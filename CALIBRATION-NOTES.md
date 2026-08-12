@@ -30,3 +30,19 @@ first letter (the run of bright columns), so the level clustering is set
 from clean letter positions. Then lock: chevron template (from the
 known-expanded "02 - Carson James" row) and the right template (from a known
 collapsed folder), the indent step, and the checkbox/bullet thresholds.
+
+## Learned lessons (Tristan's coaching, must remember for Obsidian quality)
+1. The clean tesseract TEXT is the spine, always: rows and names in order,
+   untouched. Structure layers sit ON TOP; they never rewrite the text.
+2. Obsidian's render laws: every folder row carries a triangle (down =
+   expanded, right = collapsed); every file row carries none; the vertical
+   guide lines carry the nesting (one line per ancestor level); the triangle
+   sits left of the name at the row's indent.
+3. In this video's theme the root rows all carry numeric prefixes
+   ("00 - Inbox", "01 - Daily Notes", "02 - Carson James", "03 - Horse.TV")
+   and NO other row does: a row matching ^\d+ - is a depth-0 root. This
+   defeats the digit-prefix corruption of the x anchor entirely.
+4. The fixture is the target: the layer is done when its tree matches
+   GROUND-TRUTH-TREE.md row for row (name, kind, chevron, depth).
+5. Calibrate against the fixture, never against blind guesses; a detector
+   that disagrees with the fixture on a row is uncalibrated, not "close."

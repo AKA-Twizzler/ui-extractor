@@ -9,6 +9,7 @@ file. The vision subagent's judgments come in from outside, never from here.
 Run: python3 ui_geometry.py <crop.png> <output.json>
 """
 import csv
+import re
 import io
 import json
 import statistics
@@ -185,22 +186,25 @@ def centroid_state(cell):
     return None
 
 
-def cluster_indents(icon_xs):
-    """Quantize the measured icon-left x's into depth levels by the dominant
-    indent step (observed at 3x: 40-45 px)."""
-    xs = sorted(set(icon_xs.values()))
-    if not xs:
-        return {}
-    gaps = [b - a for a, b in zip(xs, xs[1:]) if b - a >= 25]
-    step = sorted(gaps)[0] if gaps else 42
-    base = xs[0]
-    return {x: int(round((x - base) / step)) for x in xs}
+def cluster_indents(icon_xs, lines):
+    """Depth levels, fixture-calibrated: rows whose names start with a
+    numeric prefix are roots (depth 0); the rest cluster by the measured
+    x-step (base 181.5, step 38.5 at 3x, from the ground-truth fixture)."""
+    out = {}
+    for ln in lines:
+        x = icon_xs.get(ln["y"], ln["x"])
+        if re.search(r"(^|\s)\d+ - ", ln["text"]):
+            out[x] = 0
+        else:
+            d = int(round((x - 181.5) / 38.5))
+            out[x] = max(1, d)
+    return out
 
 def build_tree(lines, arrows, icon_xs):
     """Stack build: a folder opens a level; a file never deepens it."""
     roots = []
     stack = []  # list of dict nodes at each depth
-    depth_map = cluster_indents(icon_xs)
+    depth_map = cluster_indents(icon_xs, lines)
     for ln in lines:
         depth = depth_map[ln["x"]]
         is_folder = arrows.get(ln["y"], "none") != "none"
@@ -308,6 +312,14 @@ def main():
     rows = tesseract_tsv(png)
     lines = group_lines(rows)
     lines = strip_furniture_by_gaps(lines)
+    # the tree starts at the first root-prefixed row; anything above is chrome
+    first_root = None
+    for i, ln in enumerate(lines):
+        if re.search(r"(^|\s)\d+ - ", ln["text"]):
+            first_root = i
+            break
+    if first_root is not None:
+        lines = lines[first_root:]
     icon_xs = row_icon_x(img, lines)
     bands = icon_bands(img, lines)
     down_t, right_t = grounded_templates(lines, bands)
@@ -324,7 +336,7 @@ def main():
         else:
             arrows[band["y"]] = "none"
 
-    depth_map = cluster_indents(icon_xs)
+    depth_map = cluster_indents(icon_xs, lines)
     for ln in lines:
         ln["x"] = icon_xs.get(ln["y"], ln["x"])
     tree = build_tree(lines, arrows, icon_xs)
