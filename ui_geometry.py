@@ -63,9 +63,8 @@ def group_lines(rows):
         # furniture and garbage: no alphanumerics, or fewer than 3, or low conf
         if len(alnum) < 3 or statistics.mean(confs) < 30:
             continue
-        # the indent anchor is the LEFTMOST token of the row: the icon column
-        # sits at indent_x + constant width, so its x quantizes into levels
-        # cleanly even when tesseract glues junk to the name
+        # the indent anchor is measured from the pixels later (row_icon_x);
+        # keep the TSV text and y-band only
         anchor = min(int(w["left"]) for w in words)
         # furniture bands: the window title and tab bars at the top, the
         # status/scroll noise at the bottom, never part of the tree
@@ -112,7 +111,7 @@ def icon_bands(img, lines, pad_x=4):
         if int(ln["y"]) > bottom_band:
             continue
         x0 = 0
-        x1 = max(0, int(ln["x"]) - 2)
+        x1 = min(img.shape[1], int(ln["x"]) + 130)
         y0 = max(0, int(ln["y"]) - 2)
         y1 = min(img.shape[0], int(ln["bottom"]) + 2)
         if x1 <= 0:
@@ -186,32 +185,22 @@ def centroid_state(cell):
     return None
 
 
-def cluster_indents(lines):
-    """Quantize per-line x into depths by the dominant indent step."""
-    xs = sorted({ln["x"] for ln in lines})
+def cluster_indents(icon_xs):
+    """Quantize the measured icon-left x's into depth levels by the dominant
+    indent step (observed at 3x: 40-45 px)."""
+    xs = sorted(set(icon_xs.values()))
     if not xs:
         return {}
-    gaps = [b - a for a, b in zip(xs, xs[1:]) if b - a > 0]
-    step = None
-    if gaps:
-        from collections import Counter
-        # the most common small gap is the icon-width jitter; the step is the
-        # smallest gap larger than the jitter median
-        small = [g for g in gaps if g <= 30]
-        jitter = sorted(small)[len(small) // 2] if small else 0
-        big = [g for g in gaps if g > jitter + 8]
-        step = sorted(big)[0] if big else 42
-    if step is None:
-        step = 42
+    gaps = [b - a for a, b in zip(xs, xs[1:]) if b - a >= 25]
+    step = sorted(gaps)[0] if gaps else 42
     base = xs[0]
     return {x: int(round((x - base) / step)) for x in xs}
 
-
-def build_tree(lines, arrows):
+def build_tree(lines, arrows, icon_xs):
     """Stack build: a folder opens a level; a file never deepens it."""
     roots = []
     stack = []  # list of dict nodes at each depth
-    depth_map = cluster_indents(lines)
+    depth_map = cluster_indents(icon_xs)
     for ln in lines:
         depth = depth_map[ln["x"]]
         is_folder = arrows.get(ln["y"], "none") != "none"
@@ -318,7 +307,8 @@ def main():
     img = load_gray(png)
     rows = tesseract_tsv(png)
     lines = group_lines(rows)
-    lines = strip_furniture(lines, img.shape[0])
+    lines = strip_furniture_by_gaps(lines)
+    icon_xs = row_icon_x(img, lines)
     bands = icon_bands(img, lines)
     down_t, right_t = grounded_templates(lines, bands)
 
@@ -334,7 +324,10 @@ def main():
         else:
             arrows[band["y"]] = "none"
 
-    tree = build_tree(lines, arrows)
+    depth_map = cluster_indents(icon_xs)
+    for ln in lines:
+        ln["x"] = icon_xs.get(ln["y"], ln["x"])
+    tree = build_tree(lines, arrows, icon_xs)
     flags = formatting_flags(img, lines)
 
     result = {
@@ -348,6 +341,72 @@ def main():
     print(json.dumps({k: v for k, v in result.items() if k != "tree"}, indent=2))
     print(json.dumps(result["tree"], indent=2))
 
+
+
+
+def row_icon_x(img, lines):
+    """The left edge of each row's icon glyph, measured from the pixels.
+
+    For each row's y-band, scan for the first column where a sustained bright
+    run appears (the icon/chevron column). This is deterministic and ignores
+    tesseract's token boxes entirely.
+    """
+    bright_thresh = 100  # Obsidian's icons are dim gray, text is bright
+    icon_xs = {}
+    for ln in lines:
+        y0 = max(0, int(ln["y"]) - 4)
+        y1 = min(img.shape[0], int(ln["bottom"]) + 4)
+        if y1 - y0 < 8:
+            icon_xs[ln["y"]] = int(ln["x"])
+            continue
+        # the text anchor: the first real word token (all-alpha, len >= 3)
+        text_x = None
+        for w in ln["words"]:
+            t = w["text"]
+            if t.isalpha() and len(t) >= 3 and float(w["conf"]) >= 40:
+                text_x = int(w["left"])
+                break
+        if text_x is None:
+            text_x = int(ln["x"])
+        lo = max(0, text_x - 170)
+        hi = max(lo + 8, text_x - 8)
+        band = img[y0:y1, lo:hi]
+        if band.size == 0:
+            icon_xs[ln["y"]] = text_x
+            continue
+        bright = (band > bright_thresh).astype(np.float32)
+        col = bright.mean(axis=0)
+        found = None
+        for x in range(len(col) - 2):
+            if col[x] >= 0.25 and col[x+1] >= 0.25:
+                found = lo + x
+                break
+        icon_xs[ln["y"]] = found if found is not None else text_x
+    return icon_xs
+
+
+def strip_furniture_by_gaps(lines):
+    """Drop rows separated from the row above by a gap far beyond the median
+    row pitch: window chrome above the tree, status noise below it."""
+    if not lines:
+        return lines
+    pitches = []
+    for a, b in zip(lines, lines[1:]):
+        pitches.append(int(b["y"]) - int(a["y"]))
+    if not pitches:
+        return lines
+    from collections import Counter
+    # the mode of the small pitches is the row pitch
+    small = [p for p in pitches if p <= 90]
+    counts = Counter(small)
+    mode_pitch = counts.most_common(1)[0][0] if counts else 60
+    out = [lines[0]]
+    for ln in lines[1:]:
+        gap = int(ln["y"]) - int(out[-1]["y"])
+        if gap > mode_pitch * 2.5:
+            continue  # furniture band (title bar, status noise)
+        out.append(ln)
+    return out
 
 def grounded_templates(lines, bands):
     """Templates from known rows: at the minimal depth, a row with deeper
