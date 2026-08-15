@@ -34,9 +34,13 @@ import numpy as np
 
 import screenness
 
-SAME_SCREEN_DIFF = 6.0   # mean grey change below this and it is the same screen
+SAME_SCREEN_DIFF = 4.0   # mean grey change below this and it is the same screen
 UNCERTAIN_BOXES = 20     # OCR boxes needed for an uncertain frame to be a screen
-THUMB = (80, 45)
+THUMB = (320, 180)
+# The comparison picture has to be big enough to SEE a change. At 80x45 a
+# different note open in the same window is pixel-identical, so a ten minute
+# Obsidian session came back as two screens: consecutive change measured 0.31
+# on average while the layout never moved.
 
 
 def duration(video):
@@ -104,6 +108,15 @@ def scan(video, every, cache_path=None, rescan=False):
 
 
 def changed(a, b):
+    """Is this a different screen from the one the stretch started on.
+
+    Compared against the stretch's OWN first sample, never against the sample
+    immediately before. Screens drift: a note scrolls a line, a folder opens,
+    a pane resizes. Judged step by step every change looks small and a whole
+    video collapses into one stretch — measured, a ten minute recording came
+    back as two screens. Judged against where the stretch began, drift adds up
+    and the split lands where the screen genuinely became another one.
+    """
     ta = np.array(a["thumb"], np.float32)
     tb = np.array(b["thumb"], np.float32)
     return float(np.mean(np.abs(ta - tb))) > SAME_SCREEN_DIFF
@@ -114,10 +127,10 @@ def stretches(samples):
     for s in samples:
         new = (not runs
                or runs[-1]["call"] != s["call"]
-               or (s["call"] == "screen" and changed(runs[-1]["last"], s)))
+               or (s["call"] == "screen" and changed(runs[-1]["anchor"], s)))
         if new:
             runs.append({"call": s["call"], "start": s["t"], "end": s["t"],
-                         "last": s, "best": s})
+                         "anchor": s, "last": s, "best": s})
         else:
             runs[-1]["end"] = s["t"]
             runs[-1]["last"] = s
