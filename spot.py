@@ -1,21 +1,29 @@
 #!/usr/bin/env python3
-"""Find the moments in a video where a UI is on screen, without watching it all.
+"""Map a video: where there is an interface, where it changes, what to capture.
 
-Two stages, because grabbing every frame at full quality is enormous waste:
+The aim is to not waste effort. Ten minutes is eighteen thousand frames, most
+of them either somebody talking or the same screen sitting still. What is worth
+capturing is one frame per DISTINCT screen and nothing else.
 
-1. SCAN - walk the video at a coarse interval, at reduced size, and score each
-   sample for how much readable interface it holds. Cheap enough to run over a
-   whole video.
-2. CAPTURE - only the moments that scored well are then taken at full quality
-   by capture.py, burst-stacked and lossless.
+How it decides, cheapest test first:
 
-The score is not a guess about content. It counts what an OCR pass actually
-finds: how many separate text boxes, how confidently they read, and how many
-of them line up in a column, since stacked left-aligned rows are what file
-trees, menus and sidebars look like and prose does not.
+  1. Where could interface be?  A camera sensor puts noise on every pixel, so
+     neighbouring pixels are almost never exactly equal; anything rendered
+     paints flat areas with one exact value. Counting exact ties costs almost
+     nothing and proposes regions, per part of the frame — so a caption bar or
+     a file window filling a corner of a camera shot is still found.
+  2. Is that region really interface?  Only the proposed regions are read, and
+     only they. A blank wall is flat too; what makes a region interface is
+     that it CARRIES TEXT. Frames with no candidate region are never read at
+     all, which is most of the talking ones.
+  3. Has the screen changed?  Consecutive samples are compared as pictures.
+     No reading is needed to know one screen became a different screen.
 
-Run: python3 spot.py <video> [--every 15] [--top 8]
+Only the moments that survive all that are captured at full quality.
+
+Run: python3 spot.py <video> [--every 10] [--map] [--rescan]
 """
+import json
 import os
 import subprocess
 import sys
@@ -23,6 +31,12 @@ import tempfile
 
 import cv2
 import numpy as np
+
+import screenness
+
+SAME_SCREEN_DIFF = 6.0   # mean grey change below this and it is the same screen
+UNCERTAIN_BOXES = 20     # OCR boxes needed for an uncertain frame to be a screen
+THUMB = (80, 45)
 
 
 def duration(video):
@@ -33,74 +47,126 @@ def duration(video):
     return float(r.stdout.strip())
 
 
-def sample_frames(video, every, workdir, width=1280):
-    """Take one sample every `every` seconds, each seeked to explicitly.
+def sample_frames(video, every, workdir):
+    """One sample every `every` seconds, each seeked to explicitly.
 
-    Each sample is grabbed with its own seek so its timestamp is KNOWN rather
-    than inferred from its position in a sequence. Letting ffmpeg thin the
-    stream and then counting frames drifts — measured at six seconds on a nine
-    minute video — which points the capture at the wrong moment entirely, and
-    the frame it returns looks perfectly reasonable while being the wrong shot.
+    Each sample is seeked to so its timestamp is KNOWN rather than inferred
+    from a position in a sequence. Letting ffmpeg thin the stream and counting
+    frames drifted six seconds over nine minutes when measured, which points
+    the capture at the wrong scene while looking perfectly reasonable.
     """
     total = duration(video)
-    out = []
     t = 0.0
     while t < total:
         path = os.path.join(workdir, f"s_{int(t):06d}.png")
         r = subprocess.run(
             ["ffmpeg", "-y", "-v", "error", "-ss", f"{t:.3f}", "-i", video,
-             "-frames:v", "1", "-vf", f"scale={width}:-2", path],
+             "-frames:v", "1", "-vf", f"scale={screenness.WORK_WIDTH}:-2", path],
             capture_output=True)
         if r.returncode == 0 and os.path.exists(path):
-            out.append((path, int(t)))
+            yield path, int(t)
         t += every
-    return out
 
 
-def ui_score(engine, path):
-    """How much readable, column-aligned interface this frame holds."""
-    res, _ = engine(path)
-    if not res:
-        return 0.0, 0, 0.0
-    boxes = [(min(p[0] for p in b), min(p[1] for p in b), t, float(s))
-             for b, t, s in res]
-    n = len(boxes)
-    confs = [s for _, _, _, s in boxes]
-    # rows that share a left edge: the signature of a tree, list or menu
-    xs = sorted(int(x) for x, _, _, _ in boxes)
-    aligned, run = 0, 1
-    for a, b in zip(xs, xs[1:]):
-        if b - a <= 6:
-            run += 1
+def scan(video, every, cache_path=None, rescan=False):
+    if cache_path and os.path.exists(cache_path) and not rescan:
+        d = json.load(open(cache_path))
+        if d.get("every") == every and d.get("video") == video and d.get("v") == 2:
+            return d["samples"]
+
+    from rapidocr_onnxruntime import RapidOCR
+    engine = RapidOCR()
+    samples = []
+    read = 0
+    with tempfile.TemporaryDirectory() as work:
+        for path, secs in sample_frames(video, every, work):
+            bgr = cv2.imread(path)
+            if bgr is None:
+                continue
+            regions = screenness.ui_regions(bgr, engine)
+            if regions:
+                read += 1
+            share = sum(r["share"] for r in regions)
+            thumb = cv2.resize(cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY), THUMB,
+                               interpolation=cv2.INTER_AREA)
+            samples.append({"t": secs, "call": "screen" if regions else "camera",
+                            "frac": share, "regions": len(regions),
+                            "box": regions[0]["box"] if regions else None,
+                            "boxes": regions[0]["boxes"] if regions else 0,
+                            "thumb": thumb.tolist()})
+    print(f"  {len(samples)} samples; text read on {read} of them "
+          f"({100*read/max(1,len(samples)):.0f}%), the rest ruled out by pixels alone")
+    if cache_path:
+        os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+        json.dump({"v": 2, "video": video, "every": every, "samples": samples},
+                  open(cache_path, "w"))
+    return samples
+
+
+def changed(a, b):
+    ta = np.array(a["thumb"], np.float32)
+    tb = np.array(b["thumb"], np.float32)
+    return float(np.mean(np.abs(ta - tb))) > SAME_SCREEN_DIFF
+
+
+def stretches(samples):
+    runs = []
+    for s in samples:
+        new = (not runs
+               or runs[-1]["call"] != s["call"]
+               or (s["call"] == "screen" and changed(runs[-1]["last"], s)))
+        if new:
+            runs.append({"call": s["call"], "start": s["t"], "end": s["t"],
+                         "last": s, "best": s})
         else:
-            aligned = max(aligned, run)
-            run = 1
-    aligned = max(aligned, run)
-    return n * (aligned / max(1, n)) ** 0.5 * float(np.mean(confs)), n, aligned
+            runs[-1]["end"] = s["t"]
+            runs[-1]["last"] = s
+            if s["frac"] > runs[-1]["best"]["frac"]:
+                runs[-1]["best"] = s
+    return runs
+
+
+def hms(s):
+    return f"{s//3600:02d}:{s%3600//60:02d}:{s%60:02d}"
 
 
 def main():
     video = sys.argv[1]
-    every = int(sys.argv[sys.argv.index("--every") + 1]) if "--every" in sys.argv else 15
-    top = int(sys.argv[sys.argv.index("--top") + 1]) if "--top" in sys.argv else 8
-    from rapidocr_onnxruntime import RapidOCR
-    engine = RapidOCR()
+    every = int(sys.argv[sys.argv.index("--every") + 1]) if "--every" in sys.argv else 10
+    title = os.path.basename(os.path.dirname(video)) or "capture"
+    cache = f"/mnt/g/Images/{title}/scan.json"
     total = duration(video)
-    print(f"{total/60:.1f} minutes; sampling every {every}s "
-          f"(~{int(total/every)} frames instead of {int(total*30)})")
-    rows = []
-    with tempfile.TemporaryDirectory() as work:
-        for path, secs in sample_frames(video, every, work):
-            score, n, aligned = ui_score(engine, path)
-            rows.append((score, secs, n, aligned))
-    rows.sort(reverse=True)
-    print(f"\n{'when':>10} {'score':>8} {'text boxes':>11} {'aligned rows':>13}")
-    for score, secs, n, aligned in rows[:top]:
-        ts = f"{secs//3600:02d}:{secs%3600//60:02d}:{secs%60:02d}"
-        print(f"{ts:>10} {score:>8.0f} {n:>11} {aligned:>13}")
-    print("\ncapture these with:  python3 capture.py <video> " +
-          " ".join(f"{s//3600:02d}:{s%3600//60:02d}:{s%60:02d}"
-                   for _, s, _, _ in rows[:top]))
+    print(f"{total/60:.1f} minutes; {int(total/every)} samples instead of "
+          f"{int(total*30)} frames")
+    samples = scan(video, every, cache, rescan="--rescan" in sys.argv)
+
+    runs = stretches(samples)
+    ui = [r for r in runs if r["call"] == "screen"]
+    none = [r for r in runs if r["call"] == "camera"]
+    ui_time = sum(r["end"] + every - r["start"] for r in ui)
+    print(f"\n{'from':>9}  {'to':>9}   ")
+    for r in runs:
+        mins = (r["end"] + every - r["start"]) / 60
+        if r["call"] == "screen":
+            share = r["best"]["frac"] * 100
+            how = "full screen" if share > 60 else f"part of frame ({share:.0f}%)"
+            label = f"UI - {how}"
+        else:
+            label = "no UI (real-life camera only)"
+        print(f"{hms(r['start']):>9}  {hms(r['end']+every):>9}   {label:<30} "
+              f"({mins:.1f} min)")
+    print(f"\n{ui_time/60:.1f} of {total/60:.1f} minutes hold interface; "
+          f"{len(ui)} distinct screens to capture, {len(none)} stretches with none")
+    if ui:
+        print("\none capture per distinct screen:")
+        for r in ui:
+            b = r["best"]
+            box = b.get("box")
+            where = (f"x{box[0]}-{box[2]} y{box[1]}-{box[3]}" if box else "")
+            print(f"   {hms(b['t'])}   {b['frac']*100:3.0f}% of frame   "
+                  f"{b['boxes']:>3} text items   {where}")
+        print("\n  python3 capture.py <video> " +
+              " ".join(hms(r["best"]["t"]) for r in ui))
 
 
 if __name__ == "__main__":
