@@ -14,6 +14,13 @@ Two things matter here and neither is obvious:
    moving, the burst is detected as moving and the single sharpest frame is
    used instead, because stacking motion would smear it.
 
+3. A burst never crosses a cut. Video cuts between shots, and a burst centred
+   on a moment can straddle one, so half its frames show a different scene
+   entirely. The burst is split at any jump too large to be content changing,
+   and only the shot containing the requested moment is kept. Without this the
+   sharpest-frame rule can hand back a frame from the wrong shot, which is a
+   silent and very convincing kind of wrong.
+
 Run: python3 capture.py <video> <HH:MM:SS> [more timestamps...] --out DIR
 """
 import os
@@ -26,6 +33,7 @@ import numpy as np
 
 BURST_SECONDS = 1.5
 STILL_THRESHOLD = 1.5     # mean grey levels of frame-to-frame change
+CUT_THRESHOLD = 12.0      # above this, the picture changed shot, not content
 
 
 def _ffmpeg_burst(video, timestamp, seconds, workdir):
@@ -63,6 +71,21 @@ def capture_moment(video, timestamp, out_dir, seconds=BURST_SECONDS):
         grays = [cv2.cvtColor(f, cv2.COLOR_BGR2GRAY) for f in frames]
         moves = [float(np.mean(np.abs(a.astype(np.int16) - b.astype(np.int16))))
                  for a, b in zip(grays, grays[1:])]
+
+        # keep only the shot the requested moment belongs to
+        target = len(frames) // 2
+        lo, hi = 0, len(frames)
+        for i, m in enumerate(moves):
+            if m >= CUT_THRESHOLD:
+                if i + 1 <= target:
+                    lo = i + 1
+                else:
+                    hi = i + 1
+                    break
+        cuts = sum(1 for m in moves if m >= CUT_THRESHOLD)
+        frames, grays = frames[lo:hi], grays[lo:hi]
+        moves = [float(np.mean(np.abs(a.astype(np.int16) - b.astype(np.int16))))
+                 for a, b in zip(grays, grays[1:])]
         still = (max(moves) < STILL_THRESHOLD) if moves else True
         if still and len(frames) >= 3:
             out = np.median(np.stack(frames).astype(np.float32), axis=0).astype(np.uint8)
@@ -71,6 +94,8 @@ def capture_moment(video, timestamp, out_dir, seconds=BURST_SECONDS):
             sharp = [cv2.Laplacian(g, cv2.CV_64F).var() for g in grays]
             out = frames[int(np.argmax(sharp))]
             how = f"sharpest of {len(frames)} moving frames"
+        if cuts:
+            how += f"; burst crossed {cuts} cut(s), kept the moment's own shot"
         path = os.path.join(out_dir, f"{_slug(timestamp)}.png")
         cv2.imwrite(path, out, [cv2.IMWRITE_PNG_COMPRESSION, 3])
         return path, how

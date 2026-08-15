@@ -380,13 +380,43 @@ def read_tree(png_path):
         else:
             row["kind"], row["chevron"] = "file", None
 
+    ys = [r["y0"] for r in rows]
+    pitch = statistics.median([b - a for a, b in zip(ys, ys[1:])]) if len(ys) > 2 else 0
+    ok, why = looks_like_a_tree(len(rows), len(every), columns, pitch)
     return {"source": png_path, "guide_columns": columns,
             "contrast_margin": margin, "chrome_rows_dropped": chrome_dropped,
-            "rows": out}
+            "is_tree": ok, "layout_verdict": why, "row_pitch": pitch,
+            "rows": out if ok else []}
+
+
+def looks_like_a_tree(rows_kept, rows_seen, columns, pitch):
+    """Decide whether this pane is a tree at all, and say so when it is not.
+
+    Reading a tree out of something that is not one is the worst outcome
+    available: the answer comes back confident and wrong. On a file list with
+    columns — a Finder window, a table — the column edges pass for guide lines
+    and the result reads like a nesting that was never there.
+
+    Two things separate them. A tree's rows are the bulk of what is in its
+    pane, where a column layout leaves most of the text unaccounted for. And a
+    tree indents by roughly the height of a row, where column positions are
+    spaced by whatever the columns happen to need.
+    """
+    if rows_seen and rows_kept / rows_seen < 0.5:
+        return False, (f"only {rows_kept} of {rows_seen} rows sit on one pitch; "
+                       "a tree's rows are the bulk of its pane")
+    if len(columns) >= 2 and pitch:
+        step = statistics.median([b - a for a, b in zip(columns, columns[1:])])
+        if not (0.25 * pitch <= step <= 2.5 * pitch):
+            return False, (f"indent step {step:.0f}px against row pitch "
+                           f"{pitch:.0f}px; that spacing is columns, not nesting")
+    return True, "rows evenly pitched and indented like a tree"
 
 
 def render(tree):
     """Draw the tree the way Obsidian shows it, for eyeballing against a frame."""
+    if not tree.get("is_tree", True):
+        return f"NOT A TREE VIEW - {tree.get('layout_verdict')}"
     lines = []
     for r in tree["rows"]:
         mark = {"down": "˅", "right": "˃"}.get(r["chevron"], " ")
@@ -399,7 +429,8 @@ def main():
     tree = read_tree(png)
     print(f"guide columns {tree.get('guide_columns')} at contrast margin "
           f"{tree.get('contrast_margin')}; chrome rows dropped "
-          f"{tree.get('chrome_rows_dropped')}")
+          f"{tree.get('chrome_rows_dropped')}; verdict: "
+          f"{tree.get('layout_verdict')}")
     print(render(tree))
     if "--json" in sys.argv:
         out = sys.argv[sys.argv.index("--json") + 1]
