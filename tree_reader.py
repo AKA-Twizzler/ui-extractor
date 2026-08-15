@@ -136,29 +136,42 @@ def gutter_profile(img, row):
     return band
 
 
-def local_contrast(band):
+def is_dark_theme(img):
+    """Dark theme when the pane's commonest value is a dark one."""
+    return float(np.median(img)) < 128
+
+
+def local_contrast(band, dark_theme=True):
     """The gutter with its own background removed.
 
-    A horizontal opening wipes out anything narrower than the kernel, so what
-    is left is the background the UI painted — including the selection
-    highlight on whichever file is open. Subtracting it leaves the thin
-    structures: guide lines and chevrons. This is what makes the read survive
-    a highlighted row, where absolute brightness fails outright because the
-    highlight is brighter than the lines it hides.
+    A horizontal opening wipes out anything narrower than the kernel, leaving
+    the background the UI painted — including the selection highlight on
+    whichever file is open. What stands out from that is the thin structure:
+    guide lines and chevrons.
+
+    Which way it stands out depends on the theme, and the theme is decided
+    once for the whole pane rather than guessed per row. In a dark theme the
+    guide lines are BRIGHTER than their background; in a light theme they are
+    DARKER. Looking only for brighter lines finds one column instead of four
+    on a light theme and rebuilds the tree wrongly WITHOUT COMPLAINING, which
+    is the worst way for this to fail. Taking both directions at once fixes
+    that but blunts the dark case, because the dark fringe around bright text
+    then reads as structure too. So: pick the direction, once, from the pane.
     """
-    bg = cv2.morphologyEx(band, cv2.MORPH_OPEN,
-                          np.ones((1, BG_KERNEL), np.uint8))
-    return cv2.subtract(band, bg)
+    k = np.ones((1, BG_KERNEL), np.uint8)
+    if dark_theme:
+        return cv2.subtract(band, cv2.morphologyEx(band, cv2.MORPH_OPEN, k))
+    return cv2.subtract(cv2.morphologyEx(band, cv2.MORPH_CLOSE, k), band)
 
 
-def lines_and_glyphs(band, margin):
+def lines_and_glyphs(band, margin, dark_theme=True):
     """Split the gutter into guide lines and glyphs.
 
     Coverage, not brightness, separates them: a guide line stands above its
     background down the full height of the row, a chevron or icon only part
     of it.
     """
-    cov = (local_contrast(band) > margin).mean(axis=0)
+    cov = (local_contrast(band, dark_theme) > margin).mean(axis=0)
     lines = [r for r in _runs(cov, LINE_COVERAGE) if r[2] <= THIN_MAX]
     glyphs = [r for r in _runs(cov, GLYPH_COVERAGE) if r[2] >= BLOB_MIN]
     return lines, glyphs
@@ -228,7 +241,7 @@ def _present(lines, columns):
             if any(abs(a - c) <= COLUMN_TOL for a, b, w in lines)]
 
 
-def calibrate_margin(bands, candidates=range(3, 41)):
+def calibrate_margin(bands, dark_theme=True, candidates=range(3, 41)):
     """Choose the contrast margin from the image, not from a constant.
 
     Two rules that always hold in a rendered tree do the filtering: the guide
@@ -245,7 +258,7 @@ def calibrate_margin(bands, candidates=range(3, 41)):
     """
     valid = {}
     for margin in candidates:
-        all_lines = [lines_and_glyphs(b, margin)[0] for b in bands]
+        all_lines = [lines_and_glyphs(b, margin, dark_theme)[0] for b in bands]
         cols = _columns_from(all_lines)
         if not cols:
             continue
@@ -350,13 +363,14 @@ def read_tree(png_path):
     rows = [r for r, _ in keep]
     bands = [b for _, b in keep]
 
-    margin, columns = calibrate_margin(bands)
+    dark = is_dark_theme(img)
+    margin, columns = calibrate_margin(bands, dark)
     if margin is None:
         margin, columns = 8, []
 
     out = []
     for r, band in zip(rows, bands):
-        lines, glyphs = lines_and_glyphs(band, margin)
+        lines, glyphs = lines_and_glyphs(band, margin, dark)
         present = _present(lines, columns)
         depth = len(present)
         last_guide = max(present) if present else -1
@@ -384,6 +398,7 @@ def read_tree(png_path):
     pitch = statistics.median([b - a for a, b in zip(ys, ys[1:])]) if len(ys) > 2 else 0
     ok, why = looks_like_a_tree(len(rows), len(every), columns, pitch)
     return {"source": png_path, "guide_columns": columns,
+            "theme": "dark" if dark else "light",
             "contrast_margin": margin, "chrome_rows_dropped": chrome_dropped,
             "is_tree": ok, "layout_verdict": why, "row_pitch": pitch,
             "rows": out if ok else []}

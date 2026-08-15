@@ -52,8 +52,12 @@ def read_row(img, row, pad_right=8):
     crop = img[y0:y1, x0:x1]
     crop = cv2.resize(crop, (crop.shape[1] * UPSCALE, crop.shape[0] * UPSCALE),
                       interpolation=cv2.INTER_LANCZOS4)
-    # dark theme: engines are trained on dark text on light paper
-    crop = 255 - crop
+    # engines are trained on dark text on light paper, so a dark theme is
+    # inverted and a light one is left alone. Which it is comes from the
+    # pixels: if the common value is dark, the text is the light minority.
+    import numpy as _np
+    if float(_np.median(crop)) < 128:
+        crop = 255 - crop
     return _tess_line(crop)
 
 
