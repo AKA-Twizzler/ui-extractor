@@ -375,14 +375,25 @@ def standing_text(paths, engine=None):
     with it -- lit by the same lamps, moved by the same camera, walked in
     front of by the same person. So the test is a comparison, not a threshold:
 
-        drawn, if the glyphs changed no more than the ground around them
+        drawn, if the glyphs changed no more than the ground around them,
+        and the glyphs are stiller than HALF THE FRAME is
         -- and only where the ground changed at all, since nothing is proved
         by standing still in front of something that also stood still
 
-    Measured over ten minutes on two different streams: the banner's glyphs
-    changed 19 against a ground of 32, and 11 against 29. The sticker's
-    changed 111 against 72, and 86 against 51. On both frames the banner was
-    the only text the test admitted, and the sticker was not among them.
+    The second line is the one that costs to leave out, and it was left out.
+    Comparing the glyphs only against their own ground says nothing about how
+    much either moved: on a third video a sticker changed 161 against a ground
+    of 178 and passed, along with six other fragments of the room -- BEST,
+    CALTY, BITCH, PEOPLE, XING -- every one of them moving five to nine times
+    as much as the stillest quarter of that frame. Drawn text does not move.
+    Requiring it to be stiller than the frame's own median says that without
+    naming a number, because the frame supplies the number.
+
+    Measured over ten minutes on three videos. The banner's glyphs changed 21
+    against a ground of 33 and a frame median of 37, and 13 against 35 and 40.
+    The sticker's changed 48 against 51 with a median of 40, and 161 against
+    178 with a median of 52. The banner is the only text admitted on either
+    stream, and on the third video nothing is admitted at all.
 
     Nothing is claimed about text this cannot prove. A chat line scrolls away
     and a counter ticks over, so both fail the test though both are drawn;
@@ -398,6 +409,9 @@ def standing_text(paths, engine=None):
     stack = np.stack([s.astype(np.int16) for s in shots])
     change = np.abs(stack - stack[0]).max(axis=0).max(axis=2)
     still = float(np.percentile(change, 25))
+    # how much this frame moves altogether, which is what "stiller than the
+    # picture it sits on" has to be measured against
+    moving = float(np.median(change))
     if engine is None:
         from rapidocr_onnxruntime import RapidOCR
         engine = RapidOCR()
@@ -415,7 +429,7 @@ def standing_text(paths, engine=None):
         here = change[y0:y1, x0:x1]
         glyphs = float(np.median(here[ink]))
         ground = float(np.median(here[~ink]))
-        if ground <= still or glyphs > ground:
+        if ground <= still or glyphs > ground or glyphs > moving:
             continue
         out.append({"text": text.strip(), "box": (x0, y0, x1, y1),
                     "glyphs": glyphs, "ground": ground})

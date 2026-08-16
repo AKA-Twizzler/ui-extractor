@@ -336,3 +336,23 @@ application reserves that space and clips text that would reach it.
     every gap a whole multiple of one pixel, and the false tree scored a
     perfect 0.000 against the real sidebar's 0.109. The pitch has to come from
     the median gap, never the smallest.
+30. **A comparison needs a scale, or it proves nothing.** The test for text
+    drawn on a picture was "the glyphs changed no more than the ground around
+    them", and it was right as far as it went — on two live streams it admitted
+    the `jaredrhod.com` banner and refused the `FALSE` sticker on the shelf.
+    Run against a third video it admitted the sticker AND six fragments of the
+    room: BEST, CALTY, BITCH, SOM, PEOPLE, XING. Every one of them had moved
+    enormously — glyphs changing 140 to 175 where the banner changes 13 to 21 —
+    and passed only because the wall behind them moved slightly more.
+
+    A ratio with no scale under it is satisfied by two large numbers as easily
+    as by two small ones. The missing half is the premise itself: drawn text
+    does not move. So it must also be stiller than the frame's own median,
+    which is a second comparison rather than a second threshold — the frame
+    supplies the number. Banner 21 against a median of 37, and 13 against 40;
+    sticker 48 against 40, and 161 against 52.
+
+    Worth keeping about how it was found: this only surfaced because the whole
+    pipeline was run end to end on a video it had never been run on. Neither
+    fixture covers it, and the frame that broke it was not a hard frame — it
+    was a man sitting in a room with posters behind him.

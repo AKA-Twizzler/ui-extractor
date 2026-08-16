@@ -144,9 +144,25 @@ report none, which is right.
 
 The same module also finds text drawn on the picture with no panel round it.
 On both streams, `jaredrhod.com` is the ONLY text it admits, and the `FALSE`
-sticker on the shelf behind Jared is not among them — the banner's glyphs
-changed 19 against a ground of 32 on one stream and 11 against 29 on the
-other, while the sticker's changed 111 against 72 and 86 against 51.
+sticker on the shelf behind Jared is not among them. On *My AI Jarvis Makes
+Money* it admits nothing at all, which is right: that video's overlays are
+panels, and they have their own reader.
+
+```
+                      glyphs   ground   frame median   admitted
+  banner, st jude       21       33          37          yes
+  banner, live aug 03   13       35          40          yes
+  sticker, live aug 03  48       51          40          no
+  sticker, jarvis      161      178          52          no
+```
+
+Two lines of the test, not one, and the second was learned the hard way. The
+first version compared the glyphs only against their own ground, which says
+nothing about how much either moved: on the Jarvis video that admitted the
+sticker and six other fragments of the room — BEST, CALTY, BITCH, PEOPLE,
+XING — each moving five to nine times as much as the stillest quarter of the
+frame. Drawn text does not move, so it must also be stiller than the frame's
+own median. The frame supplies that number; nothing is named.
 
 Seven measurements were tried on the text itself before that and every one
 failed, several backwards, because the sticker is printed matter photographed
