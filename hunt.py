@@ -70,11 +70,25 @@ def theme_of(img, regions):
     return "light" if float(np.median(vals)) >= 128 else "dark"
 
 
+HUNT_WIDTH = 1920      # deciding WHAT a frame holds needs far less than 4K
+
+
 def look(png, engine):
-    """What this frame holds: nothing, a tree, a table, or plain interface."""
+    """What this frame holds: nothing, a tree, a table, or plain interface.
+
+    The frame is capped in width first. Reading a screen exactly needs every
+    pixel; deciding whether it holds a tree or a table does not, and a 4K
+    frame's panes enlarge to a hundred million pixels apiece, which turns a
+    sweep of a library into an overnight job. The moments this finds are
+    re-read at full size afterwards.
+    """
     img = cv2.imread(png)
     if img is None:
         return None
+    if img.shape[1] > HUNT_WIDTH:
+        h = int(img.shape[0] * HUNT_WIDTH / img.shape[1])
+        img = cv2.resize(img, (HUNT_WIDTH, h), interpolation=cv2.INTER_AREA)
+        cv2.imwrite(png, img)
     regions = screenness.ui_regions(img, engine)
     if not regions:
         return {"ui": False}
