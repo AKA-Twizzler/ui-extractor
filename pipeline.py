@@ -16,6 +16,7 @@ import numpy as np
 import capture
 import screenness
 import spot
+import columns
 import note_reader
 import tree_reader
 import verify_names
@@ -110,7 +111,15 @@ def main():
                         f"{x['name_primary']!r}/{x['name_second']!r}"
                         for x in flagged))
             else:
-                # not a tree: read it as a document — the words AND the shape
+                # not a tree: a column view before a document, since a table
+                # read as prose loses the pairing of value to heading
+                lst = columns.read_list(pane_path)
+                if lst.get("is_list"):
+                    print(f"  [pane {pi}: a list of columns]")
+                    for line in columns.render(lst).splitlines():
+                        print("    " + line)
+                    continue
+                # a document: the words AND the shape
                 note = note_reader.read_note(pane_path)
                 if note["markdown"].strip().count("\n") >= 3:
                     print(f"  [pane {pi}: an open document]")
