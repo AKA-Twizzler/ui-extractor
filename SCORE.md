@@ -110,12 +110,14 @@ card bands, every value paired to its own heading, including two large
 figures the line engine missed entirely. It correctly refuses the prose pane,
 giving the reason.
 
-Known gap, on a frame outside the fixture: at 00:06:00 the sidebar reads all
-35 rows with every depth and every open-or-closed state matching the frame,
-except one collapsed folder ("Courses") whose chevron is too faint at the
-chosen contrast margin and comes back as a file. It is not chased, because
-the fix — testing every row at the chevron column learned from its depth —
-can turn a file INTO a folder, and inventing a folder is the worse error.
+Closed, on a frame outside the fixture: at 00:06:00 one collapsed folder
+("Courses") used to come back as a file, its chevron too faint at the chosen
+contrast margin. It was left alone because the obvious fix — testing every row
+at the chevron column its depth implies — can turn a file INTO a folder, and
+inventing a folder is the worse error. Looking for the chevron where it SITS
+settled it instead: one indent past the row's last guide line, counted only
+where blank follows it before the name. "Courses" now reads as a collapsed
+folder, and the tree fixture is unchanged at 31/31 for folder-versus-file.
 
 `columns.py` on a real Finder window -- found by `hunt.py`, at 00:07:00 of
 *How Claude Code Actually Works*: the whole window as ONE table, headed Name /
