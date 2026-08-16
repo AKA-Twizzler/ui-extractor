@@ -18,6 +18,7 @@ import screenness
 import spot
 import chat_reader
 import columns
+import console_reader
 import panes
 import note_reader
 import tree_reader
@@ -80,6 +81,16 @@ def main():
                         f"{x['name_primary']!r}/{x['name_second']!r}"
                         for x in flagged))
             else:
+                # a terminal first: it is the one screen that proves itself,
+                # since nothing else sets every character on one width, and
+                # read as anything else it loses the split between what Jared
+                # typed and what came back -- which is most of what it says
+                term = console_reader.read_console(pane_path)
+                if term.get("is_console"):
+                    print(f"  [pane {pi}: a terminal]")
+                    for line in console_reader.render(term).splitlines():
+                        print("    " + line)
+                    continue
                 # not a tree: a column view before a document, since a table
                 # read as prose loses the pairing of value to heading
                 lst = columns.read_list(pane_path)

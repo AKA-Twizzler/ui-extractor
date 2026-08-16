@@ -33,6 +33,36 @@ The single engine alone reads 26 of 31 names exactly; the five it misses are
 all lost spaces, which the second engine restores. Structure does not depend
 on either engine.
 
+## The terminal
+
+Machine output against GROUND-TRUTH-CONSOLE.md, the 00:02:42 frame of
+*Install Claude Code and-or the AI Memory Vault*. Reproduce with:
+
+```
+python3 score_console.py <frame.png>
+```
+
+```
+  characters               339/360  (94.2%)
+  typed vs output            9/9
+  cut marks                  9/9
+```
+
+Read from the full frame, presenter's camera inset and all — no hand-made
+crop, no pane splitting needed, because the monospace test carries it.
+
+What the remaining 21 characters are, so nobody chases the wrong one. Ten are
+the top line, `Next: Run claude --help to get started`, which the line engine
+mangles and the cell engine does not return at all; it is the topmost row of
+the frame and half of it is drawn in colour. Six are the `⚠`, `●` and `✅`
+that stand at the head of three lines — each drawn exactly once, so the
+font has nothing to compare them against and they are left as read. The rest
+are the `[` that opens each prompt, which the line engine reads as a curly
+quote every time, and one inserted digit in `.1local`.
+
+Turning the font consensus off scores 92.2%, which is how the 94.2% was
+decided; see lesson 21 for the four rules that were tried and rejected.
+
 ## Where the other two instruments stand
 
 There is no numeric fixture for these yet — they are checked against the

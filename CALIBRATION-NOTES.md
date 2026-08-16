@@ -172,3 +172,50 @@ application reserves that space and clips text that would reach it.
     in two and lost a row. The inset needs no handling at all, because rows
     found on a cap and a shirt do not sit on the tree's row pitch and are
     dropped as chrome already.
+18. **Fit the character lattice; never average it.** A terminal's advance
+    taken as a median of per-word widths came out 78.5px against a true
+    82.3px, and the 4.7% error accumulates: by the seventeenth character of
+    a prompt the cell boundary has walked half a glyph, and every letter
+    after that is cut from the wrong box. Word edges cannot fix it either —
+    a box hugs the ink, so it sits inside its cell by however much that
+    particular letter's bearing happens to be, and a least-squares fit to
+    those edges lands 0.16 cell out. The ink is periodic: the profile of ink
+    down each column beats at the advance, its autocorrelation gives the
+    period, and the phase is wherever that profile is quietest. Two
+    independent methods agreeing on 82.3 is what made it safe to use.
+19. **Cut cells on the baseline, never on the row box.** A row is boxed
+    around whichever ascenders and descenders it happens to contain, so the
+    same letter in two rows comes out at two different heights and matches
+    nothing. The baseline does not move: most glyphs end on it at once, so
+    it is the steepest fall in the row's ink. With cells cut on the box,
+    same-letter and different-letter distances were indistinguishable
+    (medians 0.156 and 0.164). Cut on the baseline they separate cleanly
+    (0.012 against 0.110) — the difference between an instrument and noise.
+20. **The middle of a word box, never its edges.** Even on an exact lattice,
+    a "%" is drawn wide enough that its box crosses into the cell before it,
+    and taking the column from the left edge puts the prompt marker one cell
+    early and swallows the space in front of it. The middle of a word of
+    known length gives the column back exactly. Where a run of written-on
+    cells is exactly as long as the word, that settles it outright instead.
+21. **A screen's own font can settle letters, within limits worth stating.**
+    Cells whose pixels match are the same character, so a doubted cell can be
+    read off its twins — which is how "~/.zshre" became "~/.zshrc" without
+    preferring an engine. What does NOT work, each tried and measured: a
+    majority vote inside a radius (merges "h" with "n", since they stand
+    0.017 apart while true twins stand 0.011); unanimity among the three
+    nearest (flips single cells, 93.9% down to nothing gained); comparing
+    shrunk cells to save time (blurs away the very ascender that separates
+    "h" from "n"). What works is the nearest match, inside a radius the frame
+    measures for itself, and only when the reading that would replace the
+    letter appears somewhere else on screen — a screen carries a few glyphs
+    drawn once each, a warning sign, a bullet, a tick, and left alone they
+    match each other, every one of them a lone blob. Worth 92.2% to 94.2% on
+    the fixture, decided by scoring rather than by eye.
+22. **Two marks for the edge of a frame, not one.** Jared's recordings zoom
+    in, so a terminal is often wider than the picture. A glyph the frame cut
+    through has ink in the very last column of pixels and is certainly
+    incomplete; a line cut in the space BETWEEN two glyphs leaves nothing
+    bisected and reads as whole. Reporting both as "cut" calls a sentence
+    that merely ends in the last column a lie; reporting only the first
+    presents two thirds of a command as the whole of it. So: "cut" for
+    proven, "edge" for possible, and the fixture grades both.
