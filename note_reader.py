@@ -494,6 +494,17 @@ def split_key_value(row, body_h, min_gap=3.0):
     return key, val
 
 
+def is_button(text):
+    """The "add a property" button, however the engine drew its plus sign.
+
+    It sits inside the properties panel and is not a property. The plus is a
+    drawn glyph, so one engine reads it as "+", another as "++", and a third
+    loses it -- the test is the words, not the sign.
+    """
+    t = text.lstrip("+ \t").lstrip()
+    return t.lower().startswith("add property") or t.lower().startswith("add a property")
+
+
 def properties_block(rows, body_h):
     """The panel of key/value fields above a note's body, if there is one.
 
@@ -505,7 +516,11 @@ def properties_block(rows, body_h):
     fields, last = [], -1
     for i, r in enumerate(rows[:12]):
         kv = split_key_value(r, body_h)
-        if kv:
+        # A field's LABEL is a word. A row of window furniture -- the menu
+        # bar's icons across the top of a wider crop -- splits at a wide gap
+        # like a field does and arrives here as ".: he . C8 @we eo @ #.",
+        # which is not a field name and must not become frontmatter.
+        if kv and any(ch.isalpha() for ch in kv[0]) and not is_button(kv[0]):
             fields.append((i, kv))
             last = i
     if len(fields) < 2:
@@ -514,8 +529,7 @@ def properties_block(rows, body_h):
     # Obsidian shows above the note, and the properties panel itself. None of
     # it is prose, and counting the filename as a heading pushes every real
     # heading down a rank.
-    body = [r for r in rows[last + 1:]
-            if not r["text"].lstrip().startswith(("+ Add", "+Add"))]
+    body = [r for r in rows[last + 1:] if not is_button(r["text"])]
     return [kv for _, kv in fields], body
 
 
