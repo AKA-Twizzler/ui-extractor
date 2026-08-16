@@ -146,3 +146,29 @@ application reserves that space and clips text that would reach it.
     laying ink clean across every corridor. Corridors are therefore asked of
     a RUN of consecutive rows, not of the whole pane, which also makes a grid
     of cards read as several tables without a rule written for that case.
+14. **A column view fills its columns on EVERY row it covers.** A majority is
+    not enough. A terminal recording with the presenter's camera inset in the
+    corner came back as a confident two-column table of prose: the inset
+    leaves a blank gap, OCR finds text on the cap and the shirt, and those
+    fragments fill the far band on half the rows. The cost of the strict rule
+    is that a table with genuinely empty cells is refused, which is the right
+    way round — refusing falls back to reading the pane as prose, which loses
+    the pairing but invents nothing.
+15. **The tie measure needs flat area, so it cannot judge a word.** Trying to
+    tell that same camera text from interface text by its exact-pixel ties
+    fails at both scales: a band is mostly flat background and scores like a
+    screen wherever the inset sits, and a tight text box is mostly ink edges,
+    where screen text measured 0.21–0.53 and camera text 0.07–0.44. It works
+    on regions, and only on regions.
+16. **One home for the splitter, and it must not be the simpler one.**
+    pipeline.py carried its own copy that looked only for a DRAWN border.
+    Obsidian does not draw one between its sidebar and its note — the
+    boundary is a step in background colour — so a window did not split at
+    all and the two panes were read as one that was neither. panes.py also
+    splits where no line of text crosses, and finds it.
+17. **Do not paint the camera out before splitting.** The presenter's inset
+    sits ON the interface, and removing it first looks obvious. The painted
+    patch has hard edges, and those read as pane borders: the sidebar split
+    in two and lost a row. The inset needs no handling at all, because rows
+    found on a cap and a shirt do not sit on the tree's row pitch and are
+    dropped as chrome already.
