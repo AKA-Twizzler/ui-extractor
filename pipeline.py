@@ -38,6 +38,122 @@ import verify_names
 frame_regions = panes.frame_regions
 write_box = panes.write_box
 
+# Every reader that fell over during a run, so a run that limped says so at
+# the end instead of looking clean.
+STUMBLED = []
+
+
+def guard(what, fn, *args, **kwargs):
+    """Run one reader, and never let it end the run.
+
+    A pass over the whole library is tens of thousands of panes, and one of
+    them will always be the shape no reader expected. Measured the hard way:
+    an entry with no name reached the chat reader, `sum(ch.isalpha() for ch in
+    None)` raised, and a run that had already read half a video threw all of it
+    away -- the traceback replaced the answer rather than joining it.
+
+    So a reader that falls over costs its own pane and says so on the spot,
+    and the count is repeated at the end. Nothing is swallowed: a failure is
+    printed where the reading would have been, which is the same rule the rest
+    of this build runs on -- refuse out loud rather than return a guess or
+    return nothing.
+    """
+    try:
+        return fn(*args, **kwargs)
+    except Exception as why:
+        note = f"{what}: {type(why).__name__}: {why}"
+        STUMBLED.append(note)
+        print(f"    [this reader fell over and the run went on -- {note}]")
+        return None
+
+
+def say_pane(pane_path, pi, engine):
+    """Read one pane every way there is, and print what it turned out to be."""
+    tree = guard(f"tree reader, pane {pi}", tree_reader.read_tree, pane_path) or {}
+    if tree.get("is_tree") and len(tree["rows"]) >= 5:
+        tree = guard(f"second engine, pane {pi}",
+                     verify_names.verify, pane_path, tree) or tree
+        print(f"  [pane {pi}: a file tree]")
+        print(tree_reader.render(tree))
+        flagged = [x for x in tree["rows"]
+                   if x.get("name_status") not in ("confident", "reconciled")]
+        if flagged:
+            print("    unsettled: " + "; ".join(
+                f"{x.get('name_primary')!r}/{x.get('name_second')!r}"
+                for x in flagged))
+        return
+    # a terminal first: it is the one screen that proves itself, since nothing
+    # else sets every character on one width, and read as anything else it
+    # loses the split between what Jared typed and what came back -- which is
+    # most of what it says
+    term = guard(f"terminal reader, pane {pi}",
+                 console_reader.read_console, pane_path) or {}
+    if term.get("is_console"):
+        print(f"  [pane {pi}: a terminal]")
+        for line in console_reader.render(term).splitlines():
+            print("    " + line)
+        return
+    # not a tree: a column view before a document, since a table read as prose
+    # loses the pairing of value to heading
+    lst = guard(f"columns reader, pane {pi}", columns.read_list, pane_path) or {}
+    if lst.get("is_list"):
+        print(f"  [pane {pi}: a list of columns]")
+        for line in columns.render(lst).splitlines():
+            print("    " + line)
+        return
+    # a live stream's chat log, before the document reader, which would
+    # otherwise take it for prose and lose who said what
+    chat = guard(f"chat reader, pane {pi}",
+                 chat_reader.read_chat, pane_path, engine=engine) or {}
+    if chat.get("is_chat"):
+        print(f"  [pane {pi}: a chat log]")
+        for line in chat_reader.render(chat).splitlines():
+            print("    " + line)
+        return
+    # a document: the words AND the shape
+    note = guard(f"document reader, pane {pi}",
+                 note_reader.read_note, pane_path) or {"markdown": "", "backed": 0}
+    # lines of TEXT, not lines of output: the fences round a properties block
+    # are structure the reader emits, so counting them lets two garbled words
+    # come back as a document. And enough of those lines must be lines the
+    # OTHER engine read too. Every line here is already read twice and
+    # reconciled; nothing had ever looked at the verdict, so a stream's
+    # leaderboard came back as prose -- "# 3 & Dr. Paris Woods", "a @& Alex
+    # Palencia" -- with one line in eight backed.
+    if (note_reader.body_lines(note["markdown"]) >= 3
+            and note["backed"] >= note_reader.BACKED):
+        print(f"  [pane {pi}: an open document]")
+        for line in note["markdown"].splitlines():
+            print("    " + line)
+        return
+    res, _ = engine(pane_path)
+    texts = [t for _, t, _ in (res or [])]
+    # Nothing is dropped for being short. This used to skip any pane with
+    # fewer than four readings, which is silent loss -- the worst kind,
+    # because the output looks complete. On a slide of nine cards split into
+    # three columns, the left column held three of them and was thrown away
+    # without a word: "moonstone.co * 12k", "the tiny gem * 4k", "hearthstone
+    # * 15k" simply were not in the answer. Whether a reading is worth
+    # anything is what the confirmation below says, and it says it out loud.
+    if not texts:
+        return
+    # nothing else placed this pane, so there is no structure to stand behind
+    # the words. Printing them as read is how "R78" came off Jared's
+    # visualizer -- three faint marks one engine calls R78 and the other calls
+    # Ris. The rule this build runs on is that a string enters the record only
+    # when the instruments confirm it, so say which ones did.
+    marked = guard(f"confirmation, pane {pi}",
+                   verify_names.confirm_readings, pane_path, texts[:16])
+    if marked is None:
+        marked = [(t, False) for t in texts[:16]]
+    sure = [t for t, ok in marked if ok]
+    doubt = [t for t, ok in marked if not ok]
+    print(f"  [pane {pi}: text, not a tree]")
+    if sure:
+        print("    " + " | ".join(sure))
+    if doubt:
+        print("    [only one engine read these] " + " | ".join(doubt))
+
 
 def main():
     video = sys.argv[1]
@@ -84,7 +200,11 @@ def main():
             print(f"--- {ts}  (no picture: {why}) ---\n")
             continue
         img = cv2.imread(path)
-        regions = screenness.ui_regions(img, engine)
+        if img is None:
+            print(f"--- {ts}  (no picture: {path} would not open) ---\n")
+            continue
+        regions = guard(f"screenness at {ts}",
+                        screenness.ui_regions, img, engine) or []
         share = sum(x["share"] for x in regions) * 100
         print(f"--- {ts}  ({how}; interface on {share:.0f}% of the frame) ---")
         if joined and r.get("said"):
@@ -95,7 +215,9 @@ def main():
 
         # A panel is a rectangle floating over video, so it belongs to no pane
         # and splitting the frame would cut it in half.
-        for panel in overlay.read_overlays(path, engine)["panels"]:
+        for panel in (guard(f"panel reader at {ts}",
+                            overlay.read_overlays, path, engine)
+                      or {"panels": []})["panels"]:
             print("  [a panel drawn on the picture]")
             unsettled = set(panel.get("unsettled") or [])
             if panel["label"] and not unsettled:
@@ -117,10 +239,10 @@ def main():
         # a screen recording is drawn. Measured: the two frames carrying the
         # banner are 25% and 10% interface, and the two where a fragment of
         # the room crept in are 67% and 100%.
-        for found in (overlay.standing_text(
+        for found in ((guard(f"standing text at {ts}", lambda: overlay.standing_text(
                 overlay.frames_across(video, secs,
                                       workdir=os.path.join(out_dir, "_looks")),
-                engine=engine) if share < 50 else []):
+                engine=engine)) or []) if share < 50 else []):
             if found["text"] in standing:
                 continue
             standing.add(found["text"])
@@ -134,94 +256,20 @@ def main():
         # the frame's windows first, each split into ITS panes, and then the
         # desktop no window covers -- a frame holding one window comes back
         # exactly as it did when this only cut vertical strips
-        for pi, box in enumerate(frame_regions(img, engine=engine)):
+        for pi, box in enumerate(guard(f"regions at {ts}", frame_regions,
+                                       img, engine=engine) or []):
             pane_path = os.path.join(
                 out_dir, f"{ts.replace(':','-')}_pane{pi}.png")
             if write_box(img, box, pane_path) is None:
                 continue
-            tree = tree_reader.read_tree(pane_path)
-            if tree.get("is_tree") and len(tree["rows"]) >= 5:
-                tree = verify_names.verify(pane_path, tree)
-                print(f"  [pane {pi}: a file tree]")
-                print(tree_reader.render(tree))
-                flagged = [x for x in tree["rows"]
-                           if x["name_status"] not in ("confident", "reconciled")]
-                if flagged:
-                    print("    unsettled: " + "; ".join(
-                        f"{x['name_primary']!r}/{x['name_second']!r}"
-                        for x in flagged))
-            else:
-                # a terminal first: it is the one screen that proves itself,
-                # since nothing else sets every character on one width, and
-                # read as anything else it loses the split between what Jared
-                # typed and what came back -- which is most of what it says
-                term = console_reader.read_console(pane_path)
-                if term.get("is_console"):
-                    print(f"  [pane {pi}: a terminal]")
-                    for line in console_reader.render(term).splitlines():
-                        print("    " + line)
-                    continue
-                # not a tree: a column view before a document, since a table
-                # read as prose loses the pairing of value to heading
-                lst = columns.read_list(pane_path)
-                if lst.get("is_list"):
-                    print(f"  [pane {pi}: a list of columns]")
-                    for line in columns.render(lst).splitlines():
-                        print("    " + line)
-                    continue
-                # a live stream's chat log, before the document reader, which
-                # would otherwise take it for prose and lose who said what
-                chat = chat_reader.read_chat(pane_path, engine=engine)
-                if chat.get("is_chat"):
-                    print(f"  [pane {pi}: a chat log]")
-                    for line in chat_reader.render(chat).splitlines():
-                        print("    " + line)
-                    continue
-                # a document: the words AND the shape
-                note = note_reader.read_note(pane_path)
-                # lines of TEXT, not lines of output: the fences round a
-                # properties block are structure the reader emits, so counting
-                # them lets two garbled words come back as a document.
-                # And enough of those lines must be lines the OTHER engine read
-                # too. Every line here is already read twice and reconciled;
-                # nothing had ever looked at the verdict, so a stream's
-                # leaderboard came back as prose -- "# 3 & Dr. Paris Woods",
-                # "a @& Alex Palencia" -- with one line in eight backed.
-                if (note_reader.body_lines(note["markdown"]) >= 3
-                        and note["backed"] >= note_reader.BACKED):
-                    print(f"  [pane {pi}: an open document]")
-                    for line in note["markdown"].splitlines():
-                        print("    " + line)
-                    continue
-                res, _ = engine(pane_path)
-                texts = [t for _, t, _ in (res or [])]
-                # Nothing is dropped for being short. This used to skip any
-                # pane with fewer than four readings, which is silent loss --
-                # the worst kind, because the output looks complete. On a slide
-                # of nine cards split into three columns, the left column held
-                # three of them and was thrown away without a word:
-                # "moonstone.co * 12k", "the tiny gem * 4k", "hearthstone *
-                # 15k" simply were not in the answer. Whether a reading is
-                # worth anything is what the confirmation below says, and it
-                # says it out loud.
-                if not texts:
-                    continue
-                # nothing else placed this pane, so there is no structure to
-                # stand behind the words. Printing them as read is how "R78"
-                # came off Jared's visualizer -- three faint marks one engine
-                # calls R78 and the other calls Ris. The rule this build runs
-                # on is that a string enters the record only when the
-                # instruments confirm it, so say which ones did.
-                marked = verify_names.confirm_readings(pane_path, texts[:16])
-                sure = [t for t, ok in marked if ok]
-                doubt = [t for t, ok in marked if not ok]
-                print(f"  [pane {pi}: text, not a tree]")
-                if sure:
-                    print("    " + " | ".join(sure))
-                if doubt:
-                    print("    [only one engine read these] "
-                          + " | ".join(doubt))
+            say_pane(pane_path, pi, engine)
         print()
+
+    if STUMBLED:
+        print(f"[{len(STUMBLED)} reader(s) fell over in this run and were "
+              "stepped over]")
+        for note in STUMBLED:
+            print("   " + note)
 
 
 if __name__ == "__main__":

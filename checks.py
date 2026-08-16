@@ -28,6 +28,7 @@ pretend to have passed.
 """
 import glob
 import os
+import re
 import sys
 import traceback
 
@@ -420,19 +421,30 @@ def _standing():
 
 @check("confirmation: says which readings are backed")
 def _confirm():
-    pane = regions("jarvis", "00:02:00")[0]
-    res, _ = engine()(pane)
-    texts = [t for _, t, _ in (res or [])]
-    if not texts:
-        return False, "read nothing on the visualizer panel"
-    marked = verify_names.confirm_readings(pane, texts)
-    doubtful = [t for t, ok in marked if not ok]
-    if not doubtful:
-        return False, ("every reading on the visualizer came back confirmed; "
-                       "the other engine cannot read that panel at all")
-    if not any(t.strip().upper().startswith("R7") for t in doubtful):
-        return False, f"R78 was not among the doubtful: {doubtful}"
-    return True, f"{len(doubtful)} of {len(marked)} unconfirmed, R78 among them"
+    """The fault this whole suite was built for, pinned to its own frame.
+
+    The pane is found by what is written on it, not by its position in the
+    list. It was `regions(...)[0]` until covering the frame properly put the
+    menu bar there instead, and a check that moves when the regions move
+    reports a fault that is not one.
+    """
+    seen = []
+    for pane in regions("jarvis", "00:02:00"):
+        res, _ = engine()(pane)
+        texts = [t for _, t, _ in (res or [])]
+        marks = [t for t in texts if re.fullmatch(r"[Rr][\dis]\d?", t.strip())]
+        if not marks:
+            seen.append(f"{os.path.basename(pane)}:{len(texts)}")
+            continue
+        marked = verify_names.confirm_readings(pane, texts)
+        doubtful = [t for t, ok in marked if not ok]
+        if not any(t in doubtful for t in marks):
+            return False, (f"{marks} came back confirmed, though the other "
+                           "engine cannot read that panel at all")
+        return True, (f"{len(doubtful)} of {len(marked)} unconfirmed on "
+                      f"{os.path.basename(pane)}, {marks} among them")
+    return False, ("no pane of the visualizer holds the faint marks any more; "
+                   "panes were " + ", ".join(seen))
 
 
 # ----------------------------------------------------------- the words

@@ -162,22 +162,58 @@ def frame_regions(img, engine=None):
     for x0, y0, x1, y1 in found:
         split(img[y0:y1, x0:x1], x0, y0, y1 - y0)
 
+    # The columns no window occupies at all are the desktop, and they are cut
+    # the full height of the frame, exactly as they always were.
+    least = max(1, int(MIN_PANE * scale))
     taken = np.zeros(w, bool)
     for x0, _, x1, _ in found:
         taken[max(0, x0):min(w, x1)] = True
-    for a, b in _free_spans(taken, max(1, int(MIN_PANE * scale))):
+    for a, b in _free_spans(taken, least):
         split(img[:, a:b], a, 0, h)
 
-    # A window takes its whole COLUMN out of the desktop, and what sits above
-    # or below it in that column belonged to nothing at all. On a slide of nine
-    # cards, one card was found as a window; the two cards beneath it fell in
-    # its column, outside its height, and were in no region -- so "the tiny gem
-    # * 4k" and "hearthstone * 15k" were read by nothing and reported nowhere.
-    # The regions must cover the frame.
-    for x0, y0, x1, y1 in found:
-        for a, b in ((0, y0), (y1, h)):
-            if b - a >= MIN_PANE * scale:
-                split(img[a:b, x0:x1], x0, a, b - a)
+    # What is left is the frame above and below a window that does not run the
+    # full height, and it used to belong to nothing at all: on a slide of nine
+    # cards, one card was found as a window by its drawn sides, the two beneath
+    # it fell in its column outside its height, and "the tiny gem * 4k" and
+    # "hearthstone * 15k" were read by nothing and reported nowhere.
+    #
+    # So only THAT is added, inside the window columns and nowhere else. The
+    # windows' own top and bottom edges cut those columns into bands; in one
+    # band the set of columns a window holds does not change, so the free
+    # spans of each band are rectangles which together cover the rest and
+    # overlap neither each other nor the strips above.
+    #
+    #     |  strip  |   band above the window   |  strip  |
+    #     |         +---------------------------+         |
+    #     |         |          window           |         |
+    #     |         +---------------------------+         |
+    #     |         |   band below the window   |         |
+    #
+    # Adding a band per window instead covers the frame several times over,
+    # and the same card came back in four panes. Cutting the WHOLE frame into
+    # bands is worse still: the menu bar is a band 44 pixels tall, and taking
+    # it out of the desktop strip changed which corridors that strip has --
+    # one of the new ones ran straight through the Clock app's lap table.
+    #
+    # A band too short to hold a pane is not split into panes; it is read
+    # whole, which is what the menu bar wants. Under eight pixels nothing
+    # legible fits at all, and those are the sliver a rounded corner leaves.
+    edges = sorted({0, h} | {y for _, y0, _, y1 in found for y in (y0, y1)})
+    for top, bottom in zip(edges, edges[1:]):
+        if bottom - top < 8:
+            continue
+        held = np.zeros(w, bool)
+        for x0, y0, x1, y1 in found:
+            if y0 < bottom and y1 > top:
+                held[max(0, x0):min(w, x1)] = True
+        # _free_spans returns the stretches that are FALSE, so the mask handed
+        # to it is everything this band is NOT: held by a window here, or
+        # outside the window columns entirely and already cut above.
+        for a, b in _free_spans(held | ~taken, least):
+            if bottom - top >= least:
+                split(img[top:bottom, a:b], a, top, bottom - top)
+            else:
+                boxes.append((a, top, b, bottom))
 
     boxes.sort(key=lambda box: (box[0], box[1]))
     return boxes
