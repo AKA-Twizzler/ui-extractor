@@ -16,6 +16,8 @@ A pane boundary shows up two ways and BOTH are needed:
                    empty — they carry background texture. Where the TEXT stops
                    is unambiguous, and it is what we actually care about.
 """
+import os
+
 import cv2
 import numpy as np
 
@@ -24,6 +26,18 @@ import screenness
 import machine
 
 MIN_PANE = 90          # a pane narrower than this is furniture, not a pane
+# How far a pane may be enlarged before it is handed to a reader. Every reader
+# enlarges what it is given three times over AGAIN, so this number multiplies:
+# without a cap a 139px sliver of a 1080p frame was magnified ten times here
+# and three times again inside, and the reader was handed 4170 x 32400 pixels
+# -- 135 million of them, five gigabytes of working memory, and the first video
+# of a library sweep never finished.
+#
+# Three is where the fixtures stand. At two the tree loses a folder (30/31
+# instead of 31/31 on folder-versus-file); at three every stage holds and the
+# same sliver comes to 12 million pixels instead of 135. Past that the pixels
+# are interpolated, not read, and only the memory grows.
+MAX_SCALE = int(os.environ.get("PANE_MAX_SCALE", "3"))
 EMPTY_BAND = 26        # an empty strip at least this wide separates panes
 INK = 26               # how far from the local background a pixel counts as ink
 
@@ -232,7 +246,7 @@ def write_box(img, box, path, target=1400):
                max(0, x0):min(img.shape[1], x1)]
     if crop.size == 0 or crop.shape[1] < 40:
         return None
-    scale = max(1, int(target / crop.shape[1]))
+    scale = min(MAX_SCALE, max(1, int(target / crop.shape[1])))
     if scale > 1:
         crop = cv2.resize(crop, (crop.shape[1] * scale, crop.shape[0] * scale),
                           interpolation=cv2.INTER_LANCZOS4)
