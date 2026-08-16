@@ -68,6 +68,43 @@ def is_text_line(row):
     return statistics.median(gaps) <= char_w * GAP_TO_CHAR
 
 
+def split_wide_gaps(rows):
+    """Cut a row wherever the gap is too wide to be a space.
+
+    The recogniser returns a scan line, not a column, so a slide on the left
+    of the frame and a chat log on the right come back as ONE row with a
+    quarter of the picture between them. Left whole, the row begins at the
+    slide's margin, the log's margin is never found, and three bullet points
+    and their captions are reported as things people said.
+
+    The width that is no longer a space is the one already measured for
+    telling writing from scattered marks; a row is cut there instead of being
+    thrown away, so the chat keeps its own half.
+    """
+    out = []
+    for r in rows:
+        words = r.get("words") or []
+        if len(words) < 2:
+            out.append(r)
+            continue
+        chars = sum(len(w[0]) for w in words)
+        if chars < 4:
+            out.append(r)
+            continue
+        char_w = sum(w[2] - w[1] for w in words) / chars
+        piece = [words[0]]
+        for a, b in zip(words, words[1:]):
+            if b[1] - a[2] > char_w * GAP_TO_CHAR:
+                out.append(dict(r, words=piece, x0=piece[0][1], x1=piece[-1][2],
+                                text=" ".join(w[0] for w in piece)))
+                piece = []
+            piece.append(b)
+        if piece:
+            out.append(dict(r, words=piece, x0=piece[0][1], x1=piece[-1][2],
+                            text=" ".join(w[0] for w in piece)))
+    return out
+
+
 def text_margin(rows, tol):
     """Where the chat's writing begins, leaving the avatars to its left.
 
@@ -179,6 +216,7 @@ def read_chat(png_path):
     gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
     mask = note_reader.ink_mask(gray)
     rows = [r for r in note_reader.tess_rows(big, gray) if r["text"].strip()]
+    rows = split_wide_gaps(rows)
     rows = [r for r in rows if is_text_line(r)]
     rows.sort(key=lambda r: r["y0"])
     if len(rows) < MIN_ENTRIES:
@@ -191,8 +229,14 @@ def read_chat(png_path):
     # drawn over video, and whatever animates behind it leaves marks on other
     # scan lines that survive every other test; they do not share the margin,
     # because nothing arranged them.
+    # A word AT the margin, not merely one somewhere to the left of it. The
+    # looser test admitted any row beginning further left, which on a frame
+    # holding a slide beside a chat let the whole slide into the log: three
+    # bullet points and their captions came back as things people had said.
+    # Avatars still sit left of the margin and are still stripped, because a
+    # line with an avatar has its text at the margin as well.
     rows = [r for r in rows
-            if any(abs(w[1] - margin) <= body_h or w[1] < margin
+            if any(abs(w[1] - margin) <= body_h
                    for w in (r.get("words") or []))]
     if len(rows) < MIN_ENTRIES:
         return {"is_chat": False, "why": "no run of lines shares one margin"}

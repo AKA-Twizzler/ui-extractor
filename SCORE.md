@@ -106,6 +106,27 @@ after the fact, by asking each neighbouring row the simpler question -- does
 it fill every column, one cell to each, with nothing left over. The corridor
 test itself is untouched, which is what keeps prose from reading as a table.
 
+`overlay.py`, on the panels a live stream draws over its picture. On the
+St. Jude fundraiser at 2:12:59, the donation card comes back paired:
+`St. Judes Children's Hospital Donations: 22154/ 2110`. On *Live August 03* at
+00:09:00, all three "Livestream Ended" cards come back with their titles and
+their sentences, and the strip of video BETWEEN two of them is correctly not
+called a panel. Two frames whose interface is a slide rather than a panel
+report none, which is right.
+
+What it will not do, and the reason is worth keeping: the `jaredrhod.com`
+banner floating on the picture is left unclaimed. Four measurements were tried
+to tell it from a `FALSE` sticker on the shelf behind Jared and every one put
+them the wrong way round or not apart at all; they are written up in lesson
+24. Calling a sticker interface is a worse answer than saying nothing.
+
+`chat_reader.py` reads the log at 00:40:36 of *Live Replay - July 6, 2026*
+entire: a wrapped question with its asker, and three event lines with theirs.
+On a frame where a slide sits beside the log it now refuses rather than
+reading the slide's bullets as things people said — the recogniser returns a
+scan line, so the two were arriving as one row until rows were cut at gaps
+too wide to be spaces.
+
 Not yet proven, for want of a frame holding one: a file tree drawn in a light
 theme. `hunt.py` sweeps a library for it.
 

@@ -21,6 +21,7 @@ import columns
 import console_reader
 import panes
 import note_reader
+import overlay
 import tree_reader
 import verify_names
 
@@ -64,6 +65,17 @@ def main():
         if not regions:
             print("    no readable interface at full size\n")
             continue
+
+        # Panels drawn ON the picture are read from the whole frame, before it
+        # is split. A donation counter or an alert is a rectangle floating over
+        # video, so it belongs to no pane and splitting would cut it in half.
+        for panel in overlay.read_overlays(path)["panels"]:
+            print(f"  [a panel drawn on the picture]")
+            if panel["label"]:
+                print(f"    {panel['label']}: {panel['value']}")
+            else:
+                for line in panel["lines"]:
+                    print(f"    {line}")
 
         for pi, (px0, px1) in enumerate(pane_columns(img, engine=engine)):
             pane_path = f"{out_dir}/{ts.replace(':','-')}_pane{pi}.png"

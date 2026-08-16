@@ -238,3 +238,31 @@ application reserves that space and clips text that would reach it.
     tables were chosen in; a table left too short to be one is dropped, and
     that is what dissolved a spurious two-column table holding the last two
     files of a four-column one.
+24. **On a live stream, find the PANEL, never classify the text.** A frame
+    holding a "jaredrhod.com" banner the application drew and a "FALSE"
+    sticker on the shelf behind Jared defeats every measure tried on the text
+    itself, each one recorded here so it is not tried again. Exact-pixel ties,
+    which separate a screen recording from a camera everywhere else in this
+    build, put the banner BELOW the sticker (0.24 against 0.44) — over moving
+    video a banner's own soft edges break ties. Motion between frames a second
+    apart put the sticker (25) below the chat (159 and up), because the chat
+    scrolls: drawn is not the same as still. Flat colour found nothing, the
+    room being dim enough that the frame's median local deviation was 0.6 grey
+    levels. The exact painted colour found the panel on one frame and not the
+    other, because the room is lit green and shares the panel's green. What
+    works is the one thing an application does and a room cannot: it draws a
+    RECTANGLE, two horizontal steps and two vertical ones each running dead
+    straight for hundreds of pixels at exactly one x or one y. Two card edges
+    with video between them make a rectangle just as square, and the fill
+    tells them apart — the cards measured 0, 0 and 1 grey levels of spread,
+    the video between them 5. Free-floating text with no panel round it is
+    left unclaimed on purpose: calling a sticker interface is the invention
+    this build exists to prevent.
+25. **Cut a row at a gap too wide to be a space; do not throw it away.** The
+    recogniser returns a scan LINE, not a column, so a slide on the left of a
+    frame and a chat log on the right come back as one row with a quarter of
+    the picture in between. The chat's margin is then never found, its own
+    lines are judged against the slide's margin, and three bullet points and
+    their captions were reported as things people had said. The width that is
+    no longer a space was already measured for telling writing from scattered
+    marks; cutting there rather than rejecting the row keeps both halves.
