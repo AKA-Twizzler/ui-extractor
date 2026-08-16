@@ -178,6 +178,7 @@ def cells_in_bands(row, bands, tess_words=None):
     """
     out = ["" for _ in bands]
     flags = [None for _ in bands]
+    box = [None for _ in bands]
     for c in row["cells"]:
         mid = (c["x0"] + c["x1"]) // 2
         for i, (a, b) in enumerate(bands):
@@ -189,10 +190,38 @@ def cells_in_bands(row, bands, tess_words=None):
                         from verify_names import reconcile
                         text, status = reconcile(c["text"], other)
                 out[i] = (out[i] + " " + text).strip()
+                if box[i] is None:
+                    box[i] = [c["x0"], c["x1"]]
+                else:
+                    box[i][0] = min(box[i][0], c["x0"])
+                    box[i][1] = max(box[i][1], c["x1"])
                 if status not in ("confident", "reconciled", "single"):
                     flags[i] = status
                 break
-    return out, flags
+    return out, flags, box
+
+
+def aligned(boxes, space_w):
+    """Do these cells sit in a drawn column, or just happen to share a gap?
+
+    A column is painted at a fixed x, so its cells agree on an edge: the left
+    one normally, the right one where the values are numbers. Text that merely
+    falls either side of an accidental gap -- a terminal beside a webcam
+    inset, a paragraph's ragged edge -- agrees on neither, and without this
+    test such a frame comes back as a confident two-column table of prose.
+    """
+    have = [b for b in boxes if b]
+    if len(have) < 2:
+        # one cell cannot disagree with itself; absence of evidence is not
+        # evidence of misalignment, and rejecting here loses a real column
+        # whose neighbours happen to be blank
+        return True
+    for side in (0, 1):
+        vals = [b[side] for b in have]
+        mid = statistics.median(vals)
+        if statistics.median([abs(v - mid) for v in vals]) <= space_w * 1.5:
+            return True
+    return False
 
 
 def read_list(png_path):
@@ -230,28 +259,43 @@ def read_list(png_path):
     found = []
     for block_rows, corrs in blocks(mask, rows, space_w)[0]:
         bands = bands_from(corrs, mask.shape[1])
-        table, flagged = [], []
+        table, flagged, boxes = [], [], []
         for r in block_rows:
-            vals, flags = cells_in_bands(r, bands, tess_words)
+            vals, flags, box = cells_in_bands(r, bands, tess_words)
             table.append(vals)
             flagged.append(flags)
-        # A column view FILLS its columns. If most rows leave a band empty,
-        # that band was a paragraph's ragged edge pretending to be one.
+            boxes.append(box)
+        # A column view fills its columns on EVERY row it covers. A majority
+        # is not enough: prose whose lines happen to stop short leaves a gap,
+        # and text beyond it -- a webcam inset in the corner of a screen
+        # recording -- fills the far band on half the rows, which was enough
+        # to return a terminal as a confident two-column table.
+        #
+        # The cost is real and is the right way round. A band left blank by
+        # even one row is dropped, so a table whose cells are genuinely empty
+        # is refused rather than read. Refusing falls back to reading the
+        # pane as prose, which loses the pairing but invents nothing; the
+        # other way round invents a table, which is what this build exists
+        # to prevent.
         filled = [sum(1 for row in table if row[i].strip()) / len(table)
                   for i in range(len(bands))]
-        keep = [i for i, f in enumerate(filled) if f >= 0.5]
+        keep = [i for i, f in enumerate(filled) if f >= 1.0
+                and aligned([row[i] for row in boxes], space_w)]
         if len(keep) < 2:
             continue
         bands = [bands[i] for i in keep]
         table = [[row[i] for i in keep] for row in table]
         flagged = [[row[i] for i in keep] for row in flagged]
-        # the header is the first row that fills every column
+        # The header is the first row that fills every column -- and there
+        # must BE one. A set of columns nothing spans is not a table: it is
+        # prose with a ragged edge, and text found on a webcam inset beside
+        # it filling one band on half the rows is enough to fake the rest.
         header, body, hflags = None, table, flagged
         for i, row in enumerate(table):
             if all(c.strip() for c in row):
                 header, body, hflags = row, table[i + 1:], flagged[i + 1:]
                 break
-        if not body:
+        if header is None or not body:
             continue
         found.append({"columns": len(bands), "bands": bands,
                       "header": header, "rows": body, "flags": hflags,
