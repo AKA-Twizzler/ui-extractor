@@ -153,7 +153,10 @@ def main():
                     continue
                 # a document: the words AND the shape
                 note = note_reader.read_note(pane_path)
-                if note["markdown"].strip().count("\n") >= 3:
+                # lines of TEXT, not lines of output: the fences round a
+                # properties block are structure the reader emits, so counting
+                # them lets two garbled words come back as a document
+                if note_reader.body_lines(note["markdown"]) >= 3:
                     print(f"  [pane {pi}: an open document]")
                     for line in note["markdown"].splitlines():
                         print("    " + line)

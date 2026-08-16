@@ -560,6 +560,19 @@ def to_markdown(rows):
     return "\n".join(out)
 
 
+def body_lines(markdown):
+    """How many lines of a read note are actually text.
+
+    The `---` fences of a properties block are structure the reader emits, not
+    something it read, so counting them as lines lets two words become a
+    document. On a stylised heads-up display the recogniser returned "we Me
+    Bs: VE Ze Ss" and "ub: LN CONNECTED", the reader wrapped them in fences,
+    and four lines came back where two garbled ones had been read.
+    """
+    return sum(1 for line in markdown.splitlines()
+               if line.strip() and line.strip() != "---")
+
+
 if __name__ == "__main__":
     note = read_note(sys.argv[1])
     print(f"body height {note['body_height']:.0f}px, heading sizes "

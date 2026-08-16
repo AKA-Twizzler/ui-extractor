@@ -356,3 +356,18 @@ application reserves that space and clips text that would reach it.
     pipeline was run end to end on a video it had never been run on. Neither
     fixture covers it, and the frame that broke it was not a hard frame — it
     was a man sitting in a room with posters behind him.
+31. **Count what was READ, not what was written out.** A stylised heads-up
+    display gave the recogniser decorative graphics, and it returned "we Me Bs:
+    VE Ze Ss" and "ub: LN CONNECTED" for them. The note reader wrapped those
+    two garbled lines in the `---` fences of a properties block, and the gate
+    that asks whether there is enough here to be a document counted four lines
+    and said yes. The fences are structure the reader emits; they are not
+    something it read. Counting only lines carrying text, the fragment gives
+    two and is refused, while the real note gives seven and the browser page
+    beside it four.
+
+    Rejected on the way, with numbers, so it is not tried again: the
+    recogniser's own CONFIDENCE does not separate garbage from text here. A
+    real note reads at a median 0.855, a real chat log 0.856, a real sidebar
+    0.852 — and the two heads-up fragments at 0.798 and 0.825. It is
+    confidently wrong, which is the failure this whole build is built around.
