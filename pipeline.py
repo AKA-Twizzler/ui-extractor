@@ -22,6 +22,7 @@ import console_reader
 import panes
 import note_reader
 import overlay
+import transcript
 import tree_reader
 import verify_names
 
@@ -47,7 +48,11 @@ def main():
 
     print(f"=== {title} ===")
     samples = spot.scan(video, every, cache, rescan="--rescan" in sys.argv)
-    runs = [r for r in spot.stretches(samples) if r["call"] == "screen"]
+    every_run = spot.stretches(samples)
+    # the words that go with each screen, joined on the one clock both halves
+    # were stamped with -- see transcript.py
+    joined = transcript.words_for(video, every_run) is not None
+    runs = [r for r in every_run if r["call"] == "screen"]
     print(f"{len(runs)} distinct screens found; capturing "
           f"{min(limit, len(runs))}\n")
 
@@ -62,6 +67,8 @@ def main():
         regions = screenness.ui_regions(img, engine)
         share = sum(x["share"] for x in regions) * 100
         print(f"--- {ts}  ({how}; interface on {share:.0f}% of the frame) ---")
+        if joined and r.get("said"):
+            print(f"  [said while this screen was up]\n    {r['said']}")
         if not regions:
             print("    no readable interface at full size\n")
             continue
