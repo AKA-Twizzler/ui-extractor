@@ -36,6 +36,7 @@ import cv2
 import numpy as np
 
 import note_reader
+import machine
 
 MIN_BAND = 3          # a band narrower than this many spaces is not a column
 MIN_ROWS = 3          # a table is a heading and at least two rows

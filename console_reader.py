@@ -50,6 +50,7 @@ import cv2
 import numpy as np
 
 import note_reader
+import machine
 
 MONO_SPREAD = 0.04     # character widths vary less than this on a lattice
 MIN_PROMPTS = 2        # one line proves no repetition

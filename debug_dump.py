@@ -14,6 +14,7 @@ import numpy as np
 import cv2
 
 from ui_geometry import tesseract_tsv, group_lines, strip_furniture_by_gaps
+import machine
 
 BRIGHT = 100  # Obsidian icons are dim gray; text is bright
 

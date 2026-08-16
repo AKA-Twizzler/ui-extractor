@@ -29,6 +29,7 @@ instead of one blurred average that is right about neither.
 """
 import cv2
 import numpy as np
+import machine
 
 GRID = (6, 8)          # rows, cols of cells the frame is scored in
 CELL_IS_SCREEN = 0.55  # a cell's tie-fraction above this reads as interface

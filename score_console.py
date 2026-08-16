@@ -12,6 +12,7 @@ import difflib
 import sys
 
 import console_reader
+import machine
 
 TRUTH = [
     ("Next: Run claude --help to get started", False, False),

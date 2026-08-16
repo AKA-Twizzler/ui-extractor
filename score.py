@@ -13,6 +13,7 @@ import re
 import sys
 
 import fixture
+import machine
 
 
 def key(s):

@@ -55,6 +55,7 @@ import cv2
 import numpy as np
 
 import note_reader
+import machine
 
 RUN = 0.04            # an edge runs this far across the frame to count
 MIN_SIDE = 40         # and a panel is at least this many pixels each way

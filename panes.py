@@ -21,6 +21,7 @@ import numpy as np
 
 import overlay
 import screenness
+import machine
 
 MIN_PANE = 90          # a pane narrower than this is furniture, not a pane
 EMPTY_BAND = 26        # an empty strip at least this wide separates panes

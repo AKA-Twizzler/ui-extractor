@@ -167,6 +167,20 @@ reading the slide's bullets as things people said — the recogniser returns a
 scan line, so the two were arriving as one row until rows were cut at gaps
 too wide to be spaces.
 
+`tree_reader.py` now refuses two things it used to claim as file trees: a
+live stream's chat log, which came back with `˃ DavidThuku-89` for a folder,
+and a desktop's menu bar, which came back with `˃ Clock` and `˃ File Edit`.
+A tree is exactly a layout whose indentation carries depth, so a row starts
+where its depth puts it: real sidebars miss that by 0.55 and 0.71 row
+heights, the chat log by 3.19 and the menu bar by 21.5. Both fixtures are
+unchanged by it.
+
+`panes.py`, on the desktop at 00:01:41 of *My AI Jarvis Makes Money*: three
+windows found by their four drawn sides, each split into its own panes, and
+the desktop no window covers split the way a frame always was. The Finder,
+terminal and Obsidian frames give exactly the regions they gave when this
+only cut vertical strips.
+
 Not yet proven, for want of a frame holding one: a file tree drawn in a light
 theme. `hunt.py` sweeps a library for it.
 

@@ -313,3 +313,26 @@ application reserves that space and clips text that would reach it.
     warning triangle — it stopped with an encoder error partway through the
     answer. Both are one-line fixes, and both are invisible until a frame
     carries a character outside the alphabet.
+29. **A tree's indentation IS its depth — fit that line and measure the
+    worst row.** Two faults stood open: a live stream's chat log came back as
+    a file tree with folders in it (`˃ DavidThuku-89`), and so did a desktop's
+    menu bar (`˃ Clock`, `˃ File Edit`). Two measurements had already failed
+    to separate them — the x-alignment of rows within one depth, and the ink
+    in the gutter where a chevron would be.
+
+    What works is the definition of the thing. A tree is exactly a layout
+    whose indentation carries depth: rows at one depth start at one x, and the
+    step from each depth to the next is one indent. Fit `x = base + depth *
+    indent` through the rows and take the worst row's distance from it. In ROW
+    HEIGHTS, which the frame gives itself — a fixed pixel count means
+    something different on a 640-wide crop and a 3840-wide desktop. Real
+    sidebars measure 0.55 and 0.71; the chat log 3.19, the menu bar 21.5.
+
+    A near miss worth keeping: row RHYTHM looked like the answer first, since
+    a tree draws every row at one height. It kills the menu bar (gaps of 0, 1,
+    2, 323, 2592 pixels) but not the chat, whose lines are evenly spaced
+    because a chat log is a list too. And taken carelessly it runs backwards —
+    with the pitch read from the smallest gap, two rows a pixel apart make
+    every gap a whole multiple of one pixel, and the false tree scored a
+    perfect 0.000 against the real sidebar's 0.109. The pitch has to come from
+    the median gap, never the smallest.

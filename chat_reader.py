@@ -35,6 +35,7 @@ import cv2
 import numpy as np
 
 import note_reader
+import machine
 
 GAP_TO_CHAR = 4.0      # a space wider than this many characters is not a space
 MIN_ENTRIES = 2        # one entry is not a log

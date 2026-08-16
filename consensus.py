@@ -24,6 +24,7 @@ import sys
 from collections import Counter, defaultdict
 
 from verify_names import HOMOGLYPHS, only_homoglyph_diff, truncation, completes
+import machine
 
 
 def glyph_key(name):

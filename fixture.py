@@ -9,6 +9,7 @@ Row: {name, kind ("folder"|"file"), chevron ("down"|"right"|None), depth}
 """
 import re
 import os
+import machine
 
 FIXTURE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                        "GROUND-TRUTH-TREE.md")

@@ -36,6 +36,7 @@ import sys
 
 import cv2
 import numpy as np
+import machine
 
 LINE_COVERAGE = 0.9    # a guide line is lit down (almost) the whole row
 BG_KERNEL = 31         # width of the horizontal opening that estimates background
@@ -45,6 +46,9 @@ GLYPH_COVERAGE = 0.25  # a glyph lights part of the row, not all of it
 COLUMN_TOL = 10        # px tolerance when clustering guide-line columns
 PITCH_TOL = 0.14       # a file tree's rows are evenly pitched, within 14%
 MIN_COLUMN_ROWS = 2    # a column drawn on one row only is noise
+INDENT_MISS = 1.5      # how far a row may start from where its depth puts
+                       # it, in row heights: real sidebars measure 0.55 and
+                       # 0.71, a chat log 3.19, a desktop menu bar 21.5
 CHEVRON_CHARS = "><»›˃˅⌄▸▾▶▼"
 
 
@@ -419,7 +423,7 @@ def read_tree(png_path):
     ys = [r["y0"] for r in rows]
     pitch = statistics.median([b - a for a, b in zip(ys, ys[1:])]) if len(ys) > 2 else 0
     ok, why = looks_like_a_tree(len(rows), len(every), columns, pitch,
-                                [r['name'] for r in out])
+                                [r['name'] for r in out], out)
     return {"source": png_path, "guide_columns": columns,
             "theme": "dark" if dark else "light",
             "contrast_margin": margin, "chrome_rows_dropped": chrome_dropped,
@@ -452,7 +456,35 @@ def looks_like_prose(names):
     return enders > len(named) / 2
 
 
-def looks_like_a_tree(rows_kept, rows_seen, columns, pitch, names=()):
+def indent_miss(rows):
+    """How far a row starts from where its depth puts it, in row heights.
+
+    A tree is exactly a thing whose indentation carries its depth: two rows at
+    one depth start at one x, and the step from each depth to the next is one
+    indent. So fit that line through the rows and measure the worst one's
+    distance from it.
+
+    In ROW HEIGHTS, because the frame gives that scale itself and a fixed
+    number of pixels would mean something different on a 640-wide crop and a
+    3840-wide desktop.
+    """
+    if len(rows) < 3:
+        return 0.0
+    x = np.array([r["x0"] for r in rows], float)
+    d = np.array([r["depth"] for r in rows], float)
+    h = statistics.median([r["y1"] - r["y0"] for r in rows]) or 1.0
+    if d.max() > d.min():
+        fitted = np.vstack([d, np.ones(len(d))]).T
+        (step, base), *_ = np.linalg.lstsq(fitted, x, rcond=None)
+        worst = float(np.abs(x - (base + step * d)).max())
+    else:
+        # every row at one depth: then they must all start at one x, which is
+        # the same test with the indent taken out of it
+        worst = float(x.max() - x.min())
+    return worst / h
+
+
+def looks_like_a_tree(rows_kept, rows_seen, columns, pitch, names=(), placed=()):
     """Decide whether this pane is a tree at all, and say so when it is not.
 
     Reading a tree out of something that is not one is the worst outcome
@@ -460,10 +492,13 @@ def looks_like_a_tree(rows_kept, rows_seen, columns, pitch, names=()):
     columns — a Finder window, a table — the column edges pass for guide lines
     and the result reads like a nesting that was never there.
 
-    Two things separate them. A tree's rows are the bulk of what is in its
-    pane, where a column layout leaves most of the text unaccounted for. And a
+    Three things separate them. A tree's rows are the bulk of what is in its
+    pane, where a column layout leaves most of the text unaccounted for. A
     tree indents by roughly the height of a row, where column positions are
-    spaced by whatever the columns happen to need.
+    spaced by whatever the columns happen to need. And a tree's indentation IS
+    its depth, so a row starts where its depth says it starts — which is what
+    a live stream's chat log and a desktop's menu bar cannot do, both of which
+    were coming back as trees with folders in them.
     """
     if rows_seen and rows_kept / rows_seen < 0.5:
         return False, (f"only {rows_kept} of {rows_seen} rows sit on one pitch; "
@@ -473,6 +508,10 @@ def looks_like_a_tree(rows_kept, rows_seen, columns, pitch, names=()):
         if not (0.25 * pitch <= step <= 2.5 * pitch):
             return False, (f"indent step {step:.0f}px against row pitch "
                            f"{pitch:.0f}px; that spacing is columns, not nesting")
+    miss = indent_miss(placed)
+    if miss > INDENT_MISS:
+        return False, (f"rows start {miss:.1f} row heights from where their "
+                       "depth puts them; a tree's indent IS its depth")
     if looks_like_prose(names):
         return False, ("most rows end in sentence punctuation; "
                        "these are sentences, not names")
