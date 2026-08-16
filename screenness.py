@@ -135,6 +135,44 @@ def clusters(mask):
     return out
 
 
+def candidate_regions(bgr, min_cells=2):
+    """Where interface COULD be, from pixels alone. No reading, no engine.
+
+    Separated out so a whole video can be segmented before anything is read.
+    Reading is the expensive step and most of it is redundant: inside a long
+    stretch of one screen, confirming every sample tells you nothing the first
+    one did not.
+    """
+    work = to_working_size(bgr)
+    cells = cell_scores(work)
+    h, w = work.shape[:2]
+    rows, cols = GRID
+    out = []
+    for n, r0, r1, c0, c1 in clusters(cells >= CELL_IS_SCREEN):
+        if n < min_cells:
+            continue
+        out.append({"cells": n, "share": n / (rows * cols),
+                    "box": (c0 * w // cols, r0 * h // rows,
+                            (c1 + 1) * w // cols, (r1 + 1) * h // rows)})
+    return out
+
+
+def rows_aligned(boxes, tol=6, need=3):
+    """Do these text boxes line up the way interface does.
+
+    Interface stacks its text in columns that share a left edge — a tree, a
+    list, a menu, a form. Writing in the real world does not: a sign, a book
+    spine, a whiteboard scrawl gives you one or two strings at odd positions.
+    Without this test, flat-plus-text calls a printed sign an interface.
+    """
+    xs = sorted(int(min(p[0] for p in b)) for b, _, _ in boxes)
+    best = run = 1
+    for a, b in zip(xs, xs[1:]):
+        run = run + 1 if b - a <= tol else 1
+        best = max(best, run)
+    return best >= need
+
+
 def ui_regions(bgr, engine, min_cells=2, min_boxes=5):
     """Regions of the frame that hold interface, confirmed by finding text.
 
@@ -163,7 +201,7 @@ def ui_regions(bgr, engine, min_cells=2, min_boxes=5):
                               interpolation=cv2.INTER_LANCZOS4)
         res, _ = engine(crop)
         boxes = len(res) if res else 0
-        if boxes >= min_boxes:
+        if boxes >= min_boxes and rows_aligned(res):
             found.append({"cells": n, "boxes": boxes,
                           "box": (x0, y0, x1, y1),
                           "share": n / (rows * cols)})

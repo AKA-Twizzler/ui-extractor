@@ -23,12 +23,13 @@ import re
 import sys
 from collections import Counter, defaultdict
 
-from verify_names import HOMOGLYPHS, only_homoglyph_diff
+from verify_names import HOMOGLYPHS, only_homoglyph_diff, truncation, completes
 
 
 def glyph_key(name):
     """A key that ignores spacing, case, and look-alike glyphs."""
-    t = re.sub(r"[^A-Za-z0-9]", "", name).lower()
+    t = re.sub(r"[^A-Za-z0-9]", "", name.replace("\u2026", "").replace("...", ""))
+    t = t.lower()
     out = []
     for ch in t:
         for cls in HOMOGLYPHS:
@@ -54,8 +55,21 @@ def gather(trees):
 
 def decide(readings):
     counts = Counter(readings)
+    # a name the application shortened is never the answer when another frame
+    # showed it whole: the missing letters were never drawn, so the fuller
+    # reading is the only one that was ever really on screen
+    whole = [r for r in counts if truncation(r) is None]
+    cut = [r for r in counts if truncation(r) is not None]
+    for c in cut:
+        filled = [w for w in whole if completes(c, w)]
+        if filled:
+            best = max(filled, key=lambda w: counts[w])
+            counts[best] += counts.pop(c)
     if len(counts) == 1:
-        return readings[0], "agreed", dict(counts)
+        # the surviving key, not the first reading: a truncated name may have
+        # had its votes moved onto the complete one just above
+        only = next(iter(counts))
+        return only, "agreed", dict(counts)
     top, n = counts.most_common(1)[0]
     runners = [r for r, c in counts.items() if r != top]
     if all(only_homoglyph_diff(re.sub(r"[^A-Za-z0-9]", "", top),

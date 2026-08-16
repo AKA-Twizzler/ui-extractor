@@ -78,28 +78,48 @@ def scan(video, every, cache_path=None, rescan=False):
         if d.get("every") == every and d.get("video") == video and d.get("v") == 2:
             return d["samples"]
 
-    from rapidocr_onnxruntime import RapidOCR
-    engine = RapidOCR()
     samples = []
-    read = 0
+    keep = {}
     with tempfile.TemporaryDirectory() as work:
         for path, secs in sample_frames(video, every, work):
             bgr = cv2.imread(path)
             if bgr is None:
                 continue
-            regions = screenness.ui_regions(bgr, engine)
-            if regions:
-                read += 1
-            share = sum(r["share"] for r in regions)
+            cands = screenness.candidate_regions(bgr)
+            share = sum(c["share"] for c in cands)
             thumb = cv2.resize(cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY), THUMB,
                                interpolation=cv2.INTER_AREA)
-            samples.append({"t": secs, "call": "screen" if regions else "camera",
-                            "frac": share, "regions": len(regions),
-                            "box": regions[0]["box"] if regions else None,
-                            "boxes": regions[0]["boxes"] if regions else 0,
-                            "thumb": thumb.tolist()})
-    print(f"  {len(samples)} samples; text read on {read} of them "
-          f"({100*read/max(1,len(samples)):.0f}%), the rest ruled out by pixels alone")
+            samples.append({"t": secs, "call": "screen" if cands else "camera",
+                            "frac": share, "regions": len(cands),
+                            "box": cands[0]["box"] if cands else None,
+                            "boxes": 0, "thumb": thumb.tolist()})
+            if cands:
+                keep[secs] = path
+        # confirm by reading, but ONCE PER STRETCH rather than once per sample.
+        # Inside a run of one screen every extra read says what the first said.
+        from rapidocr_onnxruntime import RapidOCR
+        engine = RapidOCR()
+        by_t = {s["t"]: s for s in samples}
+        checked = 0
+        for run in stretches(samples):
+            if run["call"] != "screen":
+                continue
+            best = run["best"]
+            path = keep.get(best["t"])
+            if path is None:
+                continue
+            regions = screenness.ui_regions(cv2.imread(path), engine)
+            checked += 1
+            confirmed = bool(regions)
+            for s2 in samples:
+                if run["start"] <= s2["t"] <= run["end"]:
+                    s2["call"] = "screen" if confirmed else "camera"
+                    if confirmed:
+                        s2["boxes"] = regions[0]["boxes"]
+                        s2["box"] = regions[0]["box"]
+    print(f"  {len(samples)} samples; text read on {checked} of them "
+          f"({100*checked/max(1,len(samples)):.0f}%) — one per stretch, "
+          f"the rest settled by pixels alone")
     if cache_path:
         os.makedirs(os.path.dirname(cache_path), exist_ok=True)
         json.dump({"v": 2, "video": video, "every": every, "samples": samples},

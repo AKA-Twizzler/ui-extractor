@@ -61,6 +61,36 @@ def read_row(img, row, pad_right=8):
     return _tess_line(crop)
 
 
+ELLIPSES = ("\u2026", "...")
+
+
+def truncation(name):
+    """Split a name the application itself shortened into (head, tail).
+
+    Applications cut names they cannot fit and draw an ellipsis in the gap:
+    'project_ship...ation_fix.md'. Those letters were never on the screen, so
+    no amount of resolution recovers them from this frame — the only way back
+    is another frame where the column was wider. What matters is that such a
+    name is never mistaken for the real one, so it is marked here and completed
+    later if a fuller reading of the same name turns up.
+    """
+    for e in ELLIPSES:
+        if e in name:
+            head, _, tail = name.partition(e)
+            return head.strip(), tail.strip()
+    return None
+
+
+def completes(short, full):
+    """Does `full` plausibly fill in the gap the application cut out."""
+    parts = truncation(short)
+    if not parts or truncation(full):
+        return False
+    head, tail = parts
+    return (len(full) > len(head) + len(tail)
+            and full.startswith(head) and full.endswith(tail))
+
+
 def strip_arrow_junk(s):
     """Drop the arrow an engine mistook for punctuation at the start of a name."""
     t = s
@@ -118,6 +148,7 @@ def verify(png_path, tree):
         row["name_second"] = second
         row["name"] = name
         row["name_status"] = status
+        row["truncated"] = truncation(name) is not None
     tree["verified"] = True
     return tree
 
