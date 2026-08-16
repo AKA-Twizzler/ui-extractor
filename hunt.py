@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Sweep a library and catalogue the KINDS of interface it contains.
 
-    python3 hunt.py <video-or-folder> [--every 90] [--out census.md]
+    python3 hunt.py <video-or-folder> [--spots 6]      a few moments each
+    python3 hunt.py <video-or-folder> [--every 15]     every distinct screen
 
 Reading one video end to end proves the readers on the screens that video
 happens to show. It says nothing about the next one. What decides whether a
@@ -166,13 +167,13 @@ def look(png, engine):
     kinds = []
     for pi, (px0, px1) in enumerate(panes.pane_columns(img, engine=engine)):
         pane_path = png.replace(".png", f"_c{pi}.png")
-        # written at NATIVE size. write_pane normally enlarges a pane so fine
-        # text reads cleanly, but a narrow one is enlarged sevenfold and then
-        # again threefold for measurement -- ninety megapixels to answer a
-        # question that does not need them. Deciding WHAT a pane is takes far
-        # less than reading it; the examples this keeps are re-read at full
-        # size afterwards.
-        if panes.write_pane(img, px0, px1, pane_path, target=1) is None:
+        # Enlarged as the readers expect. Writing panes at native size was
+        # tried, to keep a narrow pane from being blown up sevenfold and then
+        # threefold again for measurement -- and it silently broke the whole
+        # census: at native size the text is too small to read, so every pane
+        # came back as nothing and nine videos in a row reported no interface
+        # at all. Cheap and blind is worse than slow and right.
+        if panes.write_pane(img, px0, px1, pane_path) is None:
             continue
         kind = classify(pane_path)
         if kind:
@@ -194,6 +195,41 @@ def keep_frame(video, secs, png):
         if img is not None:
             cv2.imwrite(dest, img)
     return dest
+
+
+def spot_check(video, count, work, engine, seen):
+    """Look at a handful of moments spread through a video, and no more.
+
+    Mapping a video to every screen it shows is the right thing when that
+    video is being READ. It is the wrong thing when the question is only
+    "what kinds of interface does this library contain" -- the map costs
+    minutes a video and forty-three of them is an afternoon, to answer a
+    question a few moments from each would have answered.
+
+    So this takes `count` moments spread evenly through each video, skipping
+    the first and last tenth where titles and end cards live, and keeps only
+    the kinds it has not seen before.
+    """
+    total = duration(video)
+    if total <= 0:
+        return
+    title = os.path.basename(os.path.dirname(video)) or os.path.basename(video)
+    print(f"# {title}", flush=True)
+    for k in range(count):
+        secs = total * (0.1 + 0.8 * (k + 0.5) / count)
+        png = frame_at(video, secs, os.path.join(work, "spot.png"))
+        if not png:
+            continue
+        got = look(png, engine)
+        if not (got and got.get("ui") and got["kinds"]):
+            continue
+        sig = (got["theme"], tuple(sorted(set(got["kinds"]))))
+        if sig in seen:
+            continue
+        seen[sig] = (title, hms(secs))
+        keep_frame(video, secs, png)
+        print(f"NEW  {title}  {hms(secs)}  {got['theme']}  "
+              + " + ".join(sorted(set(got['kinds']))), flush=True)
 
 
 def sweep(video, every, work, engine, seen):
@@ -248,8 +284,13 @@ def main():
     from rapidocr_onnxruntime import RapidOCR
     engine = RapidOCR()
     seen = {}
+    spots = int(sys.argv[sys.argv.index("--spots") + 1]) \
+        if "--spots" in sys.argv else 0
     for v in videos:
-        sweep(v, every, work, engine, seen)
+        if spots:
+            spot_check(v, spots, work, engine, seen)
+        else:
+            sweep(v, every, work, engine, seen)
     print("\n=== the kinds of screen in this library ===", flush=True)
     for (theme, kinds), (title, ts) in sorted(seen.items(), key=lambda kv: str(kv[0])):
         print(f"  {theme:5s}  {' + '.join(kinds):28s}  {title}  {ts}", flush=True)

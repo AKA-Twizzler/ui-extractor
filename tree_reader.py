@@ -418,7 +418,8 @@ def read_tree(png_path):
 
     ys = [r["y0"] for r in rows]
     pitch = statistics.median([b - a for a, b in zip(ys, ys[1:])]) if len(ys) > 2 else 0
-    ok, why = looks_like_a_tree(len(rows), len(every), columns, pitch)
+    ok, why = looks_like_a_tree(len(rows), len(every), columns, pitch,
+                                [r['name'] for r in out])
     return {"source": png_path, "guide_columns": columns,
             "theme": "dark" if dark else "light",
             "contrast_margin": margin, "chrome_rows_dropped": chrome_dropped,
@@ -426,7 +427,32 @@ def read_tree(png_path):
             "rows": out if ok else []}
 
 
-def looks_like_a_tree(rows_kept, rows_seen, columns, pitch):
+SENTENCE_END = ".,:;?!"
+
+
+def looks_like_prose(names):
+    """Are these rows sentences rather than names?
+
+    A page of evenly spaced prose passes every geometric test a tree has to
+    pass: the lines sit on one pitch, they start at one margin, and a letter
+    standing at the same x on four consecutive lines reads as a guide line.
+    Given a light-theme email being written, the reader returned fifteen rows
+    of a stranger's copy as a folder tree, chevrons and all -- confident, and
+    entirely invented.
+
+    Geometry cannot separate them, but the words can, without being trusted
+    for anything else: a sentence ENDS in punctuation and a file name does
+    not. This is the one place the text gets a vote, and it only ever votes
+    to refuse.
+    """
+    named = [n.strip() for n in names if n.strip()]
+    if len(named) < 4:
+        return False
+    enders = sum(1 for n in named if n[-1] in SENTENCE_END)
+    return enders > len(named) / 2
+
+
+def looks_like_a_tree(rows_kept, rows_seen, columns, pitch, names=()):
     """Decide whether this pane is a tree at all, and say so when it is not.
 
     Reading a tree out of something that is not one is the worst outcome
@@ -447,6 +473,9 @@ def looks_like_a_tree(rows_kept, rows_seen, columns, pitch):
         if not (0.25 * pitch <= step <= 2.5 * pitch):
             return False, (f"indent step {step:.0f}px against row pitch "
                            f"{pitch:.0f}px; that spacing is columns, not nesting")
+    if looks_like_prose(names):
+        return False, ("most rows end in sentence punctuation; "
+                       "these are sentences, not names")
     return True, "rows evenly pitched and indented like a tree"
 
 
