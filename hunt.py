@@ -79,10 +79,10 @@ def look(png, engine):
     if not regions:
         return {"ui": False}
     found = {"ui": True, "theme": theme_of(img, regions), "panes": []}
-    from pipeline import pane_columns, write_pane
-    for pi, (px0, px1) in enumerate(pane_columns(img)):
+    from panes import pane_columns, write_pane
+    for pi, (px0, px1) in enumerate(pane_columns(img, engine=engine)):
         pane_path = png.replace(".png", f"_h{pi}.png")
-        if not write_pane(img, px0, px1, pane_path):
+        if write_pane(img, px0, px1, pane_path) is None:
             continue
         try:
             tree = tree_reader.read_tree(pane_path)
