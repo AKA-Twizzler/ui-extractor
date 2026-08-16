@@ -237,6 +237,54 @@ def tess_rows(png_path, gray):
     return rows
 
 
+def second_engine_rows(big_path):
+    """The other engine's reading of the same pixels, as boxed lines."""
+    try:
+        from tree_reader import ocr_rows
+        return ocr_rows(big_path)
+    except Exception:
+        return []
+
+
+def text_at(second, row, pad):
+    """What the other engine read across this row."""
+    picked = [c for c in second
+              if row["y0"] - pad <= (c["y0"] + c["y1"]) / 2 <= row["y1"] + pad
+              and c["x1"] > row["x0"] - pad and c["x0"] < row["x1"] + pad]
+    picked.sort(key=lambda c: c["x0"])
+    text = " ".join(c["text"] for c in picked).strip()
+    # the other engine sees the drawn bullet as well, and it has already been
+    # taken off the primary reading; left on, the two never agree
+    while text[:1] in BULLET_CHARS and len(text) > 2:
+        text = text[1:].lstrip()
+    return text
+
+
+def reconcile_rows(rows, big_path, body_h):
+    """Read every line twice and keep what the two engines agree on.
+
+    One engine loses spaces inside a word; the other loses a glyph it cannot
+    name, welding two version numbers together where a rendered arrow stood.
+    Neither is trusted alone. Where the letters match, the fuller reading
+    wins, because an engine drops what it cannot name and never invents it;
+    where they do not, the line is left flagged rather than picked between.
+    """
+    second = second_engine_rows(big_path)
+    if not second:
+        return rows
+    from verify_names import reconcile
+    for r in rows:
+        other = text_at(second, r, body_h * 0.4)
+        if not other:
+            r["read_status"] = "unverified"
+            continue
+        text, status = reconcile(r["text"], other)
+        r["text"] = text
+        r["read_status"] = status
+        r["text_second"] = other
+    return rows
+
+
 def read_note(png_path, engine=None):
     bgr = cv2.imread(png_path)
     # everything is measured on a 3x enlargement: strokes are two or three
@@ -288,6 +336,10 @@ def read_note(png_path, engine=None):
         r["number"] = int(m.group(1)) if m else None
         # provisional, only to keep a heading from joining a body line
         r["heading"] = 1 if r["xh"] >= body * 1.10 else 0
+    # only now is the text read a second time: reconciling first would replace
+    # the line and take the drawn bullet off it, and the row would rejoin the
+    # line above as if it had never started a new one
+    rows = reconcile_rows(rows, big_path, body)
 
     # the column's right edge is where full lines end, taken as the busiest
     # right-hand position rather than the furthest, so one stray wide row

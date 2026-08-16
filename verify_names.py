@@ -120,6 +120,59 @@ def letters(s):
     return re.sub(r"[^A-Za-z0-9]", "", s)
 
 
+def subsequence(small, big):
+    """Is every character of `small` present in `big`, in order?"""
+    it = iter(big)
+    return all(ch in it for ch in small)
+
+
+def _split_on_letters(text):
+    """The letters of a reading, and the run of symbols before each of them."""
+    seps, letters_out, run = [], [], ""
+    for ch in text:
+        if ch.isalnum():
+            seps.append(run)
+            letters_out.append(ch)
+            run = ""
+        else:
+            run += ch
+    return seps, letters_out, run
+
+
+def merge_readings(a, b):
+    """Combine two readings of the same letters, keeping every symbol seen.
+
+    Two engines lose DIFFERENT spaces from the same line -- one writes
+    "even ona", the other "evenona ... assessment, so" -- so neither contains
+    the other and neither is simply the fuller reading. But an engine drops a
+    space and never invents one, so a space either of them saw was really
+    drawn. The same holds for a symbol: where one read a rendered arrow and
+    the other skipped it, welding two version numbers together, the arrow was
+    on the screen.
+
+    So the two are walked in step over the letters they agree on, and at each
+    gap the longer run of symbols is kept. Returns None if the letters differ,
+    which is a real disagreement and not this function's business.
+    """
+    sa, la, ta = _split_on_letters(a)
+    sb, lb, tb = _split_on_letters(b)
+    if la != lb:
+        return None, 0
+    out, clashes = [], 0
+    for x, y, ch in zip(sa, sb, la):
+        if x != y and len(x) == len(y):
+            # not an omission by either engine but a SUBSTITUTION: one read
+            # ">" where the other read the arrow that was really drawn.
+            # Nothing here can decide it, so it is counted and reported.
+            clashes += 1
+        out.append(x if len(x) >= len(y) else y)
+        out.append(ch)
+    if ta != tb and len(ta) == len(tb):
+        clashes += 1
+    out.append(ta if len(ta) >= len(tb) else tb)
+    return "".join(out), clashes
+
+
 def reconcile(primary, second):
     """Return (name, status) — status in confident | reconciled | uncertain."""
     p = strip_arrow_junk(" ".join(primary.split()))
@@ -129,7 +182,20 @@ def reconcile(primary, second):
     if p == s:
         return p, "confident"
     if letters(p) == letters(s):
-        return (s, "reconciled") if s.count(" ") > p.count(" ") else (p, "reconciled")
+        # Same letters, so the two differ only in spaces and symbols. An
+        # engine DROPS a glyph it cannot name and never invents one, so the
+        # reading that CONTAINS the other in order is the fuller one and
+        # wins -- a lost space, or a rendered arrow one engine skipped,
+        # welding "2.1.176" and "2.1.178" into a single number.
+        #
+        # Length alone is not that test. Where one engine read ">" and the
+        # other "→" neither contains the other: that is a substitution, the
+        # engines genuinely disagree, and the honest answer is to say so
+        # rather than let a tie in character count decide it.
+        merged, clashes = merge_readings(p, s)
+        if merged is None:
+            return p, "reconciled"
+        return merged, ("ambiguous-symbol" if clashes else "reconciled")
     if only_homoglyph_diff(letters(p), letters(s)):
         return p, "ambiguous-glyph"
     return p, "uncertain"
