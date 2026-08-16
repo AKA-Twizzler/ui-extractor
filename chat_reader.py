@@ -291,7 +291,14 @@ def read_chat(png_path, engine=None):
             entries[-1]["said"] = entries[-1]["said"].rstrip() + " " + r["text"].lstrip()
             entries[-1]["y1"] = r["y1"]
     entries = [e for e in entries if e["said"].strip() or e["who"]]
-    named = [e for e in entries if e["who"]]
+    # A speaker's name is a WORD. The Finder sidebar's icons come back as "C)"
+    # and "e}" in their own colour at the margin, which is the shape of an
+    # avatar and a name, and "Recents Shared Applications Pictures Movies
+    # Desktop Documents Downloads iCloud Drive" then read as something someone
+    # said. Every real name in the fixture -- ozildartradez, Garden Infuzions,
+    # Giwrgos, Michael Taylor -- is letters.
+    named = [e for e in entries
+             if sum(ch.isalpha() for ch in (e["who"] or "")) >= 2]
     if len(named) < MIN_ENTRIES:
         return {"is_chat": False,
                 "why": "no run of entries carries a name in its own colour"}

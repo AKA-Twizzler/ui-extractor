@@ -320,6 +320,26 @@ def reach(found, rows, tess_words):
             vals, fl, _ = cells_in_bands(rows[k], b["bands"], tess_words)
             table.append(vals)
             flags.append(fl)
+        # The heading row is the first one that NAMES EVERY COLUMN, if any row
+        # does. What sits above it is the window's furniture: a Finder window's
+        # toolbar puts "vault-demo" and "000" across two of the four bands, and
+        # left at the top it became the headings while "Name / Date Modified /
+        # Size / Kind" became the first row of data.
+        #
+        # Only if no row fills every column is the topmost kept -- because
+        # sometimes the screen really has no heading there. Two cards of the
+        # metrics dashboard have their titles blurred out, and the third reads
+        # "LLC - TOTAL RECURRING"; demanding a full row would throw all three
+        # away rather than report the one heading that is on the screen.
+        full = next((i for i, row in enumerate(table)
+                     if all(c.strip() for c in row)), None)
+        if full:
+            table, flags, mine = table[full:], flags[full:], mine[full:]
+        # MIN_ROWS was already asked of the block. What is asked here is only
+        # that a heading and a row survive the furniture being taken off the
+        # top -- a table is not disqualified for having had a toolbar above it.
+        if len(table) < 2:
+            continue
         b["header"], b["rows"] = table[0], table[1:]
         b["headflags"], b["flags"] = flags[0], flags[1:]
         b["y0"], b["y1"] = rows[mine[0]]["y0"], rows[mine[-1]]["y1"]

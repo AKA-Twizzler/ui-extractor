@@ -57,6 +57,9 @@ VIDEOS = {
     # cards in drawn rectangles, dim text. Every gate in the build meets
     # something here it was never shown while it was being built.
     "skills": "How To Make Your Own AI Skills",
+    # a second Finder window, in a different video, on a desktop beside an
+    # Obsidian window -- so the table's headings are not proved on one frame
+    "memfiles": "Move Memory Files Out of Claude Code Into Obsidian",
 }
 
 _ENGINE = None
@@ -570,6 +573,53 @@ def _capture_damaged():
     if "moved" not in how:
         return False, f"decoded 00:45:00 without stepping over anything: {how}"
     return True, how
+
+
+@check("chat: a speaker's name is a word")
+def _chat_name_is_a_word():
+    """The Finder sidebar read as a log, twice over.
+
+    Its icons come back as "C)" and "e}" in their own colour at the margin,
+    which is exactly the shape of an avatar and a name, so "Recents Shared
+    Applications Pictures Movies Desktop Documents Downloads iCloud Drive"
+    was reported as something a person said.
+    """
+    for pane in regions("memfiles", "00:00:00"):
+        got = chat_reader.read_chat(pane, engine=engine())
+        if got.get("is_chat"):
+            who = [e["who"] for e in got["entries"]]
+            return False, (f"{os.path.basename(pane)} read as a log by "
+                           f"{who}")
+    logs = [g for g in (chat_reader.read_chat(p, engine=engine())
+                        for p in regions("july6", "00:40:36"))
+            if g.get("is_chat")]
+    if not logs:
+        return False, "the real log stopped reading as one"
+    return True, (f"the sidebar is not a log; the real one still reads "
+                  f"{max(len(g['entries']) for g in logs)} entries")
+
+
+@check("columns: a toolbar is not a heading row")
+def _toolbar_not_heading():
+    """A second Finder window, in another video, on a busier desktop.
+
+    Its toolbar puts "vault-demo" across one band and "000" across another,
+    and being the topmost row of the block it became the table's headings --
+    with "Name / Date Modified / Size / Kind" demoted to the first row of data.
+    The heading row is the first that names EVERY column, where a row does.
+    """
+    want = ("name", "date", "size", "kind")
+    for pane in regions("memfiles", "00:00:00"):
+        got = columns.read_list(pane)
+        if not got.get("is_list"):
+            continue
+        for b in got["blocks"]:
+            head = [c.lower() for c in b["header"]]
+            if all(any(w in c for c in head) for w in want):
+                return True, (f"{len(b['rows'])} rows under "
+                              + " / ".join(b["header"]))
+    return False, ("no block of that frame is headed by the window's four "
+                   "column names")
 
 
 @check("pipeline: no pane is dropped for being short")
