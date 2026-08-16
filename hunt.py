@@ -1,31 +1,52 @@
 #!/usr/bin/env python3
-"""Find the frames worth calibrating against, across a whole library.
+"""Sweep a library and catalogue the KINDS of interface it contains.
 
-    python3 hunt.py <video-or-folder> [--every 20] [--what list|light|tree]
+    python3 hunt.py <video-or-folder> [--every 90] [--out census.md]
 
-Some things cannot be proven without an example: a Finder-style window with
-Name, Date Modified, Size and Kind, or a file tree drawn in a light theme.
-Hunting for them by watching hours of video is not the job. The instruments
-already know what they are looking at, so they do the hunting: each sampled
-frame is asked whether it holds an interface, whether that interface is light
-or dark, and whether any of its panes reads as a tree or as a table.
+Reading one video end to end proves the readers on the screens that video
+happens to show. It says nothing about the next one. What decides whether a
+library can be read is not how many videos have been walked but how many
+DIFFERENT kinds of screen appear in it -- and so far every new kind found has
+turned up a fault of its own.
 
-Only the answers are printed -- video, timestamp, and what was found -- so a
-library can be swept once and the interesting moments picked out by eye.
+So this does not look for one thing. It samples every video, asks the
+instruments what each pane of each frame actually is, and keeps ONE example of
+every distinct combination it meets, with the video and the timestamp. What
+comes back is a menu of the interfaces the library contains, each with a frame
+to calibrate against.
+
+The instruments answer for themselves; nothing here recognises anything:
+
+    tree      the tree reader accepted it
+    list      the column reader accepted it
+    console   the characters are all ONE width, which is what a terminal is
+              and what no proportional interface can be
+    document  the note reader got lines out of it
+    text      something readable that is none of the above -- an honest
+              answer, and the one that marks a kind still to be handled
 """
 import os
 import subprocess
 import sys
+import statistics
 
 import cv2
 import numpy as np
 
 import columns
 import note_reader
+import panes
 import screenness
+import spot
 import tree_reader
 
 VIDEO_EXT = (".mp4", ".mkv", ".mov", ".webm", ".m4v")
+HUNT_WIDTH = 1920      # deciding WHAT a frame holds needs far less than 4K
+MONO_SPREAD = 0.04     # below this every character is one width
+
+# The number is measured. On the frames to hand a terminal scores 0.015, an
+# Obsidian note 0.094, a Finder list 0.166 and a sidebar tree 0.078: monospace
+# sits an order of magnitude below anything proportional.
 
 
 def duration(path):
@@ -51,37 +72,87 @@ def hms(secs):
     return f"{s // 3600:02d}:{(s % 3600) // 60:02d}:{s % 60:02d}"
 
 
-def theme_of(img, regions):
+def theme_of(bgr, regions):
     """Light or dark, from the interface's own pixels rather than the frame's.
 
     A dark video with a light window in it is a light interface, and asking
     the whole frame would answer the opposite.
     """
-    # the region boxes are in the WORKING copy's coordinates, so the theme
-    # must be read there too, or the crop lands somewhere else entirely
-    work = screenness.to_working_size(img)
-    g = cv2.cvtColor(work, cv2.COLOR_BGR2GRAY)
     if not regions:
         return None
+    work = screenness.to_working_size(bgr)
+    g = cv2.cvtColor(work, cv2.COLOR_BGR2GRAY)
     vals = []
     for r in regions:
         x0, y0, x1, y1 = r["box"]
-        vals.append(float(np.median(g[y0:y1, x0:x1])))
+        crop = g[y0:y1, x0:x1]
+        if crop.size:
+            vals.append(float(np.median(crop)))
+    if not vals:
+        return None
     return "light" if float(np.median(vals)) >= 128 else "dark"
 
 
-HUNT_WIDTH = 1920      # deciding WHAT a frame holds needs far less than 4K
+def char_spread(big_path, gray):
+    """How much the width of a character varies across this pane.
+
+    A terminal sets every character on the same advance, so the spread is
+    almost nothing. No proportional interface can do that. This is the one
+    test that separates a console from a document, and it is a measurement
+    rather than a look-up of fonts.
+    """
+    widths = []
+    for r in note_reader.tess_rows(big_path, gray):
+        for text, x0, x1 in (r.get("words") or []):
+            if len(text) >= 3:
+                widths.append((x1 - x0) / len(text))
+    if len(widths) < 20:
+        return None
+    mid = statistics.median(widths)
+    if mid <= 0:
+        return None
+    return statistics.median([abs(w - mid) for w in widths]) / mid
+
+
+def classify(pane_path):
+    """What this pane is, in the instruments' own words."""
+    try:
+        tree = tree_reader.read_tree(pane_path)
+        if tree.get("is_tree") and len(tree["rows"]) >= 5:
+            return "tree"
+    except Exception:
+        pass
+    try:
+        lst = columns.read_list(pane_path)
+        if lst.get("is_list"):
+            return "list"
+    except Exception:
+        pass
+    try:
+        bgr = cv2.imread(pane_path)
+        if bgr is None:
+            return None
+        big = pane_path.replace(".png", "_3x.png")
+        if not os.path.exists(big):
+            up = cv2.resize(bgr, (bgr.shape[1] * 3, bgr.shape[0] * 3),
+                            interpolation=cv2.INTER_LANCZOS4)
+            cv2.imwrite(big, up)
+        gray = cv2.cvtColor(cv2.imread(big), cv2.COLOR_BGR2GRAY)
+        spread = char_spread(big, gray)
+        if spread is None:
+            return None
+        if spread < MONO_SPREAD:
+            return "console"
+        note = note_reader.read_note(pane_path)
+        if note["markdown"].strip().count("\n") >= 3:
+            return "document"
+        return "text"
+    except Exception:
+        return None
 
 
 def look(png, engine):
-    """What this frame holds: nothing, a tree, a table, or plain interface.
-
-    The frame is capped in width first. Reading a screen exactly needs every
-    pixel; deciding whether it holds a tree or a table does not, and a 4K
-    frame's panes enlarge to a hundred million pixels apiece, which turns a
-    sweep of a library into an overnight job. The moments this finds are
-    re-read at full size afterwards.
-    """
+    """The kinds of pane this frame holds, and whether it is light or dark."""
     img = cv2.imread(png)
     if img is None:
         return None
@@ -92,56 +163,79 @@ def look(png, engine):
     regions = screenness.ui_regions(img, engine)
     if not regions:
         return {"ui": False}
-    found = {"ui": True, "theme": theme_of(img, regions), "panes": []}
-    from panes import pane_columns, write_pane
-    for pi, (px0, px1) in enumerate(pane_columns(img, engine=engine)):
-        pane_path = png.replace(".png", f"_h{pi}.png")
-        if write_pane(img, px0, px1, pane_path) is None:
+    kinds = []
+    for pi, (px0, px1) in enumerate(panes.pane_columns(img, engine=engine)):
+        pane_path = png.replace(".png", f"_c{pi}.png")
+        # written at NATIVE size. write_pane normally enlarges a pane so fine
+        # text reads cleanly, but a narrow one is enlarged sevenfold and then
+        # again threefold for measurement -- ninety megapixels to answer a
+        # question that does not need them. Deciding WHAT a pane is takes far
+        # less than reading it; the examples this keeps are re-read at full
+        # size afterwards.
+        if panes.write_pane(img, px0, px1, pane_path, target=1) is None:
             continue
-        try:
-            tree = tree_reader.read_tree(pane_path)
-            if tree.get("is_tree") and len(tree["rows"]) >= 5:
-                found["panes"].append(("tree", len(tree["rows"])))
-                continue
-            lst = columns.read_list(pane_path)
-            if lst.get("is_list"):
-                found["panes"].append(("list", lst["columns"]))
-                continue
-        except Exception as exc:
-            found["panes"].append(("error", str(exc)[:40]))
-        finally:
-            for junk in (pane_path, pane_path.replace(".png", "_3x.png")):
-                if os.path.exists(junk):
-                    os.remove(junk)
-    return found
+        kind = classify(pane_path)
+        if kind:
+            kinds.append(kind)
+        for junk in (pane_path, pane_path.replace(".png", "_3x.png")):
+            if os.path.exists(junk):
+                os.remove(junk)
+    return {"ui": True, "theme": theme_of(img, regions), "kinds": kinds}
 
 
-def sweep(video, every, work, engine):
-    total = duration(video)
-    name = os.path.basename(os.path.dirname(video)) or os.path.basename(video)
-    secs = 0.0
-    while secs < total:
-        png = frame_at(video, secs, os.path.join(work, "hunt.png"))
-        if png:
-            got = look(png, engine)
-            if got and got.get("ui"):
-                kinds = got["panes"]
-                lists = [n for k, n in kinds if k == "list"]
-                trees = [n for k, n in kinds if k == "tree"]
-                if lists or (trees and got["theme"] == "light"):
-                    bits = []
-                    if lists:
-                        bits.append(f"list with {max(lists)} columns")
-                    if trees:
-                        bits.append(f"{got['theme']} tree, {max(trees)} rows")
-                    print(f"{name}  {hms(secs)}  " + "; ".join(bits), flush=True)
-        secs += every
+def keep_frame(video, secs, png):
+    """Save the example beside its video's other frames, named by its moment."""
+    title = os.path.basename(os.path.dirname(video))
+    out_dir = os.path.join("/mnt/g/Images", title)
+    os.makedirs(out_dir, exist_ok=True)
+    dest = os.path.join(out_dir, hms(secs).replace(":", "-") + ".png")
+    if not os.path.exists(dest):
+        img = cv2.imread(png)
+        if img is not None:
+            cv2.imwrite(dest, img)
+    return dest
+
+
+def sweep(video, every, work, engine, seen):
+    """Classify one frame per DISTINCT screen, not one per sample.
+
+    Sampling on a fixed clock and reading every sample is waste: a video sits
+    on the same screen for minutes at a time, and reading it again tells us
+    nothing we did not have. The video map already answers where the screen
+    CHANGES, cheaply, so only those moments are read -- which is the same
+    method the capture step uses, on the same cache.
+    """
+    title = os.path.basename(os.path.dirname(video)) or os.path.basename(video)
+    out_dir = os.path.join("/mnt/g/Images", title)
+    os.makedirs(out_dir, exist_ok=True)
+    try:
+        samples = spot.scan(video, every, os.path.join(out_dir, "scan.json"))
+    except Exception as exc:
+        print(f"  (could not map {title}: {str(exc)[:60]})", flush=True)
+        return
+    runs = [r for r in spot.stretches(samples) if r["call"] == "screen"]
+    print(f"# {title} -- {len(runs)} distinct screens", flush=True)
+    for r in runs:
+        secs = r["best"]["t"]
+        png = frame_at(video, secs, os.path.join(work, "census.png"))
+        if not png:
+            continue
+        got = look(png, engine)
+        if not (got and got.get("ui") and got["kinds"]):
+            continue
+        sig = (got["theme"], tuple(sorted(set(got["kinds"]))))
+        if sig in seen:
+            continue
+        seen[sig] = (title, hms(secs))
+        keep_frame(video, secs, png)
+        print(f"NEW  {title}  {hms(secs)}  {got['theme']}  "
+              + " + ".join(sorted(set(got['kinds']))), flush=True)
 
 
 def main():
     target = sys.argv[1]
     every = float(sys.argv[sys.argv.index("--every") + 1]) \
-        if "--every" in sys.argv else 20.0
+        if "--every" in sys.argv else 15.0
     work = os.environ.get("HUNT_WORK", "/tmp")
     videos = []
     if os.path.isdir(target):
@@ -153,8 +247,12 @@ def main():
         videos = [target]
     from rapidocr_onnxruntime import RapidOCR
     engine = RapidOCR()
+    seen = {}
     for v in videos:
-        sweep(v, every, work, engine)
+        sweep(v, every, work, engine, seen)
+    print("\n=== the kinds of screen in this library ===", flush=True)
+    for (theme, kinds), (title, ts) in sorted(seen.items(), key=lambda kv: str(kv[0])):
+        print(f"  {theme:5s}  {' + '.join(kinds):28s}  {title}  {ts}", flush=True)
 
 
 if __name__ == "__main__":
