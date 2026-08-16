@@ -35,8 +35,8 @@ import verify_names
 # presenter's inset over it never split at all, and a sidebar and a note were
 # read as one pane that was neither. panes.py also splits where no line of
 # text crosses, which finds that boundary; one home, and the better one.
-pane_columns = panes.pane_columns
-write_pane = panes.write_pane
+frame_regions = panes.frame_regions
+write_box = panes.write_box
 
 
 def main():
@@ -45,7 +45,7 @@ def main():
     limit = int(sys.argv[sys.argv.index("--limit") + 1]) if "--limit" in sys.argv else 12
     title = os.path.basename(os.path.dirname(video)) or "capture"
     out_dir = machine.here(f"/mnt/g/Images/{title}")
-    cache = f"{out_dir}/scan.json"
+    cache = os.path.join(out_dir, "scan.json")
 
     print(f"=== {title} ===")
     samples = spot.scan(video, every, cache, rescan="--rescan" in sys.argv)
@@ -93,7 +93,7 @@ def main():
         # it is proved, and text this cannot prove is simply not claimed.
         for found in overlay.standing_text(
                 overlay.frames_across(video, secs,
-                                      workdir=f"{out_dir}/_looks"),
+                                      workdir=os.path.join(out_dir, "_looks")),
                 engine=engine):
             if found["text"] in standing:
                 continue
@@ -105,9 +105,13 @@ def main():
             print("    no readable interface at full size\n")
             continue
 
-        for pi, (px0, px1) in enumerate(pane_columns(img, engine=engine)):
-            pane_path = f"{out_dir}/{ts.replace(':','-')}_pane{pi}.png"
-            if write_pane(img, px0, px1, pane_path) is None:
+        # the frame's windows first, each split into ITS panes, and then the
+        # desktop no window covers -- a frame holding one window comes back
+        # exactly as it did when this only cut vertical strips
+        for pi, box in enumerate(frame_regions(img, engine=engine)):
+            pane_path = os.path.join(
+                out_dir, f"{ts.replace(':','-')}_pane{pi}.png")
+            if write_box(img, box, pane_path) is None:
                 continue
             tree = tree_reader.read_tree(pane_path)
             if tree.get("is_tree") and len(tree["rows"]) >= 5:

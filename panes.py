@@ -19,6 +19,7 @@ A pane boundary shows up two ways and BOTH are needed:
 import cv2
 import numpy as np
 
+import overlay
 import screenness
 
 MIN_PANE = 90          # a pane narrower than this is furniture, not a pane
@@ -69,8 +70,17 @@ def text_gaps(work, engine, min_gap=40):
     return gaps, spans
 
 
-def pane_columns(img, engine=None):
-    """The window's panes as (x0, x1) in working-size coordinates."""
+def pane_columns(img, engine=None, least=MIN_PANE):
+    """The window's panes as (x0, x1) in working-size coordinates.
+
+    `least` is the narrowest a pane may be, in those same coordinates. It has
+    to be given when the picture is a WINDOW cut out of a frame rather than
+    the frame: every picture is measured at one width, so a small window is
+    magnified more than a large one, and a strip too thin to be a pane in the
+    frame's own pixels is wide enough to pass in the window's. Left at its
+    default it is the same test the frame gets, which is what a caller with a
+    whole frame wants.
+    """
     work = screenness.to_working_size(img)
     w = work.shape[1]
     cuts = set()
@@ -87,33 +97,97 @@ def pane_columns(img, engine=None):
     edges = [0] + sorted(cuts) + [w]
     panes, last = [], 0
     for e in edges[1:]:
-        if e - last >= MIN_PANE:
+        if e - last >= least:
             panes.append((last, e))
             last = e
-    if w - last >= MIN_PANE:
+    if w - last >= least:
         panes.append((last, w))
     return panes or [(0, w)]
 
 
-def write_pane(img, x0, x1, path, target=1400):
-    """Cut the pane out of the ORIGINAL frame, not the shrunken working copy.
+def _free_spans(taken, least):
+    """The stretches of a row of flags that are still false."""
+    spans, start = [], None
+    for x, t in enumerate(taken):
+        if not t and start is None:
+            start = x
+        elif t and start is not None:
+            if x - start >= least:
+                spans.append((start, x))
+            start = None
+    if start is not None and len(taken) - start >= least:
+        spans.append((start, len(taken)))
+    return spans
+
+
+def frame_regions(img, engine=None):
+    """The rectangles of this frame to read, one at a time, in its own pixels.
+
+    A frame is not always one window. Jared works across a whole desktop — a
+    full-screen HUD on the left, the Clock app in the middle, a browser on the
+    right — and split into vertical strips, as a single window is, the three
+    run together: the menu bar came back as a folder tree with "Clock" and
+    "File Edit" for folders, and everything else landed in one strip read as
+    loose text.
+
+    So the windows are found first, by their four drawn sides (overlay.py),
+    and each is split into ITS panes rather than the frame's. What no window
+    covers is the desktop, and it is split the same way it always was. A frame
+    holding no window at all — every Obsidian, Finder and terminal frame in
+    the fixtures — comes back exactly as it did before this existed.
+    """
+    h, w = img.shape[:2]
+    scale = w / screenness.WORK_WIDTH
+    boxes = []
+
+    def split(crop, x_at, y_at, height):
+        back = crop.shape[1] / screenness.WORK_WIDTH
+        # a pane is thin or wide in the FRAME's pixels, never in the window's
+        least = MIN_PANE * w / max(1, crop.shape[1])
+        for a, b in pane_columns(crop, engine=engine, least=least):
+            boxes.append((x_at + int(a * back), y_at,
+                          x_at + int(b * back), y_at + height))
+
+    found = overlay.windows(img)
+    for x0, y0, x1, y1 in found:
+        split(img[y0:y1, x0:x1], x0, y0, y1 - y0)
+
+    taken = np.zeros(w, bool)
+    for x0, _, x1, _ in found:
+        taken[max(0, x0):min(w, x1)] = True
+    for a, b in _free_spans(taken, max(1, int(MIN_PANE * scale))):
+        split(img[:, a:b], a, 0, h)
+
+    boxes.sort(key=lambda box: (box[0], box[1]))
+    return boxes
+
+
+def write_box(img, box, path, target=1400):
+    """Cut a rectangle out of the ORIGINAL frame, not the shrunken copy.
 
     Boundaries are found on a small copy because that is cheap, but the pixels
     must come from the full-size frame. Cropping the small copy and enlarging
     it again destroys the fine text this exists to read — measured, it turned
     clean names into "Beyond the Baoics" and "Emall Gueue".
     """
-    scale_back = img.shape[1] / screenness.WORK_WIDTH
-    nx0, nx1 = int(x0 * scale_back), int(x1 * scale_back)
-    pane = img[:, max(0, nx0):min(img.shape[1], nx1)]
-    if pane.size == 0 or pane.shape[1] < 40:
+    x0, y0, x1, y1 = box
+    crop = img[max(0, y0):min(img.shape[0], y1),
+               max(0, x0):min(img.shape[1], x1)]
+    if crop.size == 0 or crop.shape[1] < 40:
         return None
-    scale = max(1, int(target / pane.shape[1]))
+    scale = max(1, int(target / crop.shape[1]))
     if scale > 1:
-        pane = cv2.resize(pane, (pane.shape[1] * scale, pane.shape[0] * scale),
+        crop = cv2.resize(crop, (crop.shape[1] * scale, crop.shape[0] * scale),
                           interpolation=cv2.INTER_LANCZOS4)
-    cv2.imwrite(path, pane)
-    return pane
+    cv2.imwrite(path, crop)
+    return crop
+
+
+def write_pane(img, x0, x1, path, target=1400):
+    """A full-height strip, named in working-size coordinates."""
+    back = img.shape[1] / screenness.WORK_WIDTH
+    return write_box(img, (int(x0 * back), 0, int(x1 * back), img.shape[0]),
+                     path, target)
 
 
 if __name__ == "__main__":
