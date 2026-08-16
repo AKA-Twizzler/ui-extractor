@@ -91,10 +91,16 @@ def main():
         # at every moment rather than once, because a banner comes and goes
         # and moves about the frame; each wording is reported the first time
         # it is proved, and text this cannot prove is simply not claimed.
-        for found in overlay.standing_text(
+        # and only where there IS a picture to be composited over. The
+        # question is whether this text was drawn on top of the camera, which
+        # on a frame that is mostly interface has no meaning -- everything on
+        # a screen recording is drawn. Measured: the two frames carrying the
+        # banner are 25% and 10% interface, and the two where a fragment of
+        # the room crept in are 67% and 100%.
+        for found in (overlay.standing_text(
                 overlay.frames_across(video, secs,
                                       workdir=os.path.join(out_dir, "_looks")),
-                engine=engine):
+                engine=engine) if share < 50 else []):
             if found["text"] in standing:
                 continue
             standing.add(found["text"])

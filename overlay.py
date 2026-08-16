@@ -399,6 +399,14 @@ def standing_text(paths, engine=None):
     and a counter ticks over, so both fail the test though both are drawn;
     they have their own readers, and a verdict of "no evidence" costs nothing
     where an "in the room" would have been wrong.
+
+    ASK THIS ONLY WHERE THERE IS A PICTURE. The question is whether the text
+    was composited over the camera, and on a frame that is mostly interface it
+    has no meaning: everything on a screen recording is drawn. Left ungated it
+    admitted "SOM", a fragment of a poster, from a frame that was 100%
+    interface. The two frames carrying the banner are 25% and 10% interface;
+    the two where the room crept in are 67% and 100%. The caller holds that
+    share, so the caller holds the gate -- see pipeline.py.
     """
     if len(paths) < 3:
         return []

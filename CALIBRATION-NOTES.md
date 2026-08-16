@@ -371,3 +371,18 @@ application reserves that space and clips text that would reach it.
     real note reads at a median 0.855, a real chat log 0.856, a real sidebar
     0.852 — and the two heads-up fragments at 0.798 and 0.825. It is
     confidently wrong, which is the failure this whole build is built around.
+32. **Ask a question only where it means something.** Even with a scale under
+    it, the test for text drawn on a picture kept admitting "SOM", a fragment
+    of a poster, from a frame that was 100% interface — a full screen
+    recording of Obsidian. Two more measurements failed to catch it, and both
+    failed the same way: its glyphs changed 79.5 against a ground of 134 and a
+    frame median of 86, and 1.77 times the frame's still floor, where the real
+    banner measures 2.1 times its own.
+
+    The mistake was not the measure, it was asking at all. "Was this text
+    composited over the camera" has no meaning on a frame with no camera in
+    it: everything on a screen recording is drawn. The frames carrying the
+    banner are 25% and 10% interface; the two where the room crept in are 67%
+    and 100%. So the test runs only where the frame is more picture than
+    interface, which is a comparison the build already measures for other
+    reasons.
