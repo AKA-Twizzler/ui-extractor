@@ -9,13 +9,16 @@ build reads interface that fills a window; here the interface is a few small
 rectangles floating on a photograph, and the first question is not what they
 say but WHICH of the text on screen is interface at all.
 
-That question is harder than it sounds, and four ways of answering it were
-measured on one frame that holds both kinds -- a "jaredrhod.com" banner the
-application drew, and a "FALSE" sticker on the shelf behind Jared:
+That question is harder than it sounds. Seven ways of answering it were
+measured on frames holding both kinds -- a "jaredrhod.com" banner the
+application drew, and a "FALSE" sticker on the shelf behind Jared -- and the
+first seven all failed, several of them backwards, because the sticker is
+printed matter photographed close up and comes out crisper and purer than a
+banner drawn over moving video:
 
   exact-pixel ties, the measure that separates a screen recording from a
   camera elsewhere in this build, put the banner BELOW the sticker (0.24
-  against 0.44). Over moving video the banner's own soft edges break ties.
+  against 0.44). Over moving video a banner's own soft edges break ties.
 
   motion between frames a second apart put the sticker (25) below the chat
   (159 and up), because the chat scrolls. Drawn is not the same as still.
@@ -26,17 +29,26 @@ application drew, and a "FALSE" sticker on the shelf behind Jared:
   the exact painted colour found the panel on one frame and not the other,
   because the room is lit green and shares the panel's own green.
 
-What does work is the one thing an application does and a room cannot: it
-draws a RECTANGLE. Two horizontal steps and two vertical ones, each running
-dead straight for hundreds of pixels at exactly one x or one y. Nothing
-photographed holds a line like that. So the panels are found by their edges,
-and only text inside a panel is called interface.
+  the purity of the ink put the sticker first on both frames (28 against 44).
 
-Text floating on the picture with no panel round it -- the "jaredrhod.com"
-banner -- is left alone deliberately. Nothing measured here tells it from a
-sticker on the shelf, and calling a sticker interface is the invention this
-build exists to prevent.
+  the sharpness of the glyph edges did the same (0.25 against 0.60).
+
+  the evenness of the stroke did not order them at all.
+
+Two things do work, and this module is the two of them.
+
+A PANEL is found by its edges. An application draws a rectangle: two
+horizontal steps and two vertical, each running dead straight for hundreds of
+pixels at exactly one x or one y, which nothing photographed holds. Two card
+edges with video between them make a rectangle just as square, and the fill
+separates those -- a drawn fill is one value.
+
+TEXT with no panel round it is judged not by how it looks but by how it
+behaves against the ground it sits on, over minutes rather than seconds. An
+overlay is composited on top: the picture behind it changes and it does not. A
+sticker is part of that picture and changes with it. See standing_text.
 """
+import os
 import sys
 
 import cv2
@@ -50,6 +62,8 @@ MAX_SHARE = 0.55      # a rectangle covering more than this is the picture
 OVERLAP = 0.6         # two edges bound one panel if they line up this well
 GAP_TO_HEIGHT = 1.2   # a gap wider than the text is tall splits label from value
 FILL_SPREAD = 2.0     # a drawn fill is one value; two levels allows for the codec
+SPAN = 600            # seconds the frames judging steadiness are spread over
+LOOKS = 4             # and how many of them
 
 
 def strong_steps(gray, axis):
@@ -248,6 +262,93 @@ def read_overlays(png_path):
         got["box"] = box
         out.append(got)
     return {"panels": out}
+
+
+def frames_across(video, at, span=SPAN, looks=LOOKS, workdir=None):
+    """A handful of frames spread across a window, for judging what stands still.
+
+    The window is minutes wide on purpose. Over a second or two a camera in a
+    dim room barely changes and neither does an overlay, so nothing separates;
+    over ten minutes the room has been lit differently, sat in differently and
+    walked in front of, and an overlay has not moved a pixel.
+    """
+    import subprocess
+    import tempfile
+    workdir = workdir or tempfile.mkdtemp(prefix="standing_")
+    os.makedirs(workdir, exist_ok=True)
+    out = []
+    for i in range(looks):
+        t = max(0.0, at - span / 2 + span * i / max(1, looks - 1))
+        path = os.path.join(workdir, f"look_{i:02d}.png")
+        subprocess.run(["ffmpeg", "-v", "error", "-ss", f"{t:.3f}", "-i", video,
+                        "-frames:v", "1", "-y", path], capture_output=True)
+        if os.path.exists(path) and os.path.getsize(path) > 0:
+            out.append(path)
+    return out
+
+
+def standing_text(paths, engine=None):
+    """The text on the picture that is PROVEN to have been drawn on it.
+
+    A banner reading "jaredrhod.com" and a sticker reading "FALSE" on the shelf
+    behind Jared are both text to a recogniser, and seven measurements failed
+    to tell them apart: exact-pixel ties, motion over a second, flat colour,
+    the exact painted colour, the purity of the ink, the sharpness of the
+    glyph edges and the evenness of the stroke. Several put them the wrong way
+    round -- the sticker is printed matter photographed close up, so it is
+    crisper and purer than a banner drawn over moving video.
+
+    What separates them is not how the text looks but how it behaves against
+    the ground it sits on. An overlay is composited on top: the picture behind
+    it changes and IT does not. A sticker is part of that picture and changes
+    with it -- lit by the same lamps, moved by the same camera, walked in
+    front of by the same person. So the test is a comparison, not a threshold:
+
+        drawn, if the glyphs changed no more than the ground around them
+        -- and only where the ground changed at all, since nothing is proved
+        by standing still in front of something that also stood still
+
+    Measured over ten minutes on two different streams: the banner's glyphs
+    changed 19 against a ground of 32, and 11 against 29. The sticker's
+    changed 111 against 72, and 86 against 51. On both frames the banner was
+    the only text the test admitted, and the sticker was not among them.
+
+    Nothing is claimed about text this cannot prove. A chat line scrolls away
+    and a counter ticks over, so both fail the test though both are drawn;
+    they have their own readers, and a verdict of "no evidence" costs nothing
+    where an "in the room" would have been wrong.
+    """
+    if len(paths) < 3:
+        return []
+    shots = [cv2.imread(p) for p in paths]
+    shots = [s for s in shots if s is not None]
+    if len(shots) < 3 or len({s.shape for s in shots}) != 1:
+        return []
+    stack = np.stack([s.astype(np.int16) for s in shots])
+    change = np.abs(stack - stack[0]).max(axis=0).max(axis=2)
+    still = float(np.percentile(change, 25))
+    if engine is None:
+        from rapidocr_onnxruntime import RapidOCR
+        engine = RapidOCR()
+    res, _ = engine(paths[0])
+    out = []
+    for box, text, _conf in (res or []):
+        x0 = int(min(q[0] for q in box)); x1 = int(max(q[0] for q in box))
+        y0 = int(min(q[1] for q in box)); y1 = int(max(q[1] for q in box))
+        if x1 - x0 < 14 or y1 - y0 < 8:
+            continue
+        gray = cv2.cvtColor(shots[0][y0:y1, x0:x1], cv2.COLOR_BGR2GRAY)
+        ink = note_reader.ink_mask(gray)
+        if ink.sum() < 25 or (~ink).sum() < 25:
+            continue
+        here = change[y0:y1, x0:x1]
+        glyphs = float(np.median(here[ink]))
+        ground = float(np.median(here[~ink]))
+        if ground <= still or glyphs > ground:
+            continue
+        out.append({"text": text.strip(), "box": (x0, y0, x1, y1),
+                    "glyphs": glyphs, "ground": ground})
+    return out
 
 
 def render(res):

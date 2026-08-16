@@ -58,6 +58,7 @@ def main():
 
     from rapidocr_onnxruntime import RapidOCR
     engine = RapidOCR()
+    standing = set()
 
     for r in runs[:limit]:
         secs = r["best"]["t"]
@@ -69,20 +70,39 @@ def main():
         print(f"--- {ts}  ({how}; interface on {share:.0f}% of the frame) ---")
         if joined and r.get("said"):
             print(f"  [said while this screen was up]\n    {r['said']}")
-        if not regions:
-            print("    no readable interface at full size\n")
-            continue
+        # Both kinds of overlay are read from the WHOLE frame, and before the
+        # test for readable interface -- a live stream is mostly camera, and a
+        # banner over a shot of the room is exactly the case that test rejects.
 
-        # Panels drawn ON the picture are read from the whole frame, before it
-        # is split. A donation counter or an alert is a rectangle floating over
-        # video, so it belongs to no pane and splitting would cut it in half.
+        # A panel is a rectangle floating over video, so it belongs to no pane
+        # and splitting the frame would cut it in half.
         for panel in overlay.read_overlays(path)["panels"]:
-            print(f"  [a panel drawn on the picture]")
+            print("  [a panel drawn on the picture]")
             if panel["label"]:
                 print(f"    {panel['label']}: {panel['value']}")
             else:
                 for line in panel["lines"]:
                     print(f"    {line}")
+
+        # Text with no panel round it -- a banner, a lower third -- is proved
+        # by watching its spot over minutes: an overlay holds still while the
+        # picture behind it moves, and a sticker on the shelf does not. Asked
+        # at every moment rather than once, because a banner comes and goes
+        # and moves about the frame; each wording is reported the first time
+        # it is proved, and text this cannot prove is simply not claimed.
+        for found in overlay.standing_text(
+                overlay.frames_across(video, secs,
+                                      workdir=f"{out_dir}/_looks"),
+                engine=engine):
+            if found["text"] in standing:
+                continue
+            standing.add(found["text"])
+            print("  [drawn on the picture, standing while the shot moved]"
+                  f"\n    {found['text']}")
+
+        if not regions:
+            print("    no readable interface at full size\n")
+            continue
 
         for pi, (px0, px1) in enumerate(pane_columns(img, engine=engine)):
             pane_path = f"{out_dir}/{ts.replace(':','-')}_pane{pi}.png"

@@ -114,11 +114,23 @@ their sentences, and the strip of video BETWEEN two of them is correctly not
 called a panel. Two frames whose interface is a slide rather than a panel
 report none, which is right.
 
-What it will not do, and the reason is worth keeping: the `jaredrhod.com`
-banner floating on the picture is left unclaimed. Four measurements were tried
-to tell it from a `FALSE` sticker on the shelf behind Jared and every one put
-them the wrong way round or not apart at all; they are written up in lesson
-24. Calling a sticker interface is a worse answer than saying nothing.
+The same module also finds text drawn on the picture with no panel round it.
+On both streams, `jaredrhod.com` is the ONLY text it admits, and the `FALSE`
+sticker on the shelf behind Jared is not among them — the banner's glyphs
+changed 19 against a ground of 32 on one stream and 11 against 29 on the
+other, while the sticker's changed 111 against 72 and 86 against 51.
+
+Seven measurements were tried on the text itself before that and every one
+failed, several backwards, because the sticker is printed matter photographed
+close up and comes out crisper and purer than a banner drawn over moving
+video. They are written up in lesson 24 so they are not tried again. What
+works is not how the text looks but how it behaves against the ground it sits
+on, watched over minutes: an overlay holds still while the picture behind it
+moves, and a thing in the room cannot.
+
+Text this cannot prove is not claimed either way. A chat line scrolls and a
+counter ticks, so both fail the test though both are drawn; they have their
+own readers, and "no evidence" costs nothing where a wrong verdict would not.
 
 `chat_reader.py` reads the log at 00:40:36 of *Live Replay - July 6, 2026*
 entire: a wrapped question with its asker, and three event lines with theirs.

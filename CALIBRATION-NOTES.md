@@ -256,8 +256,27 @@ application reserves that space and clips text that would reach it.
     with video between them make a rectangle just as square, and the fill
     tells them apart — the cards measured 0, 0 and 1 grey levels of spread,
     the video between them 5. Free-floating text with no panel round it is
-    left unclaimed on purpose: calling a sticker interface is the invention
-    this build exists to prevent.
+    judged separately, and by a different question — see lesson 26.
+26. **Ask how text BEHAVES, not how it looks.** Seven measurements failed to
+    tell a drawn banner from a sticker on the shelf: exact-pixel ties, motion
+    over a second, flat colour, the exact painted colour, the purity of the
+    ink, the sharpness of the glyph edges, the evenness of the stroke. Several
+    failed backwards, and the reason is worth holding on to — the sticker is
+    printed matter photographed close up, so it is crisper, purer and more
+    even than a banner drawn over moving video. Every property that sounds
+    like "drawn" belongs to the sticker here. What separates them is not the
+    text at all but its relationship to the ground it sits on, watched over
+    MINUTES rather than seconds: an overlay is composited on top, so the
+    picture behind it changes and it does not; a sticker is part of that
+    picture, lit by the same lamps and walked in front of by the same person.
+    So: drawn, if the glyphs changed no more than the ground around them, and
+    only where the ground changed at all — nothing is proved by standing still
+    in front of something that also stood still. Measured over ten minutes on
+    two streams, the banner gave 19 against 32 and 11 against 29, the sticker
+    111 against 72 and 86 against 51, and on both frames the banner was the
+    only text admitted. Text the test cannot prove is left unclaimed rather
+    than called scenery: a chat line scrolls away and a counter ticks over, so
+    both fail it though both are drawn, and both have their own readers.
 25. **Cut a row at a gap too wide to be a space; do not throw it away.** The
     recogniser returns a scan LINE, not a column, so a slide on the left of a
     frame and a chat log on the right come back as one row with a quarter of
