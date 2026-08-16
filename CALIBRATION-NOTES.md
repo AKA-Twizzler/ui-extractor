@@ -386,3 +386,35 @@ application reserves that space and clips text that would reach it.
     and 100%. So the test runs only where the frame is more picture than
     interface, which is a comparison the build already measures for other
     reasons.
+33. **Find the chevron where it SITS, not where the recogniser's box ends.**
+    The gutter is cut at the left edge of the text box, which is fine while
+    that box begins at the name. A newer recogniser's boxes sometimes swallow
+    the arrow in front of the name — on one frame its rows at depth 1 began
+    anywhere from x=174 to x=211, against 213 to 218 from the engine in use —
+    and a collapsed folder then loses its arrow and reads as a file. Structure
+    decided by how a recogniser drew a rectangle is exactly what this reader
+    exists not to do.
+
+    The arrow does not move. It occupies the one indent slot after the row's
+    last guide line, and a gap separates it from the name, so look in that
+    slot and count a run only where blank follows it before the strip ends —
+    a name's first letters run on to the edge. The engine in use is unchanged
+    at 31/31 for folder-versus-file; the newer one goes from 30/31 to 31/31.
+
+34. **PP-OCRv6 measured against the fixture, and NOT adopted — yet.** The
+    newer recogniser (`rapidocr` 3.9.2, PP-OCRv6) reads better and boxes
+    worse. Measured through a shim so not one line of the build changed:
+
+        tree, names exact      30/31  ->  31/31   (it settles Carson AI)
+        tree, all four         30/31  ->  31/31
+        terminal characters   336/360 -> 336/360  (no change; tesseract's cells)
+
+    31/31 on all four is the best this build has scored, and the row it wins
+    is the capital-I/lowercase-l collision written up as undecidable.
+
+    What stops it: its boxes are inconsistent, and one of the refusals depends
+    on them. A live stream's chat log misses its own depth by 3.19 row heights
+    under the engine in use, which is what refuses it; under the newer one the
+    same log measures 0.75, inside a real sidebar's own 0.71. So the swap
+    would buy one fixture row and give back a false file tree. It waits on a
+    discriminator for chat-versus-tree that does not lean on the boxes.

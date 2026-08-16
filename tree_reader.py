@@ -394,13 +394,19 @@ def read_tree(png_path):
     if margin is None:
         margin, columns = 8, []
 
+    # one indent, from the guide columns themselves: it is where a chevron
+    # sits when the recogniser's box has swallowed it
+    step = (statistics.median([b - a for a, b in zip(columns, columns[1:])])
+            if len(columns) >= 2 else 0)
+
     out = []
     for r, band in zip(rows, bands):
         lines, glyphs = lines_and_glyphs(band, margin, dark)
         present = _present(lines, columns)
         depth = len(present)
         last_guide = max(present) if present else -1
-        blob = any(a > last_guide for a, b, w in glyphs)
+        blob = (any(a > last_guide for a, b, w in glyphs)
+                or chevron_beyond(img, r, last_guide, step, margin, dark))
         name, ocr_chevron = strip_chevron(r["text"])
         out.append({
             "name": name, "raw": r["text"], "depth": depth,
@@ -482,6 +488,36 @@ def indent_miss(rows):
         # the same test with the indent taken out of it
         worst = float(x.max() - x.min())
     return worst / h
+
+
+def chevron_beyond(img, row, last_guide, step, margin, dark_theme):
+    """A chevron sitting past the last guide line, even inside the name's box.
+
+    The gutter is cut at the left edge of the recogniser's text box, which is
+    fine while that box begins at the name. One engine's boxes begin at the
+    name and another's sometimes swallow the arrow in front of it, and then a
+    collapsed folder loses its arrow and reads as a file -- structure decided
+    by how a recogniser drew a rectangle, which is the one thing this reader
+    is built not to do.
+
+    The arrow does not move: it occupies the one indent slot after the row's
+    last guide line, and a GAP separates it from the name. So look in that
+    slot, and count a run only if blank follows it before the strip ends --
+    a name's first letters run on to the edge and are not counted.
+    """
+    if last_guide < 0 or not step:
+        return False
+    wide = int(last_guide + step * 1.5)
+    if wide <= row["x0"] or wide > img.shape[1]:
+        return False
+    band = img[max(0, row["y0"]):min(img.shape[0], row["y1"]), 0:wide]
+    if band.size == 0:
+        return False
+    cov = (local_contrast(band, dark_theme) > margin).mean(axis=0)
+    for a, b, w in _runs(cov, GLYPH_COVERAGE):
+        if w >= BLOB_MIN and w <= step and a > last_guide and b < wide - 2:
+            return True
+    return False
 
 
 def looks_like_a_tree(rows_kept, rows_seen, columns, pitch, names=(), placed=()):

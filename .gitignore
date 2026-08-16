@@ -1,3 +1,5 @@
 .venv/
+.venv-next/
 __pycache__/
 _frames/
+_trial/
