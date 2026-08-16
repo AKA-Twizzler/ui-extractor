@@ -77,13 +77,15 @@ def main():
 
         # A panel is a rectangle floating over video, so it belongs to no pane
         # and splitting the frame would cut it in half.
-        for panel in overlay.read_overlays(path)["panels"]:
+        for panel in overlay.read_overlays(path, engine)["panels"]:
             print("  [a panel drawn on the picture]")
-            if panel["label"]:
+            unsettled = set(panel.get("unsettled") or [])
+            if panel["label"] and not unsettled:
                 print(f"    {panel['label']}: {panel['value']}")
             else:
                 for line in panel["lines"]:
-                    print(f"    {line}")
+                    mark = "  <- only one engine read this" if line in unsettled else ""
+                    print(f"    {line}{mark}")
 
         # Text with no panel round it -- a banner, a lower third -- is proved
         # by watching its spot over minutes: an overlay holds still while the
@@ -171,8 +173,21 @@ def main():
                 texts = [t for _, t, _ in (res or [])]
                 if len(texts) < 4:
                     continue
+                # nothing else placed this pane, so there is no structure to
+                # stand behind the words. Printing them as read is how "R78"
+                # came off Jared's visualizer -- three faint marks one engine
+                # calls R78 and the other calls Ris. The rule this build runs
+                # on is that a string enters the record only when the
+                # instruments confirm it, so say which ones did.
+                marked = verify_names.confirm_readings(pane_path, texts[:16])
+                sure = [t for t, ok in marked if ok]
+                doubt = [t for t, ok in marked if not ok]
                 print(f"  [pane {pi}: text, not a tree]")
-                print("    " + " | ".join(texts[:16]))
+                if sure:
+                    print("    " + " | ".join(sure))
+                if doubt:
+                    print("    [only one engine read these] "
+                          + " | ".join(doubt))
         print()
 
 

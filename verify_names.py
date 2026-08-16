@@ -223,6 +223,77 @@ def verify(png_path, tree):
     return tree
 
 
+def _flat(text):
+    return re.sub(r"[^a-z0-9]", "", text.lower())
+
+
+def _terms(text):
+    return [w for w in re.findall(r"[a-z0-9]+", text.lower()) if len(w) >= 3]
+
+
+def second_engine_text(png_path, psm=6):
+    """Everything the other engine reads on this picture, as one string.
+
+    Enlarged and, on a dark theme, inverted first -- the same treatment every
+    other second reading in this build gets. Handed the pane raw, tesseract
+    missed half the Clock app's real tab labels and they came back unconfirmed,
+    which makes the mark meaningless. The point is to separate text no other
+    engine can find from text it simply was not given a fair look at.
+    """
+    img = cv2.imread(png_path)
+    if img is None:
+        return ""
+    if img.shape[1] < 1600:
+        img = cv2.resize(img, (img.shape[1] * 3, img.shape[0] * 3),
+                         interpolation=cv2.INTER_LANCZOS4)
+    if float(np.median(img)) < 128:
+        img = 255 - img
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as fh:
+        work = fh.name
+    try:
+        cv2.imwrite(work, img)
+        r = subprocess.run(
+            [machine.tesseract_or_refuse(), work, "stdout", "-l", "eng",
+             "--psm", str(psm)],
+            capture_output=True, text=True, encoding="utf-8")
+        return r.stdout or ""
+    finally:
+        os.unlink(work)
+
+
+def confirm_readings(png_path, texts, other_text=None):
+    """Which of these readings the OTHER engine read too, and which it did not.
+
+    The build's rule is that a string enters the record only when the
+    instruments confirm it, and two paths were breaking it: the fallback that
+    prints whatever one engine read off a pane it could not otherwise place,
+    and the panel reader. Both stated their readings as fact.
+
+    That is how "R78" came to be printed off Jared's visualizer. Something IS
+    drawn there -- three faint marks on near-black, read at 0.65 where the
+    same panel's other labels read at 0.86 -- and the other engine, on the
+    same pixels, finds nothing of it. Neither "R78" nor "there is no R78" is
+    the truth; "one engine read R78 and nothing confirms it" is.
+
+    So nothing is dropped and nothing is asserted: each reading comes back
+    with whether it was confirmed, and the caller says so plainly.
+
+    `other_text` is for the callers whose FIRST engine is tesseract -- the
+    panel reader is one -- so the check runs the other way round with whatever
+    the other engine read on the same pixels.
+    """
+    other = second_engine_text(png_path) if other_text is None else other_text
+    flat, terms = _flat(other), set(_terms(other))
+    out = []
+    for text in texts:
+        mine, words = _flat(text), _terms(text)
+        ok = bool(mine) and len(mine) >= 3 and mine in flat
+        if not ok and words:
+            ok = sum(1 for w in words if w in terms) * 2 >= len(words)
+        out.append((text, ok))
+    return out
+
+
 if __name__ == "__main__":
     import sys, json
     from tree_reader import read_tree, render

@@ -235,14 +235,24 @@ def aligned(boxes, space_w):
 def belongs(row, bands, tess_words):
     """Is this row one of the table's, judged only by its columns?
 
-    Every column filled, one cell to each, and no cell of the row left over.
-    The last two halves matter as much as the first: without them the toolbar
+    Every column filled but at most one, one cell to each, and no cell of the
+    row left over. The last two matter as much as the first: without them the
+    toolbar
     above the window "fits" because the cells falling outside the columns are
     quietly ignored, and the path bar along the bottom "fits" because its
     eight crumbs happen to land two to a column.
     """
     vals, _, _ = cells_in_bands(row, bands, tess_words)
-    if not all(v.strip() for v in vals):
+    # ONE column may be empty. A value can be missing from a row that is
+    # plainly the table's own -- in the Finder window the mouse pointer sits
+    # over a file name and neither engine reads it -- and treating that as a
+    # different table cost the whole thing its heading: the four-column table
+    # fell to two rows, a three-column one formed under it out of the sixteen
+    # files' dates and sizes, and the bigger one won with a date for a
+    # heading. A missing value is a missing value. What is NOT relaxed is the
+    # rest: one cell to a column and nothing left over, which is what keeps
+    # the toolbar and the path bar out.
+    if sum(1 for v in vals if not v.strip()) > 1:
         return False
     seen = [0] * len(bands)
     for c in row["cells"]:

@@ -83,24 +83,32 @@ def strong_steps(gray, axis):
 
 
 def runs_along(strong, axis, need):
-    """The longest unbroken run of edge on each line, where it is long enough."""
+    """EVERY unbroken run of edge on each line that is long enough.
+
+    Every one of them, not the longest: a drawn edge can be crossed by
+    something and arrive in pieces. The donation card's lower edge is broken
+    by the glare of the lamp behind Jared, and on one grab of that second the
+    surviving piece of its lower edge and the surviving piece of its upper
+    edge did not overlap, so the rectangle they bound was never proposed and
+    the card was not found at all -- on a frame where it is unmistakable to
+    the eye. On another grab of the SAME second the pieces happened to
+    overlap and it was found. An instrument that depends on which grab it got
+    is not an instrument.
+    """
     out = []
     count = strong.shape[axis]
     for i in range(count):
         line = strong[i, :] if axis == 0 else strong[:, i]
-        best = start = run = 0
         at = None
         for j, on in enumerate(line):
-            if on:
-                if at is None:
-                    at = j
-                run += 1
-                if run > best:
-                    best, start = run, at
-            else:
-                run, at = 0, None
-        if best >= need:
-            out.append((i, start, start + best))
+            if on and at is None:
+                at = j
+            elif not on and at is not None:
+                if j - at >= need:
+                    out.append((i, at, j))
+                at = None
+        if at is not None and len(line) - at >= need:
+            out.append((i, at, len(line)))
     return out
 
 
@@ -212,7 +220,7 @@ def panels(bgr):
     return out
 
 
-def read_panel(bgr, box, scratch):
+def read_panel(bgr, box, scratch, engine=None):
     """What one panel says, and how it is laid out.
 
     A counter puts its name on the left and its number on the right, wrapped
@@ -247,20 +255,32 @@ def read_panel(bgr, box, scratch):
             break
         left.append(" ".join(w[0] for w in words[:where + 1]))
         right.append(" ".join(w[0] for w in words[where + 1:]))
+    # this reader's engine is tesseract, so the OTHER one checks it: a panel
+    # whose lettering neither engine agrees on is a picture of text, and the
+    # browser toolbar it kept finding is exactly that
+    import verify_names
+    if engine is None:
+        from rapidocr_onnxruntime import RapidOCR
+        engine = RapidOCR()
+    res, _ = engine(path)
+    said = " ".join(t for _, t, _ in (res or []))
+    unsettled = [t for t, ok in verify_names.confirm_readings(path, lines, said)
+                 if not ok]
     if left and right:
         return {"lines": lines, "label": " ".join(left),
-                "value": " ".join(right)}
-    return {"lines": lines, "label": None, "value": None}
+                "value": " ".join(right), "unsettled": unsettled}
+    return {"lines": lines, "label": None, "value": None,
+            "unsettled": unsettled}
 
 
-def read_overlays(png_path):
+def read_overlays(png_path, engine=None):
     bgr = cv2.imread(png_path)
     if bgr is None:
         return {"panels": [], "why": "could not read the image"}
     out = []
     for n, box in enumerate(panels(bgr)):
         got = read_panel(
-            bgr, box, png_path.replace(".png", f"_panel{n}.png"))
+            bgr, box, png_path.replace(".png", f"_panel{n}.png"), engine)
         if not got["lines"]:
             continue
         got["box"] = box

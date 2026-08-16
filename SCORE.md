@@ -119,12 +119,25 @@ settled it instead: one indent past the row's last guide line, counted only
 where blank follows it before the name. "Courses" now reads as a collapsed
 folder, and the tree fixture is unchanged at 31/31 for folder-versus-file.
 
-`columns.py` on a real Finder window -- found by `hunt.py`, at 00:07:00 of
-*How Claude Code Actually Works*: the whole window as ONE table, headed Name /
-Date Modified / Size / Kind, with all sixteen files under it, every value
-paired to the right column, including the names the application itself
-truncated ("project_ship...ation_fix.md"). The path bar along the bottom is
-correctly left out.
+`columns.py` on a real Finder window, at 00:07:00 of *How Claude Code
+Actually Works*: on a crop of the window itself it reads as ONE table, headed
+Name / Date Modified / Size / Kind, with all sixteen files under it, every
+value paired to the right column, including the names the application itself
+truncated ("project_ship...ation_fix.md"), and the path bar left out.
+
+**FAILING through the pipeline, and the check says so.** Handed the region the
+pipeline actually cuts -- a full-height strip, toolbar and path bar included --
+the same window comes back as twelve rows headed `Jun12,2026at11:03AM / 1 KB /
+Markdo...text file`, which is one of its own files' data. Two things combine:
+the mouse pointer sits over `feedback_br...cleanup.md` so neither engine reads
+that name, and the window's toolbar forms a block of its own with seven
+corridors that takes the heading row with it. The file rows then form a
+three-column table underneath, and being the bigger one it wins.
+
+Allowing one empty cell per row was tried and is not enough on its own, since
+the four-column table never forms at all. It is `checks.py`'s one failing
+stage and it is left failing rather than papered over with a weaker
+assertion.
 
 Three rows of that window do not share the corridors the columns are found
 from, and each for its own real reason: the heading row, because Finder
@@ -136,8 +149,15 @@ after the fact, by asking each neighbouring row the simpler question -- does
 it fill every column, one cell to each, with nothing left over. The corridor
 test itself is untouched, which is what keeps prose from reading as a table.
 
-`overlay.py`, on the panels a live stream draws over its picture. On the
-St. Jude fundraiser at 2:12:59, the donation card comes back paired:
+`overlay.py`, on the panels a live stream draws over its picture. An edge is
+now taken in every long piece it arrives in rather than only its longest: the
+donation card's lower edge is broken by the glare of the lamp behind Jared,
+and on one grab of that second the surviving pieces of its upper and lower
+edges did not overlap, so the card was not found at all on a frame where it is
+unmistakable to the eye -- while another grab of the SAME second found it. An
+instrument that depends on which grab it got is not an instrument.
+
+On the St. Jude fundraiser at 2:12:59, the donation card comes back paired:
 `St. Judes Children's Hospital Donations: 22154/ 2110`. On *Live August 03* at
 00:09:00, all three "Livestream Ended" cards come back with their titles and
 their sentences, and the strip of video BETWEEN two of them is correctly not
@@ -213,3 +233,34 @@ The template-matching build (`ui_geometry.py`, superseded by `tree_reader.py`):
 
 It failed because it tried to learn the shape of an arrow from the picture,
 and this picture contains no closed folder at the top level to learn from.
+
+
+## Every stage, checked
+
+`checks.py` runs each stage against a frame whose answer is known, including
+the stages whose whole job is to REFUSE -- which is where wrong answers come
+from, and which no score had ever covered. It exists because a wrong answer
+got into the output that both scored fixtures passed straight through: the
+fallback printing loose text stated "R78" off Jared's visualizer as fact,
+where one engine reads R78, the other reads Ris, and the marks are three faint
+shapes on near-black.
+
+```
+python3 checks.py              every stage
+python3 checks.py tree chat    only the stages named
+python3 checks.py --list       what there is
+```
+
+Nineteen stages: the machine's paths and programs, capture, screen against
+camera, windows, regions, the desktop's Clock, the tree fixture, the tree's
+refusals, a faint chevron, the terminal fixture, the terminal's refusals, the
+Finder table, a real chat log, the chat's refusal, the document gate, a drawn
+panel, the banner, confirmation, and the transcript join.
+
+Eighteen hold. The one that does not is the Finder table above, and it found
+two others that are now fixed: the donation card lost to a broken edge, and
+this file's own claim that the Courses folder could not be recovered.
+
+The frames are not kept in the repository. They are cut from the library on
+demand by the same capture the pipeline uses and land where the vault's rule
+says captured images live, so there are no binary fixtures to drift.
