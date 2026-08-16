@@ -90,22 +90,21 @@ the fix — testing every row at the chevron column learned from its depth —
 can turn a file INTO a folder, and inventing a folder is the worse error.
 
 `columns.py` on a real Finder window -- found by `hunt.py`, at 00:07:00 of
-*How Claude Code Actually Works*: thirteen files with Name, Date Modified,
-Size and Kind, every value paired to the right column, including the names
-the application itself truncated ("project_ship...ation_fix.md").
+*How Claude Code Actually Works*: the whole window as ONE table, headed Name /
+Date Modified / Size / Kind, with all sixteen files under it, every value
+paired to the right column, including the names the application itself
+truncated ("project_ship...ation_fix.md"). The path bar along the bottom is
+correctly left out.
 
-Known gap on that window: the heading ROW is not attached, so the columns are
-named after the first file instead of "Name / Date Modified / Size / Kind",
-and the selected row above it is left out of the block. The cause is a real
-property of the window: Finder left-aligns the heading "Size" while
-right-aligning the sizes themselves, so the heading crosses the very corridor
-its own column stands on, and no run of rows containing it can keep that
-column. Three ways to attach it were tried and each cost more than it gained
--- ranking candidate blocks by rows, by area, and taking the heading from the
-row above while blocks that fail validation claim nothing. Each one either
-collapsed the four columns into two, broke the dashboard, or made a page of
-prose read as a table. The pairing is right; only the column NAMES are a row
-out, and that is visible rather than silent.
+Three rows of that window do not share the corridors the columns are found
+from, and each for its own real reason: the heading row, because Finder
+left-aligns "Size" over sizes it right-aligns, so the heading crosses the very
+corridor its column stands on; the selected row, because it is drawn white on
+a green fill, which changes what counts as blank across it; and one file whose
+long name runs within two spaces of the date column. All three are recovered
+after the fact, by asking each neighbouring row the simpler question -- does
+it fill every column, one cell to each, with nothing left over. The corridor
+test itself is untouched, which is what keeps prose from reading as a table.
 
 Not yet proven, for want of a frame holding one: a file tree drawn in a light
 theme. `hunt.py` sweeps a library for it.

@@ -219,3 +219,22 @@ application reserves that space and clips text that would reach it.
     that merely ends in the last column a lie; reporting only the first
     presents two thirds of a command as the whole of it. So: "cut" for
     proven, "edge" for possible, and the fixture grades both.
+23. **Find the columns from the rows that share them; find the ROWS after.**
+    A table has rows that do not share its corridors, and each for a real
+    reason rather than a fault: Finder left-aligns the heading "Size" over
+    sizes it right-aligns, so the heading crosses the corridor its own column
+    stands on; the selected row is drawn white on a green fill, which changes
+    what counts as blank across it; a long file name runs within two spaces
+    of the next column and closes the corridor for that row alone. Trying to
+    fit them into the corridor search is what failed three times before —
+    ranking blocks by rows, by area, and letting failed blocks claim nothing
+    — each collapsing the columns, breaking the dashboard, or turning prose
+    into a table. Once the columns are settled the question gets simpler and
+    the corridor test never has to bend: does this neighbouring row fill every
+    column, one cell to each, with nothing left over. One cell to each is what
+    keeps the path bar out — its eight crumbs land two to a column — and
+    nothing left over is what keeps the toolbar out. Where two tables both
+    want a row, the one with more columns takes it, which is the order the
+    tables were chosen in; a table left too short to be one is dropped, and
+    that is what dissolved a spurious two-column table holding the last two
+    files of a four-column one.

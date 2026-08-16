@@ -19,8 +19,15 @@ column view cannot close them: the application reserves that space and clips
 text that would reach it. So the corridors ARE the columns, and finding them
 is a count of blank pixels, with nothing to tune and no template to learn.
 
-The header is then the topmost row that puts a word in most of the corridors'
-bands, and every row below it pairs its cells to those headings by position.
+The corridors give the columns. They do not give every ROW, because a table
+has rows that do not share them: a heading left-aligned over right-aligned
+numbers crosses the corridor its own column stands on, a selected row drawn
+white on a coloured fill changes what counts as blank across it, and one long
+name can run within two spaces of the next column. Once the columns are
+settled, each neighbouring row is asked the simpler question -- does it fill
+every column, one cell to each, with nothing left over -- and taken back if it
+does. The topmost row of what results is the header; the rest pair their cells
+to it by position.
 """
 import statistics
 import sys
@@ -224,6 +231,92 @@ def aligned(boxes, space_w):
     return False
 
 
+def belongs(row, bands, tess_words):
+    """Is this row one of the table's, judged only by its columns?
+
+    Every column filled, one cell to each, and no cell of the row left over.
+    The last two halves matter as much as the first: without them the toolbar
+    above the window "fits" because the cells falling outside the columns are
+    quietly ignored, and the path bar along the bottom "fits" because its
+    eight crumbs happen to land two to a column.
+    """
+    vals, _, _ = cells_in_bands(row, bands, tess_words)
+    if not all(v.strip() for v in vals):
+        return False
+    seen = [0] * len(bands)
+    for c in row["cells"]:
+        mid = (c["x0"] + c["x1"]) // 2
+        for i, (a, b) in enumerate(bands):
+            if a <= mid < b:
+                seen[i] += 1
+                break
+        else:
+            return False
+    return all(n == 1 for n in seen)
+
+
+def reach(found, rows, tess_words):
+    """Give each table back the rows above and below that are still its own.
+
+    The corridors are found from the rows that share them, and some of a
+    table's rows do not: Finder left-aligns "Size" over sizes it
+    right-aligns, so its heading crosses the very corridor its column stands
+    on; the selected row is drawn white on a green fill, which changes what
+    counts as blank across it; and one long file name runs within two spaces
+    of the next column, closing the corridor for that row alone. Left there,
+    a table names its columns after its first file and sheds its last rows
+    into a second table of two columns that is really the same one.
+
+    Nothing here loosens the corridor test, which is what keeps prose from
+    reading as a table. The columns are already settled. This only asks of
+    each neighbouring row whether it still fills them, one cell to a column,
+    with nothing left over -- and stops at the first row that does not.
+
+    Where two tables both want a row, the one with more columns takes it, the
+    same order in which the tables were chosen. A table left with too few rows
+    to be one is dropped.
+    """
+    order = sorted(range(len(found)), key=lambda i: -found[i]["columns"])
+    owner = {}
+    for i in order:
+        for k in range(found[i]["first"], found[i]["last"] + 1):
+            owner.setdefault(k, i)
+
+    def free(k, i):
+        held = owner.get(k)
+        return held is None or found[held]["columns"] < found[i]["columns"]
+
+    for i in order:
+        b = found[i]
+        for step in (-1, 1):
+            k = (b["first"] if step < 0 else b["last"]) + step
+            while 0 <= k < len(rows) and free(k, i) \
+                    and belongs(rows[k], b["bands"], tess_words):
+                owner[k] = i
+                if step < 0:
+                    b["first"] = k
+                else:
+                    b["last"] = k
+                k += step
+
+    kept = []
+    for i, b in enumerate(found):
+        mine = sorted(k for k, o in owner.items() if o == i)
+        if len(mine) < MIN_ROWS:
+            continue
+        table, flags = [], []
+        for k in mine:
+            vals, fl, _ = cells_in_bands(rows[k], b["bands"], tess_words)
+            table.append(vals)
+            flags.append(fl)
+        b["header"], b["rows"] = table[0], table[1:]
+        b["headflags"], b["flags"] = flags[0], flags[1:]
+        b["y0"], b["y1"] = rows[mine[0]]["y0"], rows[mine[-1]]["y1"]
+        kept.append(b)
+    kept.sort(key=lambda b: b["y0"])
+    return kept
+
+
 def read_list(png_path):
     """Read a column view back as a table, or say plainly that it is not one."""
     bgr = cv2.imread(png_path)
@@ -256,6 +349,7 @@ def read_list(png_path):
 
     space_w = space_width(tess) or (statistics.median(
         [r["y1"] - r["y0"] for r in rows]) * 0.3)
+    at = {id(r): i for i, r in enumerate(rows)}
     found = []
     for block_rows, corrs in blocks(mask, rows, space_w)[0]:
         bands = bands_from(corrs, mask.shape[1])
@@ -290,16 +384,21 @@ def read_list(png_path):
         # must BE one. A set of columns nothing spans is not a table: it is
         # prose with a ragged edge, and text found on a webcam inset beside
         # it filling one band on half the rows is enough to fake the rest.
-        header, body, hflags = None, table, flagged
+        header, body, hflags, headflags = None, table, flagged, None
         for i, row in enumerate(table):
             if all(c.strip() for c in row):
                 header, body, hflags = row, table[i + 1:], flagged[i + 1:]
+                headflags = flagged[i]
                 break
         if header is None or not body:
             continue
         found.append({"columns": len(bands), "bands": bands,
                       "header": header, "rows": body, "flags": hflags,
+                      "headflags": headflags,
+                      "first": at[id(block_rows[0])],
+                      "last": at[id(block_rows[-1])],
                       "y0": block_rows[0]["y0"], "y1": block_rows[-1]["y1"]})
+    found = reach(found, rows, tess_words)
     if not found:
         return {"is_list": False,
                 "why": "no run of rows shares a blank corridor between them"}
