@@ -43,19 +43,31 @@ def main():
     video = sys.argv[1]
     every = int(sys.argv[sys.argv.index("--every") + 1]) if "--every" in sys.argv else 10
     limit = int(sys.argv[sys.argv.index("--limit") + 1]) if "--limit" in sys.argv else 12
+    # --at 00:14:30,01:02:00 reads exactly these moments and skips mapping the
+    # video first. Everything below is untouched, which is the whole point: a
+    # probe that took its own path would prove nothing about what this does.
+    at = (sys.argv[sys.argv.index("--at") + 1].split(",")
+          if "--at" in sys.argv else [])
     title = os.path.basename(os.path.dirname(video)) or "capture"
     out_dir = machine.here(f"/mnt/g/Images/{title}")
     cache = os.path.join(out_dir, "scan.json")
 
     print(f"=== {title} ===")
-    samples = spot.scan(video, every, cache, rescan="--rescan" in sys.argv)
-    every_run = spot.stretches(samples)
-    # the words that go with each screen, joined on the one clock both halves
-    # were stamped with -- see transcript.py
-    joined = transcript.words_for(video, every_run) is not None
-    runs = [r for r in every_run if r["call"] == "screen"]
-    print(f"{len(runs)} distinct screens found; capturing "
-          f"{min(limit, len(runs))}\n")
+    if at:
+        runs = [{"best": {"t": int(capture._to_seconds(s.strip()))}} for s in at]
+        joined = False
+        if "--limit" not in sys.argv:
+            limit = len(runs)      # named moments are not silently dropped
+        print(f"{len(runs)} moments named\n")
+    else:
+        samples = spot.scan(video, every, cache, rescan="--rescan" in sys.argv)
+        every_run = spot.stretches(samples)
+        # the words that go with each screen, joined on the one clock both
+        # halves were stamped with -- see transcript.py
+        joined = transcript.words_for(video, every_run) is not None
+        runs = [r for r in every_run if r["call"] == "screen"]
+        print(f"{len(runs)} distinct screens found; capturing "
+              f"{min(limit, len(runs))}\n")
 
     from rapidocr_onnxruntime import RapidOCR
     engine = RapidOCR()
@@ -64,7 +76,13 @@ def main():
     for r in runs[:limit]:
         secs = r["best"]["t"]
         ts = spot.hms(secs)
-        path, how = capture.capture_moment(video, ts, out_dir)
+        try:
+            path, how = capture.capture_moment(video, ts, out_dir)
+        except RuntimeError as why:
+            # a damaged patch is the file's problem, not this moment's, and
+            # certainly not the other eleven moments' -- say so and go on
+            print(f"--- {ts}  (no picture: {why}) ---\n")
+            continue
         img = cv2.imread(path)
         regions = screenness.ui_regions(img, engine)
         share = sum(x["share"] for x in regions) * 100
@@ -163,15 +181,30 @@ def main():
                 note = note_reader.read_note(pane_path)
                 # lines of TEXT, not lines of output: the fences round a
                 # properties block are structure the reader emits, so counting
-                # them lets two garbled words come back as a document
-                if note_reader.body_lines(note["markdown"]) >= 3:
+                # them lets two garbled words come back as a document.
+                # And enough of those lines must be lines the OTHER engine read
+                # too. Every line here is already read twice and reconciled;
+                # nothing had ever looked at the verdict, so a stream's
+                # leaderboard came back as prose -- "# 3 & Dr. Paris Woods",
+                # "a @& Alex Palencia" -- with one line in eight backed.
+                if (note_reader.body_lines(note["markdown"]) >= 3
+                        and note["backed"] >= note_reader.BACKED):
                     print(f"  [pane {pi}: an open document]")
                     for line in note["markdown"].splitlines():
                         print("    " + line)
                     continue
                 res, _ = engine(pane_path)
                 texts = [t for _, t, _ in (res or [])]
-                if len(texts) < 4:
+                # Nothing is dropped for being short. This used to skip any
+                # pane with fewer than four readings, which is silent loss --
+                # the worst kind, because the output looks complete. On a slide
+                # of nine cards split into three columns, the left column held
+                # three of them and was thrown away without a word:
+                # "moonstone.co * 12k", "the tiny gem * 4k", "hearthstone *
+                # 15k" simply were not in the answer. Whether a reading is
+                # worth anything is what the confirmation below says, and it
+                # says it out loud.
+                if not texts:
                     continue
                 # nothing else placed this pane, so there is no structure to
                 # stand behind the words. Printing them as read is how "R78"

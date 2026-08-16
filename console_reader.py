@@ -51,6 +51,7 @@ import numpy as np
 
 import note_reader
 import machine
+import verify_names
 
 MONO_SPREAD = 0.04     # character widths vary less than this on a lattice
 MIN_PROMPTS = 2        # one line proves no repetition
@@ -59,6 +60,7 @@ SAME_GLYPH = 1.5       # a match stands this close, in units of the font's
 GROUP_MIN = 3          # and enough cells on screen for a match to mean it
 INK_CELL = 24          # ink in a cell, past what bleeds in from its neighbours
 ROW_OFF = 0.10         # how far a line may sit off a whole multiple of the pitch
+ROW_SIZE = 0.10        # and how far its own advance may sit off the common one
 
 
 def normalise(text):
@@ -422,6 +424,31 @@ def read_console(png_path):
                 "why": (f"character widths vary by {spread:.3f}; a terminal "
                         "sets every character on one advance")}
 
+    # That spread is measured over every word on the frame at once, so one
+    # heading three times the size of the body hides inside it: a slide set in
+    # a terminal font -- a title bar with traffic lights, a prompt line, then
+    # "what "works" means" in display type -- passed at 0.017 and came back
+    # 'rends and nriter real riles'. Whether a row is set in the SAME size is
+    # a question about that row, so it is asked of each one.
+    #
+    #   fixture, a real terminal        0.036 off the common advance
+    #   another, camera inset and all   0.052
+    #   "what works means" slide        0.345
+    #   AI PRIMING slide                0.347
+    #   a grid of cards, in mono        1.280
+    per_row = [statistics.median(
+                   [(x1 - x0) / len(t) for t, x0, x1 in (r.get("words") or [])
+                    if len(t) >= 3] or [0])
+               for r in rows]
+    per_row = [a for a in per_row if a > 0]
+    if len(per_row) >= 3:
+        one = statistics.median(per_row)
+        far = max(per_row, key=lambda a: abs(a - one))
+        if abs(far - one) / one > ROW_SIZE:
+            return {"is_console": False,
+                    "why": (f"one line is set {far / one:.2f} times the size "
+                            "of the rest; a terminal has one size")}
+
     # One advance is not enough on its own. A web page set in a monospace
     # font passes that test and then reads as nonsense, because its heading
     # is three times the size of its body and no single lattice fits both.
@@ -461,11 +488,29 @@ def read_console(png_path):
                                           up_px, down_px)})
     fixed = agree([c for e in laid for w in e["words"] for c in w["cells"]])
 
+    # The lattice reading and the line engine's reading are two readings of
+    # the same pixels, and only one of them was ever printed. On a real
+    # terminal the lattice wins -- that is what the fixture measures, 94.2%
+    # against 92.2% with the font consensus off. On a slide SET in a terminal
+    # font it loses badly, and said so nowhere:
+    #
+    #   line engine  'PRIMED. NOW do the thing.'   'opal & oak x 22k'
+    #   lattice      'PRIMED. NOW do tIe thiII.'   'opaa   « oak x 22k'
+    #
+    # The build's rule is that a string enters the record only when the
+    # instruments confirm it. The lattice's text is kept, because its spacing
+    # is the column structure and merging would destroy it, but a line whose
+    # LETTERS the two engines read differently is marked and both are shown.
+    # Spacing and symbols do not count: the line engine reads a curly quote for
+    # the "[" that opens every prompt, and that is settled, not disputed.
     lines = []
     for e in laid:
         text = lay_out(e["words"])
+        _, status = verify_names.reconcile(text, e["row"]["text"])
         lines.append({"text": text,
                       "y0": e["row"]["y0"], "y1": e["row"]["y1"],
+                      "second": e["row"]["text"],
+                      "unsettled": status == "uncertain",
                       "clipped": runs_off_frame(mask, e["base"], up_px,
                                                 down_px, text, adv, org)})
 
@@ -474,6 +519,7 @@ def read_console(png_path):
     out = []
     for i, ln in enumerate(lines):
         entry = {"text": ln["text"], "clipped": ln["clipped"],
+                 "second": ln["second"], "unsettled": ln["unsettled"],
                  "prompt": None, "kind": "output"}
         if i in typed and marker:
             cut = ln["text"].rfind(marker)
@@ -496,6 +542,8 @@ def render(res):
             body += "  <the frame cuts this line off here>"
         elif ln["clipped"] == "edge":
             body += "  <reaches the edge of the frame; there may be more>"
+        if ln.get("unsettled"):
+            body += f"   <- the other engine read {ln['second']!r}"
         if ln["kind"] == "typed":
             out.append(f"$ {body}" if ln["text"] else "$")
         else:

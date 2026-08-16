@@ -125,19 +125,21 @@ Name / Date Modified / Size / Kind, with all sixteen files under it, every
 value paired to the right column, including the names the application itself
 truncated ("project_ship...ation_fix.md"), and the path bar left out.
 
-**FAILING through the pipeline, and the check says so.** Handed the region the
-pipeline actually cuts -- a full-height strip, toolbar and path bar included --
-the same window comes back as twelve rows headed `Jun12,2026at11:03AM / 1 KB /
-Markdo...text file`, which is one of its own files' data. Two things combine:
-the mouse pointer sits over `feedback_br...cleanup.md` so neither engine reads
-that name, and the window's toolbar forms a block of its own with seven
-corridors that takes the heading row with it. The file rows then form a
-three-column table underneath, and being the bigger one it wins.
+Through the pipeline's own region too, which for a long time it was not:
+handed the full-height strip, toolbar and path bar included, the same window
+came back as twelve rows headed `Jun12,2026at11:03AM / 1 KB / Markdo...text
+file`, which is one of its own files' data.
 
-Allowing one empty cell per row was tried and is not enough on its own, since
-the four-column table never forms at all. It is `checks.py`'s one failing
-stage and it is left failing rather than papered over with a weaker
-assertion.
+The cause was one row short of a column. The mouse pointer sits over
+`feedback_br...cleanup.md`, so neither engine reads that name, and a band left
+blank by even one row was dropped -- taking the Name column with it. The
+heading's four cells then no longer fitted the three bands that remained, so it
+could not join the table and the first file's data became the headings.
+
+One blank row is now allowed, which is the rule `belongs` already ran on -- a
+missing value is a missing value -- read down a column instead of across a row.
+One blank of thirteen is 0.92; the webcam inset that used to fake a column
+filled its band on half the rows, and half is still refused.
 
 Three rows of that window do not share the corridors the columns are found
 from, and each for its own real reason: the heading row, because Finder
@@ -251,16 +253,53 @@ python3 checks.py tree chat    only the stages named
 python3 checks.py --list       what there is
 ```
 
-Nineteen stages: the machine's paths and programs, capture, screen against
-camera, windows, regions, the desktop's Clock, the tree fixture, the tree's
-refusals, a faint chevron, the terminal fixture, the terminal's refusals, the
-Finder table, a real chat log, the chat's refusal, the document gate, a drawn
-panel, the banner, confirmation, and the transcript join.
+Twenty-five stages: the machine's paths and programs, capture, capture over a
+damaged patch, screen against camera, windows, regions, no pane dropped, the
+desktop's Clock, the tree fixture, the tree's refusals, a faint chevron, the
+terminal fixture, the terminal's refusals, its refusal of a slide set in a
+terminal font, its mark where the two engines differ, the Finder table, a real
+chat log, the chat's refusal, the document gate, the document's refusal of what
+one engine alone read, a card that is not a properties panel, a drawn panel,
+the banner, confirmation, and the transcript join.
 
-Eighteen hold. The one that does not is the Finder table above, and it found
-two others that are now fixed: the donation card lost to a broken edge, and
-this file's own claim that the Courses folder could not be recovered.
+**Twenty-five of twenty-five hold**, both fixtures unchanged by all of it.
 
 The frames are not kept in the repository. They are cut from the library on
 demand by the same capture the pipeline uses and land where the vault's rule
 says captured images live, so there are no binary fixtures to drift.
+
+## What running it over unseen material found
+
+The nineteen stages were built against the frames the build already knew. Run
+over parts of the library no fixture had seen -- a designed slide deck, a
+claude.ai page, a Finder-and-Obsidian desktop, two live replays at fresh
+moments, a vertical short-form live -- it found eight more faults, every one of
+them a reader saying yes where it should have said no, or saying as fact what
+only one engine ever read.
+
+```
+  silent loss   a pane with under four readings was skipped without a word
+                a strip too thin to be a pane was dropped with its text on it
+                a window took its whole column out of the desktop, and what
+                  sat above or below it was in no region at all
+  false yes     a letterspaced label read as a properties field, and the card
+                  above it was discarded as the note's header
+                a slide drawn as a terminal read as a terminal
+                a stream's leaderboard read as prose
+  unsaid        the terminal never said where its two engines differed
+  dead run      one undecodable patch killed a six-hour video's whole run
+```
+
+A terminal's rows are one size. The character-width spread is measured over
+every word at once, so a heading three times the body's size hides inside it;
+asked of each row instead, two real terminals sit 0.036 and 0.052 off the
+common advance and three of Jared's slides 0.35, 0.35 and 1.28.
+
+A document is one both engines read. Share of lines the second engine backed:
+a real note 1.00 and 0.89; a stream's leaderboard 0.12; a frame of its overlay
+0.00; a column of chat bubbles 0.50; the claude.ai sidebar, every label
+carrying a drawn icon, 0.33.
+
+A properties panel is a column. Its labels start at one x and its values at
+another, within a character; the card that read as one had values at 786 and
+1830.

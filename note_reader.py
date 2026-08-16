@@ -388,7 +388,7 @@ def read_note(png_path, engine=None):
         md = ("---\n" + "\n".join(f"{k}: {v}" for k, v in props)
               + "\n---\n" + md)
     return {"rows": rows, "properties": props, "body_rows": body_rows,
-            "body_height": body, "levels": levels,
+            "body_height": body, "levels": levels, "backed": backed_share(rows),
             "body_stroke": round(body_stroke, 2), "markdown": md}
 
 
@@ -496,7 +496,7 @@ def split_key_value(row, body_h, min_gap=3.0):
     val = " ".join(t for t, _, _ in words[at + 1:]).strip(" :=+©@")
     if not key or not val:
         return None
-    return key, val
+    return key, val, row["x0"], words[at + 1][1]
 
 
 def is_button(text):
@@ -517,6 +517,25 @@ def properties_block(rows, body_h):
     icons look exactly like checkboxes, and its right-hand values sit far from
     the body margin so they read as deep indentation. It is everything before
     the first heading that pairs a label on the left with a value to its right.
+
+    A wide gap alone does not make a field, and taking it for one costs more
+    than a wrong fence: everything above the last field is dropped as the
+    note's header, so a card whose last line happens to split loses its whole
+    body. A letterspaced label -- "TYPING IT YOURSELF" -- splits at a gap
+    wider than three body heights, and so does a line of prose with a drawn
+    bullet in front of it.
+
+    What a real panel has and neither of those has is a COLUMN. Its labels all
+    start at one x and its values all start at another:
+
+      status   active        key x0 1098   value x0 1426
+      project  personal          "  1098       "    1427
+      type     log               "  1098       "    1427
+      created  06/16/2026        "  1097       "    1426
+
+    against a card that read as one, where the values began at 786 and 1830.
+    So the columns must hold to within a character of the text's own width,
+    which the rows themselves supply -- no fixed number.
     """
     fields, last = [], -1
     for i, r in enumerate(rows[:12]):
@@ -526,22 +545,51 @@ def properties_block(rows, body_h):
         # like a field does and arrives here as ".: he . C8 @we eo @ #.",
         # which is not a field name and must not become frontmatter.
         if kv and any(ch.isalpha() for ch in kv[0]) and not is_button(kv[0]):
-            fields.append((i, kv))
+            fields.append((i, kv, r))
             last = i
     if len(fields) < 2:
         return [], rows
+    char = statistics.median(
+        [(r["x1"] - r["x0"]) / max(1, len(r["text"])) for _, _, r in fields])
+    for col in (2, 3):                       # where the keys start, then the values
+        edges = [kv[col] for _, kv, _ in fields]
+        if max(edges) - min(edges) > char:
+            return [], rows
     # everything up to the last field row is the note's header: the filename
     # Obsidian shows above the note, and the properties panel itself. None of
     # it is prose, and counting the filename as a heading pushes every real
     # heading down a rank.
     body = [r for r in rows[last + 1:] if not is_button(r["text"])]
-    return [kv for _, kv in fields], body
+    return [(kv[0], kv[1]) for _, kv, _ in fields], body
+
+
+# A document's lines are read twice, and this is the share of them the second
+# engine backed. Measured: a real Obsidian note 1.00 and 0.89; the July 6
+# stream's leaderboard 0.12; a frame of that stream's own overlay 0.00; a
+# column of chat bubbles on a slide 0.50; the claude.ai sidebar, where every
+# label carries a drawn icon, 0.33. Under this, what came back was not a
+# document but the recogniser's best effort at a picture -- "## +M O L 8 | 0",
+# "F Fi X | GC)" -- and it used to be printed as prose with nothing said.
+BACKED = 2 / 3
+
+
+def backed_share(rows):
+    if not rows:
+        return 0.0
+    good = sum(1 for r in rows if r.get("read_status") in
+               ("confident", "reconciled", "ambiguous-symbol",
+                "ambiguous-glyph"))
+    return good / len(rows)
 
 
 def to_markdown(rows):
     out = []
     for r in rows:
         text = r["text"]
+        if r.get("read_status") in ("uncertain", "unverified"):
+            other = r.get("text_second")
+            text += ("   <- only one engine read this" if not other
+                     else f"   <- the other engine read {other!r}")
         pad = "  " * max(0, min(4, r["indent"]))
         if r["heading"]:
             out.append(f"{pad}{'#' * min(6, r['heading'])} {text}")

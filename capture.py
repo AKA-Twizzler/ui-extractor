@@ -60,13 +60,39 @@ def _slug(ts):
     return f"{int(s // 3600):02d}-{int(s % 3600 // 60):02d}-{int(s % 60):02d}"
 
 
+MOVED_ON = 6           # how many bursts forward a damaged patch may be stepped over
+
+
 def capture_moment(video, timestamp, out_dir, seconds=BURST_SECONDS):
-    """Return (path, how) for one moment: how is 'stacked' or 'sharpest'."""
+    """Return (path, how) for one moment: how is 'stacked' or 'sharpest'.
+
+    A recording of this length is not always whole. The St. Jude replay is
+    5.6GB and 6h20m, and at 00:45:00 its H264 stream is damaged: ffmpeg reports
+    "Error splitting the input into NAL units", exits 0, and writes no frames
+    at all. That is the file, not this program -- 2:12:59 of the same file
+    reads perfectly -- but the run used to die on it, so one bad patch in a
+    six-hour video returned nothing for the whole video.
+
+    So a moment that cannot be decoded is stepped over, a burst at a time, and
+    HOW FAR it moved is reported with the frame. A picture from a second later
+    is worth having; a picture silently taken from somewhere else is not.
+    """
     os.makedirs(out_dir, exist_ok=True)
     with tempfile.TemporaryDirectory() as work:
-        files = _ffmpeg_burst(video, timestamp, seconds, work)
+        moved, files = 0.0, []
+        for step in range(MOVED_ON):
+            moved = step * seconds
+            files = _ffmpeg_burst(video, _to_seconds(timestamp) + moved,
+                                  seconds, work)
+            if files:
+                break
+            for stale in os.listdir(work):
+                os.unlink(os.path.join(work, stale))
         if not files:
-            raise RuntimeError(f"no frames at {timestamp}")
+            raise RuntimeError(
+                f"no frames at {timestamp}, nor in the "
+                f"{MOVED_ON * seconds:.0f}s after it; the file cannot be "
+                "decoded here")
         frames = [cv2.imread(f, cv2.IMREAD_COLOR) for f in files]
         frames = [f for f in frames if f is not None]
         grays = [cv2.cvtColor(f, cv2.COLOR_BGR2GRAY) for f in frames]
@@ -97,6 +123,9 @@ def capture_moment(video, timestamp, out_dir, seconds=BURST_SECONDS):
             how = f"sharpest of {len(frames)} moving frames"
         if cuts:
             how += f"; burst crossed {cuts} cut(s), kept the moment's own shot"
+        if moved:
+            how += (f"; moved {moved:.1f}s on, the file cannot be decoded at "
+                    f"{timestamp}")
         path = os.path.join(out_dir, f"{_slug(timestamp)}.png")
         cv2.imwrite(path, out, [cv2.IMWRITE_PNG_COMPRESSION, 3])
         return path, how

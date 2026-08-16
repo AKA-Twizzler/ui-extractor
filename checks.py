@@ -53,6 +53,10 @@ VIDEOS = {
     "july6": "Live Replay - July 6, 2026; AI marketing, Jarvis builds, and AI automation",
     "stjude": "Jarvis and Jaredrhod Raise Money for St. Jude's Children's Hospital - Live Replay 8-1-26",
     "aug03": "Live August 03",
+    # a designed slide rather than a screen recording: monospace throughout,
+    # cards in drawn rectangles, dim text. Every gate in the build meets
+    # something here it was never shown while it was being built.
+    "skills": "How To Make Your Own AI Skills",
 }
 
 _ENGINE = None
@@ -441,6 +445,154 @@ def _transcript():
     if len(cues) < 20:
         return False, f"the transcript loaded {len(cues)} lines"
     return True, f"{len(cues)} lines of transcript found and read"
+
+
+# ------------------------------------------- what a designed slide breaks
+
+@check("note: a card is not a properties panel")
+def _props_are_a_column():
+    """A wide gap does not make a field; a shared column does.
+
+    The left-hand card of this slide reads "TYPING IT YOURSELF" in letterspaced
+    capitals, which splits at a gap wider than three body heights exactly as a
+    field does. Taken for a properties block it cost the whole card: everything
+    above the last field is dropped as the note's header, so the filename and
+    all three bullets went with it and four garbled lines came back in fences.
+    """
+    card = regions("skills", "00:01:00")[0]
+    got = note_reader.read_note(card)
+    if got.get("properties"):
+        return False, (f"read {len(got['properties'])} properties off a card: "
+                       + "; ".join(f"{k}: {v}" for k, v in got["properties"]))
+    md = got["markdown"].lower()
+    missing = [w for w in ("my-chili-recipe", "brown the meat",
+                           "cook a few hours", "season to taste")
+               if w not in md]
+    if missing:
+        return False, "the card came back without " + ", ".join(missing)
+    real = note_reader.read_note(regions("obsidian", "00:07:30")[2])
+    keys = [k.lower() for k, _ in (real.get("properties") or [])]
+    if not all(k in keys for k in ("status", "project", "type", "created")):
+        return False, f"a real properties panel came back as {keys}"
+    return True, f"the card keeps its bullets; a real panel keeps {keys}"
+
+
+@check("terminal: refuses a slide set in a terminal font")
+def _console_refuses_slides():
+    """Jared's slides are drawn as terminals, and they are not terminals.
+
+    Traffic lights, a prompt line, a monospace face throughout -- every test
+    this reader had, passed. What gave them away is that a slide has a
+    HEADING: one line set larger than the rest, where a terminal has one size
+    for everything. Measured off the common advance: two real terminals 0.036
+    and 0.052, these three 0.35, 0.35 and 1.28.
+
+    It matters because the lattice fitted to the body then reads the heading
+    as noise and drags the body with it -- "rends and nriter real riles" for
+    "reads and writes real files" -- and printed it as a terminal transcript.
+    """
+    slides = [("skills", "00:01:30"), ("skills", "00:03:10")]
+    for key, stamp in slides:
+        for pane in regions(key, stamp):
+            got = console_reader.read_console(pane)
+            if got.get("is_console"):
+                return False, (f"{stamp} {os.path.basename(pane)} still reads "
+                               f"as a terminal: {len(got['lines'])} lines")
+    return True, "neither slide is claimed as a terminal"
+
+
+@check("terminal: says when the other engine disagrees")
+def _console_unsettled():
+    """The lattice's reading is not evidence on its own.
+
+    The lattice beats the line engine on a real terminal -- 94.2% against
+    92.2% -- and that is why its text is the one kept. But it is still one
+    engine, and where the two read different LETTERS the line said so nowhere.
+    On the fixture the mark lands on the top line, drawn half in colour, and
+    on the prompt whose colon the lattice loses.
+    """
+    real = console_reader.read_console(frame("install", "00:02:42"))
+    if not real.get("is_console"):
+        return False, f"the terminal fixture was refused: {real.get('why')}"
+    marked = [l for l in real["lines"] if l.get("unsettled")]
+    if not marked:
+        return False, ("not one line marked, though the two engines differ on "
+                       "the top line and on the prompt's colon")
+    if len(marked) > len(real["lines"]) / 2:
+        return False, (f"{len(marked)} of {len(real['lines'])} lines marked; "
+                       "a mark on everything means nothing")
+    return True, (f"{len(marked)} of {len(real['lines'])} lines marked, "
+                  f"first: {marked[0]['second'][:38]!r}")
+
+
+@check("document: refuses what one engine alone read")
+def _note_backed():
+    """A document's lines are read twice; nothing had ever looked at the verdict.
+
+    So a live stream's leaderboard came back as prose -- "# 3 & Dr. Paris
+    Woods", "a @& Alex Palencia" -- and a frame of its own overlay came back as
+    "## +M O L 8 | 0". Measured share of lines the second engine backed: a real
+    note 1.00 and 0.89, those two 0.12 and 0.00.
+    """
+    real = note_reader.read_note(regions("obsidian", "00:07:30")[2])
+    if real["backed"] < note_reader.BACKED:
+        return False, (f"a real note came back {real['backed']:.2f} backed, "
+                       f"under the {note_reader.BACKED:.2f} a document needs")
+    worst = None
+    for pane in regions("july6", "00:20:00"):
+        got = note_reader.read_note(pane)
+        if note_reader.body_lines(got["markdown"]) < 3:
+            continue
+        if got["backed"] >= note_reader.BACKED:
+            return False, (f"{os.path.basename(pane)} passed at "
+                           f"{got['backed']:.2f}: {got['markdown'][:60]!r}")
+        worst = got["backed"] if worst is None else min(worst, got["backed"])
+    if worst is None:
+        raise Skip("no pane of that frame read as a document either way")
+    return True, (f"a real note {real['backed']:.2f}, the stream's overlay "
+                  f"{worst:.2f}")
+
+
+@check("capture: steps over a patch the file cannot decode")
+def _capture_damaged():
+    """5.6GB of H264 is not always whole, and one bad patch is not a dead run.
+
+    At 00:45:00 of the St. Jude replay ffmpeg reports "Error splitting the
+    input into NAL units", exits 0 and writes no frames. 2:12:59 of the same
+    file reads perfectly, so it is the recording, not this program -- but the
+    run used to die on it and return nothing for six hours of video.
+    """
+    out_dir = machine.here(f"/mnt/g/Images/{VIDEOS['stjude']}")
+    path, how = capture.capture_moment(video("stjude"), "00:45:00", out_dir)
+    img = cv2.imread(path)
+    if img is None:
+        return False, "came back with no picture at all"
+    if "moved" not in how:
+        return False, f"decoded 00:45:00 without stepping over anything: {how}"
+    return True, how
+
+
+@check("pipeline: no pane is dropped for being short")
+def _nothing_dropped():
+    """Silent loss is the worst kind, because the answer still looks whole.
+
+    This slide is nine cards in a three-column grid. The frame splits into
+    three regions, and the left one holds three cards -- three readings, one
+    short of the four a pane used to need before it was allowed to say
+    anything. So "moonstone.co", "the tiny gem" and "hearthstone" were not in
+    the answer, and nothing anywhere said a pane had been thrown away.
+    """
+    import subprocess
+    r = subprocess.run([sys.executable, "pipeline.py", video("skills"),
+                        "--at", "00:01:30"],
+                       capture_output=True, text=True, encoding="utf-8")
+    text = (r.stdout or "").lower()
+    missing = [w for w in ("moonstone", "tiny gem", "hearthstone")
+               if w not in text]
+    if missing:
+        return False, ("the whole frame's answer never mentions "
+                       + ", ".join(missing) + "; three cards of nine")
+    return True, "all three columns of the grid reach the answer"
 
 
 def main():

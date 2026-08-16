@@ -101,9 +101,18 @@ def pane_columns(img, engine=None, least=MIN_PANE):
         if e - last >= least:
             panes.append((last, e))
             last = e
-    if w - last >= least:
-        panes.append((last, w))
-    return panes or [(0, w)]
+    # What is left over at the right is too thin to be a pane of its own, and
+    # it used to be dropped -- with whatever was written on it. On a card
+    # reading "moonstone.co * 12k" the gap before the number is wide enough to
+    # cut at, so the pane ended there and the number was never read by
+    # anything. A strip too thin to stand alone belongs to its neighbour; it
+    # does not belong to nobody.
+    if panes:
+        if w > last:
+            panes[-1] = (panes[-1][0], w)
+    else:
+        panes = [(0, w)]
+    return panes
 
 
 def _free_spans(taken, least):
@@ -158,6 +167,17 @@ def frame_regions(img, engine=None):
         taken[max(0, x0):min(w, x1)] = True
     for a, b in _free_spans(taken, max(1, int(MIN_PANE * scale))):
         split(img[:, a:b], a, 0, h)
+
+    # A window takes its whole COLUMN out of the desktop, and what sits above
+    # or below it in that column belonged to nothing at all. On a slide of nine
+    # cards, one card was found as a window; the two cards beneath it fell in
+    # its column, outside its height, and were in no region -- so "the tiny gem
+    # * 4k" and "hearthstone * 15k" were read by nothing and reported nowhere.
+    # The regions must cover the frame.
+    for x0, y0, x1, y1 in found:
+        for a, b in ((0, y0), (y1, h)):
+            if b - a >= MIN_PANE * scale:
+                split(img[a:b, x0:x1], x0, a, b - a)
 
     boxes.sort(key=lambda box: (box[0], box[1]))
     return boxes

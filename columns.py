@@ -370,21 +370,27 @@ def read_list(png_path):
             table.append(vals)
             flagged.append(flags)
             boxes.append(box)
-        # A column view fills its columns on EVERY row it covers. A majority
-        # is not enough: prose whose lines happen to stop short leaves a gap,
-        # and text beyond it -- a webcam inset in the corner of a screen
-        # recording -- fills the far band on half the rows, which was enough
-        # to return a terminal as a confident two-column table.
+        # A column view fills its columns on the rows it covers. A majority is
+        # not enough: prose whose lines happen to stop short leaves a gap, and
+        # text beyond it -- a webcam inset in the corner of a screen recording
+        # -- fills the far band on half the rows, which was enough to return a
+        # terminal as a confident two-column table.
         #
-        # The cost is real and is the right way round. A band left blank by
-        # even one row is dropped, so a table whose cells are genuinely empty
-        # is refused rather than read. Refusing falls back to reading the
-        # pane as prose, which loses the pairing but invents nothing; the
-        # other way round invents a table, which is what this build exists
-        # to prevent.
-        filled = [sum(1 for row in table if row[i].strip()) / len(table)
+        # But ONE row may leave a column blank, for the same reason one row of
+        # a table may be missing a value: in the Finder window the mouse
+        # pointer sits over a file name and neither engine reads it. Demanding
+        # every row cost the Name column, and with it the heading -- the four
+        # cells of "Name / Date Modified / Size / Kind" no longer fitted the
+        # three bands that were left, so the table named itself after its first
+        # file: "Jun 12, 2026 at 11:03 AM / 1 KB / Markdo...text file". The
+        # rule `belongs` already runs on -- a missing value is a missing value
+        # -- read down a column instead of across a row.
+        #
+        # One blank of thirteen is 0.92; the webcam inset filled its band on
+        # half the rows, and half is still refused.
+        blanks = [sum(1 for row in table if not row[i].strip())
                   for i in range(len(bands))]
-        keep = [i for i, f in enumerate(filled) if f >= 1.0
+        keep = [i for i, n in enumerate(blanks) if n <= 1
                 and aligned([row[i] for row in boxes], space_w)]
         if len(keep) < 2:
             continue
