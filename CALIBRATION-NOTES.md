@@ -418,3 +418,20 @@ application reserves that space and clips text that would reach it.
     same log measures 0.75, inside a real sidebar's own 0.71. So the swap
     would buy one fixture row and give back a false file tree. It waits on a
     discriminator for chat-versus-tree that does not lean on the boxes.
+35. **The reader with the weakest proof carries the burden of proof.** A tree
+    has Obsidian's guide lines, a terminal has its lattice, a table has
+    corridors of blank pixels no row crosses. A chat log has only its shape —
+    a name, then a message — and a shape is easy to hit by accident. Jared's
+    visualizer hit it: "(same): jong", "=: CONNECTED" and "ror: thers" came
+    back as three people talking.
+
+    That was not the recogniser failing to see. It read the panel's stylised
+    lettering as best it could; the OTHER engine, reading the same pixels, read
+    `J.A.R.V.I.S NEURAL LINK - CONNECTED R78 MIC LISTENING` and shares almost
+    none of those words. Where two engines agree there is text; where they
+    share nothing there is a picture of text. So a log must show that a third
+    of its words are words the other engine read too — measured, one real log
+    gives 0.79 and 0.50 across two captures of it, and the visualizer 0.20.
+
+    A third rather than most, deliberately: refusing a real log loses who said
+    what, and the failure it has to catch is not a near miss.

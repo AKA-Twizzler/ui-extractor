@@ -28,6 +28,7 @@ entries the name scored 1.04, 0.86, 1.29 and 1.00 against the line's own
 median, which is no separation at all. The wider gap after a name works in
 three cases of four. Colour works in all four, so colour is what is used.
 """
+import re
 import statistics
 import sys
 
@@ -39,6 +40,9 @@ import machine
 
 GAP_TO_CHAR = 4.0      # a space wider than this many characters is not a space
 MIN_ENTRIES = 2        # one entry is not a log
+CONFIRMED = 0.34       # a third of a log's words are words the other engine
+                       # read too: measured, one real log gives 0.79 and 0.50
+                       # across two captures, and a heads-up display 0.00
 
 
 def ink_colour(bgr, mask, y0, y1, x0, x1):
@@ -204,7 +208,40 @@ def split_name(gray, mask, row, words, scale=1):
     return name, rest
 
 
-def read_chat(png_path):
+def _words(text):
+    return [w for w in re.findall(r"[a-z0-9]+", text.lower()) if len(w) >= 3]
+
+
+def confirmed_elsewhere(png_path, entries, engine=None):
+    """How much of what this reader is about to say the OTHER engine read too.
+
+    A chat log is the one view here with no drawing of its own to prove it. A
+    tree has Obsidian's guide lines, a terminal has its lattice, a table has
+    corridors of blank pixels no row crosses -- a log has only its shape, a
+    name and then a message, and a shape is easy to hit by accident. Jared's
+    heads-up display hit it: "(same): jong", "=: CONNECTED" and "ror: thers"
+    came back as three people talking, from a panel that reads J.A.R.V.I.S
+    NEURAL LINK - CONNECTED.
+
+    That was not the recogniser failing to see. It read the panel's stylised
+    lettering as best it could and produced words; the other engine, reading
+    the same pixels, read something else entirely and shares none of them.
+    Where the two agree there is text; where they share nothing there is a
+    picture of text, and the reader with the weakest proof of its own is the
+    one that should have to show the difference.
+    """
+    if engine is None:
+        from rapidocr_onnxruntime import RapidOCR
+        engine = RapidOCR()
+    res, _ = engine(png_path)
+    seen = set(_words(" ".join(t for _, t, _ in (res or []))))
+    mine = _words(" ".join(f"{e['who']} {e['said']}" for e in entries))
+    if not mine:
+        return 0.0
+    return sum(1 for w in mine if w in seen) / len(mine)
+
+
+def read_chat(png_path, engine=None):
     bgr = cv2.imread(png_path)
     if bgr is None:
         return {"is_chat": False, "why": "could not read the image"}
@@ -268,6 +305,11 @@ def read_chat(png_path):
         return {"is_chat": False,
                 "why": (f"only {len(named)} of {len(entries)} entries carry a "
                         "name; a log is who said what")}
+    share = confirmed_elsewhere(png_path, entries, engine)
+    if share < CONFIRMED:
+        return {"is_chat": False,
+                "why": (f"only {share:.0%} of these words are words the other "
+                        "engine read; this is a picture of text, not a log")}
     return {"is_chat": True, "entries": entries}
 
 

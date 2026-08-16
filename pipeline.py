@@ -151,7 +151,7 @@ def main():
                     continue
                 # a live stream's chat log, before the document reader, which
                 # would otherwise take it for prose and lose who said what
-                chat = chat_reader.read_chat(pane_path)
+                chat = chat_reader.read_chat(pane_path, engine=engine)
                 if chat.get("is_chat"):
                     print(f"  [pane {pi}: a chat log]")
                     for line in chat_reader.render(chat).splitlines():
