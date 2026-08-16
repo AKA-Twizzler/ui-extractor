@@ -97,6 +97,27 @@ def x_height(mask, y0, y1, x0, x1):
     return float((profile >= profile.max() * 0.5).sum())
 
 
+def row_x_height(mask, row):
+    """The size THIS ROW is set in: what most of its words are set in.
+
+    Measured across the whole row, an inline code span stretches the answer,
+    because it is set in another face at another size and its ink lands
+    outside the row's own band. A prose line carrying one such span then
+    measures as tall as a small heading and is marked as one.
+
+    A heading is uniformly larger -- every word of it. So the row's size is
+    the median of its words' sizes, which one odd span cannot move.
+    """
+    words = row.get("words") or []
+    if len(words) < 2:
+        return x_height(mask, row["y0"], row["y1"], row["x0"], row["x1"])
+    sizes = [x_height(mask, row["y0"], row["y1"], w[1], w[2]) for w in words]
+    sizes = [s for s in sizes if s > 0]
+    if not sizes:
+        return x_height(mask, row["y0"], row["y1"], row["x0"], row["x1"])
+    return float(statistics.median(sizes))
+
+
 def gutter_marker(mask, gray, row, body_h):
     """What is drawn to the left of this row's text, if anything."""
     y0, y1 = max(0, row["y0"] - 2), min(mask.shape[0], row["y1"] + 2)
@@ -231,7 +252,7 @@ def read_note(png_path, engine=None):
         return {"rows": [], "markdown": ""}
     rows.sort(key=lambda r: (r["y0"], r["x0"]))
     for r in rows:
-        r["xh"] = x_height(mask, r["y0"], r["y1"], r["x0"], r["x1"])
+        r["xh"] = row_x_height(mask, r)
     heights = [r["xh"] for r in rows if r["xh"] > 0]
     body = statistics.median(heights) if heights else 1.0
     rows = note_body(rows, body)
@@ -288,11 +309,14 @@ def read_note(png_path, engine=None):
     left = min((r["x0"] for r in rows), default=0)
     for r, st in zip(rows, strokes):
         ratio = (r["xh"] / body) if body else 1.0
-        level = 0
-        for i, lv in enumerate(levels):
-            if ratio >= lv - LEVEL_GAP / 2:
-                level = i + 1
-                break
+        # Nearest size wins. A one-sided cutoff needs a tolerance and drops
+        # the row that sits just under it: two headings of the same rank
+        # measure a pixel apart, and the shorter one loses its mark. Asking
+        # which size this row is CLOSEST to -- the body's, or one of the
+        # heading sizes -- needs no tolerance and cannot drop either.
+        sizes = [1.0] + list(levels)
+        nearest = min(range(len(sizes)), key=lambda i: abs(ratio - sizes[i]))
+        level = nearest  # index 0 is the body itself
         r["height_ratio"] = round(ratio, 2)
         r["heading"] = level
         r["bold"] = bool(level == 0 and st >= body_stroke * BOLD_RATIO)

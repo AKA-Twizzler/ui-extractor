@@ -302,7 +302,14 @@ def calibrate_margin(bands, dark_theme=True, candidates=range(3, 41)):
         sit.
         """
         depths, cols = valid[pl[0]]
-        return (len(cols), len(pl))
+        # More resolved depth is strictly better, for the same reason more
+        # columns is: a MISSED guide line can only make a row shallower than
+        # it is, while an invented one would have broken the prefix rule and
+        # been thrown out before it got here. Ranking on the columns alone is
+        # not enough -- a margin can find every column across the pane and
+        # still lose a faint line on one row, which flattens that row and
+        # costs the folder below it its open-or-closed state.
+        return (len(cols), sum(depths), len(pl))
 
     best = max(plateaus, key=rank)
     pick = best[len(best) // 2]
