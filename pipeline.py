@@ -17,53 +17,21 @@ import capture
 import screenness
 import spot
 import columns
+import panes
 import note_reader
 import tree_reader
 import verify_names
 
 
-def pane_columns(img, min_width=90):
-    """Split a window into its panes at the vertical borders it draws.
-
-    A pane border runs the full height of the window, which no text or icon
-    ever does. Splitting there matters: handed a whole Obsidian window, the
-    tree reader correctly refuses, because a note's prose lines do not sit on
-    the sidebar's row pitch. Each pane has to be read as itself.
-    """
-    work = screenness.to_working_size(img)
-    g = cv2.cvtColor(work, cv2.COLOR_BGR2GRAY)
-    k = np.ones((1, 41), np.uint8)
-    lighter = cv2.subtract(g, cv2.morphologyEx(g, cv2.MORPH_OPEN, k))
-    darker = cv2.subtract(cv2.morphologyEx(g, cv2.MORPH_CLOSE, k), g)
-    cov = (cv2.max(lighter, darker) > 4).mean(axis=0)
-    edges = [x for x, v in enumerate(cov) if v >= 0.75]
-    cuts, w = [0], work.shape[1]
-    for x in edges:
-        if x - cuts[-1] >= min_width:
-            cuts.append(x)
-    cuts.append(w)
-    return [(a, b) for a, b in zip(cuts, cuts[1:]) if b - a >= min_width]
-
-
-def write_pane(img, x0, x1, path, target=1400):
-    """Cut the pane out of the ORIGINAL frame, not the shrunken working copy.
-
-    The pane boundaries are found on a small copy because that is cheap, but
-    the pixels must come from the full-size frame. Cropping the small copy and
-    enlarging it again destroys exactly the fine text this is here to read —
-    measured, it turned clean names into "Beyond the Baoics" and "Emall Gueue".
-    """
-    scale_back = img.shape[1] / screenness.WORK_WIDTH
-    nx0, nx1 = int(x0 * scale_back), int(x1 * scale_back)
-    pane = img[:, max(0, nx0):min(img.shape[1], nx1)]
-    if pane.size == 0 or pane.shape[1] < 40:
-        return False
-    scale = max(1, int(target / pane.shape[1]))
-    if scale > 1:
-        pane = cv2.resize(pane, (pane.shape[1] * scale, pane.shape[0] * scale),
-                          interpolation=cv2.INTER_LANCZOS4)
-    cv2.imwrite(path, pane)
-    return True
+# Splitting a window into panes lives in panes.py and is used from there.
+# This module carried its own simpler copy for a while, which only looked for
+# a DRAWN border. Obsidian does not draw one between its sidebar and its note
+# -- the boundary is a step in background colour -- so a window with the
+# presenter's inset over it never split at all, and a sidebar and a note were
+# read as one pane that was neither. panes.py also splits where no line of
+# text crosses, which finds that boundary; one home, and the better one.
+pane_columns = panes.pane_columns
+write_pane = panes.write_pane
 
 
 def main():
@@ -95,9 +63,9 @@ def main():
             print("    no readable interface at full size\n")
             continue
 
-        for pi, (px0, px1) in enumerate(pane_columns(img)):
+        for pi, (px0, px1) in enumerate(pane_columns(img, engine=engine)):
             pane_path = f"{out_dir}/{ts.replace(':','-')}_pane{pi}.png"
-            if not write_pane(img, px0, px1, pane_path):
+            if write_pane(img, px0, px1, pane_path) is None:
                 continue
             tree = tree_reader.read_tree(pane_path)
             if tree.get("is_tree") and len(tree["rows"]) >= 5:
