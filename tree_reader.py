@@ -93,18 +93,33 @@ def tree_rows(rows):
                 # the BEST candidate, not the first: a stray icon sitting a few
                 # pixels off the pitch would otherwise steal the link and drop
                 # the real row that follows it
-                nxt, best_off = None, None
+                nxt, best_key = None, None
                 for j in range(i + 1, len(rows)):
                     gap = ys[j] - ys[i]
                     if gap > pitch + tol:
                         break
                     off = abs(gap - pitch)
-                    if off <= tol and (best_off is None or off < best_off):
-                        nxt, best_off = j, off
+                    if off > tol:
+                        continue
+                    # Widest first, then closest to the pitch. A tree row
+                    # carries a NAME; the window's furniture carries a glyph.
+                    # The ribbon of icons down the left of the window sits on
+                    # the tree's own row pitch, so an icon at the same height
+                    # as a real row was taken instead of it and the tree came
+                    # back headed by "仁" and "89" rather than "00 - Inbox"
+                    # and "01 - Daily Notes".
+                    key = (-(rows[j]["x1"] - rows[j]["x0"]), off)
+                    if best_key is None or key < best_key:
+                        nxt, best_key = j, key
                 if nxt is None:
                     break
                 chain.append(nxt)
                 i = nxt
+            # Longest chain wins, and ONLY length. Ranking chains by how much
+            # text they carry was tried and is wrong: a pane of prose carries
+            # far more than a tree, and the fixture fell from 30 of 31 names
+            # to 1. Width settles which ROW to take at a given height, never
+            # which set of rows is the tree.
             if len(chain) > len(best):
                 best = chain
     return [rows[i] for i in best] if len(best) >= 3 else rows
