@@ -64,6 +64,9 @@ GAP_TO_HEIGHT = 1.2   # a gap wider than the text is tall splits label from valu
 FILL_SPREAD = 2.0     # a drawn fill is one value; two levels allows for the codec
 SPAN = 600            # seconds the frames judging steadiness are spread over
 LOOKS = 4             # and how many of them
+WINDOW_RUN = 0.08     # a window side runs this far across the frame
+WINDOW_SIDE = 80      # and a window is at least this many pixels each way
+CORNER = 0.15         # its sides may start this far in, for rounded corners
 
 
 def strong_steps(gray, axis):
@@ -262,6 +265,73 @@ def read_overlays(png_path):
         got["box"] = box
         out.append(got)
     return {"panels": out}
+
+
+def windows(bgr, run=WINDOW_RUN, min_side=WINDOW_SIDE):
+    """The application windows on a desktop, by their four drawn sides.
+
+    A frame is not always one window. Jared works across a whole desktop --
+    a full-screen HUD on the left, the Clock app in the middle, a browser on
+    the right -- and split into vertical strips, as a single window is, the
+    three run together: the menu bar came back as a folder tree with "Clock"
+    and "File Edit" for folders, and everything else landed in one strip that
+    was read as loose text.
+
+    A window is the same rectangle a panel is, minus the one thing a panel
+    has: its interior is not a single colour, because a window has contents.
+    So the interior is not asked about at all, and instead ALL FOUR sides must
+    be drawn -- two horizontal edges, and a vertical edge standing at each end
+    of them through the whole height between. A panel found this way is a real
+    box either way; what is refused is a rectangle inferred from two sides and
+    a hope, which is how a stretch of empty desktop becomes a window.
+    """
+    gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+    h, w = gray.shape
+    across = merge_runs(runs_along(strong_steps(gray, 0), 0, int(w * run)))
+    down = merge_runs(runs_along(strong_steps(gray, 1), 1, int(h * run)))
+    found = []
+    for a in range(len(across)):
+        ya, a0, a1 = across[a]
+        for b in range(a + 1, len(across)):
+            yb, b0, b1 = across[b]
+            if yb - ya < min_side:
+                continue
+            lo, hi = max(a0, b0), min(a1, b1)
+            if hi - lo < min_side:
+                continue
+            # a window's corners are rounded, so its sides start a little
+            # inside its top and stop a little short of its bottom -- the
+            # Clock app's left edge begins one pixel below where a fixed
+            # allowance would have accepted it. The allowance is a share of
+            # the window's own height instead, which does not care how big
+            # the window is.
+            room = (yb - ya) * CORNER
+            sides = [d for d in down if d[1] <= ya + room and d[2] >= yb - room]
+            left = [d[0] for d in sides if abs(d[0] - lo) < min_side]
+            right = [d[0] for d in sides if abs(d[0] - hi) < min_side]
+            if not left or not right:
+                continue
+            found.append(((hi - lo) * (yb - ya),
+                          (min(left), ya, max(right) + 1, yb)))
+    found.sort(reverse=True)
+    kept = []
+    for _, box in found:
+        x0, y0, x1, y1 = box
+        mine = (x1 - x0) * (y1 - y0)
+        clash = False
+        for X0, Y0, X1, Y1 in kept:
+            over = (max(0, min(x1, X1) - max(x0, X0))
+                    * max(0, min(y1, Y1) - max(y0, Y0)))
+            # windows sit side by side and their borders touch, so ANY overlap
+            # is the wrong test -- one shared pixel column had the browser
+            # thrown away as a duplicate of the Clock beside it
+            if over * 2 > min(mine, (X1 - X0) * (Y1 - Y0)):
+                clash = True
+                break
+        if not clash:
+            kept.append(box)
+    kept.sort(key=lambda b: (b[0], b[1]))
+    return kept
 
 
 def frames_across(video, at, span=SPAN, looks=LOOKS, workdir=None):

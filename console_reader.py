@@ -57,6 +57,7 @@ SAME_GLYPH = 1.5       # a match stands this close, in units of the font's
                        # own repeat distance, measured on the frame itself
 GROUP_MIN = 3          # and enough cells on screen for a match to mean it
 INK_CELL = 24          # ink in a cell, past what bleeds in from its neighbours
+ROW_OFF = 0.10         # how far a line may sit off a whole multiple of the pitch
 
 
 def normalise(text):
@@ -419,6 +420,24 @@ def read_console(png_path):
         return {"is_console": False,
                 "why": (f"character widths vary by {spread:.3f}; a terminal "
                         "sets every character on one advance")}
+
+    # One advance is not enough on its own. A web page set in a monospace
+    # font passes that test and then reads as nonsense, because its heading
+    # is three times the size of its body and no single lattice fits both.
+    # A terminal sets every LINE on one pitch too, so the gaps between its
+    # rows are whole multiples of one number -- blank lines make twos and
+    # threes, never one-and-a-halves. Measured: a terminal's gaps sit 0.05 of
+    # a pitch off a whole multiple, a monospace web page 0.14, a note 0.28.
+    tops = sorted(r["y0"] for r in rows)
+    gaps = [b - a for a, b in zip(tops, tops[1:]) if b > a]
+    if len(gaps) >= 3:
+        pitch = min(gaps)
+        off = statistics.median([abs(g / pitch - round(g / pitch))
+                                 for g in gaps])
+        if off > ROW_OFF:
+            return {"is_console": False,
+                    "why": (f"its lines sit {off:.2f} of a pitch off a whole "
+                            "multiple; a terminal's lines are one pitch apart")}
 
     adv, org = column_lattice(mask, rows)
     if adv is None:
