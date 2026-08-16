@@ -16,6 +16,7 @@ import numpy as np
 import capture
 import screenness
 import spot
+import chat_reader
 import columns
 import panes
 import note_reader
@@ -85,6 +86,14 @@ def main():
                 if lst.get("is_list"):
                     print(f"  [pane {pi}: a list of columns]")
                     for line in columns.render(lst).splitlines():
+                        print("    " + line)
+                    continue
+                # a live stream's chat log, before the document reader, which
+                # would otherwise take it for prose and lose who said what
+                chat = chat_reader.read_chat(pane_path)
+                if chat.get("is_chat"):
+                    print(f"  [pane {pi}: a chat log]")
+                    for line in chat_reader.render(chat).splitlines():
                         print("    " + line)
                     continue
                 # a document: the words AND the shape
