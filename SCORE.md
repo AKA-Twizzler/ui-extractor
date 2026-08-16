@@ -59,9 +59,26 @@ chosen contrast margin and comes back as a file. It is not chased, because
 the fix — testing every row at the chevron column learned from its depth —
 can turn a file INTO a folder, and inventing a folder is the worse error.
 
-Not yet proven, for want of a frame holding one: a Finder-style window with
-Name, Date Modified, Size and Kind; and a file tree drawn in a light theme.
-`hunt.py` sweeps a library for both.
+`columns.py` on a real Finder window -- found by `hunt.py`, at 00:07:00 of
+*How Claude Code Actually Works*: thirteen files with Name, Date Modified,
+Size and Kind, every value paired to the right column, including the names
+the application itself truncated ("project_ship...ation_fix.md").
+
+Known gap on that window: the heading ROW is not attached, so the columns are
+named after the first file instead of "Name / Date Modified / Size / Kind",
+and the selected row above it is left out of the block. The cause is a real
+property of the window: Finder left-aligns the heading "Size" while
+right-aligning the sizes themselves, so the heading crosses the very corridor
+its own column stands on, and no run of rows containing it can keep that
+column. Three ways to attach it were tried and each cost more than it gained
+-- ranking candidate blocks by rows, by area, and taking the heading from the
+row above while blocks that fail validation claim nothing. Each one either
+collapsed the four columns into two, broke the dashboard, or made a page of
+prose read as a table. The pairing is right; only the column NAMES are a row
+out, and that is visible rather than silent.
+
+Not yet proven, for want of a frame holding one: a file tree drawn in a light
+theme. `hunt.py` sweeps a library for it.
 
 ## Previous, for comparison
 
