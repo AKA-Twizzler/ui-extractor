@@ -35,6 +35,7 @@ import cv2
 import numpy as np
 
 import columns
+import machine
 import note_reader
 import panes
 import screenness
@@ -187,7 +188,7 @@ def look(png, engine):
 def keep_frame(video, secs, png):
     """Save the example beside its video's other frames, named by its moment."""
     title = os.path.basename(os.path.dirname(video))
-    out_dir = os.path.join("/mnt/g/Images", title)
+    out_dir = os.path.join(machine.here("/mnt/g/Images"), title)
     os.makedirs(out_dir, exist_ok=True)
     dest = os.path.join(out_dir, hms(secs).replace(":", "-") + ".png")
     if not os.path.exists(dest):
@@ -242,7 +243,7 @@ def sweep(video, every, work, engine, seen):
     method the capture step uses, on the same cache.
     """
     title = os.path.basename(os.path.dirname(video)) or os.path.basename(video)
-    out_dir = os.path.join("/mnt/g/Images", title)
+    out_dir = os.path.join(machine.here("/mnt/g/Images"), title)
     os.makedirs(out_dir, exist_ok=True)
     try:
         samples = spot.scan(video, every, os.path.join(out_dir, "scan.json"))

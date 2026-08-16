@@ -257,6 +257,14 @@ application reserves that space and clips text that would reach it.
     tells them apart — the cards measured 0, 0 and 1 grey levels of spread,
     the video between them 5. Free-floating text with no panel round it is
     judged separately, and by a different question — see lesson 26.
+25. **Cut a row at a gap too wide to be a space; do not throw it away.** The
+    recogniser returns a scan LINE, not a column, so a slide on the left of a
+    frame and a chat log on the right come back as one row with a quarter of
+    the picture in between. The chat's margin is then never found, its own
+    lines are judged against the slide's margin, and three bullet points and
+    their captions were reported as things people had said. The width that is
+    no longer a space was already measured for telling writing from scattered
+    marks; cutting there rather than rejecting the row keeps both halves.
 26. **Ask how text BEHAVES, not how it looks.** Seven measurements failed to
     tell a drawn banner from a sticker on the shelf: exact-pixel ties, motion
     over a second, flat colour, the exact painted colour, the purity of the
@@ -277,11 +285,31 @@ application reserves that space and clips text that would reach it.
     only text admitted. Text the test cannot prove is left unclaimed rather
     than called scenery: a chat line scrolls away and a counter ticks over, so
     both fail it though both are drawn, and both have their own readers.
-25. **Cut a row at a gap too wide to be a space; do not throw it away.** The
-    recogniser returns a scan LINE, not a column, so a slide on the left of a
-    frame and a chat log on the right come back as one row with a quarter of
-    the picture in between. The chat's margin is then never found, its own
-    lines are judged against the slide's margin, and three bullet points and
-    their captions were reported as things people had said. The width that is
-    no longer a space was already measured for telling writing from scattered
-    marks; cutting there rather than rejecting the row keeps both halves.
+27. **Move the work to the data, and keep one file that knows where it is.**
+    This build reads frames off a Windows drive and writes pictures back to
+    one, thousands of times in a run, and from Linux every crossing is
+    answered by a Windows process — so the Linux side slows Windows itself
+    rather than only itself. It now runs from Windows, and `machine.py` is
+    the ONLY file that knows which platform it is on: every path stays
+    written the one way in the code and is translated in that one place.
+    The alternative — a platform test at each of the seven places a drive
+    was named — is the same fact in seven homes, and the seventh is the one
+    that gets forgotten.
+28. **A moved instrument is not the same instrument until it is scored
+    again.** The move looked clean: the working tree matched the commit byte
+    for byte, every module imported, and the tree fixture came back at 30/31
+    names with all three structure counts perfect, identical to Linux down to
+    which row it misses. The terminal fixture did not — 336 of 360 characters
+    against 339 — because the published tesseract for Windows is 5.4.0 and
+    Ubuntu ships 5.3.4, and the two are wrong in different places. Nothing in
+    the method moved; the recogniser did. Both numbers are recorded rather
+    than the better one, because a score that quietly names a different
+    machine is not a score.
+
+    Two real faults hid inside that gap and would have been read as engine
+    noise. Windows decodes a pipe in cp1252 unless told, so tesseract's UTF-8
+    came back with one curly quote as three wrong characters. And Windows
+    writes its console in cp1252 too, so the first run did not print a wrong
+    warning triangle — it stopped with an encoder error partway through the
+    answer. Both are one-line fixes, and both are invisible until a frame
+    carries a character outside the alphabet.

@@ -22,9 +22,10 @@ nothing, rather than joining a screen to somebody else's words.
 import os
 import re
 import sys
+import machine
 
-TRANSCRIPTS = ("/mnt/nas/obsidian-vault/04 - Resources/Dev/Jaredrhod/"
-               "Transcripts MD")
+TRANSCRIPTS = machine.here("/mnt/nas/obsidian-vault/04 - Resources/Dev/"
+                          "Jaredrhod/Transcripts MD")
 STAMP = re.compile(r"^\*\*\[(\d+):(\d{2}):(\d{2})\]\*\*\s*(.*)$")
 
 
@@ -121,7 +122,7 @@ def main():
     if path is None:
         print(f"NO TRANSCRIPT for {title!r} in {TRANSCRIPTS}")
         return 1
-    cache = f"/mnt/g/Images/{title}/scan.json"
+    cache = machine.here(f"/mnt/g/Images/{title}/scan.json")
     samples = spot.scan(video, every, cache)
     every_run = spot.stretches(samples)
     words_for(video, every_run)

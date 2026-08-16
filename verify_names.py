@@ -21,6 +21,7 @@ import os
 
 import cv2
 import numpy as np
+import machine
 
 PAD_Y = 6
 UPSCALE = 4
@@ -33,9 +34,12 @@ def _tess_line(img_bgr_gray, psm=7):
         path = fh.name
     try:
         cv2.imwrite(path, img_bgr_gray)
+        # encoding: tesseract writes UTF-8 whatever the machine's locale is,
+        # and Windows decodes a pipe in cp1252 unless told
         r = subprocess.run(
-            ["tesseract", path, "stdout", "-l", "eng", "--psm", str(psm)],
-            capture_output=True, text=True)
+            [machine.tesseract_or_refuse(), path, "stdout", "-l", "eng",
+             "--psm", str(psm)],
+            capture_output=True, text=True, encoding="utf-8")
         return " ".join(r.stdout.split())
     finally:
         os.unlink(path)

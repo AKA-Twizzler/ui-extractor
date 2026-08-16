@@ -1,5 +1,22 @@
 # Calibration score
 
+## Where it runs
+
+On Windows, from `G:\AI\Ethereal\ui-extractor\`, because that is where its
+data is: it reads frames off `G:\Video` and writes pictures to `G:\Images`
+thousands of times in a run, and from Linux every one of those crossings goes
+through a Windows process. The standing rule and its measurement live in the
+machine record, `04 - Resources/LAN Infrastructure/System Inventory/
+DESKTOP-AFQQARN.md`; `machine.py` is the only file here that knows which
+platform it is on.
+
+It still runs from Linux, and the numbers below say what each side reads.
+Both use rapidocr 1.2.3 on onnxruntime 1.28.0 and the identical `eng`
+language data (same checksum); they differ only in the tesseract build --
+5.4.0 on Windows, which is what is published for it, against Ubuntu's 5.3.4.
+
+## The tree
+
 Machine output against GROUND-TRUTH-TREE.md, the 00:02:09 sidebar, aligned on
 "02 - Carson James". Reproduce with:
 
@@ -7,8 +24,6 @@ Machine output against GROUND-TRUTH-TREE.md, the 00:02:09 sidebar, aligned on
 python3 verify_names.py <sidebar.png> --json tree.json
 python3 score.py tree.json
 ```
-
-## The tree
 
 Pipeline: `capture.py` (burst + median stack, PNG) -> `tree_reader.py`
 (structure from pixels) -> `verify_names.py` (second engine) -> `score.py`.
@@ -21,6 +36,9 @@ Pipeline: `capture.py` (burst + median stack, PNG) -> `tree_reader.py`
   open vs closed           31/31
   ALL FOUR correct         30/31
 ```
+
+The same on both sides, down to which row it misses, on a frame captured
+fresh by `capture.py` on Windows rather than carried across.
 
 The one row short is `Carson Al` / `Carson AI`: capital I and lowercase l are
 the same shape in this font, so no recogniser can separate them from pixels.
@@ -43,10 +61,20 @@ python3 score_console.py <frame.png>
 ```
 
 ```
-  characters               339/360  (94.2%)
-  typed vs output            9/9
-  cut marks                  9/9
+                          Windows          Linux
+  characters             336/360 (93.3%)  339/360 (94.2%)
+  typed vs output            9/9              9/9
+  cut marks                  9/9              9/9
 ```
+
+The three characters are the tesseract build and nothing in the method: the
+split of typed from output and the marking of cut lines, which are what this
+reader is for, are identical. All three sit in the two places the recogniser
+was already worst — the top line, which is drawn half in colour, and the
+curly quote it has always read for the `[` that opens a prompt. 5.4.0 fixes a
+lost space in `echo 'export` and reads `.local` where 5.3.4 read `.1local`,
+then loses the colon in `bin:$PATH` and the closing quote. Neither build is
+better; they are wrong in different places.
 
 Read from the full frame, presenter's camera inset and all — no hand-made
 crop, no pane splitting needed, because the monospace test carries it.

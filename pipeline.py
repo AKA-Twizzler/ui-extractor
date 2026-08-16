@@ -18,6 +18,7 @@ import screenness
 import spot
 import chat_reader
 import columns
+import machine
 import console_reader
 import panes
 import note_reader
@@ -43,7 +44,7 @@ def main():
     every = int(sys.argv[sys.argv.index("--every") + 1]) if "--every" in sys.argv else 10
     limit = int(sys.argv[sys.argv.index("--limit") + 1]) if "--limit" in sys.argv else 12
     title = os.path.basename(os.path.dirname(video)) or "capture"
-    out_dir = f"/mnt/g/Images/{title}"
+    out_dir = machine.here(f"/mnt/g/Images/{title}")
     cache = f"{out_dir}/scan.json"
 
     print(f"=== {title} ===")

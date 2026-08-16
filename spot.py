@@ -31,6 +31,7 @@ import tempfile
 
 import cv2
 import numpy as np
+import machine
 
 import screenness
 
@@ -167,7 +168,7 @@ def main():
     video = sys.argv[1]
     every = int(sys.argv[sys.argv.index("--every") + 1]) if "--every" in sys.argv else 10
     title = os.path.basename(os.path.dirname(video)) or "capture"
-    cache = f"/mnt/g/Images/{title}/scan.json"
+    cache = machine.here(f"/mnt/g/Images/{title}/scan.json")
     total = duration(video)
     print(f"{total/60:.1f} minutes; {int(total/every)} samples instead of "
           f"{int(total*30)} frames")

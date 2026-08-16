@@ -30,6 +30,7 @@ import tempfile
 
 import cv2
 import numpy as np
+import machine
 
 BURST_SECONDS = 1.5
 STILL_THRESHOLD = 1.5     # mean grey levels of frame-to-frame change
@@ -124,7 +125,7 @@ def main():
     video, stamps = args[0], args[1:]
     if out_dir is None:
         title = os.path.basename(os.path.dirname(video)) or "capture"
-        out_dir = f"/mnt/g/Images/{title}"
+        out_dir = machine.here(f"/mnt/g/Images/{title}")
     for ts in stamps:
         path, how = capture_moment(video, ts, out_dir)
         print(f"{ts} -> {path}  ({how})")

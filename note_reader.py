@@ -37,6 +37,7 @@ import subprocess
 
 import cv2
 import numpy as np
+import machine
 
 INK_MARGIN = 26        # how far from local background a pixel counts as ink
 GUTTER_SPAN = 2.4      # gutter searched, in multiples of the row's height
@@ -195,8 +196,12 @@ def tess_rows(png_path, gray):
     """
     work = png_path.replace(".png", "_tess.png")
     cv2.imwrite(work, 255 - gray if float(np.median(gray)) < 128 else gray)
-    r = subprocess.run(["tesseract", work, "stdout", "-l", "eng",
-                        "--psm", "4", "tsv"], capture_output=True, text=True)
+    # encoding: tesseract writes UTF-8 whatever the machine's locale is, and
+    # Windows decodes a pipe in cp1252 unless told, which turns one curly
+    # quote into three wrong characters and loses the cell it stood in
+    r = subprocess.run([machine.tesseract_or_refuse(), work, "stdout",
+                        "-l", "eng", "--psm", "4", "tsv"],
+                       capture_output=True, text=True, encoding="utf-8")
     # QUOTE_NONE matters: note text contains quotation marks, and the default
     # parser treats them as field quoting, which swallows the row structure
     # and leaks raw table rows into the output as if they were prose

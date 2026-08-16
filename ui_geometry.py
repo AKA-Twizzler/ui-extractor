@@ -18,6 +18,7 @@ import sys
 
 import cv2
 import numpy as np
+import machine
 
 BODY_MEDIAN_RATIO = 1.35      # word height above this ratio of the median = heading candidate
 LOW_CONF = 40.0               # word confidence floor for the record
@@ -26,9 +27,12 @@ STROKE_DENSITY_FLOOR = 1.28   # stroke-density ratio above median = bold candida
 
 def tesseract_tsv(png_path, psm=6, lang="eng"):
     """Run tesseract TSV and return the parsed rows."""
+    # encoding: tesseract writes UTF-8 whatever the machine's locale is, and
+    # Windows decodes a pipe in cp1252 unless told
     res = subprocess.run(
-        ["tesseract", png_path, "stdout", "-l", lang, "--psm", str(psm), "tsv"],
-        capture_output=True, text=True, check=True,
+        [machine.tesseract_or_refuse(), png_path, "stdout", "-l", lang,
+         "--psm", str(psm), "tsv"],
+        capture_output=True, text=True, encoding="utf-8", check=True,
     )
     return list(csv.DictReader(io.StringIO(res.stdout), delimiter="\t"))
 
