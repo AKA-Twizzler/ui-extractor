@@ -52,6 +52,13 @@ card bands, every value paired to its own heading, including two large
 figures the line engine missed entirely. It correctly refuses the prose pane,
 giving the reason.
 
+Known gap, on a frame outside the fixture: at 00:06:00 the sidebar reads all
+35 rows with every depth and every open-or-closed state matching the frame,
+except one collapsed folder ("Courses") whose chevron is too faint at the
+chosen contrast margin and comes back as a file. It is not chased, because
+the fix — testing every row at the chevron column learned from its depth —
+can turn a file INTO a folder, and inventing a folder is the worse error.
+
 Not yet proven, for want of a frame holding one: a Finder-style window with
 Name, Date Modified, Size and Kind; and a file tree drawn in a light theme.
 `hunt.py` sweeps a library for both.
