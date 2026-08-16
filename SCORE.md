@@ -253,16 +253,18 @@ python3 checks.py tree chat    only the stages named
 python3 checks.py --list       what there is
 ```
 
-Twenty-five stages: the machine's paths and programs, capture, capture over a
+Twenty-seven stages: the machine's paths and programs, capture, capture over a
 damaged patch, screen against camera, windows, regions, no pane dropped, the
 desktop's Clock, the tree fixture, the tree's refusals, a faint chevron, the
 terminal fixture, the terminal's refusals, its refusal of a slide set in a
-terminal font, its mark where the two engines differ, the Finder table, a real
-chat log, the chat's refusal, the document gate, the document's refusal of what
-one engine alone read, a card that is not a properties panel, a drawn panel,
-the banner, confirmation, and the transcript join.
+terminal font, its mark where the two engines differ, the Finder table, a
+second Finder window whose toolbar is not its headings, a real chat log, the
+chat's refusal, a speaker's name being a word, the document gate, the
+document's refusal of what one engine alone read, a card that is not a
+properties panel, a drawn panel, the banner, confirmation, and the transcript
+join.
 
-**Twenty-five of twenty-five hold**, both fixtures unchanged by all of it.
+**Twenty-seven of twenty-seven hold**, both fixtures unchanged by all of it.
 
 The frames are not kept in the repository. They are cut from the library on
 demand by the same capture the pipeline uses and land where the vault's rule
@@ -286,6 +288,8 @@ only one engine ever read.
                   above it was discarded as the note's header
                 a slide drawn as a terminal read as a terminal
                 a stream's leaderboard read as prose
+                a Finder toolbar read as a table's headings
+                a Finder sidebar read as a chat log, its icons for speakers
   unsaid        the terminal never said where its two engines differed
   dead run      one undecodable patch killed a six-hour video's whole run
 ```
@@ -303,3 +307,30 @@ carrying a drawn icon, 0.33.
 A properties panel is a column. Its labels start at one x and its values at
 another, within a character; the card that read as one had values at 786 and
 1830.
+
+### What that run left standing
+
+Nothing below loses anything in silence — each is reported, and wrong in a way
+you can see in the output.
+
+A pane boundary can cut a line of text. Where a note's prose runs to the edge
+of the region it was cut into, the first characters of every line are gone:
+`rkeragentneverreadsthis index -> itonlyknows itsownfolder`. The corridor was
+real in the working copy and is not a column in the note.
+
+A slide comes back in pieces. `METHOD 2 — RESEARCH: THE NICHER, THE BETTER`
+arrives as `ME` in one pane and `THOD ... BETTER` in another, because a card
+found as a window splits the frame around it. Nothing is missing; the reading
+order is not the screen's.
+
+A window's table can still come back in two blocks, the second headed by its
+own data, where the corridors change partway down. The first block carries the
+real headings.
+
+`Jarvis Visualizer with Claude Code` reports no interface at all, at every
+moment, and that is right: it is a camera pointed at a Gigabyte monitor, bezel
+and wall and lamp glare included, not a screen recording. Worth knowing before
+anyone reaches for it as a test. The board it draws is labelled the way a real
+one is — `R50`, `C50`, `JP76`, `Q71`, `R78` — which is why one engine read R78
+off a handful of faint marks on another frame, and why the other engine reading
+`Ris` there settles nothing.
