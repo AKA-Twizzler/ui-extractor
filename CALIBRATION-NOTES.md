@@ -1,13 +1,20 @@
-# How the tree is read, and what had to be learned to get there
+# How a screen is read, and what had to be learned to get there
 
-Status: the structure read is exact on the fixture — folder vs file, depth,
-and open vs closed all 31 of 31. Names are 30 of 31, the last being a glyph
-no recogniser can decide. `ui_geometry.py` is superseded by `tree_reader.py`.
+Three instruments, one law: the text comes from OCR, the structure comes from
+pixels, and nothing comes from a model's judgment.
 
-## The method
+    tree_reader.py    a file tree      -> names, depth, folder/file, open/closed
+    note_reader.py    an open document -> markdown, with its shape
+    columns.py        a list or table  -> cells paired to their headings
 
-The text comes from OCR, the structure comes from pixels, nothing comes from
-a model's judgment.
+Each refuses out loud when it is handed something it cannot read, rather than
+returning a confident answer to the wrong question.
+
+Status: the tree read is exact on the fixture — folder vs file, depth, and
+open vs closed all 31 of 31. Names are 30 of 31, the last being a glyph no
+recogniser can decide. `ui_geometry.py` is superseded by `tree_reader.py`.
+
+## The tree
 
 Obsidian draws one faint vertical guide line per ancestor level, so:
 
@@ -20,7 +27,7 @@ Obsidian draws one faint vertical guide line per ancestor level, so:
 
 Each of those is a count or a comparison, so there is nothing to tune.
 
-## The four rules that make it self-calibrating
+### The four rules that make it self-calibrating
 
 Only one number could have been a magic constant — how far above its
 background a pixel must sit to count as part of a line. It is measured, not
@@ -35,8 +42,48 @@ always true of a rendered tree:
 4. **Not every row.** A column drawn beside every row is a border, not a
    guide line; a guide line is missing from the shallowest rows.
 
-Among the settings that satisfy all four, the one resolving the most levels
-wins, ties broken by the width of the plateau of settings that agree with it.
+Among the settings that satisfy all four, the one resolving the most guide
+columns wins, then the most total depth, then the widest plateau of settings
+that agree with it.
+
+## The open note
+
+Formatting is RENDERED, so there is no `#` to find and no `- [ ]` to find.
+Every mark is measured instead:
+
+```
+  heading   the row's x-height against the body's, clustered; the distinct
+            sizes above the body ARE the levels, in order
+  bold      stroke thickness, as the mean width of a run of ink
+  bullet    a drawn blob in the gutter; a checkbox is a drawn box
+  number    the application draws "1." as text, so OCR reads it
+  indent    where the row's text starts, against the leftmost body row
+```
+
+x-height, not the height of the OCR box: a line with a "g" in it measures
+taller than the same size without one. Everything is measured on a 3x
+enlargement, because at native size a stroke is two or three pixels and the
+number can only land on whole values, which cannot separate bold from body.
+
+Order of operations is part of the method, not an implementation detail:
+markers are found FIRST so a bullet is never swallowed as the tail of the
+line above it; wraps are joined ONCE; only then are sizes clustered into
+ranks.
+
+## The list or table
+
+A tree carries its meaning in its indentation. A list carries it sideways,
+and read row by row the pairing of a value to its heading is lost before the
+reading starts. The instrument is the same shape as the guide lines:
+
+```
+  a column boundary is a vertical corridor of blank pixels
+  that no row's text crosses
+```
+
+Prose cannot hold such a corridor open — a word may end anywhere and the next
+line begins again at the margin. A column view cannot close one, because the
+application reserves that space and clips text that would reach it.
 
 ## Lessons, dearly bought
 
@@ -69,8 +116,33 @@ wins, ties broken by the width of the plateau of settings that agree with it.
 8. **Two engines disagree in useful ways.** Tesseract and RapidOCR miss
    different names. Neither is trusted alone: identical readings are
    confident, same letters with more spaces reconcile to the spaced one (OCR
-   drops spaces, it never invents them), and anything else is flagged.
+   drops spaces, it never invents them), and anything else is flagged. They
+   also specialise — the cell engine is primary for short strings, the line
+   engine for prose, and on one dashboard the cell engine read large figures
+   the line engine missed entirely.
 9. **Some characters are undecidable and must be said so.** Capital I,
    lowercase l and the digit 1 are one shape in a UI font. Those rows are
    marked `ambiguous-glyph` carrying every candidate reading. Guessing there
    is exactly the invention this whole build exists to prevent.
+10. **A tolerance is a bug waiting for its frame.** Twice a rule written as
+    "near enough" failed on the next window: a wrapped line recognised by
+    ending near the right margin lost every wrapped HEADING, because a
+    heading is set in bigger type and wraps far short of where prose wraps;
+    and a heading rank assigned by a one-sided cutoff dropped the heading
+    sitting a pixel under it. Both were replaced by questions with no
+    tolerance in them — would the next line's first word have FITTED, and
+    which size is this row CLOSEST to.
+11. **Measure the row, not the line.** A prose line carrying an inline code
+    span measured as tall as a heading, because the span is set in another
+    face and its ink lands outside the row's own band. A heading is uniformly
+    larger — every word of it — so a row's size is the median of its words'.
+12. **More resolved depth is better, not just more columns.** A contrast
+    margin can find every guide column across a pane and still lose a faint
+    line on ONE row. That flattens the row and costs the folder above it its
+    open-or-closed state. A missed line can only make a row shallower; an
+    invented one breaks the prefix rule and is thrown out before ranking.
+13. **A full-width rule is not a column boundary's enemy by accident.**
+    Applications draw section rules on the same line as the section title,
+    laying ink clean across every corridor. Corridors are therefore asked of
+    a RUN of consecutive rows, not of the whole pane, which also makes a grid
+    of cards read as several tables without a rule written for that case.
