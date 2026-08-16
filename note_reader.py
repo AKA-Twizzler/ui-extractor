@@ -42,7 +42,11 @@ INK_MARGIN = 26        # how far from local background a pixel counts as ink
 GUTTER_SPAN = 2.4      # gutter searched, in multiples of the row's height
 BOLD_RATIO = 1.18      # stroke this much above the body's is bold
 LEVEL_GAP = 0.07       # height clusters closer than this are one size
-NUMBERED = re.compile(r"^\s*(\d+)\s*[.)]\s*")
+# An ordered list draws its number, then a GAP, then the text. Without
+# requiring that gap a version number at the start of a wrapped line
+# ("2.1.176 is effectively...") reads as list item 2, and the line then
+# refuses to rejoin the sentence it belongs to.
+NUMBERED = re.compile(r"^\s*(\d+)\s*[.)]\s+")
 # what a drawn bullet turns into when an engine reads it as a character
 BULLET_CHARS = "\u00b7\u2022\u2219\u25aa\u25cf\u25e6\u00bb\u203a\u2023-"
 
@@ -205,6 +209,8 @@ def tess_rows(png_path, gray):
             "x1": max(int(w["left"]) + int(w["width"]) for w, _, _ in ws),
             "y0": min(int(w["top"]) for w, _, _ in ws),
             "y1": max(int(w["top"]) + int(w["height"]) for w, _, _ in ws),
+            "words": [(t, int(w["left"]), int(w["left"]) + int(w["width"]))
+                      for w, t, _ in ws],
         })
     rows.sort(key=lambda r: (r["y0"], r["x0"]))
     return rows
@@ -232,6 +238,45 @@ def read_note(png_path, engine=None):
     heights = [r["xh"] for r in rows if r["xh"] > 0]
     body = statistics.median(heights) if heights else 1.0
 
+    props, body_rows = properties_block(rows, body)
+    # the sizes that define heading levels come from the note's own text. The
+    # filename Obsidian prints above the note is the biggest text on screen,
+    # and left in the reckoning it takes the top rank and pushes every real
+    # heading down one.
+    body_heights = [r["xh"] for r in body_rows if r["xh"] > 0]
+    if body_heights:
+        body = statistics.median(body_heights)
+    rows = body_rows
+    heights = body_heights or heights
+    # Order matters here. The markers are found FIRST, because a row that
+    # carries its own bullet begins a new line and must never be swallowed as
+    # the wrapped tail of the line above it. Then the wraps are joined, once.
+    # Only then are the sizes clustered into heading levels, because an
+    # unjoined heading tail is measured as its own size, lands between two
+    # real ranks and blurs them together — which costs a genuine smaller
+    # heading its rank.
+    for r in rows:
+        r["marker"] = gutter_marker(mask, gray, r, body * 1.4)
+        # the application draws the bullet as a glyph, and OCR often reads it
+        # as a leading character rather than leaving it in the gutter
+        lead = r["text"][:1]
+        if lead and lead in BULLET_CHARS and len(r["text"]) > 2:
+            r["marker"] = "bullet"
+            r["text"] = r["text"][1:].strip()
+        m = NUMBERED.match(r["text"])
+        r["number"] = int(m.group(1)) if m else None
+        # provisional, only to keep a heading from joining a body line
+        r["heading"] = 1 if r["xh"] >= body * 1.10 else 0
+
+    # the column's right edge is where full lines end, taken as the busiest
+    # right-hand position rather than the furthest, so one stray wide row
+    # cannot push it out and stop every wrap from joining
+    edges = sorted(r["x1"] for r in rows)
+    right = edges[int(len(edges) * 0.75)] if edges else 0
+    rows = clip_to_column(rows, right)
+    rows = join_wraps(rows, right, body)
+
+    heights = [r["xh"] for r in rows if r["xh"] > 0]
     levels = levels_from(heights, body)
     strokes = []
     for r in rows:
@@ -252,55 +297,125 @@ def read_note(png_path, engine=None):
         r["heading"] = level
         r["bold"] = bool(level == 0 and st >= body_stroke * BOLD_RATIO)
         r["stroke"] = round(st, 2)
-        r["marker"] = gutter_marker(mask, gray, r, body * 1.4)
-        # the application draws the bullet as a glyph, and OCR often reads it
-        # as a leading character rather than leaving it in the gutter
-        lead = r["text"][:1]
-        if lead and lead in BULLET_CHARS and len(r["text"]) > 2:
-            r["marker"] = "bullet"
-            r["text"] = r["text"][1:].strip()
-        m = NUMBERED.match(r["text"])
-        r["number"] = int(m.group(1)) if m else None
         # indentation is counted in whole steps from the body's own margin,
         # and capped: a value sitting far right in a property panel is not
         # text indented eight levels deep
         r["indent"] = max(0, min(4, int(round((r["x0"] - left) / max(1.0, body * 1.6)))))
-    props, body_rows = properties_block(rows, body)
-    right = max((r["x1"] for r in body_rows), default=0)
-    body_rows = join_wraps(body_rows, right, body)
+    body_rows = rows
     md = to_markdown(body_rows)
     if props:
-        pairs = []
-        for r in props:
-            pairs.append(r["text"])
-        md = "---\n" + "\n".join(pairs) + "\n---\n" + md
+        md = ("---\n" + "\n".join(f"{k}: {v}" for k, v in props)
+              + "\n---\n" + md)
     return {"rows": rows, "properties": props, "body_rows": body_rows,
             "body_height": body, "levels": levels,
             "body_stroke": round(body_stroke, 2), "markdown": md}
+
+
+def first_word_width(row):
+    """How wide this row's first word was drawn, from the row's own box.
+
+    The row's box and its character count give the mean width of a character
+    at whatever size this row is set in, so the first word's width follows
+    without knowing the font, the zoom or the theme.
+    """
+    text = row["text"].strip()
+    if not text:
+        return 0.0
+    per_char = (row["x1"] - row["x0"]) / max(1, len(text))
+    return per_char * (len(text.split()[0]) + 1)
+
+
+def clip_to_column(rows, right_edge):
+    """Drop words drawn outside the note's text column.
+
+    The application paints its own text beside the note — a status bar at the
+    far right, a backlink count — and a word there sits on the same scan line
+    as the note's last row, so OCR returns them as ONE row and the chrome ends
+    up inside the sentence. A row cannot be dropped whole without losing the
+    real text, so the chrome is removed word by word: a word that BEGINS past
+    the margin where the note's lines end was never in the column.
+    """
+    out = []
+    for r in rows:
+        words = r.get("words") or []
+        if not words:
+            out.append(r)
+            continue
+        kept = [w for w in words if w[1] <= right_edge]
+        if not kept:
+            continue
+        if len(kept) != len(words):
+            r = dict(r)
+            r["words"] = kept
+            r["text"] = " ".join(w[0] for w in kept)
+            r["x1"] = max(w[2] for w in kept)
+        out.append(r)
+    return out
 
 
 def join_wraps(rows, right_edge, body_h):
     """Put a wrapped line back onto the line it came from.
 
     A paragraph that runs past the width of the pane is drawn as several rows,
-    and each is a separate result from OCR. A row that ends near the right
-    edge of the text column did not finish — the next row is the rest of the
-    same sentence, not a new one. Without this a paragraph comes back as a
-    stack of fragments, which is not what the screen shows.
+    and each is a separate result from OCR. Without this a paragraph comes
+    back as a stack of fragments, which is not what the screen shows.
+
+    The test is not "did this row end near the margin", because that needs a
+    tolerance and gets it wrong: a heading is set in bigger type, so its words
+    are wider and it wraps a long way short of where prose wraps. The question
+    that needs no tolerance is whether the NEXT row's first word would have
+    fitted in the space left on this one. If it would have, the line ended
+    because the writer ended it; if it would not have, the application moved
+    it down and the two rows are one line.
     """
     out = []
     for r in rows:
-        joinable = (out and not r["heading"] and not r["marker"]
-                    and not r["number"] and not out[-1]["heading"]
-                    and out[-1]["x1"] >= right_edge - body_h * 2
-                    and abs(r["y0"] - out[-1]["y1"]) < body_h * 2.5)
+        close = (out
+                 and (right_edge - out[-1]["x1"]) < first_word_width(r)
+                 and abs(r["y0"] - out[-1]["y1"]) < body_h * 3.0)
+        # a heading wraps too, and its second line must rejoin the first.
+        # Left apart, the wrapped half is measured as its own size and lands
+        # between two real heading ranks, blurring the clusters so a genuine
+        # smaller heading below it stops being recognised as a heading at all.
+        same_size = (out and abs(r["xh"] - out[-1]["xh"]) <= max(1.0, body_h * 0.12))
+        joinable = (close and not r["marker"] and not r["number"]
+                    and ((not r["heading"] and not out[-1]["heading"])
+                         or (out[-1]["heading"] and same_size)))
         if joinable:
             out[-1]["text"] = out[-1]["text"].rstrip() + " " + r["text"].lstrip()
+            out[-1]["xh"] = max(out[-1]["xh"], r["xh"])
             out[-1]["x1"] = r["x1"]
             out[-1]["y1"] = r["y1"]
         else:
             out.append(dict(r))
     return out
+
+
+def split_key_value(row, body_h, min_gap=3.0):
+    """Split a field row into its label and its value.
+
+    A properties panel draws the label on the left and the value away to the
+    right, and OCR returns the whole line as one string — "status active" —
+    which reads as a sentence and is not one. The gap between them is far
+    wider than the space between words, so that is where it splits.
+    """
+    words = row.get("words") or []
+    if len(words) < 2:
+        return None
+    gaps = [(words[i + 1][1] - words[i][2], i) for i in range(len(words) - 1)]
+    widest, at = max(gaps)
+    if widest < body_h * min_gap:
+        return None
+    key_words = [t for t, _, _ in words[:at + 1]]
+    # the field's little icon comes back as a stray one-character token; a real
+    # field name never starts with one
+    while len(key_words) > 1 and len(key_words[0].strip(" :=+©@")) <= 1:
+        key_words.pop(0)
+    key = " ".join(key_words).strip(" :=+©@\u2261\u4e09")
+    val = " ".join(t for t, _, _ in words[at + 1:]).strip(" :=+©@")
+    if not key or not val:
+        return None
+    return key, val
 
 
 def properties_block(rows, body_h):
@@ -311,17 +426,21 @@ def properties_block(rows, body_h):
     the body margin so they read as deep indentation. It is everything before
     the first heading that pairs a label on the left with a value to its right.
     """
-    first_heading = next((i for i, r in enumerate(rows) if r["heading"]), None)
-    if first_heading is None or first_heading == 0:
+    fields, last = [], -1
+    for i, r in enumerate(rows[:12]):
+        kv = split_key_value(r, body_h)
+        if kv:
+            fields.append((i, kv))
+            last = i
+    if len(fields) < 2:
         return [], rows
-    head = rows[:first_heading]
-    lefts = sorted(r["x0"] for r in head)
-    if len(lefts) < 4:
-        return [], rows
-    spread = lefts[-1] - lefts[0]
-    if spread < body_h * 4:
-        return [], rows
-    return head, rows[first_heading:]
+    # everything up to the last field row is the note's header: the filename
+    # Obsidian shows above the note, and the properties panel itself. None of
+    # it is prose, and counting the filename as a heading pushes every real
+    # heading down a rank.
+    body = [r for r in rows[last + 1:]
+            if not r["text"].lstrip().startswith(("+ Add", "+Add"))]
+    return [kv for _, kv in fields], body
 
 
 def to_markdown(rows):
