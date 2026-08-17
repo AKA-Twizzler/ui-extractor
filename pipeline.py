@@ -281,6 +281,20 @@ def main():
         # every wording proved drawn at THIS moment, whether or not it is new:
         # an earlier moment having already reported it does not make it the
         # pane's own text now -- see already_drawn
+        #
+        # Sending these through floating(), the way the panels go, was tried
+        # and is WRONG -- kept here because the next person to look at this
+        # will think of it too. A Mac desktop wallpapered with a PHOTOGRAPH,
+        # carrying a Finder window, a terminal and two documents, measures 15%
+        # interface and opens this gate, and "Size", "Locations" and "Har"
+        # come back as text drawn on the camera. Asking where each one SITS
+        # looks like the fix. Measured, it drops one of those three and it
+        # also drops jaredrhod.com from two of the three live streams -- the
+        # one banner this whole instrument exists to admit -- because a
+        # screenness box happened to cover it. The boxes are wrong in both
+        # directions at once: too few on a wallpapered desktop, too generous
+        # on a stream. Anything gated on them inherits that, so the fix is not
+        # here; it is in the regions themselves.
         drawn = set()
         for found in ((guard(f"standing text at {ts}", lambda: overlay.standing_text(
                 overlay.frames_across(video, secs,

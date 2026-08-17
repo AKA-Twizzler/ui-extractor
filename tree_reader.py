@@ -490,6 +490,45 @@ def indent_miss(rows):
     return worst / h
 
 
+def indent_step(rows):
+    """The indent the names actually show, measured against their own wobble.
+
+    indent_miss asks one half of the sentence that defines a tree: that rows
+    at one depth agree on where they start. This asks the other half, that the
+    step from each depth to the next is a real indent.
+
+    Least squares cannot ask it, because a free slope fits a FLAT list
+    perfectly by choosing no slope at all. A Finder sidebar did exactly that:
+    its names are all flush and only its ICONS differ in width, the clipped
+    icons formed one phantom guide column, and five side-by-side folders came
+    back as Pictures containing Movies and Desktop -- confident, invented, and
+    scoring 0.03 row heights of miss while it did.
+
+    Both numbers come from the rows themselves, so there is nothing to tune:
+    the step is how far the names move per level, the wobble is how much they
+    disagree within a level, and an indent smaller than the wobble it is
+    measured against is not an indent. Measured, the Obsidian fixture steps
+    38.6px against 2.6px of wobble; the Finder sidebar steps -2.8px.
+
+    Returns (step, wobble), or (None, 0.0) when every row sits at one depth --
+    then there is no step to check and indent_miss already has the case.
+    """
+    if len(rows) < 3:
+        return None, 0.0
+    by_depth = {}
+    for r in rows:
+        by_depth.setdefault(r["depth"], []).append(float(r["x0"]))
+    if len(by_depth) < 2:
+        return None, 0.0
+    means = {d: float(np.mean(v)) for d, v in by_depth.items()}
+    ds = sorted(means)
+    steps = [(means[b] - means[a]) / (b - a) for a, b in zip(ds, ds[1:])]
+    spread = [float(np.abs(np.array(v) - means[d]).mean())
+              for d, v in by_depth.items() if len(v) >= 2]
+    wobble = float(np.median(spread)) if spread else 0.0
+    return float(np.median(steps)), wobble
+
+
 def chevron_beyond(img, row, last_guide, step, margin, dark_theme):
     """A chevron sitting past the last guide line, even inside the name's box.
 
@@ -528,13 +567,16 @@ def looks_like_a_tree(rows_kept, rows_seen, columns, pitch, names=(), placed=())
     columns — a Finder window, a table — the column edges pass for guide lines
     and the result reads like a nesting that was never there.
 
-    Three things separate them. A tree's rows are the bulk of what is in its
+    Four things separate them. A tree's rows are the bulk of what is in its
     pane, where a column layout leaves most of the text unaccounted for. A
     tree indents by roughly the height of a row, where column positions are
-    spaced by whatever the columns happen to need. And a tree's indentation IS
-    its depth, so a row starts where its depth says it starts — which is what
-    a live stream's chat log and a desktop's menu bar cannot do, both of which
-    were coming back as trees with folders in them.
+    spaced by whatever the columns happen to need. A tree's indentation IS its
+    depth, so a row starts where its depth says it starts — which is what a
+    live stream's chat log and a desktop's menu bar cannot do, both of which
+    were coming back as trees with folders in them. And that indentation has
+    to actually be there: rows at DIFFERENT depths must start at different x,
+    which is the half of the sentence a Finder sidebar broke, its names all
+    flush and its depth read off the widths of its icons.
     """
     if rows_seen and rows_kept / rows_seen < 0.5:
         return False, (f"only {rows_kept} of {rows_seen} rows sit on one pitch; "
@@ -548,6 +590,11 @@ def looks_like_a_tree(rows_kept, rows_seen, columns, pitch, names=(), placed=())
     if miss > INDENT_MISS:
         return False, (f"rows start {miss:.1f} row heights from where their "
                        "depth puts them; a tree's indent IS its depth")
+    step_px, wobble = indent_step(placed)
+    if step_px is not None and step_px <= wobble:
+        return False, (f"names step {step_px:.0f}px per level against "
+                       f"{wobble:.0f}px of wobble between rows of one level; "
+                       "this depth is not carried by indentation")
     if looks_like_prose(names):
         return False, ("most rows end in sentence punctuation; "
                        "these are sentences, not names")

@@ -79,6 +79,10 @@ VIDEOS = {
     # a web page rather than an application: a post with real paragraphs on it
     # and scraps of the site's own chrome scattered through the same column
     "post": "A Look Inside My Million Dollar AI Business",
+    # a Finder sidebar, cut so only the right edge of each icon survives: the
+    # names are all flush and the ICONS differ in width, which is the one
+    # shape that made this build invent nesting that was never on the screen
+    "makejarvis": "How To Make A Jarvis",
 }
 
 _ENGINE = None
@@ -305,6 +309,40 @@ def _tree_refuses():
         return False, ("read a file tree off a desktop that has none: "
                        + ", ".join(bad))
     return True, "no file tree claimed on a desktop that has none"
+
+
+@check("tree: a flat list is not a tree, whatever its icons do")
+def _tree_flat_list():
+    """Five side-by-side folders whose names are all flush.
+
+    A Finder sidebar's icons differ in width where its names do not, so the
+    clipped icons formed one phantom guide column and the pane came back as
+    Pictures containing Movies and Desktop: confident, invented, and scoring a
+    near-perfect 0.03 row heights of indent miss while it did. Least squares
+    fits a flat list perfectly by choosing no slope at all, so the reader now
+    also asks that the names MOVE.
+
+    Either answer is truthful here — refusing the pane, or reading it flat —
+    so both pass. Only nesting fails.
+    """
+    WANT = {"applications", "pictures", "movies", "desktop", "documents"}
+    sidebar = None
+    for pane in regions("makejarvis", "00:00:49"):
+        words = {r["text"].strip().lower() for r in tree_reader.ocr_rows(pane)}
+        if len(WANT & words) >= 3:
+            sidebar = pane
+            break
+    if sidebar is None:
+        raise Skip("no region of How To Make A Jarvis at 00:00:49 "
+                   "carries the Finder sidebar")
+    got = tree_reader.read_tree(sidebar)
+    if not got.get("is_tree"):
+        return True, f"refused it: {got.get('layout_verdict')}"
+    depths = {r["depth"] for r in got["rows"]}
+    if len(depths) > 1:
+        drawn = " / ".join("  " * r["depth"] + r["name"] for r in got["rows"])
+        return False, f"read nesting off a flat Finder sidebar: {drawn}"
+    return True, f"read its {len(got['rows'])} rows flat, nothing invented"
 
 
 @check("tree: a faint chevron is still a folder")
