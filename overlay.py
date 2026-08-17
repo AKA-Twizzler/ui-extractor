@@ -235,8 +235,7 @@ def read_panel(bgr, box, scratch, engine=None):
     crop = bgr[y0:y1, x0:x1]
     if crop.size == 0:
         return {"lines": [], "label": None, "value": None}
-    big = cv2.resize(crop, (crop.shape[1] * 3, crop.shape[0] * 3),
-                     interpolation=cv2.INTER_LANCZOS4)
+    big = machine.enlarge(crop, 3)
     cv2.imwrite(scratch, big)
     path = scratch
     gray = cv2.cvtColor(big, cv2.COLOR_BGR2GRAY)

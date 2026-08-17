@@ -405,8 +405,7 @@ def read_console(png_path):
     bgr = cv2.imread(png_path)
     if bgr is None:
         return {"is_console": False, "why": "could not read the image"}
-    up = cv2.resize(bgr, (bgr.shape[1] * 3, bgr.shape[0] * 3),
-                    interpolation=cv2.INTER_LANCZOS4)
+    up = machine.enlarge(bgr, 3)
     big = png_path.replace(".png", "_3x.png")
     cv2.imwrite(big, up)
     gray = cv2.cvtColor(up, cv2.COLOR_BGR2GRAY)

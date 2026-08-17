@@ -24,6 +24,11 @@ Nowhere else asks which platform it is on.
                  the path on Linux and is a portable copy beside the build on
                  Windows, extracted rather than installed so that it needed
                  nobody's password.
+
+  the memory     how much a reader enlarges a picture before reading it, and
+                 what that costs to hold. It is one rule shared by every
+                 reader rather than each one's own business, so it lives here
+                 for the same reason the drives do -- see enlarge().
 """
 import os
 import re
@@ -68,6 +73,74 @@ def here(path):
     if m:
         return m.group(1).upper() + ":" + (m.group(2) or "/").replace("/", "\\")
     return path
+
+
+# How big a picture a reader may be handed at once. No limit by default; the
+# name is kept only so the experiment below can be repeated from the command
+# line without editing anything -- READ_PIXELS=24000000 python pipeline.py ...
+READ_PIXELS = int(os.environ.get("READ_PIXELS", 0))
+
+
+def enlarge(img, times=3):
+    """Enlarge a picture for reading. The one home for the rule, uncapped.
+
+    Every reader enlarges what it is given, because at native size a stroke is
+    two or three pixels and a measurement taken on whole pixels cannot
+    separate bold from body. Eight places said "times three" in their own
+    words; they now say it here once, so that when the enlargement is worked
+    out properly there is one place for the answer to land.
+
+    The enlargements MULTIPLY, and that is the real cost. The splitter widens
+    a narrow pane toward 1400 pixels, up to five times, so a 278x2160 strip
+    arrives at the reader already 1390x10800 and the reader's three lands on
+    top of it: 135 million pixels, handed to two engines and written to disk
+    twice. Measured on one 4K frame, as peak working set:
+
+        modules and engines loaded             0.11 GB
+        capture, the burst of 44 frames        1.97 GB
+        the panel reader                       5.42 GB
+        the column reader                      6.45 GB
+
+    and 11.23 GB over a whole run, on a machine with 34 GB that is also
+    running other work. Nothing leaks -- the held figure stays near 135 MB the
+    whole way through -- but a peak is what fails an allocation, and this build
+    has already lost a run to ONNX's 'bad allocation' at exactly this size.
+
+    A pixel ceiling was tried here and is NOT kept, because it turned out to
+    be a tolerance rather than a measurement. At 24 million it saved real
+    memory -- the panel reader 3.45 GB to 0.54 GB, the whole frame 6.45 GB to
+    2.95 GB -- and cost two readings: a Finder window came back with 4 rows
+    where it holds 16, and the Clock's lap table was not read at all. Raised
+    to 64 million to clear those, it stopped cutting anything that had been
+    proven and started cutting by accident. Of the 503 panes on disk, what
+    they ask for at three times runs
+
+        ... 59.5  60.0  61.0  62.5  63.0  64.0 | 64.4  66.5  67.2  68.8 ...
+
+    with no gap anywhere near the line. 49 of the 503 would be read at two
+    times and their next-door neighbours at three, for a difference no frame
+    could tell you about. A threshold with no gap beneath it is a bug waiting
+    for its frame, so there is no threshold here.
+
+    What would be right is to ask the picture instead of the machine: the
+    enlargement a reader needs is set by the stroke it has to measure, so
+    measure the stroke and enlarge until it can be measured. Done that way the
+    splitter's head start stops mattering, because the answer comes out the
+    same whether the pane arrived widened or not. That is the fix, and it is
+    named here rather than half-done: this function does exactly what the
+    eight call sites did, and the memory stands as measured above.
+    """
+    import cv2
+    h, w = img.shape[:2]
+    if h < 1 or w < 1:
+        return img
+    times = max(1, int(times))
+    if READ_PIXELS:
+        times = max(1, min(times, int((READ_PIXELS / float(h * w)) ** 0.5)))
+    if times <= 1:
+        return img
+    return cv2.resize(img, (w * times, h * times),
+                      interpolation=cv2.INTER_LANCZOS4)
 
 
 def _tesseract():

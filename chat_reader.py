@@ -247,8 +247,7 @@ def read_chat(png_path, engine=None):
         return {"is_chat": False, "why": "could not read the image"}
     small_gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
     small_mask = note_reader.ink_mask(small_gray)
-    bgr = cv2.resize(bgr, (bgr.shape[1] * 3, bgr.shape[0] * 3),
-                     interpolation=cv2.INTER_LANCZOS4)
+    bgr = machine.enlarge(bgr, 3)
     big = png_path.replace(".png", "_3x.png")
     cv2.imwrite(big, bgr)
     gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)

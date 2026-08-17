@@ -363,8 +363,7 @@ def read_note(png_path, engine=None):
     bgr = cv2.imread(png_path)
     # everything is measured on a 3x enlargement: strokes are two or three
     # pixels at native size and the measurement can only land on whole values
-    bgr = cv2.resize(bgr, (bgr.shape[1] * 3, bgr.shape[0] * 3),
-                     interpolation=cv2.INTER_LANCZOS4)
+    bgr = machine.enlarge(bgr, 3)
     big_path = png_path.replace(".png", "_3x.png")
     cv2.imwrite(big_path, bgr)
     gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)

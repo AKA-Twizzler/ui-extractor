@@ -136,8 +136,7 @@ def classify(pane_path):
             return None
         big = pane_path.replace(".png", "_3x.png")
         if not os.path.exists(big):
-            up = cv2.resize(bgr, (bgr.shape[1] * 3, bgr.shape[0] * 3),
-                            interpolation=cv2.INTER_LANCZOS4)
+            up = machine.enlarge(bgr, 3)
             cv2.imwrite(big, up)
         gray = cv2.cvtColor(cv2.imread(big), cv2.COLOR_BGR2GRAY)
         spread = char_spread(big, gray)

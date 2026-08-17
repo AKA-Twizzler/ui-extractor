@@ -54,8 +54,7 @@ def read_row(img, row, pad_right=8):
     if y1 - y0 < 4 or x1 - x0 < 4:
         return ""
     crop = img[y0:y1, x0:x1]
-    crop = cv2.resize(crop, (crop.shape[1] * UPSCALE, crop.shape[0] * UPSCALE),
-                      interpolation=cv2.INTER_LANCZOS4)
+    crop = machine.enlarge(crop, UPSCALE)
     # engines are trained on dark text on light paper, so a dark theme is
     # inverted and a light one is left alone. Which it is comes from the
     # pixels: if the common value is dark, the text is the light minority.
@@ -262,8 +261,7 @@ def second_engine_text(png_path, psm=6):
     if img is None:
         return ""
     if img.shape[1] < 1600:
-        img = cv2.resize(img, (img.shape[1] * 3, img.shape[0] * 3),
-                         interpolation=cv2.INTER_LANCZOS4)
+        img = machine.enlarge(img, 3)
     if float(np.median(img)) < 128:
         img = 255 - img
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as fh:

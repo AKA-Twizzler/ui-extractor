@@ -353,8 +353,7 @@ def read_list(png_path):
     bgr = cv2.imread(png_path)
     if bgr is None:
         return {"is_list": False, "why": "could not read the image"}
-    bgr = cv2.resize(bgr, (bgr.shape[1] * 3, bgr.shape[0] * 3),
-                     interpolation=cv2.INTER_LANCZOS4)
+    bgr = machine.enlarge(bgr, 3)
     big = png_path.replace(".png", "_3x.png")
     cv2.imwrite(big, bgr)
     gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
