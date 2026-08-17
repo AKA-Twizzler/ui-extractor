@@ -174,13 +174,23 @@ def rows_aligned(boxes, tol=6, need=3):
     return best >= need
 
 
-def ui_regions(bgr, engine, min_cells=2, min_boxes=5):
+def ui_regions(bgr, engine, min_cells=1, min_boxes=5):
     """Regions of the frame that hold interface, confirmed by finding text.
 
     A flat, hard-edged patch alone is not interface — a painted wall is flat
     too. What makes it interface is that it CARRIES TEXT. So the cheap pixel
     test proposes the regions and a read of that region alone confirms them,
     which is both surer and far cheaper than reading the whole frame.
+
+    ONE cell is enough, because the reading is what confirms it. Two was the
+    rule, and it threw away a whole screen recording: a desktop with a
+    photographic wallpaper, where the nebula behind the windows scores like a
+    camera and only the Finder window itself ties. That window landed in a
+    single cell — seven text items in it, rows lined up — and the frame came
+    back "no readable interface at full size" with everything on it unread.
+    Measured across the library's shapes, the change moves nothing else: the
+    Jarvis desktop stays at 85%, the St. Jude stream at 25%, a talking head at
+    nothing at all.
     """
     work = to_working_size(bgr)
     cells = cell_scores(work)

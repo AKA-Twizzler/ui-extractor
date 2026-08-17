@@ -186,6 +186,29 @@ def _windows():
     return True, f"{len(desk)} on the desktop, none on either single window"
 
 
+@check("screenness: a window on a photograph is still a window")
+def _screenness_wallpaper():
+    """The frame that was thrown away whole.
+
+    A desktop with a nebula for a wallpaper: the photograph scores like a
+    camera, and the only part of the frame that ties is the Finder window
+    itself, which lands in a single cell of the grid. Two cells were required,
+    so the frame came back "no readable interface at full size" and a window
+    listing CLAUDE.md with its date, size and kind was never read at all.
+    """
+    img = cv2.imread(frame("works", "00:01:52"))
+    got = screenness.ui_regions(img, engine())
+    if not got:
+        return False, ("a desktop carrying a Finder window reads as no "
+                       "interface at all")
+    room = screenness.ui_regions(
+        cv2.imread(frame("beginners", "00:05:28")), engine())
+    if room:
+        return False, f"a talking head came back with {len(room)} regions"
+    return True, (f"{len(got)} region on the wallpapered desktop, "
+                  "none on a talking head")
+
+
 @check("regions: a desktop splits, a window keeps its panes")
 def _regions():
     desk = regions("jarvis", "00:02:00")
