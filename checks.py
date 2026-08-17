@@ -76,6 +76,9 @@ VIDEOS = {
     # and on a cap, both of which moved exactly as much as what they are
     # printed on
     "leads": "How To Generate Leads With AI",
+    # a web page rather than an application: a post with real paragraphs on it
+    # and scraps of the site's own chrome scattered through the same column
+    "post": "A Look Inside My Million Dollar AI Business",
 }
 
 _ENGINE = None
@@ -891,6 +894,32 @@ def _drawn_once():
         return True, (f"{len(names)} caption lines taken for a tree, held back "
                       "as text this frame already reported drawn")
     raise Skip("no pane of the July 31 stream carries the caption")
+
+
+@check("document: chrome scraps do not outvote paragraphs")
+def _scraps_do_not_outvote():
+    """A page of confirmed prose is not refused by the scraps around it.
+
+    Counted one row per vote, `4 :` and `d5 560 ()1 31` weigh what a whole
+    paragraph weighs. This page came to 0.64 against a gate of 0.67, fell out
+    of the document reader by three hundredths, and came back as run-together
+    loose text with its paragraphs and headings gone. By text it is 0.79.
+    """
+    for pane in regions("post", "00:02:10"):
+        got = note_reader.read_note(pane)
+        if "No fluff" not in got["markdown"]:
+            continue
+        if got["backed"] < note_reader.BACKED:
+            return False, (f"the page reads {got['backed']:.2f} backed against "
+                           f"a gate of {note_reader.BACKED:.2f}; every "
+                           "paragraph on it was confirmed twice")
+        spaced = [ln for ln in got["markdown"].splitlines()
+                  if "No fluff. No theory" in ln]
+        if not spaced:
+            return False, "the prose came back without its spaces"
+        return True, (f"{got['backed']:.2f} backed by text where it was 0.64 "
+                      "by row, and the paragraphs keep their spacing")
+    raise Skip("no pane of that frame carries the post")
 
 
 @check("pipeline: every pane is accounted for, the empty ones too")

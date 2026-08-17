@@ -631,13 +631,39 @@ def properties_block(rows, body_h):
 BACKED = 2 / 3
 
 
+BACKED_STATUS = ("confident", "reconciled", "ambiguous-symbol",
+                 "ambiguous-glyph")
+
+
 def backed_share(rows):
+    """How much of this reading the second engine read too, by TEXT not by row.
+
+    Counted by row, a two-character scrap of window chrome weighs as much as a
+    full paragraph, and a page can fail on the scraps around it while every
+    sentence on it is confirmed. Measured on a Facebook post inside an
+    Obsidian-free frame: fourteen rows, nine of them backed, 0.64 against a
+    gate of 0.67 -- so a page whose every paragraph was confirmed twice fell
+    out of the document reader by three hundredths and came back as loose
+    run-together text instead. The rows that outvoted it were
+
+        4 :                 d5 560 ()1 31            Carson James (c)
+
+    none of which is evidence about anything. By characters the same page is
+    0.76, and the reading it was built to refuse -- a live stream's
+    leaderboard, one line in eight -- stays where it was, because there the
+    unbacked lines are the long ones.
+
+    So the question is not "how many rows were confirmed" but "how much of
+    what this says was confirmed", which is what the gate always meant.
+    """
     if not rows:
         return 0.0
-    good = sum(1 for r in rows if r.get("read_status") in
-               ("confident", "reconciled", "ambiguous-symbol",
-                "ambiguous-glyph"))
-    return good / len(rows)
+    total = sum(len(r.get("text") or "") for r in rows)
+    if not total:
+        return 0.0
+    good = sum(len(r.get("text") or "") for r in rows
+               if r.get("read_status") in BACKED_STATUS)
+    return good / total
 
 
 def to_markdown(rows):
