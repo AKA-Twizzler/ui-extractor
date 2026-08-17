@@ -650,6 +650,24 @@ def _toolbar_not_heading():
                    "column names")
 
 
+@check("confirmation: a letter the other engine cannot make is never backed")
+def _confirm_foreign():
+    """The second engine is run with English only, so a Chinese character is
+    one it can never confirm. The comparison comes down to letters and digits,
+    which made the odd one invisible, and a terminal's title bar came back as
+    confirmed reading "test-<CJK>Greeting and conversation start". A star drawn
+    on a card is a symbol, not an alphabet, and is left alone."""
+    got = dict(verify_names.confirm_readings(
+        frame("obsidian", "00:02:09"),
+        ["test-米Greeting and conversation start", "salt jewelry ★ 2k"],
+        other_text="test-Greeting and conversation start salt jewelry 2k"))
+    if got["test-米Greeting and conversation start"]:
+        return False, "a reading carrying a Chinese character came back backed"
+    if not got["salt jewelry ★ 2k"]:
+        return False, "a drawn star cost a reading its backing; it is a symbol"
+    return True, "the foreign letter is unbacked, the star is not"
+
+
 @check("sweep: its own six marks all fire")
 def _sweep_detectors():
     """A clean sweep means nothing if the thing reading it has gone deaf.

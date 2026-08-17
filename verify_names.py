@@ -290,6 +290,17 @@ def confirm_readings(png_path, texts, other_text=None):
         ok = bool(mine) and len(mine) >= 3 and mine in flat
         if not ok and words:
             ok = sum(1 for w in words if w in terms) * 2 >= len(words)
+        # A letter the second engine cannot even produce is a letter it can
+        # never confirm. Tesseract is run with `-l eng`, so a Chinese or
+        # Cyrillic character in one of these readings is the first engine
+        # matching a SHAPE, not reading a word -- and because the comparison
+        # above comes down to letters and digits, the odd one was invisible to
+        # it and the whole reading passed as confirmed. A terminal's title bar
+        # came back "test-{CJK}Greeting and conversation start" that way.
+        # Symbols are left alone: the star drawn on a card is a real mark, and
+        # this is about alphabets.
+        if any(ch.isalpha() and ord(ch) > 127 for ch in text):
+            ok = False
         out.append((text, ok))
     return out
 
