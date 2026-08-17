@@ -952,6 +952,34 @@ def _scraps_do_not_outvote():
     raise Skip("no pane of that frame carries the post")
 
 
+@check("document: a joined paragraph is worth what its lines were worth")
+def _joined_paragraph_verdict():
+    """A wrapped paragraph carries every line's verdict, not just the first's.
+
+    Lines are reconciled while they are still separate and joined afterwards,
+    and the joined row can only hold one status -- the opening line's. So a
+    700-character paragraph whose first line the two engines differed on
+    counted as wholly unconfirmed, though seven of its eight lines were
+    confirmed, and it dragged a daily note out of the document reader
+    altogether: 0.64 against a gate of 0.67. Counting each line's own verdict
+    in its own characters puts the same note at 0.74.
+    """
+    md = note_on("obsidian", "00:08:15", "Mailchimp blob")
+    if "OTT census" not in md:
+        return False, "the note came back without the paragraph in question"
+    for pane in regions("obsidian", "00:08:15"):
+        got = note_reader.read_note(pane)
+        if "Mailchimp blob" not in got["markdown"]:
+            continue
+        if got["backed"] < note_reader.BACKED:
+            return False, (f"the note reads {got['backed']:.2f} backed against "
+                           f"a gate of {note_reader.BACKED:.2f}, so it is not "
+                           "a document at all any more")
+        return True, (f"{got['backed']:.2f} backed, where one paragraph's "
+                      "opening line alone put it at 0.64")
+    raise Skip("no pane of that frame carries the daily note")
+
+
 @check("pipeline: every pane is accounted for, the empty ones too")
 def _every_pane_speaks():
     """A frame's report must name every region the splitter found.

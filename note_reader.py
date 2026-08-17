@@ -345,6 +345,17 @@ def reconcile_rows(rows, big_path, body_h):
         r["text"] = text
         r["read_status"] = status
         r["text_second"] = other
+    # Each line's own verdict, measured in the characters it is worth, taken
+    # HERE while the lines are still separate. A wrapped paragraph is joined
+    # further down and the joined row can only carry one status -- the first
+    # line's -- so a paragraph whose opening line the two engines differed on
+    # counted as wholly unconfirmed though every line after it was confirmed.
+    # Measured on a daily note: one 700-character paragraph, seven of its
+    # eight lines backed, dragging the page from confirmed to refused.
+    for r in rows:
+        n = len(r.get("text") or "")
+        r["all_chars"] = n
+        r["backed_chars"] = n if r.get("read_status") in BACKED_STATUS else 0
     return rows
 
 
@@ -521,6 +532,12 @@ def join_wraps(rows, right_edge, body_h):
                     and ((not r["heading"] and not out[-1]["heading"])
                          or (out[-1]["heading"] and same_size)))
         if joinable:
+            # the joined line is worth what its parts were worth -- see
+            # reconcile_rows, which set these while the parts were separate
+            out[-1]["all_chars"] = (out[-1].get("all_chars", 0)
+                                    + r.get("all_chars", 0))
+            out[-1]["backed_chars"] = (out[-1].get("backed_chars", 0)
+                                       + r.get("backed_chars", 0))
             out[-1]["text"] = out[-1]["text"].rstrip() + " " + r["text"].lstrip()
             out[-1]["xh"] = max(out[-1]["xh"], r["xh"])
             out[-1]["x1"] = r["x1"]
@@ -658,11 +675,15 @@ def backed_share(rows):
     """
     if not rows:
         return 0.0
-    total = sum(len(r.get("text") or "") for r in rows)
+    # each line's own verdict, in the characters it was worth, summed through
+    # the wrap join -- a joined paragraph carries what its parts carried
+    total = sum(r.get("all_chars", len(r.get("text") or "")) for r in rows)
     if not total:
         return 0.0
-    good = sum(len(r.get("text") or "") for r in rows
-               if r.get("read_status") in BACKED_STATUS)
+    good = sum(r.get("backed_chars",
+                     len(r.get("text") or "")
+                     if r.get("read_status") in BACKED_STATUS else 0)
+               for r in rows)
     return good / total
 
 
