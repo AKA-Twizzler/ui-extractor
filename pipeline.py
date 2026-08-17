@@ -101,7 +101,7 @@ def say_pane(pane_path, pi, engine, drawn=()):
     tree = guard(f"tree reader, pane {pi}", tree_reader.read_tree, pane_path) or {}
     if tree.get("is_tree") and len(tree["rows"]) >= 5:
         if owned([r["name"] for r in tree["rows"]]):
-            return
+            return True
         tree = guard(f"second engine, pane {pi}",
                      verify_names.verify, pane_path, tree) or tree
         print(f"  [pane {pi}: a file tree]")
@@ -112,7 +112,7 @@ def say_pane(pane_path, pi, engine, drawn=()):
             print("    unsettled: " + "; ".join(
                 f"{x.get('name_primary')!r}/{x.get('name_second')!r}"
                 for x in flagged))
-        return
+        return True
     # a terminal first: it is the one screen that proves itself, since nothing
     # else sets every character on one width, and read as anything else it
     # loses the split between what Jared typed and what came back -- which is
@@ -123,7 +123,7 @@ def say_pane(pane_path, pi, engine, drawn=()):
         print(f"  [pane {pi}: a terminal]")
         for line in console_reader.render(term).splitlines():
             print("    " + line)
-        return
+        return True
     # not a tree: a column view before a document, since a table read as prose
     # loses the pairing of value to heading
     lst = guard(f"columns reader, pane {pi}", columns.read_list, pane_path) or {}
@@ -131,7 +131,7 @@ def say_pane(pane_path, pi, engine, drawn=()):
         print(f"  [pane {pi}: a list of columns]")
         for line in columns.render(lst).splitlines():
             print("    " + line)
-        return
+        return True
     # a live stream's chat log, before the document reader, which would
     # otherwise take it for prose and lose who said what
     chat = guard(f"chat reader, pane {pi}",
@@ -140,7 +140,7 @@ def say_pane(pane_path, pi, engine, drawn=()):
         print(f"  [pane {pi}: a chat log]")
         for line in chat_reader.render(chat).splitlines():
             print("    " + line)
-        return
+        return True
     # a document: the words AND the shape
     note = guard(f"document reader, pane {pi}",
                  note_reader.read_note, pane_path) or {"markdown": "", "backed": 0}
@@ -154,11 +154,11 @@ def say_pane(pane_path, pi, engine, drawn=()):
     if (note_reader.body_lines(note["markdown"]) >= 3
             and note["backed"] >= note_reader.BACKED):
         if owned(note["markdown"].splitlines()):
-            return
+            return True
         print(f"  [pane {pi}: an open document]")
         for line in note["markdown"].splitlines():
             print("    " + line)
-        return
+        return True
     res, _ = engine(pane_path)
     texts = [t for _, t, _ in (res or [])]
     # Nothing is dropped for being short. This used to skip any pane with
@@ -168,8 +168,10 @@ def say_pane(pane_path, pi, engine, drawn=()):
     # without a word: "moonstone.co * 12k", "the tiny gem * 4k", "hearthstone
     # * 15k" simply were not in the answer. Whether a reading is worth
     # anything is what the confirmation below says, and it says it out loud.
-    if not texts or owned(texts):
-        return
+    if not texts:
+        return False           # nothing on it; the caller says so, once
+    if owned(texts):
+        return True
     # nothing else placed this pane, so there is no structure to stand behind
     # the words. Printing them as read is how "R78" came off Jared's
     # visualizer -- three faint marks one engine calls R78 and the other calls
@@ -186,6 +188,7 @@ def say_pane(pane_path, pi, engine, drawn=()):
         print("    " + " | ".join(sure))
     if doubt:
         print("    [only one engine read these] " + " | ".join(doubt))
+    return True
 
 
 def main():
@@ -297,13 +300,29 @@ def main():
         # the frame's windows first, each split into ITS panes, and then the
         # desktop no window covers -- a frame holding one window comes back
         # exactly as it did when this only cut vertical strips
+        # Every region the splitter found is accounted for. A pane that says
+        # nothing used to print nothing, and so did a pane the writer refused
+        # -- on one frame four of seven were invisible that way. No text was
+        # lost by it, but nothing in the output told a reader whether a pane
+        # held nothing or was never looked at, and those are not the same
+        # claim. This build's rule is that refusal is an answer and silence is
+        # not, so the quiet ones are named, on one line rather than four.
+        quiet, unwritten = [], []
         for pi, box in enumerate(guard(f"regions at {ts}", frame_regions,
                                        img, engine=engine) or []):
             pane_path = os.path.join(
                 out_dir, f"{ts.replace(':','-')}_pane{pi}.png")
             if write_box(img, box, pane_path) is None:
+                unwritten.append(pi)
                 continue
-            say_pane(pane_path, pi, engine, drawn)
+            if not say_pane(pane_path, pi, engine, drawn):
+                quiet.append(pi)
+        if quiet:
+            print(f"  [panes {', '.join(map(str, quiet))}: looked at, "
+                  "nothing readable on them]")
+        if unwritten:
+            print(f"  [panes {', '.join(map(str, unwritten))}: too small to "
+                  "cut out, not read]")
         print()
 
     if STUMBLED:

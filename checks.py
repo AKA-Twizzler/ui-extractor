@@ -29,6 +29,7 @@ pretend to have passed.
 import glob
 import os
 import re
+import subprocess
 import sys
 import traceback
 
@@ -890,6 +891,38 @@ def _drawn_once():
         return True, (f"{len(names)} caption lines taken for a tree, held back "
                       "as text this frame already reported drawn")
     raise Skip("no pane of the July 31 stream carries the caption")
+
+
+@check("pipeline: every pane is accounted for, the empty ones too")
+def _every_pane_speaks():
+    """A frame's report must name every region the splitter found.
+
+    Measured on a Facebook-ads frame: seven regions, three of them carrying
+    everything and four carrying no text at all -- and those four printed
+    nothing whatever, so the report gave a reader no way to tell a pane that
+    held nothing from a pane that was never looked at. No text was lost by it;
+    the claim was.
+    """
+    path = frame("works", "00:07:29")
+    img = cv2.imread(path)
+    boxes = panes.frame_regions(img, engine=engine())
+    if len(boxes) < 3:
+        raise Skip(f"only {len(boxes)} regions on this frame to account for")
+    out = subprocess.run(
+        [sys.executable, "pipeline.py", video("works"), "--at", "00:07:29"],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        cwd=os.path.dirname(os.path.abspath(__file__)))
+    said = out.stdout or ""
+    named = set()
+    for m in re.finditer(r"\[panes? ([\d, ]+):", said):
+        named.update(int(v) for v in m.group(1).replace(" ", "").split(","))
+    missing = [i for i in range(len(boxes)) if i not in named]
+    if missing:
+        return False, (f"{len(boxes)} regions were cut and panes {missing} are "
+                       "in the report under no heading at all")
+    return True, (f"all {len(boxes)} panes named; "
+                  f"{len(re.findall('nothing readable on them', said))} line(s) "
+                  "for the quiet ones")
 
 
 def main():
