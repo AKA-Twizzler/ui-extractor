@@ -63,6 +63,7 @@ MAX_SHARE = 0.55      # a rectangle covering more than this is the picture
 OVERLAP = 0.6         # two edges bound one panel if they line up this well
 GAP_TO_HEIGHT = 1.2   # a gap wider than the text is tall splits label from value
 FILL_SPREAD = 2.0     # a drawn fill is one value; two levels allows for the codec
+STILLEST = 40         # drawn text is among this stillest share of the picture
 SPAN = 600            # seconds the frames judging steadiness are spread over
 LOOKS = 4             # and how many of them
 WINDOW_RUN = 0.08     # a window side runs this far across the frame
@@ -396,7 +397,7 @@ def standing_text(paths, engine=None):
     front of by the same person. So the test is a comparison, not a threshold:
 
         drawn, if the glyphs changed no more than the ground around them,
-        and the glyphs are stiller than HALF THE FRAME is
+        and the glyphs are among the STILLEST TWO FIFTHS of the frame
         -- and only where the ground changed at all, since nothing is proved
         by standing still in front of something that also stood still
 
@@ -437,9 +438,26 @@ def standing_text(paths, engine=None):
     stack = np.stack([s.astype(np.int16) for s in shots])
     change = np.abs(stack - stack[0]).max(axis=0).max(axis=2)
     still = float(np.percentile(change, 25))
-    # how much this frame moves altogether, which is what "stiller than the
-    # picture it sits on" has to be measured against
-    moving = float(np.median(change))
+    # How much this frame moves altogether, which is what "stiller than the
+    # picture it sits on" has to be measured against.
+    #
+    # The median was not enough. On a locked-off talking head -- Jared in his
+    # chair, camera fixed -- two stickers on the shelf behind him passed with
+    # their glyphs sitting EXACTLY on the median: 55 against 55, and 52
+    # against 55. Nothing was wrong with the reasoning, only with where the
+    # line was drawn, so it is drawn where the measurements separate:
+    #
+    #                        p20  p30  p40  p50  p60   glyphs
+    #     sticker PEOPLE      21   31   42   55   70      55
+    #     sticker SOWE        21   31   41   55   71      52
+    #     sticker SOM         38   53   71   86  103      80
+    #     banner, st jude      5   14   24   37   46      21
+    #     banner, aug 03      21   27   34   40   48      13
+    #
+    # Drawn text is not merely stiller than half the picture; it is among the
+    # stillest of it. Two fifths is the only cut that admits both banners and
+    # refuses all three stickers, and the frame still supplies the number.
+    moving = float(np.percentile(change, STILLEST))
     if engine is None:
         from rapidocr_onnxruntime import RapidOCR
         engine = RapidOCR()

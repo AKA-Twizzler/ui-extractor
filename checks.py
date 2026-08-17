@@ -61,6 +61,9 @@ VIDEOS = {
     # a second Finder window, in a different video, on a desktop beside an
     # Obsidian window -- so the table's headings are not proved on one frame
     "memfiles": "Move Memory Files Out of Claude Code Into Obsidian",
+    # a locked-off camera on a talking head: nothing in the shot moves much,
+    # so "stiller than the picture" is at its weakest here
+    "beginners": "Claude Code For Beginners; Start Here",
 }
 
 _ENGINE = None
@@ -414,7 +417,20 @@ def _standing():
     stray = [t for t in got if "jaredrhod" not in t.lower()]
     if stray:
         return False, f"admitted the room as well: {stray}"
-    return True, f"admitted {got}"
+
+    # A locked-off camera is the hard case, and the median let it through. On
+    # a talking head -- Jared in his chair, camera fixed -- two stickers on the
+    # shelf behind him sat EXACTLY on the frame's median change, 55 against 55
+    # and 52 against 55, and were reported as text drawn on the picture.
+    for secs in (328, 438):
+        looks = overlay.frames_across(
+            video("beginners"), secs,
+            workdir=machine.here(f"/mnt/g/Images/{VIDEOS['beginners']}/_looks"))
+        room = [g["text"] for g in overlay.standing_text(looks, engine=engine())]
+        if room:
+            return False, (f"admitted the room off a fixed camera at {secs}s: "
+                           f"{room}")
+    return True, f"admitted {got}; nothing off a locked-off camera"
 
 
 # --------------------------------------------------- nothing unconfirmed
