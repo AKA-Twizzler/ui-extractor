@@ -896,6 +896,36 @@ def _drawn_once():
     raise Skip("no pane of the July 31 stream carries the caption")
 
 
+@check("confirmation: a confirmed line keeps the spaces it was written with")
+def _respaced():
+    """The pane nothing could place is the commonest kind, and it read worst.
+
+    Its engine is the better reader of short labels and the worse reader of
+    running prose, where it drops the spaces. A sales page came back as
+    "Youenteryouremailandyourcard." while the other engine, on the same
+    pixels, had "You enter your email and your card." OCR drops spaces and
+    never invents them, so the reading that has them saw them.
+    """
+    for pane in regions("post", "00:06:30"):
+        from rapidocr_onnxruntime import RapidOCR  # noqa: F401  (engine cached)
+        res, _ = engine()(pane)
+        texts = [t for _, t, _ in (res or [])]
+        if not any("enteryouremail" in t.replace(" ", "").lower()
+                   for t in texts):
+            continue
+        got = verify_names.confirm_readings(pane, texts[:16])
+        said = [t for t, _ in got]
+        want = "You enter your email and your card."
+        if want not in said:
+            return False, (f"the line came back as {[t for t in said if 'enter' in t.lower()]}, "
+                           f"not {want!r}")
+        run_on = [t for t in said if len(t) > 24 and " " not in t]
+        return True, (f"respaced to {want!r}; "
+                      f"{len(run_on)} line(s) still run together, and those "
+                      "are the ones the other engine did not confirm")
+    raise Skip("no pane of that frame carries the sign-up text")
+
+
 @check("document: chrome scraps do not outvote paragraphs")
 def _scraps_do_not_outvote():
     """A page of confirmed prose is not refused by the scraps around it.

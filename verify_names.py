@@ -227,6 +227,24 @@ def _flat(text):
     return re.sub(r"[^a-z0-9]", "", text.lower())
 
 
+def _flat_with_map(text):
+    """The comparable form of a reading, and where each kept letter came from.
+
+    Same characters _flat keeps, plus the index each one stood at, so a match
+    found in the flattened text can be traced back to the words and spaces it
+    was really written with.
+    """
+    low = text.lower()
+    if len(low) != len(text):        # a lowercase form of different length
+        return _flat(text), None     # would put the map out of step
+    keep, where = [], []
+    for i, ch in enumerate(low):
+        if "a" <= ch <= "z" or "0" <= ch <= "9":
+            keep.append(ch)
+            where.append(i)
+    return "".join(keep), where
+
+
 def _terms(text):
     return [w for w in re.findall(r"[a-z0-9]+", text.lower()) if len(w) >= 3]
 
@@ -283,11 +301,35 @@ def confirm_readings(png_path, texts, other_text=None):
     the other engine read on the same pixels.
     """
     other = second_engine_text(png_path) if other_text is None else other_text
-    flat, terms = _flat(other), set(_terms(other))
+    flat, where = _flat_with_map(other)
+    terms = set(_terms(other))
     out = []
     for text in texts:
         mine, words = _flat(text), _terms(text)
         ok = bool(mine) and len(mine) >= 3 and mine in flat
+        # A confirmed line is reported in the FULLER of the two spellings.
+        # This engine is the better reader of short labels and the worse
+        # reader of running prose, where it drops the spaces: a sales page
+        # came back as "Youenteryouremailandyourcard." and
+        # "Yougetinstantaccesstoeverythingabovefor3odays." while the other
+        # engine, on the same pixels, had "You enter your email and your card."
+        # and "You get instant access to everything above for 30 days." The
+        # rule that settles it is the one this module already runs on -- OCR
+        # drops spaces and never invents them, so the reading that HAS them
+        # saw them. This is the pane nothing else could place, which is the
+        # commonest kind there is, so it is also the commonest thing read.
+        if ok and where is not None:
+            at = flat.find(mine)
+            if at >= 0:
+                end = where[at + len(mine) - 1] + 1
+                # the match ends at the last LETTER, so the full stop that
+                # closes the sentence sits just past it and was being cut off
+                while end < len(other) and not other[end].isspace() \
+                        and not other[end].isalnum():
+                    end += 1
+                span = " ".join(other[where[at]:end].split())
+                if span.count(" ") > text.count(" "):
+                    text = span
         if not ok and words:
             ok = sum(1 for w in words if w in terms) * 2 >= len(words)
         # A letter the second engine cannot even produce is a letter it can
