@@ -289,6 +289,31 @@ def read_overlays(png_path, engine=None):
     return {"panels": out}
 
 
+def floating(panels, regions, width, work_width):
+    """Of these panels, the ones floating over VIDEO rather than over interface.
+
+    A panel is a rectangle drawn on top of the picture. Where its middle sits
+    on a part of the frame already confirmed as interface, it is floating over
+    nothing: it is a card or a sidebar inside the application, and that pane's
+    own reader does it properly and in order. Left ungated, an Obsidian sidebar
+    came back as "a panel drawn on the picture" reading "eee 6aQ Nn ©) Brand
+    Guide", and a desktop returned seven such panels beside the panes that had
+    already read them.
+
+    `regions` are screenness boxes, measured at the working width, so they are
+    scaled back to the frame's own pixels before anything is compared.
+    """
+    back = width / work_width
+    boxes = [tuple(int(v * back) for v in r["box"]) for r in regions]
+    out = []
+    for panel in panels:
+        x0, y0, x1, y1 = panel["box"]
+        cx, cy = (x0 + x1) // 2, (y0 + y1) // 2
+        if not any(a <= cx < c and b <= cy < d for a, b, c, d in boxes):
+            out.append(panel)
+    return out
+
+
 def windows(bgr, run=WINDOW_RUN, min_side=WINDOW_SIDE):
     """The application windows on a desktop, by their four drawn sides.
 

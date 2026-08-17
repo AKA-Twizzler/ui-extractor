@@ -215,9 +215,12 @@ def main():
 
         # A panel is a rectangle floating over video, so it belongs to no pane
         # and splitting the frame would cut it in half.
-        for panel in (guard(f"panel reader at {ts}",
-                            overlay.read_overlays, path, engine)
-                      or {"panels": []})["panels"]:
+        # Only the panels floating over VIDEO -- see overlay.floating, which
+        # owns that question and says why.
+        for panel in overlay.floating(
+                (guard(f"panel reader at {ts}", overlay.read_overlays,
+                       path, engine) or {"panels": []})["panels"],
+                regions, img.shape[1], screenness.WORK_WIDTH):
             print("  [a panel drawn on the picture]")
             unsettled = set(panel.get("unsettled") or [])
             if panel["label"] and not unsettled:

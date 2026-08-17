@@ -429,6 +429,37 @@ def _panels():
     return True, f"{len(got)} panels, the donation card among them"
 
 
+@check("overlay: a panel over interface is not an overlay")
+def _panel_over_interface():
+    """A panel is a rectangle floating over VIDEO.
+
+    On a desktop the same finder catches the application's own cards, and the
+    frame came back with seven "panels drawn on the picture" beside the panes
+    that had already read them properly -- an Obsidian sidebar among them,
+    reading "eee 6aQ Nn ©) Brand Guide". What must NOT change is the stream:
+    the donation card floats over a shot of the room and stays.
+    """
+    keep = []
+    for key, stamp, what in (("stjude", "02:12:59", "the donation card"),
+                             ("aug03", "00:09:00", "the ended-stream cards")):
+        img = cv2.imread(frame(key, stamp))
+        pans = overlay.read_overlays(frame(key, stamp), engine())["panels"]
+        left = overlay.floating(pans, screenness.ui_regions(img, engine()),
+                                img.shape[1], screenness.WORK_WIDTH)
+        if len(left) != len(pans) or not left:
+            return False, (f"{what}: {len(left)} of {len(pans)} panels kept; "
+                           "they float over a room")
+        keep.append(f"{what} {len(left)}")
+    img = cv2.imread(frame("jarvis", "00:02:00"))
+    pans = overlay.read_overlays(frame("jarvis", "00:02:00"), engine())["panels"]
+    left = overlay.floating(pans, screenness.ui_regions(img, engine()),
+                            img.shape[1], screenness.WORK_WIDTH)
+    if left:
+        return False, (f"{len(left)} of {len(pans)} panels on a desktop that "
+                       f"is all interface: {[p['lines'][0][:30] for p in left]}")
+    return True, f"{', '.join(keep)} kept, {len(pans)} on the desktop dropped"
+
+
 @check("overlay: the banner, and nothing else")
 def _standing():
     path = frame("stjude", "02:12:59")
