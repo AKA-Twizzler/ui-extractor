@@ -634,6 +634,44 @@ def _toolbar_not_heading():
                    "column names")
 
 
+@check("sweep: its own six marks all fire")
+def _sweep_detectors():
+    """A clean sweep means nothing if the thing reading it has gone deaf.
+
+    `sweep.py` runs the pipeline over the library and reads the output back
+    for the marks a fault leaves behind. Those marks are code like any other,
+    and a sweep that reports nothing looks exactly the same whether the
+    library is clean or the reader is broken. So each is shown a line it must
+    catch, taken from output this build really produced.
+    """
+    import sweep
+    sample = """--- 00:01:00  (stacked; interface on 90% of the frame) ---
+  [pane 0: a terminal]
+    aaa   <- the other engine read 'bbb'
+    ccc   <- the other engine read 'ddd'
+    eee   <- the other engine read 'fff'
+    ggg
+  [pane 1: a list of columns]
+    | Jun27,2026at6:11PM      | 5KBLogFile |
+  [pane 2: an open document]
+    ---
+    TYPING: IT YOURSELF
+    ---
+  [pane 3: text, not a tree]
+    JK | N4 | U衣+ECE | 5D
+--- 00:02:00  (stacked; interface on 80% of the frame) ---
+    [this reader fell over and the run went on -- chat reader: TypeError: x]
+"""
+    got = {kind for kind, _ in sweep.smells(sample)}
+    want = {"fell over", "data heading", "odd script", "all unsettled",
+            "empty frame", "bare fences"}
+    if got != want:
+        missing = want - got
+        return False, (f"{sorted(missing)} did not fire" if missing
+                       else f"fired unasked: {sorted(got - want)}")
+    return True, f"all six fire: {', '.join(sorted(want))}"
+
+
 @check("pipeline: no pane is dropped for being short")
 def _nothing_dropped():
     """Silent loss is the worst kind, because the answer still looks whole.
