@@ -50,6 +50,12 @@ LEVEL_GAP = 0.07       # height clusters closer than this are one size
 NUMBERED = re.compile(r"^\s*(\d+)\s*[.)]\s+")
 # what a drawn bullet turns into when an engine reads it as a character
 BULLET_CHARS = "\u00b7\u2022\u2219\u25aa\u25cf\u25e6\u00bb\u203a\u2023-"
+# The lowercase letters that are drawn between the baseline and the x-height
+# with nothing above or below: no ascender, no descender, no dot. A word made
+# of these reports the size the line is SET in. A word of capitals, digits or
+# punctuation is drawn to the cap height instead, which is around half again
+# as tall, so it reports a size the line is not set in at all.
+X_BAND = set("acemnorsuvwxz")
 
 
 def ink_mask(gray):
@@ -108,11 +114,32 @@ def row_x_height(mask, row):
 
     A heading is uniformly larger -- every word of it. So the row's size is
     the median of its words' sizes, which one odd span cannot move.
+
+    And only the words that can REPORT that size are asked. A digit and a
+    capital are drawn to the cap height, half again as tall as the lowercase
+    the line is set in, so a line dense in numbers measures as a line set
+    larger -- and is then marked as a heading it never was. Measured on a
+    daily note, against a body of 1.00:
+
+        zero status data. OTT census: 6,285 active / 11,484 ...   1.18   1.05
+        * CJ ads check (late session): Conf TRUE CPL $0.79 ...    1.09   1.00
+        Thursday, June 11, 2026                                  1.59   1.57
+        Index                                                    1.45   1.45
+        Detail                                                   1.64   1.64
+        The permission-classifier lesson (banked)                1.32   1.32
+
+    The first two are sentences in the middle of a paragraph and came back as
+    headings; the four below them are the note's real headings and do not
+    move. A row with no such word left -- a title set as a bare date, an
+    all-capital label -- has nothing to measure but its capitals, so it is
+    measured as before rather than guessed at.
     """
     words = row.get("words") or []
     if len(words) < 2:
         return x_height(mask, row["y0"], row["y1"], row["x0"], row["x1"])
-    sizes = [x_height(mask, row["y0"], row["y1"], w[1], w[2]) for w in words]
+    speaking = [w for w in words if any(c in X_BAND for c in w[0])]
+    sizes = [x_height(mask, row["y0"], row["y1"], w[1], w[2])
+             for w in (speaking or words)]
     sizes = [s for s in sizes if s > 0]
     if not sizes:
         return x_height(mask, row["y0"], row["y1"], row["x0"], row["x1"])
@@ -170,6 +197,21 @@ def note_body(rows, body_h):
 
     So the column is found first, then its leftmost edge, and everything
     inside that column is kept.
+
+    A row is never thrown away for its first word alone. Where a mark in the
+    gutter is read as a character -- a hanging bullet, an edge of the window
+    chrome -- it joins the row and drags the row's left edge out of the
+    column, and the whole sentence goes with it. Measured on a daily note:
+    one stray 'N' at x=554 against a margin of 659 lost the line
+
+        tv folder") flipped my late-night pessimism: LTV ~$250, so the old
+        campaign's $28.57/trial
+
+    from the middle of a paragraph, with nothing said. So the leading words
+    outside the column are taken off and the row is judged by where its text
+    really starts -- the same rule clip_to_column already applies at the other
+    edge, and for the same reason: a row cannot be dropped whole without
+    losing the real text.
     """
     if not rows:
         return rows
@@ -181,7 +223,23 @@ def note_body(rows, body_h):
         return rows
     margin = min(near)
     lo, hi = margin - body_h * 1.5, margin + body_h * 8
-    return [r for r in rows if lo <= r["x0"] <= hi]
+    out = []
+    for r in rows:
+        if lo <= r["x0"] <= hi:
+            out.append(r)
+            continue
+        if r["x0"] > hi:
+            continue                    # chrome standing off to the right
+        words = r.get("words") or []
+        kept = [w for w in words if w[1] >= lo]
+        if not kept or not (lo <= kept[0][1] <= hi):
+            continue                    # nothing of this row is in the column
+        r = dict(r)
+        r["words"] = kept
+        r["text"] = " ".join(w[0] for w in kept)
+        r["x0"] = kept[0][1]
+        out.append(r)
+    return out
 
 
 def tess_rows(png_path, gray):

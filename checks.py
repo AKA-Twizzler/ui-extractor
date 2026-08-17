@@ -33,6 +33,7 @@ import sys
 import traceback
 
 import cv2
+import numpy as np
 
 import capture
 import chat_reader
@@ -42,6 +43,7 @@ import machine
 import note_reader
 import overlay
 import panes
+import pipeline
 import screenness
 import tree_reader
 import verify_names
@@ -64,6 +66,15 @@ VIDEOS = {
     # a locked-off camera on a talking head: nothing in the shot moves much,
     # so "stiller than the picture" is at its weakest here
     "beginners": "Claude Code For Beginners; Start Here",
+    # a live stream carrying a CAPTION BLOCK -- six lines of wrapped prose,
+    # drawn over the room. It is the one shape that is genuinely an overlay
+    # AND passes every geometric test a tree has to pass.
+    "july31": "Jarvis Raises Money for St. Judes with Epic Performance "
+              "- Live Replay July 31, 2026",
+    # a second locked-off room, a second camera: printing on a monitor bezel
+    # and on a cap, both of which moved exactly as much as what they are
+    # printed on
+    "leads": "How To Generate Leads With AI",
 }
 
 _ENGINE = None
@@ -116,6 +127,26 @@ def regions(key, stamp):
             out.append(cut)
     _REGIONS[(key, stamp)] = out
     return out
+
+
+_NOTES = {}
+
+
+def note_on(key, stamp, needle):
+    """The reading of whichever pane of that frame carries this text.
+
+    Anchored on what is written rather than on a pane number: the number moves
+    the moment the splitter changes, and a check that breaks when nothing is
+    wrong is worse than no check.
+    """
+    for pane in regions(key, stamp):
+        md = _NOTES.get(pane)
+        if md is None:
+            md = note_reader.read_note(pane)["markdown"]
+            _NOTES[pane] = md
+        if needle in md:
+            return md
+    raise Skip(f"no pane of {key} at {stamp} carries {needle!r}")
 
 
 CHECKS = []
@@ -476,15 +507,23 @@ def _standing():
     # a talking head -- Jared in his chair, camera fixed -- two stickers on the
     # shelf behind him sat EXACTLY on the frame's median change, 55 against 55
     # and 52 against 55, and were reported as text drawn on the picture.
-    for secs in (328, 438):
-        looks = overlay.frames_across(
-            video("beginners"), secs,
-            workdir=machine.here(f"/mnt/g/Images/{VIDEOS['beginners']}/_looks"))
-        room = [g["text"] for g in overlay.standing_text(looks, engine=engine())]
-        if room:
-            return False, (f"admitted the room off a fixed camera at {secs}s: "
-                           f"{room}")
-    return True, f"admitted {got}; nothing off a locked-off camera"
+    #
+    # And "stiller than the ground" was not enough either. Printing moves with
+    # the thing it is printed on, so a sticker's glyphs change as much as the
+    # shelf and no more -- 0.97 of it -- which the comparison admitted. A
+    # second room, a second camera: WQHD on a monitor bezel and Hat on Jared's
+    # cap, both at 0.97, against 0.32 to 0.65 for everything really drawn.
+    for key, moments in (("beginners", (328, 438)), ("leads", (181, 363))):
+        for secs in moments:
+            looks = overlay.frames_across(
+                video(key), secs,
+                workdir=machine.here(f"/mnt/g/Images/{VIDEOS[key]}/_looks"))
+            room = [g["text"]
+                    for g in overlay.standing_text(looks, engine=engine())]
+            if room:
+                return False, (f"admitted the room off a fixed camera, "
+                               f"{key} at {secs}s: {room}")
+    return True, f"admitted {got}; nothing off either locked-off camera"
 
 
 # --------------------------------------------------- nothing unconfirmed
@@ -781,6 +820,76 @@ def _nothing_dropped():
         return False, ("the whole frame's answer never mentions "
                        + ", ".join(missing) + "; three cards of nine")
     return True, "all three columns of the grid reach the answer"
+
+
+@check("document: a line set in numbers is not a heading")
+def _digits_are_not_a_heading():
+    md = note_on("obsidian", "00:08:15", "OTT census")
+    for line in md.splitlines():
+        if "OTT census" in line and line.lstrip().startswith("#"):
+            return False, ("'zero status data. OTT census: 6,285 active ...' "
+                           "came back as a heading; it is the middle of a "
+                           "paragraph, and only its digits are drawn tall")
+    heads = [ln for ln in md.splitlines() if ln.lstrip().startswith("#")]
+    if len(heads) < 3:
+        return False, (f"only {len(heads)} headings left in a note that has "
+                       "four; the size measure has stopped seeing them")
+    if not any("Index" in ln for ln in heads):
+        return False, "the note's 'Index' heading lost its rank"
+    return True, (f"{len(heads)} real headings kept, the numbered lines left "
+                  "in the prose where they were written")
+
+
+@check("document: a mark in the gutter does not lose the line")
+def _gutter_keeps_the_line():
+    md = note_on("obsidian", "00:08:15", "Mailchimp blob")
+    if "late-night pessimism" not in md:
+        return False, ("the line 'tv folder\") flipped my late-night "
+                       "pessimism: LTV ~$250 ...' is not in the reading; one "
+                       "stray glyph in the gutter took the whole line with it")
+    return True, "the line whose first glyph fell outside the column is in"
+
+
+@check("capture: the burst median never holds the whole film at once")
+def _median_stack():
+    rng = np.random.default_rng(7)
+    for n in (3, 4, 12, 45):
+        frames = [rng.integers(0, 256, (48, 32, 3), dtype=np.uint8)
+                  for _ in range(n)]
+        want = np.median(np.stack(frames).astype(np.float32),
+                         axis=0).astype(np.uint8)
+        if not np.array_equal(want, capture._median_stack(frames)):
+            return False, (f"a burst of {n} frames now stacks to a different "
+                           "picture than it used to")
+    if capture.BAND_ROWS > 512:
+        return False, (f"a band of {capture.BAND_ROWS} rows is most of a "
+                       "frame; the whole point is a bounded working set")
+    return True, ("odd and even bursts stack to the same picture as the "
+                  f"float32 median did, {capture.BAND_ROWS} rows at a time")
+
+
+@check("pipeline: a caption is reported once, not as a tree as well")
+def _drawn_once():
+    caption = {"Everything dollar we make on",
+               "live tonight is going to St. Jude's",
+               "Children's Hospital and I am",
+               "maching it! Give 10,000+ for",
+               "a huge surprise. 1,000 plus for",
+               "a light show."}
+    for pane in regions("july31", "03:18:00"):
+        tree = tree_reader.read_tree(pane)
+        names = [r["name"] for r in tree.get("rows") or []]
+        if not any("St. Jude" in n or "light show" in n for n in names):
+            continue
+        if not tree.get("is_tree"):
+            return True, "the caption pane is not taken for a tree at all"
+        if not pipeline.already_drawn(names, caption):
+            return False, ("the caption came back as a file tree, and the "
+                           "overlay it had already been proved to be did not "
+                           "hold it back")
+        return True, (f"{len(names)} caption lines taken for a tree, held back "
+                      "as text this frame already reported drawn")
+    raise Skip("no pane of the July 31 stream carries the caption")
 
 
 def main():

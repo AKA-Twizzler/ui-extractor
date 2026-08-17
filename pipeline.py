@@ -67,10 +67,41 @@ def guard(what, fn, *args, **kwargs):
         return None
 
 
-def say_pane(pane_path, pi, engine):
+def already_drawn(lines, drawn):
+    """Is this pane just the text that was already proved drawn on the picture.
+
+    A thing is an overlay or it is a pane's own content; it cannot be both,
+    and the record must not say both. On a live stream the caption block --
+    "Everything dollar we make on / live tonight is going to St. Jude's /
+    Children's Hospital and I am ..." -- was proved composited over the room
+    by holding still while the shot moved, printed as that, and then read
+    AGAIN out of the pane underneath it and printed as A FILE TREE. The same
+    six lines, twice, under two labels that contradict each other.
+
+    Which of the two is right is not in doubt. The overlay verdict is proved
+    by behaviour over minutes of film; the tree verdict is a guess from
+    left-aligned lines. So where a pane is mostly text this frame has already
+    accounted for, it is not read again.
+    """
+    said = [ln.strip() for ln in lines if ln.strip()]
+    if not said or not drawn:
+        return False
+    known = sum(1 for ln in said if ln in drawn)
+    return known * 2 > len(said)
+
+
+def say_pane(pane_path, pi, engine, drawn=()):
     """Read one pane every way there is, and print what it turned out to be."""
+    def owned(lines):
+        if not already_drawn(lines, drawn):
+            return False
+        print(f"  [pane {pi}: the text drawn on the picture, reported above]")
+        return True
+
     tree = guard(f"tree reader, pane {pi}", tree_reader.read_tree, pane_path) or {}
     if tree.get("is_tree") and len(tree["rows"]) >= 5:
+        if owned([r["name"] for r in tree["rows"]]):
+            return
         tree = guard(f"second engine, pane {pi}",
                      verify_names.verify, pane_path, tree) or tree
         print(f"  [pane {pi}: a file tree]")
@@ -122,6 +153,8 @@ def say_pane(pane_path, pi, engine):
     # Palencia" -- with one line in eight backed.
     if (note_reader.body_lines(note["markdown"]) >= 3
             and note["backed"] >= note_reader.BACKED):
+        if owned(note["markdown"].splitlines()):
+            return
         print(f"  [pane {pi}: an open document]")
         for line in note["markdown"].splitlines():
             print("    " + line)
@@ -135,7 +168,7 @@ def say_pane(pane_path, pi, engine):
     # without a word: "moonstone.co * 12k", "the tiny gem * 4k", "hearthstone
     # * 15k" simply were not in the answer. Whether a reading is worth
     # anything is what the confirmation below says, and it says it out loud.
-    if not texts:
+    if not texts or owned(texts):
         return
     # nothing else placed this pane, so there is no structure to stand behind
     # the words. Printing them as read is how "R78" came off Jared's
@@ -242,10 +275,15 @@ def main():
         # a screen recording is drawn. Measured: the two frames carrying the
         # banner are 25% and 10% interface, and the two where a fragment of
         # the room crept in are 67% and 100%.
+        # every wording proved drawn at THIS moment, whether or not it is new:
+        # an earlier moment having already reported it does not make it the
+        # pane's own text now -- see already_drawn
+        drawn = set()
         for found in ((guard(f"standing text at {ts}", lambda: overlay.standing_text(
                 overlay.frames_across(video, secs,
                                       workdir=os.path.join(out_dir, "_looks")),
                 engine=engine)) or []) if share < 50 else []):
+            drawn.add(found["text"].strip())
             if found["text"] in standing:
                 continue
             standing.add(found["text"])
@@ -265,7 +303,7 @@ def main():
                 out_dir, f"{ts.replace(':','-')}_pane{pi}.png")
             if write_box(img, box, pane_path) is None:
                 continue
-            say_pane(pane_path, pi, engine)
+            say_pane(pane_path, pi, engine, drawn)
         print()
 
     if STUMBLED:

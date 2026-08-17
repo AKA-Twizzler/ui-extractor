@@ -64,6 +64,7 @@ OVERLAP = 0.6         # two edges bound one panel if they line up this well
 GAP_TO_HEIGHT = 1.2   # a gap wider than the text is tall splits label from value
 FILL_SPREAD = 2.0     # a drawn fill is one value; two levels allows for the codec
 STILLEST = 40         # drawn text is among this stillest share of the picture
+GROUND_SHARE = 0.8    # and it moved at most this much of what its ground did
 SPAN = 600            # seconds the frames judging steadiness are spread over
 LOOKS = 4             # and how many of them
 WINDOW_RUN = 0.08     # a window side runs this far across the frame
@@ -421,10 +422,29 @@ def standing_text(paths, engine=None):
     with it -- lit by the same lamps, moved by the same camera, walked in
     front of by the same person. So the test is a comparison, not a threshold:
 
-        drawn, if the glyphs changed no more than the ground around them,
-        and the glyphs are among the STILLEST TWO FIFTHS of the frame
-        -- and only where the ground changed at all, since nothing is proved
-        by standing still in front of something that also stood still
+        drawn, if the glyphs changed FOUR FIFTHS or less of what the ground
+        around them changed, and the glyphs are among the STILLEST TWO FIFTHS
+        of the frame -- and only where the ground changed at all, since
+        nothing is proved by standing still in front of something that also
+        stood still
+
+    "No more than the ground" was the first form of the first line and it was
+    too weak by a hair. Text painted on a thing in the room moves with that
+    thing: the room is lit, the camera breathes, the compressor works, and the
+    printing and the surface it is printed on take all of it together. So the
+    sticker's glyphs change almost exactly as much as the shelf behind them --
+    not more, which is all the old test asked. Measured across two streams,
+    two talking heads and a caption block:
+
+        drawn   0.32  0.32  0.36  0.36  0.56  0.62  0.64  0.65
+        room    0.90  0.94  0.95  0.97  0.97  1.00
+
+    where the number is the glyphs' change over the ground's. Everything
+    composited sits at two thirds or less; everything photographed sits at
+    nine tenths or more; and four fifths is the middle of the gap, with the
+    same room to spare on either side. That closed a monitor bezel reading
+    WQHD and the lettering on Jared's cap reading Hat, both of which the old
+    form admitted as text drawn on the picture at 0.97.
 
     The second line is the one that costs to leave out, and it was left out.
     Comparing the glyphs only against their own ground says nothing about how
@@ -500,7 +520,7 @@ def standing_text(paths, engine=None):
         here = change[y0:y1, x0:x1]
         glyphs = float(np.median(here[ink]))
         ground = float(np.median(here[~ink]))
-        if ground <= still or glyphs > ground or glyphs > moving:
+        if ground <= still or glyphs > ground * GROUND_SHARE or glyphs > moving:
             continue
         out.append({"text": text.strip(), "box": (x0, y0, x1, y1),
                     "glyphs": glyphs, "ground": ground})

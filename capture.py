@@ -63,6 +63,49 @@ def _slug(ts):
 MOVED_ON = 6           # how many bursts forward a damaged patch may be stepped over
 
 
+BAND_ROWS = 256           # rows of the frame the median is taken over at once
+
+
+def _median_stack(frames):
+    """The per-pixel median of a burst, taken a band of rows at a time.
+
+    The answer is the same to the byte; only the room it needs is different,
+    and the room was the whole problem. Written as
+    np.median(np.stack(frames).astype(np.float32), axis=0), a burst of 44
+    frames at 3840x2160 costs
+
+        the stack, as bytes                 1.1 GB
+        cast to float32                     4.4 GB
+        the median's own partition copy     4.4 GB
+                                           -------
+                                            9.9 GB at the peak
+
+    which is what a sweep was measured holding, and what an earlier run died
+    of with ONNX's 'bad allocation'. Nothing about a median of bytes needs
+    floating point: partition keeps the frames' own dtype, and answering one
+    band of rows at a time keeps the working set the size of the band instead
+    of the size of the film. The same 44 frames now cost 260 MB.
+
+    Bit-identical to what it replaces. For an odd count the middle value is
+    the middle value either way; for an even count the old code averaged the
+    two middle values as floats and truncated to uint8, and integer division
+    of two non-negative bytes floors to the same number.
+    """
+    n = len(frames)
+    mid = n // 2
+    out = np.empty_like(frames[0])
+    for y in range(0, frames[0].shape[0], BAND_ROWS):
+        y1 = min(frames[0].shape[0], y + BAND_ROWS)
+        band = np.stack([f[y:y1] for f in frames])
+        if n % 2:
+            out[y:y1] = np.partition(band, mid, axis=0)[mid]
+        else:
+            part = np.partition(band, [mid - 1, mid], axis=0)
+            out[y:y1] = ((part[mid - 1].astype(np.uint16) + part[mid]) // 2
+                         ).astype(np.uint8)
+    return out
+
+
 def capture_moment(video, timestamp, out_dir, seconds=BURST_SECONDS):
     """Return (path, how) for one moment: how is 'stacked' or 'sharpest'.
 
@@ -115,7 +158,7 @@ def capture_moment(video, timestamp, out_dir, seconds=BURST_SECONDS):
                  for a, b in zip(grays, grays[1:])]
         still = (max(moves) < STILL_THRESHOLD) if moves else True
         if still and len(frames) >= 3:
-            out = np.median(np.stack(frames).astype(np.float32), axis=0).astype(np.uint8)
+            out = _median_stack(frames)
             how = f"stacked {len(frames)} still frames"
         else:
             sharp = [cv2.Laplacian(g, cv2.CV_64F).var() for g in grays]
