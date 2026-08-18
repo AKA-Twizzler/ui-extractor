@@ -38,7 +38,18 @@ import numpy as np
 import note_reader
 import machine
 
-MIN_BAND = 3          # a band narrower than this many spaces is not a column
+# A band narrower than this many spaces is not a column -- and lowering it
+# to two was tried, measured, and thrown away. Three is wider than Finder
+# actually draws (the name-date gap on one window is 2.3-2.8 spaces, so that
+# table falls into two blocks on a hair), and at two that one window reads
+# perfectly: one table, four columns, every value under its heading. But on
+# a WIDER crop of the same window the extra hairline corridors shatter the
+# table instead -- blocks are ranked most-columns-first, so 2-3 row
+# fragments with six phantom columns outrank the sixteen-row table, and it
+# came back headed by one of its own files. Two frames that read correctly
+# went wrong to improve one that was merely imperfect. A two-block reading
+# loses some pairing; a data-headed table states a falsehood; three stays.
+MIN_BAND = 3
 MIN_ROWS = 3          # a table is a heading and at least two rows
 
 
@@ -187,25 +198,55 @@ def cells_in_bands(row, bands, tess_words=None):
     out = ["" for _ in bands]
     flags = [None for _ in bands]
     box = [None for _ in bands]
+
+    def place(i, c):
+        text, status = c["text"], "single"
+        if tess_words is not None:
+            other = second_reading(row, c, tess_words)
+            if other:
+                from verify_names import reconcile
+                text, status = reconcile(c["text"], other)
+        out[i] = (out[i] + " " + text).strip()
+        if box[i] is None:
+            box[i] = [c["x0"], c["x1"]]
+        else:
+            box[i][0] = min(box[i][0], c["x0"])
+            box[i][1] = max(box[i][1], c["x1"])
+        if status not in ("confident", "reconciled", "single"):
+            flags[i] = status
+
+    strays = []
     for c in row["cells"]:
         mid = (c["x0"] + c["x1"]) // 2
         for i, (a, b) in enumerate(bands):
             if a <= mid < b:
-                text, status = c["text"], "single"
-                if tess_words is not None:
-                    other = second_reading(row, c, tess_words)
-                    if other:
-                        from verify_names import reconcile
-                        text, status = reconcile(c["text"], other)
-                out[i] = (out[i] + " " + text).strip()
-                if box[i] is None:
-                    box[i] = [c["x0"], c["x1"]]
-                else:
-                    box[i][0] = min(box[i][0], c["x0"])
-                    box[i][1] = max(box[i][1], c["x1"])
-                if status not in ("confident", "reconciled", "single"):
-                    flags[i] = status
+                place(i, c)
                 break
+        else:
+            strays.append(c)
+    # A cell can fall BETWEEN two kept bands. The caller drops a band that is
+    # blank on every data row, and a Finder header's "Size" -- left-aligned
+    # over the values its column right-aligns -- lived in exactly that band,
+    # so the table came back headed by its first file. Geometry cannot say
+    # which neighbour owns such a cell: it aligns with neither. Consistency
+    # can. It joins the one adjacent band that is EMPTY on its own row, and
+    # only when exactly one is -- both empty is ambiguity, both full is a row
+    # that does not fit. Cells outside the outermost bands are never adopted,
+    # which is how webcam scraps beside a table stay out of it.
+    for c in strays:
+        mid = (c["x0"] + c["x1"]) // 2
+        if not bands or mid < bands[0][0] or mid >= bands[-1][1]:
+            continue
+        pair = None
+        for i in range(len(bands) - 1):
+            if bands[i][1] <= mid < bands[i + 1][0]:
+                pair = (i, i + 1)
+                break
+        if pair is None:
+            continue
+        empties = [i for i in pair if not out[i]]
+        if len(empties) == 1:
+            place(empties[0], c)
     return out, flags, box
 
 
@@ -414,8 +455,14 @@ def read_list(png_path):
         if len(keep) < 2:
             continue
         bands = [bands[i] for i in keep]
-        table = [[row[i] for i in keep] for row in table]
-        flagged = [[row[i] for i in keep] for row in flagged]
+        # placed again rather than filtered: a cell whose band was dropped
+        # falls between the kept ones, and cells_in_bands can now adopt it
+        # into the neighbour its own row leaves empty -- see the rule there
+        table, flagged = [], []
+        for r in block_rows:
+            vals, flags, _ = cells_in_bands(r, bands, tess_words)
+            table.append(vals)
+            flagged.append(flags)
         # The header is the first row that fills every column -- and there
         # must BE one. A set of columns nothing spans is not a table: it is
         # prose with a ragged edge, and text found on a webcam inset beside
