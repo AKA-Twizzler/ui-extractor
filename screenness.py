@@ -26,6 +26,19 @@ The measurement, and why it is this one:
 The frame is scored in a grid of cells, so a screen recording with a webcam
 bubble, or a phone video with a caption bar, reports which PARTS are interface
 instead of one blurred average that is right about neither.
+
+The grid's coarseness is LOAD-BEARING, and this was measured after three
+separate fixes built on finer regions had failed. Scoring the tie map at
+pixel level (box filters of 25, 41 and 61) the measure inverts: a macOS
+window is translucent, so the photographic wallpaper bleeds through and the
+Finder window itself scores as camera (median 0.31, barely a fifth of it
+above the line); a dim compressed room scores as screen (half of it above
+the line); and a banner's own glyphs over moving video score 0.03. Averaged
+over big cells those errors cancel and the groups separate; at fine scale
+they do not. So a finer grid is not the fix for what this module gets wrong
+on a wallpapered desktop -- the fixes that worked are geometric and live
+where they are used: drawn windows (overlay.windows) gate standing text and
+panels, and moving zones (overlay.moving_zones) find the webcam inset.
 """
 import cv2
 import numpy as np

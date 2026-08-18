@@ -90,8 +90,14 @@ def already_drawn(lines, drawn):
     return known * 2 > len(said)
 
 
-def say_pane(pane_path, pi, engine, drawn=()):
-    """Read one pane every way there is, and print what it turned out to be."""
+def say_pane(pane_path, pi, engine, drawn=(), camera=None):
+    """Read one pane every way there is, and print what it turned out to be.
+
+    `camera`, when given, takes the recogniser's boxes and answers which of
+    them sit over moving video -- the webcam inset composited onto the screen.
+    Only the loose-text fallback asks; a pane a real reader claims is read as
+    what it is.
+    """
     def owned(lines):
         if not already_drawn(lines, drawn):
             return False
@@ -161,6 +167,17 @@ def say_pane(pane_path, pi, engine, drawn=()):
         return True
     res, _ = engine(pane_path)
     texts = [t for _, t, _ in (res or [])]
+    # Words over the webcam inset are not the screen's text -- the cap's
+    # "Hat", the microphone's "fifine" -- and they used to enter the record
+    # beside the real readings, marked unconfirmed but never placed. They are
+    # split out and reported under their own truthful label, not dropped.
+    video_words = []
+    if camera and res:
+        over = guard(f"camera zones, pane {pi}",
+                     camera, [b for b, _, _ in res]) or []
+        video_words = [t for t, v in zip(texts, over) if v][:16]
+        if video_words:
+            texts = [t for t, v in zip(texts, over) if not v]
     # Nothing is dropped for being short. This used to skip any pane with
     # fewer than four readings, which is silent loss -- the worst kind,
     # because the output looks complete. On a slide of nine cards split into
@@ -169,6 +186,11 @@ def say_pane(pane_path, pi, engine, drawn=()):
     # * 15k" simply were not in the answer. Whether a reading is worth
     # anything is what the confirmation below says, and it says it out loud.
     if not texts:
+        if video_words:
+            print(f"  [pane {pi}: only the presenter's camera]")
+            print("    [over moving video, not the screen's own text] "
+                  + " | ".join(video_words))
+            return True
         return False           # nothing on it; the caller says so, once
     if owned(texts):
         return True
@@ -188,6 +210,9 @@ def say_pane(pane_path, pi, engine, drawn=()):
         print("    " + " | ".join(sure))
     if doubt:
         print("    [only one engine read these] " + " | ".join(doubt))
+    if video_words:
+        print("    [over moving video, not the screen's own text] "
+              + " | ".join(video_words))
     return True
 
 
@@ -252,11 +277,13 @@ def main():
         # A panel is a rectangle floating over video, so it belongs to no pane
         # and splitting the frame would cut it in half.
         # Only the panels floating over VIDEO -- see overlay.floating, which
-        # owns that question and says why.
+        # owns that question and says why. The frame's drawn windows go along:
+        # a panel inside a clearly larger window is the window's own furniture.
+        wins = guard(f"windows at {ts}", overlay.windows, img) or []
         for panel in overlay.floating(
                 (guard(f"panel reader at {ts}", overlay.read_overlays,
                        path, engine) or {"panels": []})["panels"],
-                regions, img.shape[1], screenness.WORK_WIDTH):
+                regions, img.shape[1], screenness.WORK_WIDTH, wins):
             print("  [a panel drawn on the picture]")
             unsettled = set(panel.get("unsettled") or [])
             if panel["label"] and not unsettled:
@@ -311,6 +338,27 @@ def main():
             print("    no readable interface at full size\n")
             continue
 
+        # The webcam inset is the one part of a screen that is not the
+        # screen. Where it is comes from the stretch -- overlay.moving_zones,
+        # which says why and when it refuses -- computed once per frame and
+        # only when a pane's loose text actually asks; most panes never do.
+        # Text inside a drawn window is never the inset's, however it moved.
+        zone_state = {}
+
+        def over_video(cx, cy):
+            if any(a <= cx < c and b <= cy < d for a, b, c, d in wins):
+                return False
+            if "z" not in zone_state:
+                looks = overlay.frames_across(
+                    video, secs, span=overlay.ZONE_SPAN,
+                    looks=overlay.ZONE_LOOKS,
+                    workdir=os.path.join(out_dir, "_zones"))
+                got = guard(f"camera zones at {ts}",
+                            overlay.moving_zones, looks)
+                zone_state["z"] = got[0] if got else []
+            return any(a <= cx < c and b <= cy < d
+                       for a, b, c, d in zone_state["z"])
+
         # the frame's windows first, each split into ITS panes, and then the
         # desktop no window covers -- a frame holding one window comes back
         # exactly as it did when this only cut vertical strips
@@ -326,10 +374,23 @@ def main():
                                        img, engine=engine) or []):
             pane_path = os.path.join(
                 out_dir, f"{ts.replace(':','-')}_pane{pi}.png")
-            if write_box(img, box, pane_path) is None:
+            crop = write_box(img, box, pane_path)
+            if crop is None:
                 unwritten.append(pi)
                 continue
-            if not say_pane(pane_path, pi, engine, drawn):
+
+            def camera(quads, box=box,
+                       scale=crop.shape[1] / max(1, box[2] - box[0])):
+                out = []
+                for q in quads:
+                    xs = [p[0] for p in q]
+                    ys = [p[1] for p in q]
+                    out.append(over_video(
+                        box[0] + (min(xs) + max(xs)) / 2 / scale,
+                        box[1] + (min(ys) + max(ys)) / 2 / scale))
+                return out
+
+            if not say_pane(pane_path, pi, engine, drawn, camera):
                 quiet.append(pi)
         if quiet:
             print(f"  [panes {', '.join(map(str, quiet))}: looked at, "

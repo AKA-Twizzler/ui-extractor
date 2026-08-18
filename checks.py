@@ -518,7 +518,8 @@ def _panel_over_interface():
         img = cv2.imread(frame(key, stamp))
         pans = overlay.read_overlays(frame(key, stamp), engine())["panels"]
         left = overlay.floating(pans, screenness.ui_regions(img, engine()),
-                                img.shape[1], screenness.WORK_WIDTH)
+                                img.shape[1], screenness.WORK_WIDTH,
+                                overlay.windows(img))
         if len(left) != len(pans) or not left:
             return False, (f"{what}: {len(left)} of {len(pans)} panels kept; "
                            "they float over a room")
@@ -526,7 +527,8 @@ def _panel_over_interface():
     img = cv2.imread(frame("jarvis", "00:02:00"))
     pans = overlay.read_overlays(frame("jarvis", "00:02:00"), engine())["panels"]
     left = overlay.floating(pans, screenness.ui_regions(img, engine()),
-                            img.shape[1], screenness.WORK_WIDTH)
+                            img.shape[1], screenness.WORK_WIDTH,
+                            overlay.windows(img))
     if left:
         return False, (f"{len(left)} of {len(pans)} panels on a desktop that "
                        f"is all interface: {[p['lines'][0][:30] for p in left]}")

@@ -56,6 +56,7 @@ import numpy as np
 
 import note_reader
 import machine
+import verify_names
 
 RUN = 0.04            # an edge runs this far across the frame to count
 MIN_SIDE = 40         # and a panel is at least this many pixels each way
@@ -289,7 +290,7 @@ def read_overlays(png_path, engine=None):
     return {"panels": out}
 
 
-def floating(panels, regions, width, work_width):
+def floating(panels, regions, width, work_width, wins=()):
     """Of these panels, the ones floating over VIDEO rather than over interface.
 
     A panel is a rectangle drawn on top of the picture. Where its middle sits
@@ -302,6 +303,15 @@ def floating(panels, regions, width, work_width):
 
     `regions` are screenness boxes, measured at the working width, so they are
     scaled back to the frame's own pixels before anything is compared.
+
+    `wins` are drawn windows in the frame's own pixels, and they answer where
+    the screenness boxes cannot. A desktop over a photographic wallpaper
+    measures a few percent interface, so a Finder window's header band came
+    back "a panel drawn on the picture" reading "Name: Date Modified v Size
+    Kind" -- inside a window whose four sides are right there on the frame. A
+    panel whose middle sits inside a CLEARLY LARGER window is that window's
+    own furniture. Clearly larger matters: a donation card is itself a
+    four-sided rectangle, so a window that IS the panel must not swallow it.
     """
     back = width / work_width
     boxes = [tuple(int(v * back) for v in r["box"]) for r in regions]
@@ -309,8 +319,14 @@ def floating(panels, regions, width, work_width):
     for panel in panels:
         x0, y0, x1, y1 = panel["box"]
         cx, cy = (x0 + x1) // 2, (y0 + y1) // 2
-        if not any(a <= cx < c and b <= cy < d for a, b, c, d in boxes):
-            out.append(panel)
+        if any(a <= cx < c and b <= cy < d for a, b, c, d in boxes):
+            continue
+        area = max(1, (x1 - x0) * (y1 - y0))
+        if any(a <= cx < c and b <= cy < d
+               and (c - a) * (d - b) >= 2 * area
+               for a, b, c, d in wins):
+            continue
+        out.append(panel)
     return out
 
 
@@ -379,6 +395,78 @@ def windows(bgr, run=WINDOW_RUN, min_side=WINDOW_SIDE):
             kept.append(box)
     kept.sort(key=lambda b: (b[0], b[1]))
     return kept
+
+
+ZONE_SPAN = 24         # seconds the zone looks are spread over: inside one screen
+ZONE_LOOKS = 6         # and how many of them
+ZONE_STEP = 8          # a pixel changed when it moved more than codec noise
+ZONE_EVERY = 0.5       # video moves in at least this share of the steps
+ZONE_BLOB = 0.001      # a zone is at least this share of the frame
+ZONE_QUIET = 0.15      # more of the frame moving than this is a busy screen
+
+
+def moving_zones(paths, work_width=1280):
+    """Where the picture moved at every step while the screen stood still.
+
+    A webcam inset is the one part of a screen recording that is not the
+    screen: live video, composited at a fixed spot. Its words -- the cap, the
+    printing on the microphone -- read exactly like screen text on any single
+    frame, and measured they cannot be told apart there: the words' own tie
+    fractions overlap (a frosted dialog's prose scored 0.32 against the cap's
+    0.28), and within a capture burst a rigid microphone moves less than a
+    dialog animating in (0.00 against 0.12).
+
+    What separates them is the stretch: frames a few seconds apart, spanning
+    ~24s of one screen. Video differs at nearly every step; a screen changes
+    only when something happens. Measured at working width, share of pixels
+    changing in half the steps or more:
+
+        a desktop, terminal streaming     3.4%   one blob, and it IS the inset
+        a full-screen Obsidian            1.1%   one blob, its inset
+        a desktop mid-interaction        26.8%   dialog opening, windows moved
+        a live stream                    48.6%   the room, which IS video
+
+    The first two are the only shape this claims anything on: a small moving
+    minority against a still screen, where outside the blob the change is
+    zero to the pixel. A busy screen is refused out loud -- on it, motion
+    cannot say what is camera, and a wrong "over video" label is worse than
+    the unconfirmed mark those words already carry.
+
+    Returns (zones, why): boxes in the shots' own pixels, or ([], reason).
+    """
+    shots = [cv2.imread(p) for p in paths]
+    shots = [s for s in shots if s is not None]
+    if len(shots) < 4 or len({s.shape for s in shots}) != 1:
+        return [], "not enough matching looks across the stretch"
+    native_w = shots[0].shape[1]
+    small = []
+    for s in shots:
+        h = int(s.shape[0] * work_width / s.shape[1])
+        small.append(cv2.resize(s, (work_width, h),
+                                interpolation=cv2.INTER_AREA).astype(np.int16))
+    moved = np.zeros(small[0].shape[:2], np.int32)
+    for a, b in zip(small, small[1:]):
+        moved += (np.abs(a - b).max(axis=2) > ZONE_STEP).astype(np.int32)
+    frac = moved / float(len(small) - 1)
+    mask = (frac >= ZONE_EVERY).astype(np.uint8)
+    share = float(mask.mean())
+    if share > ZONE_QUIET:
+        return [], (f"{share*100:.0f}% of the frame moved across the "
+                    "stretch; a busy screen, nothing claimed")
+    h, w = mask.shape
+    n, _labels, stats, _ = cv2.connectedComponentsWithStats(mask)
+    back = native_w / float(work_width)
+    zones = []
+    for i in range(1, n):
+        if stats[i, 4] < ZONE_BLOB * h * w:
+            continue
+        zones.append(tuple(int(v * back) for v in
+                           (stats[i, 0], stats[i, 1],
+                            stats[i, 0] + stats[i, 2],
+                            stats[i, 1] + stats[i, 3])))
+    if not zones:
+        return [], "nothing on this stretch moves like video"
+    return zones, f"{len(zones)} zone(s), {share*100:.1f}% of the frame moving"
 
 
 def frames_across(video, at, span=SPAN, looks=LOOKS, workdir=None):
@@ -472,6 +560,25 @@ def standing_text(paths, engine=None):
     interface. The two frames carrying the banner are 25% and 10% interface;
     the two where the room crept in are 67% and 100%. The caller holds that
     share, so the caller holds the gate -- see pipeline.py.
+
+    Two more rules, both learned from one desktop. A screen recording of a
+    desktop over a photographic wallpaper measures 15% interface, so the gate
+    above let it through -- and the whole test degenerates there, because
+    between looks ten minutes apart the SCREEN switches content entirely.
+    Measured on that frame: even the stillest quarter of the picture changed
+    by 70 grey levels, and four strings out of ~140 candidates passed anyway
+    -- "Size", "Locations", a screenshot's date, the cap of the presenter's
+    webcam reading "Har" -- purely because other content later put similar
+    pixels where their glyphs stood. Chance survivors, not overlays. So:
+
+      text whose box sits inside a WINDOW drawn on the frame is that window's
+      own chrome, whatever its pixels did -- the pane readers own it;
+
+      and what is claimed as standing must be READ, at its own spot, in EVERY
+      look. A real overlay held still, so by definition it is legible in each;
+      a chance survivor's spot holds whatever screen was up at that moment.
+      That is a confirmation in this build's usual sense, not a threshold --
+      the same containment rule confirm_readings runs on.
     """
     if len(paths) < 3:
         return []
@@ -506,6 +613,7 @@ def standing_text(paths, engine=None):
         from rapidocr_onnxruntime import RapidOCR
         engine = RapidOCR()
     res, _ = engine(paths[0])
+    wins = windows(shots[0]) if res else []
     out = []
     for box, text, _conf in (res or []):
         x0 = int(min(q[0] for q in box)); x1 = int(max(q[0] for q in box))
@@ -521,9 +629,45 @@ def standing_text(paths, engine=None):
         ground = float(np.median(here[~ink]))
         if ground <= still or glyphs > ground * GROUND_SHARE or glyphs > moving:
             continue
+        if any(a <= (x0 + x1) // 2 < c and b <= (y0 + y1) // 2 < d
+               for a, b, c, d in wins):
+            continue
+        if not _looks_carry(shots, engine, (x0, y0, x1, y1), text):
+            continue
         out.append({"text": text.strip(), "box": (x0, y0, x1, y1),
                     "glyphs": glyphs, "ground": ground})
     return out
+
+
+def _looks_carry(shots, engine, box, text):
+    """Is this text readable at its own spot in EVERY look?
+
+    The pixel test above says the spot was quiet; this says the words were
+    actually THERE each time, which is what quiet has to mean for an overlay.
+    Presence is judged the way confirm_readings judges agreement: the reading's
+    letters and digits, in order, inside what was read at that spot -- or most
+    of its words, when the recogniser broke the line differently.
+    """
+    want = verify_names._flat(text)
+    if len(want) < 3:
+        return False
+    words = verify_names._terms(text)
+    x0, y0, x1, y1 = box
+    grow = max(8, y1 - y0)
+    for shot in shots[1:]:
+        h, w = shot.shape[:2]
+        crop = shot[max(0, y0 - grow):min(h, y1 + grow),
+                    max(0, x0 - grow):min(w, x1 + grow)]
+        if crop.size == 0:
+            return False
+        res, _ = engine(crop)
+        got = verify_names._flat(" ".join(t for _, t, _ in (res or [])))
+        if want in got:
+            continue
+        if words and sum(1 for t in words if t in got) * 2 >= len(words):
+            continue
+        return False
+    return True
 
 
 def render(res):
