@@ -122,13 +122,27 @@ def enlarge(img, times=3):
     could tell you about. A threshold with no gap beneath it is a bug waiting
     for its frame, so there is no threshold here.
 
-    What would be right is to ask the picture instead of the machine: the
-    enlargement a reader needs is set by the stroke it has to measure, so
-    measure the stroke and enlarge until it can be measured. Done that way the
-    splitter's head start stops mattering, because the answer comes out the
-    same whether the pane arrived widened or not. That is the fix, and it is
-    named here rather than half-done: this function does exactly what the
-    eight call sites did, and the memory stands as measured above.
+    Asking the picture was tried too, and it is refused with harder numbers.
+    "Measure the stroke and enlarge until it can be measured" sounds like the
+    principled form -- measured across the 505 stored panes it would read 446
+    at one, 20 at two and 39 at three, and cut the pixels handed to the
+    readers from 15,811 million to 2,542 million. Built and run against the
+    suite, TEN of forty stages fail. The premise is wrong: a stroke a
+    MEASUREMENT can resolve at six pixels is nowhere near what the second
+    engine needs to read. With the enlargement cut, tesseract's confirmations
+    collapse -- a real note fell from 0.84 backed to 0.31, another to 0.55
+    against a gate of 0.67 -- the terminal lattice loses its pitch (0.28 of a
+    pitch off a whole multiple, refused), the chat log loses its colours, the
+    Finder table drops to 4 rows of 16. Every reader is calibrated to the
+    world times-three produces, and the engines keep gaining accuracy well
+    past the point where a stroke is merely measurable.
+
+    Two refusals now close this family: a ceiling by pixels and a ceiling by
+    stroke both trade readings for memory, and readings are the standard. The
+    peak stands as measured above, as the price of the accuracy bar. If the
+    peak must ever come down, the honest route is engineering the PEAK --
+    reading the enlarged picture in bands, or freeing this copy before the
+    second engine takes the file -- never handing the readers fewer pixels.
     """
     import cv2
     h, w = img.shape[:2]
