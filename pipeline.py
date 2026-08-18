@@ -8,6 +8,7 @@ it can from each: the file tree where there is one, the text where there is
 not. Everything it cannot settle is reported as unsettled rather than guessed.
 """
 import os
+import re
 import sys
 
 import cv2
@@ -42,8 +43,20 @@ write_box = panes.write_box
 # the end instead of looking clean.
 STUMBLED = []
 
+# What is drawn at twice a pane's own median glyph height is drawn LARGE,
+# and the record says so -- size is layout, and a title is a title because
+# of its size. Two sits in a measured gap: across 21 stored panes, body
+# text, menus and table rows topped out at 1.5, slide titles reached 1.7 to
+# 1.9, and the readings a person calls large without thinking -- a
+# dashboard's dollar figures -- sat at 2.2 to 2.6, with nothing between
+# 1.85 and 2.18. So a 1.8x slide title is deliberately not claimed: an
+# under-claim, never a wrong one. Claimed only where the pane holds at
+# least four readings to take a median of, and only for readings the other
+# engine confirmed.
+LARGE = 2.0
 
-def guard(what, fn, *args, **kwargs):
+
+def guard(what, fn, *args, sink=None, **kwargs):
     """Run one reader, and never let it end the run.
 
     A pass over the whole library is tens of thousands of panes, and one of
@@ -56,14 +69,19 @@ def guard(what, fn, *args, **kwargs):
     and the count is repeated at the end. Nothing is swallowed: a failure is
     printed where the reading would have been, which is the same rule the rest
     of this build runs on -- refuse out loud rather than return a guess or
-    return nothing.
+    return nothing. A caller assembling its output later passes `sink`, and
+    the failure line lands in the record it belongs to instead of mid-stream.
     """
     try:
         return fn(*args, **kwargs)
     except Exception as why:
         note = f"{what}: {type(why).__name__}: {why}"
         STUMBLED.append(note)
-        print(f"    [this reader fell over and the run went on -- {note}]")
+        line = f"[this reader fell over and the run went on -- {note}]"
+        if sink is not None:
+            sink.append(line)
+        else:
+            print("    " + line)
         return None
 
 
@@ -91,65 +109,70 @@ def already_drawn(lines, drawn):
 
 
 def say_pane(pane_path, pi, engine, drawn=(), camera=None):
-    """Read one pane every way there is, and print what it turned out to be.
+    """Read one pane every way there is, and say what it turned out to be.
+
+    Returns a record -- the pane's number, what it is, and its lines -- so
+    compose() can put it under the window that holds it and name where it
+    sits. None means nothing readable on it; the caller says so, once. The
+    readings themselves are exactly what the readers rendered; assembly
+    never rewrites a line, it only places it.
 
     `camera`, when given, takes the recogniser's boxes and answers which of
     them sit over moving video -- the webcam inset composited onto the screen.
     Only the loose-text fallback asks; a pane a real reader claims is read as
     what it is.
     """
+    notes = []
+
+    def record(kind, lines):
+        return {"pi": pi, "kind": kind, "lines": lines, "notes": notes}
+
     def owned(lines):
         if not already_drawn(lines, drawn):
-            return False
-        print(f"  [pane {pi}: the text drawn on the picture, reported above]")
-        return True
+            return None
+        return record("the text drawn on the picture, reported above", [])
 
-    tree = guard(f"tree reader, pane {pi}", tree_reader.read_tree, pane_path) or {}
+    tree = guard(f"tree reader, pane {pi}", tree_reader.read_tree, pane_path,
+                 sink=notes) or {}
     if tree.get("is_tree") and len(tree["rows"]) >= 5:
-        if owned([r["name"] for r in tree["rows"]]):
-            return True
+        got = owned([r["name"] for r in tree["rows"]])
+        if got:
+            return got
         tree = guard(f"second engine, pane {pi}",
-                     verify_names.verify, pane_path, tree) or tree
-        print(f"  [pane {pi}: a file tree]")
-        print(tree_reader.render(tree))
+                     verify_names.verify, pane_path, tree, sink=notes) or tree
+        lines = tree_reader.render(tree).splitlines()
         flagged = [x for x in tree["rows"]
                    if x.get("name_status") not in ("confident", "reconciled")]
         if flagged:
-            print("    unsettled: " + "; ".join(
+            lines.append("  unsettled: " + "; ".join(
                 f"{x.get('name_primary')!r}/{x.get('name_second')!r}"
                 for x in flagged))
-        return True
+        return record("a file tree", lines)
     # a terminal first: it is the one screen that proves itself, since nothing
     # else sets every character on one width, and read as anything else it
     # loses the split between what Jared typed and what came back -- which is
     # most of what it says
     term = guard(f"terminal reader, pane {pi}",
-                 console_reader.read_console, pane_path) or {}
+                 console_reader.read_console, pane_path, sink=notes) or {}
     if term.get("is_console"):
-        print(f"  [pane {pi}: a terminal]")
-        for line in console_reader.render(term).splitlines():
-            print("    " + line)
-        return True
+        return record("a terminal", console_reader.render(term).splitlines())
     # not a tree: a column view before a document, since a table read as prose
     # loses the pairing of value to heading
-    lst = guard(f"columns reader, pane {pi}", columns.read_list, pane_path) or {}
+    lst = guard(f"columns reader, pane {pi}", columns.read_list, pane_path,
+                sink=notes) or {}
     if lst.get("is_list"):
-        print(f"  [pane {pi}: a list of columns]")
-        for line in columns.render(lst).splitlines():
-            print("    " + line)
-        return True
+        return record("a list of columns", columns.render(lst).splitlines())
     # a live stream's chat log, before the document reader, which would
     # otherwise take it for prose and lose who said what
     chat = guard(f"chat reader, pane {pi}",
-                 chat_reader.read_chat, pane_path, engine=engine) or {}
+                 chat_reader.read_chat, pane_path, engine=engine,
+                 sink=notes) or {}
     if chat.get("is_chat"):
-        print(f"  [pane {pi}: a chat log]")
-        for line in chat_reader.render(chat).splitlines():
-            print("    " + line)
-        return True
+        return record("a chat log", chat_reader.render(chat).splitlines())
     # a document: the words AND the shape
     note = guard(f"document reader, pane {pi}",
-                 note_reader.read_note, pane_path) or {"markdown": "", "backed": 0}
+                 note_reader.read_note, pane_path,
+                 sink=notes) or {"markdown": "", "backed": 0}
     # lines of TEXT, not lines of output: the fences round a properties block
     # are structure the reader emits, so counting them lets two garbled words
     # come back as a document. And enough of those lines must be lines the
@@ -159,14 +182,15 @@ def say_pane(pane_path, pi, engine, drawn=(), camera=None):
     # Palencia" -- with one line in eight backed.
     if (note_reader.body_lines(note["markdown"]) >= 3
             and note["backed"] >= note_reader.BACKED):
-        if owned(note["markdown"].splitlines()):
-            return True
-        print(f"  [pane {pi}: an open document]")
-        for line in note["markdown"].splitlines():
-            print("    " + line)
-        return True
+        got = owned(note["markdown"].splitlines())
+        if got:
+            return got
+        return record("an open document", note["markdown"].splitlines())
     res, _ = engine(pane_path)
     texts = [t for _, t, _ in (res or [])]
+    # each reading's own glyph height rides along, for the LARGE mark below
+    heights = [max(p[1] for p in b) - min(p[1] for p in b)
+               for b, _, _ in (res or [])]
     # Words over the webcam inset are not the screen's text -- the cap's
     # "Hat", the microphone's "fifine" -- and they used to enter the record
     # beside the real readings, marked unconfirmed but never placed. They are
@@ -174,10 +198,11 @@ def say_pane(pane_path, pi, engine, drawn=(), camera=None):
     video_words = []
     if camera and res:
         over = guard(f"camera zones, pane {pi}",
-                     camera, [b for b, _, _ in res]) or []
+                     camera, [b for b, _, _ in res], sink=notes) or []
         video_words = [t for t, v in zip(texts, over) if v][:16]
         if video_words:
             texts = [t for t, v in zip(texts, over) if not v]
+            heights = [h for h, v in zip(heights, over) if not v]
     # Nothing is dropped for being short. This used to skip any pane with
     # fewer than four readings, which is silent loss -- the worst kind,
     # because the output looks complete. On a slide of nine cards split into
@@ -187,34 +212,216 @@ def say_pane(pane_path, pi, engine, drawn=(), camera=None):
     # anything is what the confirmation below says, and it says it out loud.
     if not texts:
         if video_words:
-            print(f"  [pane {pi}: only moving video on it]")
-            print("    [these sit over moving video] "
-                  + " | ".join(video_words))
-            return True
-        return False           # nothing on it; the caller says so, once
-    if owned(texts):
-        return True
+            return record("only moving video on it",
+                          ["[these sit over moving video] "
+                           + " | ".join(video_words)])
+        return None            # nothing on it; the caller says so, once
+    got = owned(texts)
+    if got:
+        return got
     # nothing else placed this pane, so there is no structure to stand behind
     # the words. Printing them as read is how "R78" came off Jared's
     # visualizer -- three faint marks one engine calls R78 and the other calls
     # Ris. The rule this build runs on is that a string enters the record only
     # when the instruments confirm it, so say which ones did.
     marked = guard(f"confirmation, pane {pi}",
-                   verify_names.confirm_readings, pane_path, texts[:16])
+                   verify_names.confirm_readings, pane_path, texts[:16],
+                   sink=notes)
     if marked is None:
         marked = [(t, False) for t in texts[:16]]
-    sure = [t for t, ok in marked if ok]
+    # confirm_readings answers in input order, so heights still line up
+    med = sorted(heights)[len(heights) // 2] if len(heights) >= 4 else 0
+    big = [t for (t, ok), h in zip(marked, heights)
+           if ok and med and h >= LARGE * med]
+    sure = [t for (t, ok), h in zip(marked, heights)
+            if ok and not (med and h >= LARGE * med)]
     doubt = [t for t, ok in marked if not ok]
-    print(f"  [pane {pi}: text, not a tree]")
+    lines = []
+    if big:
+        lines.append("[drawn large] " + " | ".join(big))
     if sure:
-        print("    " + " | ".join(sure))
+        lines.append(" | ".join(sure))
     if doubt:
-        print("    [only one engine read these] " + " | ".join(doubt))
+        lines.append("[only one engine read these] " + " | ".join(doubt))
     # "sit over" is the whole claim, chosen against the stronger wording. A
     # cap's lettering and a stream's chat line both stand over moving video;
     # only the first is not screen text, and the box cannot say which.
     if video_words:
-        print("    [these sit over moving video] " + " | ".join(video_words))
+        lines.append("[these sit over moving video] " + " | ".join(video_words))
+    return record("text, not a tree", lines)
+
+
+def where(box, W, H):
+    """A place a person would say, from the rectangle alone.
+
+    The words are deliberately coarse -- thirds of the screen each way, with
+    "across" and "down" for what spans a side -- because the exact rectangle
+    is printed beside them. The word is the courtesy; the numbers are the
+    layout.
+    """
+    x0, y0, x1, y1 = box
+    wide, tall = (x1 - x0) >= 0.85 * W, (y1 - y0) >= 0.85 * H
+    if wide and tall:
+        return "filling the screen"
+    hw = ("left", "middle", "right")[min(2, int(3 * (x0 + x1) / 2 / W))]
+    vw = ("top", "middle", "bottom")[min(2, int(3 * (y0 + y1) / 2 / H))]
+    if wide:
+        return "across the middle" if vw == "middle" else f"across the {vw}"
+    if tall:
+        return "down the middle" if hw == "middle" else f"down the {hw} side"
+    if hw == vw == "middle":
+        return "the middle of the screen"
+    if vw == "middle":
+        return f"the {hw}, midway down"
+    return f"{vw} {hw}"
+
+
+def where_in(box, win):
+    """Where this pane sits inside its window, from the rectangles alone."""
+    a, t, c, d = win
+    ww, wh = max(1, c - a), max(1, d - t)
+    x0, y0, x1, y1 = box
+    if (x1 - x0) * (y1 - y0) >= 0.5 * ww * wh:
+        return "its main body"
+    hw = ("left", "middle", "right")[min(2, int(3 * ((x0 + x1) / 2 - a) / ww))]
+    vw = ("top", "middle", "bottom")[min(2, int(3 * ((y0 + y1) / 2 - t) / wh))]
+    if (x1 - x0) >= 0.85 * ww:
+        return "across its middle" if vw == "middle" else f"across its {vw}"
+    if (y1 - y0) >= 0.85 * wh:
+        return "its middle band" if hw == "middle" else f"its {hw} side"
+    if hw == vw == "middle":
+        return "its middle"
+    return f"its {hw}, midway" if vw == "middle" else f"its {vw} {hw}"
+
+
+def iou(a, b):
+    """How much of these two rectangles is the same rectangle."""
+    ox = max(0, min(a[2], b[2]) - max(a[0], b[0]))
+    oy = max(0, min(a[3], b[3]) - max(a[1], b[1]))
+    inter = ox * oy
+    union = ((a[2] - a[0]) * (a[3] - a[1])
+             + (b[2] - b[0]) * (b[3] - b[1]) - inter)
+    return inter / union if union else 0.0
+
+
+def top_text(img, win, engine, workdir, tag):
+    """The words across a window's top strip, both engines agreeing.
+
+    The strip is the height a title bar has at this frame's scale --
+    measured, 2.6% of frame height matches it at 1080p (28px) and 4K (56px)
+    alike. What is written there is often the window's title and sometimes
+    its first line of content, and the strip cannot say which -- so the
+    header claims only the geometry, "across its top", never that the words
+    are a title. Only readings the other engine confirms enter the header;
+    everything else still arrives through the panes with its own marks.
+    """
+    a, t, c, d = win
+    sh = max(24, round(img.shape[0] * 0.026))
+    strip = img[t:t + sh, a:c]
+    if strip.size == 0:
+        return []
+    big = cv2.resize(strip, None, fx=3, fy=3, interpolation=cv2.INTER_CUBIC)
+    path = os.path.join(workdir, f"{tag}_top_{a}_{t}.png")
+    cv2.imwrite(path, big)
+    res, _ = engine(path)
+    texts = [x for _, x, _ in (res or [])][:6]
+    if not texts:
+        return []
+    marked = verify_names.confirm_readings(path, texts) or []
+    return [x for x, ok in marked if ok]
+
+
+def say_panel(panel):
+    print("  [a panel drawn on the picture]")
+    unsettled = set(panel.get("unsettled") or [])
+    if panel["label"] and not unsettled:
+        print(f"    {panel['label']}: {panel['value']}")
+    else:
+        for line in panel["lines"]:
+            mark = "  <- only one engine read this" if line in unsettled else ""
+            print(f"    {line}{mark}")
+
+
+def say_record(rec, base, place):
+    at = f" -- {place}" if place else ""
+    print(f"{base}[pane {rec['pi']}: {rec['kind']}{at}]")
+    for line in rec["lines"]:
+        print(base + "  " + line)
+    for line in rec["notes"]:
+        print(base + "  " + line)
+
+
+def compose(records, wins, panels_found, img, engine, workdir, tag):
+    """Say the moment as the screen it was, not as a bag of numbered panes.
+
+    Windows speak first, top to bottom, each pane under the window that
+    holds it and named by where it sits; what belongs to no window follows,
+    placed on the screen itself. Grouping and placement come from the
+    rectangles alone -- a pane belongs to the window its centre sits in,
+    which the library bears out: wherever the splitter cuts inside a drawn
+    window, the pane lies wholly inside it, share 1.0, no straddlers.
+
+    A floating panel that IS a found window -- the same rectangle, and
+    panes were cut and read inside it -- is said once, as the window,
+    marked drawn over the picture. Its raw dump mostly said the same words
+    the structured readings say better, and the record must not carry both
+    -- but not only: the Finder's own path bar lived in that dump and in no
+    pane, so a dump line whose words the panes do not hold is kept, under
+    its own label. A panel matching no read window keeps its whole block
+    exactly as before.
+    """
+    H, W = img.shape[:2]
+    owner = {}
+    for rec in records:
+        x0, y0, x1, y1 = rec["box"]
+        cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+        for wi, (a, t, c, d) in enumerate(wins):
+            if a <= cx < c and t <= cy < d:
+                owner[rec["pi"]] = wi
+                break
+    over = {}
+    for panel in panels_found:
+        wi = next((wi for wi, win in enumerate(wins)
+                   if iou(panel["box"], win) >= 0.7
+                   and wi in owner.values()), None)
+        if wi is None:
+            say_panel(panel)
+        else:
+            over[wi] = panel
+    for wi, win in sorted(enumerate(wins), key=lambda p: (p[1][1], p[1][0])):
+        mine = [r for r in records if owner.get(r["pi"]) == wi]
+        if not mine:
+            continue
+        head = (f"  [window -- {where(win, W, H)}, "
+                f"{win[0]},{win[1]} to {win[2]},{win[3]}")
+        if wi in over:
+            head += " -- drawn over the moving picture"
+        words = guard(f"top text in window {wi}", top_text, img, win, engine,
+                      workdir, tag) or []
+        if words:
+            head += " -- across its top: " + " | ".join(words)
+        print(head + "]")
+        for rec in sorted(mine, key=lambda r: (r["box"][1], r["box"][0])):
+            say_record(rec, "    ", where_in(rec["box"], win))
+        panel = over.get(wi)
+        if panel:
+            # words of three letters and more, so an icon misread as "B" or
+            # "Mi" neither keeps a line nor loses one
+            body = verify_names._flat(" ".join(
+                ln for r in mine for ln in r["lines"]))
+            extra = [ln for ln in panel["lines"] if any(
+                len(tok) >= 3 and tok.lower() not in body
+                for tok in re.findall(r"[A-Za-z0-9]+", ln))]
+            if extra:
+                print("    [read across this window, not in any pane above]")
+                unsettled = set(panel.get("unsettled") or [])
+                for ln in extra:
+                    mark = ("  <- only one engine read this"
+                            if ln in unsettled else "")
+                    print(f"      {ln}{mark}")
+    loose = [r for r in records if r["pi"] not in owner]
+    for rec in sorted(loose, key=lambda r: (r["box"][1], r["box"][0])):
+        say_record(rec, "  ", where(rec["box"], W, H))
     return True
 
 
@@ -281,19 +488,15 @@ def main():
         # Only the panels floating over VIDEO -- see overlay.floating, which
         # owns that question and says why. The frame's drawn windows go along:
         # a panel inside a clearly larger window is the window's own furniture.
+        # Panels are held back rather than printed here: whether one of them
+        # is really a WINDOW this frame's panes were cut inside -- one thing,
+        # to be said once -- is compose()'s question, and it cannot be
+        # answered before the panes are read.
         wins = guard(f"windows at {ts}", overlay.windows, img) or []
-        for panel in overlay.floating(
-                (guard(f"panel reader at {ts}", overlay.read_overlays,
-                       path, engine) or {"panels": []})["panels"],
-                regions, img.shape[1], screenness.WORK_WIDTH, wins):
-            print("  [a panel drawn on the picture]")
-            unsettled = set(panel.get("unsettled") or [])
-            if panel["label"] and not unsettled:
-                print(f"    {panel['label']}: {panel['value']}")
-            else:
-                for line in panel["lines"]:
-                    mark = "  <- only one engine read this" if line in unsettled else ""
-                    print(f"    {line}{mark}")
+        panels_found = list(overlay.floating(
+            (guard(f"panel reader at {ts}", overlay.read_overlays,
+                   path, engine) or {"panels": []})["panels"],
+            regions, img.shape[1], screenness.WORK_WIDTH, wins))
 
         # Text with no panel round it -- a banner, a lower third -- is proved
         # by watching its spot over minutes: an overlay holds still while the
@@ -337,6 +540,8 @@ def main():
                   f"\n    {found['text']}")
 
         if not regions:
+            for panel in panels_found:
+                say_panel(panel)
             print("    no readable interface at full size\n")
             continue
 
@@ -382,7 +587,7 @@ def main():
         # held nothing or was never looked at, and those are not the same
         # claim. This build's rule is that refusal is an answer and silence is
         # not, so the quiet ones are named, on one line rather than four.
-        quiet, unwritten = [], []
+        quiet, unwritten, records = [], [], []
         for pi, box in enumerate(guard(f"regions at {ts}", frame_regions,
                                        img, engine=engine) or []):
             pane_path = os.path.join(
@@ -403,8 +608,21 @@ def main():
                         box[1] + (min(ys) + max(ys)) / 2 / scale))
                 return out
 
-            if not say_pane(pane_path, pi, engine, drawn, camera):
+            rec = say_pane(pane_path, pi, engine, drawn, camera)
+            if rec is None:
                 quiet.append(pi)
+            else:
+                rec["box"] = tuple(int(v) for v in box)
+                records.append(rec)
+        # compose is guarded like any reader, but its failure may not cost
+        # the readings it was handed -- they fall back to a flat, unplaced
+        # list rather than out of the record.
+        if guard(f"compose at {ts}", compose, records, wins, panels_found,
+                 img, engine, out_dir, ts.replace(":", "-")) is None:
+            for panel in panels_found:
+                say_panel(panel)
+            for rec in records:
+                say_record(rec, "  ", "")
         if quiet:
             print(f"  [panes {', '.join(map(str, quiet))}: looked at, "
                   "nothing readable on them]")

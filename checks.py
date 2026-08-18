@@ -1076,6 +1076,112 @@ def _no_zone_on_moving_capture():
     return True, "the zoomed Finder keeps its folder name, nothing claimed"
 
 
+def pipeline_says(key, stamps):
+    out = subprocess.run(
+        [sys.executable, "pipeline.py", video(key), "--at", stamps],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        cwd=os.path.dirname(os.path.abspath(__file__)))
+    return out.stdout or ""
+
+
+@check("assembly: the screen speaks in windows, placed")
+def _assembled_record():
+    """The report reads as the screen, not as a bag of numbered panes.
+
+    The desktop at 00:07:29 holds two drawn windows. Each pane the splitter
+    cut inside one must be said UNDER it -- nested, with where it sits --
+    and the window's own header must carry its place and its rectangle,
+    because the words are the courtesy and the numbers are the layout. What
+    belongs to no window is placed on the screen itself.
+    """
+    said = pipeline_says("works", "00:07:29")
+    if not re.search(r"\n  \[window -- .+, \d+,\d+ to \d+,\d+", said):
+        return False, "no window header carries a place and a rectangle"
+    if not re.search(r"\n    \[pane \d+: .+ -- ", said):
+        return False, "no pane is nested under a window with its place"
+    if not re.search(r"\n  \[pane \d+: .+ -- ", said):
+        return False, ("no loose pane is placed on the screen itself; "
+                       "the menu strip should be")
+    return True, "windows head their panes, and every reading has a place"
+
+
+@check("assembly: a panel that is a window is said once, a lone panel still speaks")
+def _panel_window_once():
+    """A thing is said once, in its stronger form.
+
+    At 00:01:52 the Finder over the video is found twice -- as a floating
+    panel and as a drawn window whose panes were cut and read. The record
+    must carry it ONCE, as the window, marked drawn over the picture; its
+    raw dump said the same words the structured readings say better. And at
+    00:03:44 the terminal panel has no panes behind it, so its own block is
+    the only record there is -- it must still speak.
+    """
+    said = pipeline_says("works", "00:01:52,00:03:44")
+    first, _, second = said.partition("--- 00:03:44")
+    if "[a panel drawn on the picture]" in first:
+        return False, ("00:01:52 still carries the raw panel dump beside "
+                       "the window's own readings")
+    if "drawn over the moving picture" not in first:
+        return False, "the merged window is not marked drawn over the picture"
+    if "CLAUDE.md" not in first:
+        return False, "the Finder table's own reading fell out with the dump"
+    if "zsh" not in second:
+        return False, ("the lone terminal panel at 00:03:44 lost its only "
+                       "record")
+    return True, ("the Finder is said once as a window; the lone panel "
+                  "keeps its block")
+
+
+@check("assembly: no windows found, and the panes still land placed")
+def _placed_without_windows():
+    """Placement must not depend on the window finder having a good day.
+
+    On this 1080p desktop the window finder returns nothing at all --
+    measured, not assumed -- and the record must degrade to placed, flat
+    panes: no window headers invented, every pane still saying where on the
+    screen it sits.
+    """
+    said = pipeline_says("obsidian", "00:02:09")
+    if "[window --" in said:
+        raise Skip("the window finder now sees windows here; "
+                   "pick a windowless frame to pin the degrade case")
+    labels = re.findall(r"\[pane \d+: [^\]]+\]", said)
+    if not labels:
+        return False, "no pane labels in the report at all"
+    unplaced = [x for x in labels if " -- " not in x]
+    if unplaced:
+        return False, f"panes with no place on the screen: {unplaced[:3]}"
+    return True, f"{len(labels)} panes, each placed, no window invented"
+
+
+@check("size: what is drawn large says so")
+def _drawn_large():
+    """Size is layout: the stream's banner is the reading a person calls
+    large without thinking, and across stored panes what deserves the mark
+    sits at 2.2x the pane's median glyph height and up, where body text
+    tops out at 1.5. The record must carry the mark -- and only from
+    measurement plus both engines' agreement, which is why a 1.8x slide
+    title deliberately goes unmarked."""
+    path = machine.here(
+        "/mnt/g/Images/How I Trained My AI To Stop Making Mistakes/"
+        "00-00-46_pane3.png")
+    if not os.path.exists(path):
+        raise Skip("the stored banner pane is gone")
+    rec = pipeline.say_pane(path, 0, engine())
+    if rec is None:
+        raise Skip("nothing readable on the stored banner pane any more")
+    if rec["kind"] != "text, not a tree":
+        raise Skip(f"the banner pane now reads as {rec['kind']}; the LARGE "
+                   "mark lives in loose text by design")
+    big = [ln for ln in rec["lines"] if ln.startswith("[drawn large] ")]
+    if not big:
+        return False, ("the stream's banner is the largest thing on this "
+                       "pane and carries no mark")
+    if "jaredrhod" not in big[0]:
+        return False, f"the large line is not the banner: {big[0][:80]}"
+    return True, f"marked large: {big[0][len('[drawn large] '):][:60]}"
+
+
 def main():
     wanted = [a for a in sys.argv[1:] if not a.startswith("-")]
     if "--list" in sys.argv:

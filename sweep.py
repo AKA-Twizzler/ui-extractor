@@ -73,9 +73,10 @@ def smells(text):
             found.append(("fell over", line.strip()[:150]))
         if ODD_SCRIPT.search(line):
             found.append(("odd script", line.strip()[:110]))
-    # a table's heading row is the line after "[pane N: a list of columns]"
+    # a table's heading row is the line after the columns label -- which may
+    # carry a place suffix now, so the match is the phrase, not the bracket
     for i, line in enumerate(lines):
-        if "a list of columns]" not in line and "[block" not in line:
+        if "a list of columns" not in line and "[block" not in line:
             continue
         for head in lines[i + 1:i + 3]:
             if head.lstrip().startswith("|") and DATA_HEADING.search(
@@ -83,13 +84,17 @@ def smells(text):
                 found.append(("data heading", head.strip()[:110]))
                 break
     # a reader that took something which is not what it reads
+    # panes may sit nested under a window header now, so a block opens on the
+    # label wherever it is indented, and closes on the next label, window
+    # header, or moment line
     block, marked, total = None, 0, 0
     for line in lines + ["  ---end---"]:
-        if line.startswith("  [pane") or line.startswith("---"):
+        s = line.lstrip()
+        if s.startswith(("[pane", "[window")) or line.startswith("---"):
             if block and total >= 4 and marked * 2 > total:
                 found.append(("all unsettled",
                               f"{block}: {marked} of {total} lines marked"))
-            block = line.strip()[:60] if line.startswith("  [pane") else None
+            block = s[:60] if s.startswith("[pane") else None
             marked = total = 0
         elif block and line.strip():
             total += 1
@@ -109,11 +114,13 @@ def smells(text):
             found.append(("empty frame", line.strip()[:110]))
     # a document that is nothing but a properties block
     for i, line in enumerate(lines):
-        if "an open document]" not in line:
+        if "an open document" not in line or "[pane" not in line:
             continue
         body = []
         for nxt in lines[i + 1:]:
-            if nxt.startswith("  [") or nxt.startswith("--- ") or not nxt.strip():
+            s = nxt.lstrip()
+            if (not s or nxt.startswith("--- ")
+                    or s.startswith(("[pane", "[window", "[a panel", "[drawn"))):
                 break
             body.append(nxt.strip())
         if body and body.count("---") >= 2 and len(body) <= 6:
