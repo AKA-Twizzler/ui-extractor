@@ -1052,6 +1052,30 @@ def _every_pane_speaks():
                   "for the quiet ones")
 
 
+@check("pipeline: a zoomed screen's own text is never called moving video")
+def _no_zone_on_moving_capture():
+    """A recording that zooms or pans moves its SCREEN, so motion stops
+    meaning camera there. At 00:05:36 the works video is zoomed into a
+    Finder window whose folder names sit behind censor bars; the one
+    readable name is screen text, and it came back labelled "over moving
+    video" before the guard. On a moment the capture itself caught moving,
+    nothing may be claimed."""
+    out = subprocess.run([sys.executable, "pipeline.py", video("works"),
+                          "--at", "00:05:36"],
+                         capture_output=True, text=True, encoding="utf-8",
+                         errors="replace",
+                         cwd=os.path.dirname(os.path.abspath(__file__)))
+    said = out.stdout or ""
+    if "moving frames" not in said:
+        raise Skip("00:05:36 no longer captures as a moving moment")
+    if "sit over moving video" in said:
+        return False, ("a moment the capture caught moving still claimed "
+                       "words over moving video")
+    if "Documents-test" not in said.replace(" ", ""):
+        return False, "the folder name fell out of the report entirely"
+    return True, "the zoomed Finder keeps its folder name, nothing claimed"
+
+
 def main():
     wanted = [a for a in sys.argv[1:] if not a.startswith("-")]
     if "--list" in sys.argv:

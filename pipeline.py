@@ -187,8 +187,8 @@ def say_pane(pane_path, pi, engine, drawn=(), camera=None):
     # anything is what the confirmation below says, and it says it out loud.
     if not texts:
         if video_words:
-            print(f"  [pane {pi}: only the presenter's camera]")
-            print("    [over moving video, not the screen's own text] "
+            print(f"  [pane {pi}: only moving video on it]")
+            print("    [these sit over moving video] "
                   + " | ".join(video_words))
             return True
         return False           # nothing on it; the caller says so, once
@@ -210,9 +210,11 @@ def say_pane(pane_path, pi, engine, drawn=(), camera=None):
         print("    " + " | ".join(sure))
     if doubt:
         print("    [only one engine read these] " + " | ".join(doubt))
+    # "sit over" is the whole claim, chosen against the stronger wording. A
+    # cap's lettering and a stream's chat line both stand over moving video;
+    # only the first is not screen text, and the box cannot say which.
     if video_words:
-        print("    [over moving video, not the screen's own text] "
-              + " | ".join(video_words))
+        print("    [these sit over moving video] " + " | ".join(video_words))
     return True
 
 
@@ -343,9 +345,20 @@ def main():
         # which says why and when it refuses -- computed once per frame and
         # only when a pane's loose text actually asks; most panes never do.
         # Text inside a drawn window is never the inset's, however it moved.
+        #
+        # And no zones at all on a moment the capture itself caught moving.
+        # A recording that zooms or pans moves its SCREEN, so motion stops
+        # meaning camera: on one zoomed-in Finder window the one readable
+        # folder name came back labelled "over moving video". The zoomed
+        # window's edges sit outside the frame, so no drawn window protects
+        # its text either. When the screen was caught moving, nothing is
+        # claimed -- a wrong label is worse than the unconfirmed mark those
+        # words already carry.
         zone_state = {}
 
-        def over_video(cx, cy):
+        def over_video(cx, cy, moving=("moving" in how)):
+            if moving:
+                return False
             if any(a <= cx < c and b <= cy < d for a, b, c, d in wins):
                 return False
             if "z" not in zone_state:
