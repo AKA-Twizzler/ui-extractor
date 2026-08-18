@@ -342,8 +342,34 @@ def say_panel(panel):
             print(f"    {line}{mark}")
 
 
+def unchanged_here(grey, prev, box):
+    """Did this pane's pixels move at all since the last captured moment?
+
+    The rule is zero pixels beyond compression noise, and the noise bound
+    is the one already load-bearing in overlay.moving_zones: 8 grey levels.
+    Measured on stacked captures one second apart, a still pane's largest
+    pixel step was 3 and seven of eight panes had not one pixel over the
+    bound; a pane with a webcam inset showed 2.6% of its pixels moving, and
+    a desktop six seconds on carried 0.03%-0.9% -- a cursor's worth, which
+    could as easily be a digit's worth, so ANY pixel over the bound means a
+    full re-read. An under-claim costs the time we already spend; a
+    tolerance is a bug waiting for its frame.
+    """
+    for pb, held in prev["boxes"].items():
+        if same_rect(box, pb):
+            x0, y0, x1, y1 = box
+            a = grey[y0:y1, x0:x1]
+            b = prev["grey"][y0:y1, x0:x1]
+            if a.size and a.shape == b.shape \
+                    and not (np.abs(a - b) > 8).any():
+                return True, held
+    return False, None
+
+
 def say_record(rec, base, place):
     at = f" -- {place}" if place else ""
+    if rec.get("since"):
+        at += f" -- unchanged since {rec['since']}"
     print(f"{base}[pane {rec['pi']}: {rec['kind']}{at}]")
     for line in rec["lines"]:
         print(base + "  " + line)
@@ -351,7 +377,21 @@ def say_record(rec, base, place):
         print(base + "  " + line)
 
 
-def compose(records, wins, panels_found, img, engine, workdir, tag):
+def same_rect(a, b, slack=4):
+    """The same drawn rectangle, moment to moment.
+
+    Measured: a stationary window's rect is IDENTICAL to the pixel one
+    second apart (00:07:29 and 00:07:30 of the works video, twice over).
+    The slack of four pixels covers the edge detector's wobble and nothing
+    else -- the one drifting pair measured, a stream card re-drawn 11px
+    off, is deliberately not the same rectangle. An under-claim, never a
+    wrong one.
+    """
+    return all(abs(x - y) <= slack for x, y in zip(a, b))
+
+
+def compose(records, wins, panels_found, img, engine, workdir, tag,
+            memory=None):
     """Say the moment as the screen it was, not as a bag of numbered panes.
 
     Windows speak first, top to bottom, each pane under the window that
@@ -400,6 +440,17 @@ def compose(records, wins, panels_found, img, engine, workdir, tag):
                       workdir, tag) or []
         if words:
             head += " -- across its top: " + " | ".join(words)
+            if memory is not None:
+                memory.append({"ts": tag.replace("-", ":"), "rect": win,
+                               "where": where(win, W, H),
+                               "words": " | ".join(words)})
+        elif memory is not None:
+            # this moment's strip would not confirm, but the SAME drawn
+            # rectangle read earlier -- carry what it read, said as that
+            known = [m for m in memory if same_rect(m["rect"], win)]
+            if known:
+                head += (f" -- its top read at {known[-1]['ts']}: "
+                         + known[-1]["words"])
         print(head + "]")
         for rec in sorted(mine, key=lambda r: (r["box"][1], r["box"][0])):
             say_record(rec, "    ", where_in(rec["box"], win))
@@ -458,6 +509,13 @@ def main():
     from rapidocr_onnxruntime import RapidOCR
     engine = RapidOCR()
     standing = set()
+    # every window whose top strip both engines confirmed, moment by moment
+    # -- the run's memory, for carrying words to a moment that cannot read
+    # them, and for the index at the end
+    seen_windows = []
+    # the last captured moment's pixels and pane records, for reading only
+    # what changed -- see unchanged_here for the rule and the measurements
+    prev = None
 
     for r in runs[:limit]:
         secs = r["best"]["t"]
@@ -588,8 +646,30 @@ def main():
         # claim. This build's rule is that refusal is an answer and silence is
         # not, so the quiet ones are named, on one line rather than four.
         quiet, unwritten, records = [], [], []
+        grey = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY).astype(np.int16)
+        # reuse is only asked between two STACKED captures of the same-sized
+        # frame: a moving capture's sharpest-frame picture carries motion
+        # blur and real motion both, and pixel identity stops meaning
+        # unchanged content
+        can_reuse = (prev is not None and "moving" not in how
+                     and "moving" not in prev["how"]
+                     and grey.shape == prev["grey"].shape)
+        cur_boxes = {}
         for pi, box in enumerate(guard(f"regions at {ts}", frame_regions,
                                        img, engine=engine) or []):
+            box_t = tuple(int(v) for v in box)
+            if can_reuse:
+                still, held = unchanged_here(grey, prev, box_t)
+                if still:
+                    cur_boxes[box_t] = held
+                    if held is None:
+                        quiet.append(pi)
+                    else:
+                        rec = dict(held)
+                        rec["pi"], rec["box"] = pi, box_t
+                        rec["since"] = prev["ts"]
+                        records.append(rec)
+                    continue
             pane_path = os.path.join(
                 out_dir, f"{ts.replace(':','-')}_pane{pi}.png")
             crop = write_box(img, box, pane_path)
@@ -609,16 +689,19 @@ def main():
                 return out
 
             rec = say_pane(pane_path, pi, engine, drawn, camera)
+            cur_boxes[box_t] = rec
             if rec is None:
                 quiet.append(pi)
             else:
-                rec["box"] = tuple(int(v) for v in box)
+                rec["box"] = box_t
                 records.append(rec)
+        prev = {"ts": ts, "how": how, "grey": grey, "boxes": cur_boxes}
         # compose is guarded like any reader, but its failure may not cost
         # the readings it was handed -- they fall back to a flat, unplaced
         # list rather than out of the record.
         if guard(f"compose at {ts}", compose, records, wins, panels_found,
-                 img, engine, out_dir, ts.replace(":", "-")) is None:
+                 img, engine, out_dir, ts.replace(":", "-"),
+                 memory=seen_windows) is None:
             for panel in panels_found:
                 say_panel(panel)
             for rec in records:
@@ -629,6 +712,21 @@ def main():
         if unwritten:
             print(f"  [panes {', '.join(map(str, unwritten))}: too small to "
                   "cut out, not read]")
+        print()
+
+    if seen_windows:
+        # the words each window carried across its top, collected once --
+        # this is where a program's name reaches the record when the screen
+        # wrote one anywhere, without a menu bar ever being readable
+        print("[windows seen in this video]")
+        said = set()
+        for m in seen_windows:
+            if m["words"] in said:
+                continue
+            said.add(m["words"])
+            stamps = ", ".join(x["ts"] for x in seen_windows
+                               if x["words"] == m["words"])
+            print(f"   {m['words']} -- {m['where']}, at {stamps}")
         print()
 
     if STUMBLED:

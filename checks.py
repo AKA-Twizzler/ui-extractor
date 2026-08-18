@@ -1182,6 +1182,42 @@ def _drawn_large():
     return True, f"marked large: {big[0][len('[drawn large] '):][:60]}"
 
 
+@check("assembly: the windows seen reach the end of the run")
+def _windows_index():
+    """A program's name reaches the record through what its window wrote
+    across its own top -- "test" on the Finder, a terminal's own title line
+    -- collected once at the end of the run with the moments it was seen.
+    The 4K menu bar never became readable to either engine; this is the
+    honest route around it."""
+    said = pipeline_says("works", "00:01:52,00:03:44")
+    if "[windows seen in this video]" not in said:
+        return False, "no windows index at the end of the run"
+    tail = said.split("[windows seen in this video]")[-1]
+    if "test" not in tail or "00:01:52" not in tail:
+        return False, f"the Finder's own word is not in the index: {tail[:120]}"
+    return True, "the index carries the window's words and its moment"
+
+
+@check("assembly: what did not change is not read twice")
+def _reuse_unchanged():
+    """Two stacked captures of the same screen one second apart differ by
+    NOTHING on a still pane -- measured: not one pixel beyond the 8-grey
+    compression bound on seven of eight panes, largest step 3. Those panes
+    must be said from the previous moment's reading, marked so, with the
+    readings carried whole -- and the pane where something moved must be
+    read afresh. The rule is zero pixels over the bound: a cursor's worth
+    of change could as easily be a digit's worth."""
+    said = pipeline_says("works", "00:07:29,00:07:30")
+    marks = said.count("unchanged since 00:07:29")
+    if marks < 4:
+        return False, (f"only {marks} pane(s) reused between two captures "
+                       "of the same still screen")
+    second = said.partition("--- 00:07:30")[2]
+    if "MEMORY.md" not in second:
+        return False, "the reused table lost its rows at the second moment"
+    return True, f"{marks} panes reused, the readings carried whole"
+
+
 def main():
     wanted = [a for a in sys.argv[1:] if not a.startswith("-")]
     if "--list" in sys.argv:
