@@ -111,13 +111,24 @@ def video(key):
 
 
 def frame(key, stamp):
-    """The frame at this moment, captured once and kept where images live."""
+    """The frame at this moment, captured once and kept where images live.
+
+    New captures land in the video's Images/ folder; a frame captured
+    before that layout existed is still honoured where it stands.
+    """
     if (key, stamp) in _FRAMES:
         return _FRAMES[(key, stamp)]
     out_dir = machine.here(f"/mnt/g/Images/{VIDEOS[key]}")
-    path = os.path.join(out_dir, stamp.replace(":", "-") + ".png")
+    name = stamp.replace(":", "-") + ".png"
+    path = os.path.join(out_dir, "Images", name)
+    old = os.path.join(out_dir, name)
     if not os.path.exists(path):
-        path, _ = capture.capture_moment(video(key), stamp, out_dir)
+        if os.path.exists(old):
+            path = old
+        else:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            path, _ = capture.capture_moment(
+                video(key), stamp, os.path.join(out_dir, "Images"))
     _FRAMES[(key, stamp)] = path
     return path
 
@@ -561,7 +572,7 @@ def _standing():
         for secs in moments:
             looks = overlay.frames_across(
                 video(key), secs,
-                workdir=machine.here(f"/mnt/g/Images/{VIDEOS[key]}/_looks"))
+                workdir=machine.here(f"/mnt/g/Images/{VIDEOS[key]}/Images/_looks"))
             room = [g["text"]
                     for g in overlay.standing_text(looks, engine=engine())]
             if room:
@@ -1166,6 +1177,10 @@ def _drawn_large():
         "/mnt/g/Images/How I Trained My AI To Stop Making Mistakes/"
         "00-00-46_pane3.png")
     if not os.path.exists(path):
+        path = machine.here(
+            "/mnt/g/Images/How I Trained My AI To Stop Making Mistakes/"
+            "Images/00-00-46_pane3.png")
+    if not os.path.exists(path):
         raise Skip("the stored banner pane is gone")
     rec = pipeline.say_pane(path, 0, engine())
     if rec is None:
@@ -1216,6 +1231,26 @@ def _reuse_unchanged():
     if "MEMORY.md" not in second:
         return False, "the reused table lost its rows at the second moment"
     return True, f"{marks} panes reused, the readings carried whole"
+
+
+@check("assembly: what appeared in a standing window is said as newly readable")
+def _newly_readable():
+    """Chronological understanding, first claim: a window standing in the
+    same place read at two moments says which confirmed words the second
+    look holds that the first did not. The claim is exactly that much --
+    newly READABLE -- true whether Jared typed them or they merely became
+    legible; which of the two is not measured, so it is not said. The
+    specimen is the works terminal: bare prompt at one look, the typed
+    path at the next."""
+    said = pipeline_says("works", "00:02:50,00:03:50")
+    if "newly readable since 00:02:50" not in said:
+        return False, ("the second look at the standing terminal window "
+                       "claims nothing newly readable")
+    line = [ln for ln in said.splitlines()
+            if "newly readable since 00:02:50" in ln][0]
+    if "test" not in line:
+        return False, f"the typed path is not among the new words: {line[:120]}"
+    return True, "the typed command surfaces as newly readable, nothing more claimed"
 
 
 def main():

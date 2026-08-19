@@ -345,15 +345,18 @@ def say_panel(panel):
 def unchanged_here(grey, prev, box):
     """Did this pane's pixels move at all since the last captured moment?
 
-    The rule is zero pixels beyond compression noise, and the noise bound
-    is the one already load-bearing in overlay.moving_zones: 8 grey levels.
-    Measured on stacked captures one second apart, a still pane's largest
-    pixel step was 3 and seven of eight panes had not one pixel over the
-    bound; a pane with a webcam inset showed 2.6% of its pixels moving, and
-    a desktop six seconds on carried 0.03%-0.9% -- a cursor's worth, which
-    could as easily be a digit's worth, so ANY pixel over the bound means a
-    full re-read. An under-claim costs the time we already spend; a
-    tolerance is a bug waiting for its frame.
+    The rule is zero pixels beyond the noise of two INDEPENDENT stacked
+    captures, and that bound is measured, not assumed. Bursts one second
+    apart (overlapping frames) put a still pane's largest step at 3; the
+    first calibration took the moving_zones compression bound of 8 from
+    that -- and ten seconds apart, where the bursts share no frames, a
+    still pane's noise reaches 9-14 and a single pixel one level over
+    denied a whole pane. Measured across ten still pairs of independent
+    bursts, panes up to a million pixels: noise never put ONE pixel past
+    16, while the smallest real change put 240 past it with a peak of 224
+    -- nothing lives between 14 and 105. So the bound is 16, the shape
+    stays zero-tolerance, and any pixel over it means a full re-read: a
+    cursor's worth of change could as easily be a digit's worth.
     """
     for pb, held in prev["boxes"].items():
         if same_rect(box, pb):
@@ -361,7 +364,7 @@ def unchanged_here(grey, prev, box):
             a = grey[y0:y1, x0:x1]
             b = prev["grey"][y0:y1, x0:x1]
             if a.size and a.shape == b.shape \
-                    and not (np.abs(a - b) > 8).any():
+                    and not (np.abs(a - b) > 16).any():
                 return True, held
     return False, None
 
@@ -375,6 +378,26 @@ def say_record(rec, base, place):
         print(base + "  " + line)
     for line in rec["notes"]:
         print(base + "  " + line)
+
+
+def confirmed_words(recs):
+    """The words these records carry as confirmed readings, in print order.
+
+    Lines that exist to mark doubt -- one-engine lines, over-moving-video
+    lines -- stay out, and so does everything after a disagreement arrow;
+    what remains is what both engines stood behind.
+    """
+    words = []
+    for r in recs:
+        for ln in r["lines"]:
+            s = ln.strip()
+            if s.startswith(("[only one engine", "[these sit over")):
+                continue
+            for tok in re.findall(r"[A-Za-z0-9~/.\-]{2,}",
+                                  ln.split("<-")[0]):
+                if any(ch.isalnum() for ch in tok):
+                    words.append(tok)
+    return words
 
 
 def same_rect(a, b, slack=4):
@@ -391,7 +414,7 @@ def same_rect(a, b, slack=4):
 
 
 def compose(records, wins, panels_found, img, engine, workdir, tag,
-            memory=None):
+            memory=None, texts=None):
     """Say the moment as the screen it was, not as a bag of numbered panes.
 
     Windows speak first, top to bottom, each pane under the window that
@@ -454,6 +477,30 @@ def compose(records, wins, panels_found, img, engine, workdir, tag,
         print(head + "]")
         for rec in sorted(mine, key=lambda r: (r["box"][1], r["box"][0])):
             say_record(rec, "    ", where_in(rec["box"], win))
+        if texts is not None:
+            # what happened here since the last look at this same rectangle:
+            # the confirmed words that were not readable then. True whether
+            # Jared typed them or they merely became legible -- the claim
+            # says exactly that much and no more. Proven on the works
+            # terminal: bare prompt, then "cd" half-typed, then the full
+            # "cd ~/documents/test" with the prompt renamed.
+            cur = confirmed_words(mine)
+            known = [m for m in texts if same_rect(m["rect"], win)]
+            if known:
+                had = known[-1]["words"]
+                new = [w for w in dict.fromkeys(cur)
+                       if w.lower() not in had]
+                if new:
+                    line = " | ".join(new[:24])
+                    if len(new) > 24:
+                        line += f" | and {len(new) - 24} more"
+                    print(f"    [newly readable since {known[-1]['ts']}] "
+                          + line)
+                known[-1].update(ts=tag.replace("-", ":"), rect=win,
+                                 words={w.lower() for w in cur})
+            else:
+                texts.append({"ts": tag.replace("-", ":"), "rect": win,
+                              "words": {w.lower() for w in cur}})
         panel = over.get(wi)
         if panel:
             # words of three letters and more, so an icon misread as "B" or
@@ -487,7 +534,13 @@ def main():
           if "--at" in sys.argv else [])
     title = os.path.basename(os.path.dirname(video)) or "capture"
     out_dir = machine.here(f"/mnt/g/Images/{title}")
+    # every image the run extracts -- frames, panes, strips, working
+    # frames -- lives under Images/, so the video's folder holds the note,
+    # the scan, and one folder of pictures
+    imgs = os.path.join(out_dir, "Images")
+    os.makedirs(imgs, exist_ok=True)
     cache = os.path.join(out_dir, "scan.json")
+    dense = "--dense" in sys.argv
 
     print(f"=== {title} ===")
     if at:
@@ -502,9 +555,25 @@ def main():
         # the words that go with each screen, joined on the one clock both
         # halves were stamped with -- see transcript.py
         joined = transcript.words_for(video, every_run) is not None
-        runs = [r for r in every_run if r["call"] == "screen"]
-        print(f"{len(runs)} distinct screens found; capturing "
-              f"{min(limit, len(runs))}\n")
+        if dense:
+            # chronological: the start of every screen, plus each moment a
+            # normally-quiet part of it changed -- see spot.dense_moments
+            said_by_start = {r["start"]: r.get("said")
+                             for r in every_run if r["call"] == "screen"}
+            runs = []
+            for m in spot.dense_moments(samples):
+                for i, t in enumerate(m["times"]):
+                    runs.append({"best": {"t": t},
+                                 "said": said_by_start.get(m["start"])
+                                 if i == 0 else None})
+            if "--limit" not in sys.argv:
+                limit = len(runs)
+            print(f"{len(runs)} moments across the video's screens, "
+                  "chronological\n")
+        else:
+            runs = [r for r in every_run if r["call"] == "screen"]
+            print(f"{len(runs)} distinct screens found; capturing "
+                  f"{min(limit, len(runs))}\n")
 
     from rapidocr_onnxruntime import RapidOCR
     engine = RapidOCR()
@@ -513,6 +582,9 @@ def main():
     # -- the run's memory, for carrying words to a moment that cannot read
     # them, and for the index at the end
     seen_windows = []
+    # per standing rectangle, the confirmed words last read there -- what
+    # compose() answers "newly readable since" against
+    window_texts = []
     # the last captured moment's pixels and pane records, for reading only
     # what changed -- see unchanged_here for the rule and the measurements
     prev = None
@@ -521,7 +593,7 @@ def main():
         secs = r["best"]["t"]
         ts = spot.hms(secs)
         try:
-            path, how = capture.capture_moment(video, ts, out_dir)
+            path, how = capture.capture_moment(video, ts, imgs)
         except RuntimeError as why:
             # a damaged patch is the file's problem, not this moment's, and
             # certainly not the other eleven moments' -- say so and go on
@@ -588,7 +660,7 @@ def main():
         drawn = set()
         for found in ((guard(f"standing text at {ts}", lambda: overlay.standing_text(
                 overlay.frames_across(video, secs,
-                                      workdir=os.path.join(out_dir, "_looks")),
+                                      workdir=os.path.join(imgs, "_looks")),
                 engine=engine)) or []) if share < 50 else []):
             drawn.add(found["text"].strip())
             if found["text"] in standing:
@@ -628,7 +700,7 @@ def main():
                 looks = overlay.frames_across(
                     video, secs, span=overlay.ZONE_SPAN,
                     looks=overlay.ZONE_LOOKS,
-                    workdir=os.path.join(out_dir, "_zones"))
+                    workdir=os.path.join(imgs, "_zones"))
                 got = guard(f"camera zones at {ts}",
                             overlay.moving_zones, looks)
                 zone_state["z"] = got[0] if got else []
@@ -671,7 +743,7 @@ def main():
                         records.append(rec)
                     continue
             pane_path = os.path.join(
-                out_dir, f"{ts.replace(':','-')}_pane{pi}.png")
+                imgs, f"{ts.replace(':','-')}_pane{pi}.png")
             crop = write_box(img, box, pane_path)
             if crop is None:
                 unwritten.append(pi)
@@ -700,8 +772,8 @@ def main():
         # the readings it was handed -- they fall back to a flat, unplaced
         # list rather than out of the record.
         if guard(f"compose at {ts}", compose, records, wins, panels_found,
-                 img, engine, out_dir, ts.replace(":", "-"),
-                 memory=seen_windows) is None:
+                 img, engine, imgs, ts.replace(":", "-"),
+                 memory=seen_windows, texts=window_texts) is None:
             for panel in panels_found:
                 say_panel(panel)
             for rec in records:

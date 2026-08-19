@@ -160,6 +160,52 @@ def stretches(samples):
     return runs
 
 
+# Chronological reading, within a stretch: which samples changed enough to
+# read. The whole-thumb mean cannot say -- measured across the library's
+# caches, consecutive same-screen samples differ by ~1.0 grey on average,
+# because the webcam inset and compression move the frame everywhere -- so
+# the thumb is cut into 20x20 cells and each stretch learns its own
+# persistently moving cells (the inset), the same shape moving_zones uses on
+# full frames. A cell moving in at least half the steps is the stretch's own
+# motion; an EVENT is any normally-quiet cell stepping past the bound.
+# Measured: quiet cells sit at 0.055 grey median, 0.56 at p90; a typed LINE
+# across a cell steps its mean well past 2, a lone short word may not. The
+# bound trades compute for completeness and cannot make a wrong claim in
+# either direction: every read moment goes through the full pipeline, and an
+# extra read is absorbed by the unchanged-pane proof. At 2.0, four in ten
+# within-stretch steps read.
+CELL = 20
+CELL_BOUND = 2.0
+CELL_EVERY = 0.5
+
+
+def dense_moments(samples):
+    """Per screen stretch: the moments a chronological read should capture --
+    the stretch's start, plus every sample where a normally-quiet cell of
+    the thumb stepped past the bound."""
+    out = []
+    for run in stretches(samples):
+        if run["call"] != "screen":
+            continue
+        st = [s for s in samples if run["start"] <= s["t"] <= run["end"]]
+        times = [st[0]["t"]]
+        if len(st) >= 3:
+            thumbs = [np.array(s["thumb"], np.float32) for s in st]
+            h, w = thumbs[0].shape
+            hc, wc = h // CELL, w // CELL
+            steps = np.array([
+                np.abs(a - b)[:hc * CELL, :wc * CELL]
+                .reshape(hc, CELL, wc, CELL).mean(axis=(1, 3))
+                for a, b in zip(thumbs, thumbs[1:])])
+            moving = (steps > CELL_BOUND).mean(axis=0) >= CELL_EVERY
+            for i, cells in enumerate(steps):
+                if (cells[~moving] > CELL_BOUND).any():
+                    times.append(st[i + 1]["t"])
+        out.append({"start": run["start"], "end": run["end"],
+                    "times": sorted(set(times)), "best": run["best"]})
+    return out
+
+
 def hms(s):
     return f"{s//3600:02d}:{s%3600//60:02d}:{s%60:02d}"
 
