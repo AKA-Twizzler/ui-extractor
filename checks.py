@@ -83,6 +83,9 @@ VIDEOS = {
     # names are all flush and the ICONS differ in width, which is the one
     # shape that made this build invent nesting that was never on the screen
     "makejarvis": "How To Make A Jarvis",
+    # a live stream: banner over camera, a chat column, camera strips between
+    # -- the frame the camera-pane gate and the read-again mark are pinned on
+    "qna": "Live Q&A Answering Questions About AI Automation",
 }
 
 _ENGINE = None
@@ -1251,6 +1254,135 @@ def _newly_readable():
     if "test" not in line:
         return False, f"the typed path is not among the new words: {line[:120]}"
     return True, "the typed command surfaces as newly readable, nothing more claimed"
+
+
+@check("say_pane: a camera pane skips the structural readers, and loses nothing")
+def _camera_pane_gate():
+    """The cascade is skipped only when BOTH instruments came up empty:
+    the tie test called the pane camera AND the recogniser read nothing.
+    Either alone was tried and failed -- see say_pane for the story. So
+    three legs, on one stream frame: the both-quiet pane skips (physical
+    proof: no reader wrote its 3x enlargement), the camera-ties pane that
+    CARRIES text still takes the full cascade, and the rendered pane
+    takes it too."""
+    img = cv2.imread(frame("qna", "00:02:00"))
+    work = screenness.to_working_size(img)
+    ties = screenness.tie_map(work).astype(np.float32)
+    g_rows, g_cols = screenness.GRID
+    bh = max(8, work.shape[0] // g_rows)
+    bw = max(8, work.shape[1] // g_cols)
+    sc = work.shape[1] / img.shape[1]
+
+    def hits(b):
+        return pipeline.rendered_here(
+            ties, tuple(int(v * sc) for v in b), bh, bw)
+
+    boxes = [tuple(int(v) for v in b)
+             for b in panes.frame_regions(img, engine=engine())]
+    base = frame("qna", "00:02:00").replace(".png", "")
+
+    def cut_pane(tag, box):
+        cut = f"{base}_{tag}.png"
+        for side in (cut.replace(".png", "_3x.png"),
+                     cut.replace(".png", "_3x_tess.png")):
+            if os.path.exists(side):
+                os.remove(side)
+        if panes.write_box(img, box, cut) is None:
+            return None
+        return cut
+
+    # the three legs of the rule: BOTH quiet -> skip; either speaks -> read
+    empty_cam = texty_cam = rendered = None
+    for i, b in enumerate(boxes):
+        cut = cut_pane(f"gate{i}", b)
+        if cut is None:
+            continue
+        res, _ = engine()(cut)
+        n = len(res or [])
+        if hits(b):
+            rendered = rendered or (cut, b)
+        elif n == 0:
+            empty_cam = empty_cam or (cut, b)
+        else:
+            texty_cam = texty_cam or (cut, b)
+    if not (empty_cam and texty_cam and rendered):
+        raise Skip("this frame no longer holds all three pane kinds")
+
+    rec0 = pipeline.say_pane(empty_cam[0], 0, engine(), (), None,
+                             in_ui=False)
+    if os.path.exists(empty_cam[0].replace(".png", "_3x.png")):
+        return False, ("a structural reader ran on the empty camera "
+                       "pane; its enlargement exists")
+    if rec0 is not None and rec0["lines"]:
+        return False, "the empty camera pane produced readings from nothing"
+    rec1 = pipeline.say_pane(texty_cam[0], 1, engine(), (), None,
+                             in_ui=False)
+    kinds = ("a file tree", "a terminal", "a list of columns",
+             "a chat log", "an open document")
+    if not (rec1 is not None and rec1["kind"] in kinds) \
+            and not os.path.exists(texty_cam[0].replace(".png", "_3x.png")):
+        return False, ("the camera pane WITH text skipped the cascade -- "
+                       "one instrument alone may never excuse a pane")
+    rec2 = pipeline.say_pane(rendered[0], 2, engine(), (), None,
+                             in_ui=True)
+    if not (rec2 is not None and rec2["kind"] in kinds) \
+            and not os.path.exists(rendered[0].replace(".png", "_3x.png")):
+        return False, ("the rendered pane skipped the cascade; no reader "
+                       "wrote its enlargement and none claimed it")
+    return True, ("both-quiet pane skipped, text-bearing camera pane and "
+                  "rendered pane both took the cascade")
+
+
+@check("readers: the same pixels are never read twice")
+def _memo_identical():
+    """Three readers enlarge the same pane the same way and hand the same
+    pixels to the same engines. The memo returns the FIRST reading for
+    every repeat -- identical by construction, keyed on the bytes -- and a
+    second full read of one pane must land at least one hit on each
+    engine's memo. The two readings must also be equal and distinct
+    objects, because callers mark up what they get."""
+    cuts = regions("works", "00:07:29")
+    if not cuts:
+        raise Skip("no panes cut from the works desktop")
+    pane = max(cuts, key=lambda p: os.path.getsize(p))
+    rapid0, tess0 = tree_reader._MEMO_HITS, note_reader._TESS_HITS
+    first = note_reader.read_note(pane)["markdown"]
+    mid = note_reader._TESS_HITS
+    again = note_reader.read_note(pane)["markdown"]
+    a = tree_reader.ocr_rows(pane)
+    b = tree_reader.ocr_rows(pane)
+    if note_reader._TESS_HITS <= mid:
+        return False, "a second read of the same pane reran tesseract"
+    if tree_reader._MEMO_HITS <= rapid0:
+        return False, "a second read of the same pane reran the recogniser"
+    if first != again:
+        return False, "the memo changed a reading between identical reads"
+    if a != b or (a and a is b):
+        return False, "the memo must hand back equal, distinct rows"
+    return True, (f"rapid memo +{tree_reader._MEMO_HITS - rapid0}, "
+                  f"tesseract memo +{note_reader._TESS_HITS - tess0} "
+                  "on one pane read twice")
+
+
+@check("assembly: an identical reading is said once, then pointed back to")
+def _read_again_mark():
+    """On a live stream the banner pane reads exactly the same at moment
+    after moment -- same kind, same place, every line and mark identical.
+    The record says it in full the first time and points back after:
+    'read again: the same text as at ...'. A claim about the READING, not
+    the pixels; video moves behind the banner, so the pixel carry cannot
+    make it. The chat column's own content must still arrive in full at
+    the first moment."""
+    said = pipeline_says("qna", "00:14:20,00:14:30")
+    first, _, second = said.partition("--- 00:14:30")
+    if "jaredrhod.com" not in first:
+        return False, "the banner's own line fell out of the first moment"
+    if "read again: the same text as at 00:14:20" not in second:
+        return False, ("the second identical reading was dumped again "
+                       "instead of pointing back")
+    if "x and grok" not in first:
+        return False, "the chat column's content fell out of the first moment"
+    return True, "identical reading said once, the second look points back"
 
 
 def main():

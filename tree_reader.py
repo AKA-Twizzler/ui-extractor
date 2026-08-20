@@ -54,11 +54,35 @@ CHEVRON_CHARS = "><»›˃˅⌄▸▾▶▼"
 
 # ---------------------------------------------------------------- OCR rows
 
+# One engine and one memo for every caller. Three readers write the SAME 3x
+# enlargement of the same pane and each read it again -- measured on a live
+# stream's chat pane, two full RapidOCR passes over 20 million identical
+# pixels, ten seconds twice. The memo is keyed on the file's bytes, so a
+# rewrite of identical pixels hits and different pixels never can, and every
+# hit hands back a fresh copy because callers mark up the rows they get.
+_ENGINE = None
+_MEMO = {}
+_MEMO_HITS = 0
+
+
 def ocr_rows(png_path):
     """Rows of the pane: text with its pixel box, top to bottom."""
-    from rapidocr_onnxruntime import RapidOCR
-    res, _ = RapidOCR()(png_path)
+    import copy
+    import hashlib
+    global _ENGINE, _MEMO_HITS
+    data = open(png_path, "rb").read()
+    key = hashlib.md5(data).hexdigest()
+    if key in _MEMO:
+        _MEMO_HITS += 1
+        return copy.deepcopy(_MEMO[key])
+    if _ENGINE is None:
+        from rapidocr_onnxruntime import RapidOCR
+        _ENGINE = RapidOCR()
+    res, _ = _ENGINE(png_path)
     if not res:
+        if len(_MEMO) > 64:
+            _MEMO.clear()
+        _MEMO[key] = []
         return []
     rows = []
     for box, text, score in res:
@@ -71,6 +95,9 @@ def ocr_rows(png_path):
             "score": float(score),
         })
     rows.sort(key=lambda r: r["y0"])
+    if len(_MEMO) > 64:
+        _MEMO.clear()
+    _MEMO[key] = copy.deepcopy(rows)
     return rows
 
 

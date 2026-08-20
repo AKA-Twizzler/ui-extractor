@@ -242,6 +242,15 @@ def note_body(rows, body_h):
     return out
 
 
+# The chat, console and note readers each enlarge the same pane the same way
+# and hand the same pixels to tesseract -- three identical subprocess runs
+# per pane, measured. Keyed on the exact pixels tesseract would be given, so
+# a hit is identical by construction; a fresh copy goes back every time
+# because callers mark up the rows.
+_TESS_MEMO = {}
+_TESS_HITS = 0
+
+
 def tess_rows(png_path, gray):
     """Lines of the note, read with tesseract.
 
@@ -252,8 +261,19 @@ def tess_rows(png_path, gray):
     quotation marks intact. On a tree of short names the ranking reverses.
     Neither is better in general; each is used where it wins.
     """
+    import copy
+    import hashlib
+    global _TESS_HITS
+    ink = 255 - gray if float(np.median(gray)) < 128 else gray
+    # its own name on purpose: `key` is rebound as a loop variable below,
+    # and the store at the end must file under the pixels' fingerprint --
+    # the suite caught exactly that
+    memo_key = hashlib.md5(ink.tobytes()).hexdigest()
+    if memo_key in _TESS_MEMO:
+        _TESS_HITS += 1
+        return copy.deepcopy(_TESS_MEMO[memo_key])
     work = png_path.replace(".png", "_tess.png")
-    cv2.imwrite(work, 255 - gray if float(np.median(gray)) < 128 else gray)
+    cv2.imwrite(work, ink)
     # encoding: tesseract writes UTF-8 whatever the machine's locale is, and
     # Windows decodes a pipe in cp1252 unless told, which turns one curly
     # quote into three wrong characters and loses the cell it stood in
@@ -297,6 +317,9 @@ def tess_rows(png_path, gray):
                       for w, t, _ in ws],
         })
     rows.sort(key=lambda r: (r["y0"], r["x0"]))
+    if len(_TESS_MEMO) > 64:
+        _TESS_MEMO.clear()
+    _TESS_MEMO[memo_key] = copy.deepcopy(rows)
     return rows
 
 

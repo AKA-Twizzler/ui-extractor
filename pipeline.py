@@ -108,7 +108,7 @@ def already_drawn(lines, drawn):
     return known * 2 > len(said)
 
 
-def say_pane(pane_path, pi, engine, drawn=(), camera=None):
+def say_pane(pane_path, pi, engine, drawn=(), camera=None, in_ui=True):
     """Read one pane every way there is, and say what it turned out to be.
 
     Returns a record -- the pane's number, what it is, and its lines -- so
@@ -121,6 +121,18 @@ def say_pane(pane_path, pi, engine, drawn=(), camera=None):
     them sit over moving video -- the webcam inset composited onto the screen.
     Only the loose-text fallback asks; a pane a real reader claims is read as
     what it is.
+
+    `in_ui` is the tie test's verdict on the pane -- see rendered_here --
+    and it is one voice of two, never the decision. The structural readers
+    exist for RENDERED interfaces -- trees, terminals, tables, logs,
+    documents -- and a pane that is camera all the way through still paid
+    all five of them to conclude nothing: measured on a live stream, 18 to
+    32 seconds per camera strip, of which the one read that actually
+    reports such a pane's text costs about one. The cascade is skipped
+    only when the tie test AND the recogniser both came up empty -- the
+    body below says why either alone is not enough. Nothing such a pane
+    used to say is lost: with no readings there is nothing the cascade
+    could claim that the quiet answer does not already say.
     """
     notes = []
 
@@ -132,62 +144,83 @@ def say_pane(pane_path, pi, engine, drawn=(), camera=None):
             return None
         return record("the text drawn on the picture, reported above", [])
 
-    tree = guard(f"tree reader, pane {pi}", tree_reader.read_tree, pane_path,
-                 sink=notes) or {}
-    if tree.get("is_tree") and len(tree["rows"]) >= 5:
-        got = owned([r["name"] for r in tree["rows"]])
-        if got:
-            return got
-        tree = guard(f"second engine, pane {pi}",
-                     verify_names.verify, pane_path, tree, sink=notes) or tree
-        lines = tree_reader.render(tree).splitlines()
-        flagged = [x for x in tree["rows"]
-                   if x.get("name_status") not in ("confident", "reconciled")]
-        if flagged:
-            lines.append("  unsettled: " + "; ".join(
-                f"{x.get('name_primary')!r}/{x.get('name_second')!r}"
-                for x in flagged))
-        return record("a file tree", lines)
-    # a terminal first: it is the one screen that proves itself, since nothing
-    # else sets every character on one width, and read as anything else it
-    # loses the split between what Jared typed and what came back -- which is
-    # most of what it says
-    term = guard(f"terminal reader, pane {pi}",
-                 console_reader.read_console, pane_path, sink=notes) or {}
-    if term.get("is_console"):
-        return record("a terminal", console_reader.render(term).splitlines())
-    # not a tree: a column view before a document, since a table read as prose
-    # loses the pairing of value to heading
-    lst = guard(f"columns reader, pane {pi}", columns.read_list, pane_path,
-                sink=notes) or {}
-    if lst.get("is_list"):
-        return record("a list of columns", columns.render(lst).splitlines())
-    # a live stream's chat log, before the document reader, which would
-    # otherwise take it for prose and lose who said what
-    chat = guard(f"chat reader, pane {pi}",
-                 chat_reader.read_chat, pane_path, engine=engine,
-                 sink=notes) or {}
-    if chat.get("is_chat"):
-        return record("a chat log", chat_reader.render(chat).splitlines())
-    # a document: the words AND the shape
-    note = guard(f"document reader, pane {pi}",
-                 note_reader.read_note, pane_path,
-                 sink=notes) or {"markdown": "", "backed": 0}
-    # lines of TEXT, not lines of output: the fences round a properties block
-    # are structure the reader emits, so counting them lets two garbled words
-    # come back as a document. And enough of those lines must be lines the
-    # OTHER engine read too. Every line here is already read twice and
-    # reconciled; nothing had ever looked at the verdict, so a stream's
-    # leaderboard came back as prose -- "# 3 & Dr. Paris Woods", "a @& Alex
-    # Palencia" -- with one line in eight backed.
-    if (note_reader.body_lines(note["markdown"]) >= 3
-            and note["backed"] >= note_reader.BACKED):
-        got = owned(note["markdown"].splitlines())
-        if got:
-            return got
-        return record("an open document", note["markdown"].splitlines())
+    # One pass with the recognising engine first, reused by everything below.
+    # It is also the engine the tree reader runs on the same file, so a pane
+    # it reads fewer than five texts off cannot yield the five rows a tree
+    # claim needs -- that reader is skipped, never the claim.
+    #
+    # The cascade is skipped only when BOTH instruments agree there is
+    # nothing rendered to read: the tie test called the pane camera AND
+    # this engine read nothing on it. Each alone was tried and failed.
+    # Confirmed-region rectangles demoted a real table -- they mark where
+    # reading sampled the interface, not its extent. The tie verdict alone
+    # then demoted a Chrome window whose stored frame measured 0.632 but
+    # whose re-capture fell under the 0.55 bound: capture variance moves
+    # weakly-tying interface across any single line. The two together are
+    # backed by the widest measurement there is: across a 43-video sweep
+    # with the tie gate alone, every content loss traced to a pane that
+    # CARRIED text -- no zero-text pane anywhere held a structural claim.
     res, _ = engine(pane_path)
     texts = [t for _, t, _ in (res or [])]
+    if in_ui or texts:
+        tree = {} if len(texts) < 5 else (
+            guard(f"tree reader, pane {pi}", tree_reader.read_tree,
+                  pane_path, sink=notes) or {})
+        if tree.get("is_tree") and len(tree["rows"]) >= 5:
+            got = owned([r["name"] for r in tree["rows"]])
+            if got:
+                return got
+            tree = guard(f"second engine, pane {pi}", verify_names.verify,
+                         pane_path, tree, sink=notes) or tree
+            lines = tree_reader.render(tree).splitlines()
+            flagged = [x for x in tree["rows"]
+                       if x.get("name_status") not in ("confident",
+                                                       "reconciled")]
+            if flagged:
+                lines.append("  unsettled: " + "; ".join(
+                    f"{x.get('name_primary')!r}/{x.get('name_second')!r}"
+                    for x in flagged))
+            return record("a file tree", lines)
+        # a terminal first: it is the one screen that proves itself, since
+        # nothing else sets every character on one width, and read as
+        # anything else it loses the split between what Jared typed and what
+        # came back -- which is most of what it says
+        term = guard(f"terminal reader, pane {pi}",
+                     console_reader.read_console, pane_path, sink=notes) or {}
+        if term.get("is_console"):
+            return record("a terminal",
+                          console_reader.render(term).splitlines())
+        # not a tree: a column view before a document, since a table read as
+        # prose loses the pairing of value to heading
+        lst = guard(f"columns reader, pane {pi}", columns.read_list,
+                    pane_path, sink=notes) or {}
+        if lst.get("is_list"):
+            return record("a list of columns",
+                          columns.render(lst).splitlines())
+        # a live stream's chat log, before the document reader, which would
+        # otherwise take it for prose and lose who said what
+        chat = guard(f"chat reader, pane {pi}",
+                     chat_reader.read_chat, pane_path, engine=engine,
+                     sink=notes) or {}
+        if chat.get("is_chat"):
+            return record("a chat log", chat_reader.render(chat).splitlines())
+        # a document: the words AND the shape
+        note = guard(f"document reader, pane {pi}",
+                     note_reader.read_note, pane_path,
+                     sink=notes) or {"markdown": "", "backed": 0}
+        # lines of TEXT, not lines of output: the fences round a properties
+        # block are structure the reader emits, so counting them lets two
+        # garbled words come back as a document. And enough of those lines
+        # must be lines the OTHER engine read too. Every line here is already
+        # read twice and reconciled; nothing had ever looked at the verdict,
+        # so a stream's leaderboard came back as prose -- "# 3 & Dr. Paris
+        # Woods", "a @& Alex Palencia" -- with one line in eight backed.
+        if (note_reader.body_lines(note["markdown"]) >= 3
+                and note["backed"] >= note_reader.BACKED):
+            got = owned(note["markdown"].splitlines())
+            if got:
+                return got
+            return record("an open document", note["markdown"].splitlines())
     # each reading's own glyph height rides along, for the LARGE mark below
     heights = [max(p[1] for p in b) - min(p[1] for p in b)
                for b, _, _ in (res or [])]
@@ -249,6 +282,34 @@ def say_pane(pane_path, pi, engine, drawn=(), camera=None):
     if video_words:
         lines.append("[these sit over moving video] " + " | ".join(video_words))
     return record("text, not a tree", lines)
+
+
+def rendered_here(ties, box, bh, bw):
+    """The tie test's verdict on one pane: is anything under it rendered.
+
+    One voice of two, never the decision alone -- see say_pane for the
+    rule it feeds and the story. Measured on four known stored frames,
+    interface panes read 0.587 to 0.979 and camera panes 0.251 to 0.505,
+    with the cell test's own bound (0.55) in the gap -- and then a fresh
+    RE-CAPTURE of one of those interface panes measured under the bound:
+    capture variance moves weakly-tying interface across any single line,
+    which is why this verdict may only ever excuse a pane that the
+    recogniser ALSO read nothing on. Asked per calibration-sized block so
+    a small rendered island in a large camera pane still counts.
+    """
+    x0, y0, x1, y1 = box
+    crop = ties[max(0, y0):y1, max(0, x0):x1]
+    if crop.size == 0:
+        return True
+    best = 0.0
+    for by in range(0, crop.shape[0], bh):
+        for bx in range(0, crop.shape[1], bw):
+            b = crop[by:by + bh, bx:bx + bw]
+            if b.size >= 64:
+                best = max(best, float(b.mean()))
+    if best == 0.0:
+        best = float(crop.mean())
+    return best >= screenness.CELL_IS_SCREEN
 
 
 def where(box, W, H):
@@ -373,6 +434,16 @@ def say_record(rec, base, place):
     at = f" -- {place}" if place else ""
     if rec.get("since"):
         at += f" -- unchanged since {rec['since']}"
+    if rec.get("same_as"):
+        # read afresh this moment, and the reading came back identical --
+        # every line, every mark. On a live stream the same banner and the
+        # same quiet chat were dumped in full every ten seconds; the record
+        # says the truthful thing once and then points back to it. This is
+        # a claim about the READING, not the pixels -- video moves behind a
+        # drawn banner, so the pixel proof above cannot make it.
+        print(f"{base}[pane {rec['pi']}: {rec['kind']}{at} -- read again: "
+              f"the same text as at {rec['same_as']}]")
+        return
     print(f"{base}[pane {rec['pi']}: {rec['kind']}{at}]")
     for line in rec["lines"]:
         print(base + "  " + line)
@@ -588,6 +659,9 @@ def main():
     # the last captured moment's pixels and pane records, for reading only
     # what changed -- see unchanged_here for the rule and the measurements
     prev = None
+    # every reading already said in full, keyed by what it was, where it
+    # sat, and every line of it -- see say_record's read-again mark
+    said_texts = {}
 
     for r in runs[:limit]:
         secs = r["best"]["t"]
@@ -727,6 +801,14 @@ def main():
                      and "moving" not in prev["how"]
                      and grey.shape == prev["grey"].shape)
         cur_boxes = {}
+        # the tie map, once per moment: each pane below asks it whether
+        # anything under the pane is rendered -- see rendered_here
+        work_img = screenness.to_working_size(img)
+        ties = screenness.tie_map(work_img).astype(np.float32)
+        g_rows, g_cols = screenness.GRID
+        block_h = max(8, work_img.shape[0] // g_rows)
+        block_w = max(8, work_img.shape[1] // g_cols)
+        tie_scale = work_img.shape[1] / img.shape[1]
         for pi, box in enumerate(guard(f"regions at {ts}", frame_regions,
                                        img, engine=engine) or []):
             box_t = tuple(int(v) for v in box)
@@ -738,6 +820,7 @@ def main():
                         quiet.append(pi)
                     else:
                         rec = dict(held)
+                        rec.pop("same_as", None)
                         rec["pi"], rec["box"] = pi, box_t
                         rec["since"] = prev["ts"]
                         records.append(rec)
@@ -760,7 +843,11 @@ def main():
                         box[1] + (min(ys) + max(ys)) / 2 / scale))
                 return out
 
-            rec = say_pane(pane_path, pi, engine, drawn, camera)
+            hits_ui = rendered_here(
+                ties, tuple(int(v * tie_scale) for v in box_t),
+                block_h, block_w)
+            rec = say_pane(pane_path, pi, engine, drawn, camera,
+                           in_ui=hits_ui)
             cur_boxes[box_t] = rec
             if rec is None:
                 quiet.append(pi)
@@ -768,6 +855,19 @@ def main():
                 rec["box"] = box_t
                 records.append(rec)
         prev = {"ts": ts, "how": how, "grey": grey, "boxes": cur_boxes}
+        # a reading identical to one already said in full -- same kind, same
+        # place on the screen, every line and mark the same -- points back
+        # instead of repeating; see say_record. The pixel-proved carry above
+        # is the stronger claim and keeps its own mark.
+        for rec in records:
+            if rec.get("since") or not (rec["lines"] or rec["notes"]):
+                continue
+            key = (rec["kind"], where(rec["box"], img.shape[1], img.shape[0]),
+                   tuple(rec["lines"]), tuple(rec["notes"]))
+            if key in said_texts:
+                rec["same_as"] = said_texts[key]
+            else:
+                said_texts[key] = ts
         # compose is guarded like any reader, but its failure may not cost
         # the readings it was handed -- they fall back to a flat, unplaced
         # list rather than out of the record.
