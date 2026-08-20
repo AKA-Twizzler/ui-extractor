@@ -473,6 +473,11 @@ def read_note(png_path, engine=None):
         # and capped: a value sitting far right in a property panel is not
         # text indented eight levels deep
         r["indent"] = max(0, min(4, int(round((r["x0"] - left) / max(1.0, body * 1.6)))))
+        # the ink's colour, where it is unmistakable -- see row_ink_color
+        r["color"] = (row_ink_color(bgr, (r["x0"], r["y0"],
+                                          r["x1"], r["y1"]))
+                      if sum(ch.isalnum() for ch in r["text"]) >= 3
+                      else None)
     body_rows = rows
     md = to_markdown(body_rows)
     if props:
@@ -481,6 +486,45 @@ def read_note(png_path, engine=None):
     return {"rows": rows, "properties": props, "body_rows": body_rows,
             "body_height": body, "levels": levels, "backed": backed_share(rows),
             "body_stroke": round(body_stroke, 2), "markdown": md}
+
+
+# Colour is claimed only where it is unmistakable, and the bound is
+# measured, not chosen. Across an ads manager, an Obsidian vault, a macOS
+# desktop and a live chat: plain text reads saturation 0 to 25, coloured
+# text 68 to 153 -- blue links, red and yellow chat handles, a cyan
+# button -- and nothing measured between. The bound sits mid-gap at 45.
+# Grey, white and black are the unmarked default, never a claim.
+ROW_SAT = 45
+_HUES = ((10, "red"), (22, "orange"), (33, "yellow"), (78, "green"),
+         (100, "cyan"), (128, "blue"), (155, "purple"), (175, "pink"),
+         (181, "red"))
+
+
+def row_ink_color(bgr, box):
+    """This row's ink colour by name, or None where it is plain.
+
+    The dominant ink pixel's hue, asked only where there is enough ink to
+    measure -- thirty pixels -- and the saturation clears the measured
+    gap. The caller decides whether the row's text is worth asking about;
+    this answers only what colour the ink is.
+    """
+    x0, y0, x1, y1 = box
+    crop = bgr[max(0, y0):y1, max(0, x0):x1]
+    if crop.size == 0:
+        return None
+    bg = np.median(crop.reshape(-1, 3), axis=0)
+    ink = np.abs(crop.astype(np.int16) - bg).max(axis=2) > 60
+    if int(ink.sum()) < 30:
+        return None
+    dom = np.median(crop[ink].reshape(-1, 3), axis=0) \
+        .astype(np.uint8).reshape(1, 1, 3)
+    h, s, _v = cv2.cvtColor(dom, cv2.COLOR_BGR2HSV)[0, 0]
+    if int(s) < ROW_SAT:
+        return None
+    for top, name in _HUES:
+        if int(h) <= top:
+            return name
+    return "red"
 
 
 def first_word_width(row):
@@ -719,19 +763,24 @@ def to_markdown(rows):
                      else f"   <- the other engine read {other!r}")
         pad = "  " * max(0, min(4, r["indent"]))
         if r["heading"]:
-            out.append(f"{pad}{'#' * min(6, r['heading'])} {text}")
+            line = f"{pad}{'#' * min(6, r['heading'])} {text}"
         elif r["marker"] == "checkbox":
-            out.append(f"{pad}- [ ] {text}")
+            line = f"{pad}- [ ] {text}"
         elif r["marker"] == "checkbox-checked":
-            out.append(f"{pad}- [x] {text}")
+            line = f"{pad}- [x] {text}"
         elif r["marker"] == "bullet":
-            out.append(f"{pad}- {text}")
+            line = f"{pad}- {text}"
         elif r["number"]:
-            out.append(f"{pad}{text}")
+            line = f"{pad}{text}"
         elif r["bold"]:
-            out.append(f"{pad}**{text}**")
+            line = f"{pad}**{text}**"
         else:
-            out.append(f"{pad}{text}")
+            line = f"{pad}{text}"
+        # after the shape marks, so the suffix never lands inside them --
+        # and behind the arrow, which every word-tracking reader skips
+        if r.get("color"):
+            line += f"   <- drawn in {r['color']}"
+        out.append(line)
     return "\n".join(out)
 
 

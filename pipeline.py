@@ -221,9 +221,11 @@ def say_pane(pane_path, pi, engine, drawn=(), camera=None, in_ui=True):
             if got:
                 return got
             return record("an open document", note["markdown"].splitlines())
-    # each reading's own glyph height rides along, for the LARGE mark below
+    # each reading's own glyph height rides along, for the LARGE mark
+    # below -- and its box, for the colour ask
     heights = [max(p[1] for p in b) - min(p[1] for p in b)
                for b, _, _ in (res or [])]
+    quads = [b for b, _, _ in (res or [])]
     # Words over the webcam inset are not the screen's text -- the cap's
     # "Hat", the microphone's "fifine" -- and they used to enter the record
     # beside the real readings, marked unconfirmed but never placed. They are
@@ -236,6 +238,7 @@ def say_pane(pane_path, pi, engine, drawn=(), camera=None, in_ui=True):
         if video_words:
             texts = [t for t, v in zip(texts, over) if not v]
             heights = [h for h, v in zip(heights, over) if not v]
+            quads = [b for b, v in zip(quads, over) if not v]
     # Nothing is dropped for being short. This used to skip any pane with
     # fewer than four readings, which is silent loss -- the worst kind,
     # because the output looks complete. On a slide of nine cards split into
@@ -262,18 +265,42 @@ def say_pane(pane_path, pi, engine, drawn=(), camera=None, in_ui=True):
                    sink=notes)
     if marked is None:
         marked = [(t, False) for t in texts[:16]]
-    # confirm_readings answers in input order, so heights still line up
+    # confirm_readings answers in input order, so heights and boxes still
+    # line up. Size speaks first, then colour -- see note_reader's
+    # row_ink_color for the colour rule and its measured gap.
     med = sorted(heights)[len(heights) // 2] if len(heights) >= 4 else 0
-    big = [t for (t, ok), h in zip(marked, heights)
-           if ok and med and h >= LARGE * med]
-    sure = [t for (t, ok), h in zip(marked, heights)
-            if ok and not (med and h >= LARGE * med)]
-    doubt = [t for t, ok in marked if not ok]
+    big, sure, doubt = [], [], []
+    colored = {}
+    pane_img = None
+    for (t, ok), h, q in zip(marked, heights, quads):
+        if not ok:
+            doubt.append(t)
+            continue
+        if med and h >= LARGE * med:
+            big.append(t)
+            continue
+        hue = None
+        if sum(ch.isalnum() for ch in t) >= 3:
+            if pane_img is None:
+                pane_img = cv2.imread(pane_path)
+            if pane_img is not None:
+                xs = [p[0] for p in q]
+                ys = [p[1] for p in q]
+                hue = guard(f"ink colour, pane {pi}",
+                            note_reader.row_ink_color, pane_img,
+                            (int(min(xs)), int(min(ys)),
+                             int(max(xs)), int(max(ys))), sink=notes)
+        if hue:
+            colored.setdefault(hue, []).append(t)
+        else:
+            sure.append(t)
     lines = []
     if big:
         lines.append("[drawn large] " + " | ".join(big))
     if sure:
         lines.append(" | ".join(sure))
+    for hue in sorted(colored):
+        lines.append(f"[drawn in {hue}] " + " | ".join(colored[hue]))
     if doubt:
         lines.append("[only one engine read these] " + " | ".join(doubt))
     # "sit over" is the whole claim, chosen against the stronger wording. A

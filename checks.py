@@ -1385,6 +1385,50 @@ def _read_again_mark():
     return True, "identical reading said once, the second look points back"
 
 
+@check("colour: named only where the ink is unmistakable")
+def _color_marks():
+    """Plain text measures saturation 0-25 and coloured text 68-153 with
+    nothing between; the bound sits mid-gap at 45. Pinned on the ads
+    manager pane, whose campaign links are drawn blue over a white table:
+    the instrument names the link row blue and the plain row nothing;
+    the document reader's own lines carry the mark behind the arrow; and
+    a one-row cut that no reader claims brings the mark through the
+    fallback as its own grouped line."""
+    for pane in regions("post", "00:00:30"):
+        rows = tree_reader.ocr_rows(pane)
+        blue = next((r for r in rows if "Plan-2026" in r["text"]), None)
+        plain = next((r for r in rows
+                      if r["text"].strip().lower().startswith("daily")),
+                     None)
+        if blue and plain:
+            break
+    else:
+        raise Skip("the ads pane no longer shows both row kinds")
+    img = cv2.imread(pane)
+    named = note_reader.row_ink_color(
+        img, (blue["x0"], blue["y0"], blue["x1"], blue["y1"]))
+    if named != "blue":
+        return False, f"the campaign link row read {named!r}, not blue"
+    if note_reader.row_ink_color(
+            img, (plain["x0"], plain["y0"], plain["x1"],
+                  plain["y1"])) is not None:
+        return False, "a plain row was given a colour"
+    md = note_reader.read_note(pane)["markdown"]
+    if "<- drawn in blue" not in md:
+        return False, "the document reader's lines carry no colour mark"
+    cut = pane.replace(".png", "_colorrow.png")
+    strip = img[max(0, blue["y0"] - 6):blue["y1"] + 6,
+                max(0, blue["x0"] - 6):blue["x1"] + 6]
+    cv2.imwrite(cut, strip)
+    rec = pipeline.say_pane(cut, 0, engine(), (), None, in_ui=True)
+    if rec is None or not any(ln.startswith("[drawn in blue]")
+                              for ln in rec["lines"]):
+        got = rec["lines"][:2] if rec else "nothing"
+        return False, f"the fallback said {got} without the colour group"
+    return True, ("link row blue, plain row unmarked, the mark arrives "
+                  "through the document lines and the fallback both")
+
+
 def main():
     wanted = [a for a in sys.argv[1:] if not a.startswith("-")]
     if "--list" in sys.argv:
