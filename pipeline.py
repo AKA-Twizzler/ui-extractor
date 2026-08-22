@@ -345,11 +345,21 @@ def say_pane(pane_path, pi, engine, drawn=(), camera=None, in_ui=True):
     big, sure, doubt = [], [], []
     colored = {}
     pane_img = None
+    # every reading with what was measured about it, for the records file
+    readings = []
     for (t, ok), h, q in zip(marked, heights, quads):
+        xs = [p[0] for p in q]
+        ys = [p[1] for p in q]
+        seen = {"text": t, "confirmed": bool(ok), "height": int(h),
+                "box": [int(min(xs)), int(min(ys)),
+                        int(max(xs)), int(max(ys))],
+                "large": False, "hue": None}
+        readings.append(seen)
         if not ok:
             doubt.append(t)
             continue
         if med and h >= LARGE * med:
+            seen["large"] = True
             big.append(t)
             continue
         hue = None
@@ -357,12 +367,11 @@ def say_pane(pane_path, pi, engine, drawn=(), camera=None, in_ui=True):
             if pane_img is None:
                 pane_img = cv2.imread(pane_path)
             if pane_img is not None:
-                xs = [p[0] for p in q]
-                ys = [p[1] for p in q]
                 hue = guard(f"ink colour, pane {pi}",
                             note_reader.row_ink_color, pane_img,
                             (int(min(xs)), int(min(ys)),
                              int(max(xs)), int(max(ys))), sink=notes)
+        seen["hue"] = hue
         if hue:
             colored.setdefault(hue, []).append(t)
         else:
