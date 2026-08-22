@@ -390,7 +390,9 @@ def say_pane(pane_path, pi, engine, drawn=(), camera=None, in_ui=True):
     # only the first is not screen text, and the box cannot say which.
     if video_words:
         lines.append("[these sit over moving video] " + " | ".join(video_words))
-    return record("text, not a tree", lines)
+    return record("text, not a tree", lines,
+                  {"readings": readings, "median_height": int(med),
+                   "video_words": video_words})
 
 
 def rendered_here(ties, box, bh, bw):
