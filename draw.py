@@ -118,19 +118,45 @@ def app_name(entry, panes):
     return None
 
 
+def describe(panes):
+    """What the main pane shows, in a few words: the note's first line,
+    the tree's size and first row, the table's headings."""
+    if not panes:
+        return ""
+    main = max(panes, key=lambda p: (p["box"][2] - p["box"][0]) * (p["box"][3] - p["box"][1]))
+    kind = main["kind"]
+    lines = [ln.strip() for ln in content_lines(main) if ln.strip() and ln.strip() != "---"]
+    if kind == "an open document":
+        first = next((ln for ln in lines if not re.match(r"^[a-z_ ]+: ", ln)), lines[0] if lines else "")
+        first = re.split(r"\s+<- ", first)[0].strip("#* ")
+        return f"a note: {first[:60]}" if first else "a note"
+    if kind == "a file tree":
+        rows = (main.get("data") or {}).get("rows") or []
+        first = (rows[0].get("name") if rows else "") or ""
+        return f"a file tree, {len(rows)} rows, from {first[:30]}" if rows else "a file tree"
+    if kind == "a list of columns":
+        blocks = (main.get("data") or {}).get("blocks") or []
+        head = " | ".join(blocks[0].get("header") or []) if blocks else ""
+        return f"a table: {head[:60]}" if head else "a table"
+    if kind == "a terminal":
+        return "a terminal" + (f": {lines[-1][:50]}" if lines else "")
+    if kind == "a chat log":
+        return f"a chat log, {len(lines)} lines"
+    words = " ".join(lines)[:60]
+    return f"loose text: {words}" if words else "nothing readable"
+
+
 def window_title(entry, panes):
     app = app_name(entry, panes)
     top = entry.get("top")
+    if entry.get("screen"):
+        return "The screen"
     if app and top:
         return f"The {app} window, titled {top}" if app != "Finder" else f"The Finder window, {top}"
-    if app and entry.get("screen"):
-        return f"{app[0].upper() + app[1:]}, filling the screen"
     if app:
         return f"The {app} window"
     if top:
         return f"A window titled {top}"
-    if entry.get("screen"):
-        return "The screen"
     return "A window"
 
 
@@ -692,10 +718,10 @@ def events(moments, sts):
         for s in sts:
             if m in s["moments"] and s["moments"][0] is m:
                 name = window_title(s["entry"], s["panes"])
-                what.append((name[0].lower() + name[1:]) if name.startswith(("The ", "A ")) else name)
-        kinds = sorted({p["kind"] for p in m.get("panes") or [] if p.get("wi") is None and p["kind"] != "text, not a tree"})
+                name = (name[0].lower() + name[1:]) if name.startswith(("The ", "A ")) else name
+                what.append(f"{name}: {describe(s['panes'])}")
         newly = [w for e in m.get("windows") or [] for w in (e.get("newly") or [])]
-        bit = "; ".join(what + kinds) or "the same screen"
+        bit = "; ".join(what) or "the same screen"
         if newly:
             bit += " -- newly readable: " + " | ".join(newly[:8]) + (f" and {len(newly) - 8} more" if len(newly) > 8 else "")
         how = m.get("how") or ""
@@ -741,7 +767,8 @@ def note(records_path, diary_text=None):
     secs = (moments[-1]["secs"] - moments[0]["secs"]) if len(moments) > 1 else 0
     apps = []
     for s in sts:
-        name = window_title(s["entry"], s["panes"])
+        app = app_name(s["entry"], s["panes"])
+        name = (f"{app[0].upper() + app[1:]}" if app else None) or window_title(s["entry"], s["panes"])
         if name not in apps:
             apps.append(name)
     clocks = [c for m in moments for p in m.get("panes") or [] for c in [clock_in(p)] if c]
@@ -769,7 +796,8 @@ def note(records_path, diary_text=None):
                 parts.append(said + "\n")
             parts.append("---\n")
             continue
-        parts.append(f"## {name} - as at {when}" + (", scrolled" if s["stitched"] else "") + "\n")
+        parts.append(f"## {name} - as at {when}" + (", scrolled" if s["stitched"] else "")
+                     + f" - {describe(s['panes'])}\n")
         pointer = s["moments"][0].get("pointer")
         parts.append(draw_map(s["size"], s["entry"]["rect"], s["share"] or 0,
                               app_name(s["entry"], s["panes"]) or "window", pointer) + "\n")
