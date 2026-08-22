@@ -631,12 +631,21 @@ def compose(records, wins, panels_found, img, engine, workdir, tag,
                    and wi in owner.values()), None)
         if wi is None:
             say_panel(panel)
+            if moment is not None:
+                moment["lone_panels"].append(panel)
         else:
             over[wi] = panel
     for wi, win in sorted(enumerate(wins), key=lambda p: (p[1][1], p[1][0])):
         mine = [r for r in records if owner.get(r["pi"]) == wi]
         if not mine:
             continue
+        # the window as the records file keeps it: its rectangle, its
+        # place, what its top strip read (or what it read earlier), what
+        # became readable since the last look, and the panel words the
+        # panes did not hold
+        entry = {"wi": wi, "rect": list(win), "where": where(win, W, H),
+                 "drawn_over": wi in over, "top": None, "top_from": None,
+                 "newly": [], "panel_extra": []}
         head = (f"  [window -- {where(win, W, H)}, "
                 f"{win[0]},{win[1]} to {win[2]},{win[3]}")
         if wi in over:
@@ -645,6 +654,7 @@ def compose(records, wins, panels_found, img, engine, workdir, tag,
                       workdir, tag) or []
         if words:
             head += " -- across its top: " + " | ".join(words)
+            entry["top"] = " | ".join(words)
             if memory is not None:
                 memory.append({"ts": tag.replace("-", ":"), "rect": win,
                                "where": where(win, W, H),
@@ -656,9 +666,13 @@ def compose(records, wins, panels_found, img, engine, workdir, tag,
             if known:
                 head += (f" -- its top read at {known[-1]['ts']}: "
                          + known[-1]["words"])
+                entry["top"] = known[-1]["words"]
+                entry["top_from"] = known[-1]["ts"]
         print(head + "]")
         for rec in sorted(mine, key=lambda r: (r["box"][1], r["box"][0])):
-            say_record(rec, "    ", where_in(rec["box"], win))
+            rec["wi"] = wi
+            rec["where_in"] = where_in(rec["box"], win)
+            say_record(rec, "    ", rec["where_in"])
         if texts is not None:
             # what happened here since the last look at this same rectangle:
             # the confirmed words that were not readable then. True whether
