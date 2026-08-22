@@ -259,7 +259,7 @@ def say_pane(pane_path, pi, engine, drawn=(), camera=None, in_ui=True):
                      console_reader.read_console, pane_path, sink=notes) or {}
         if term.get("is_console"):
             return record("a terminal",
-                          console_reader.render(term).splitlines())
+                          console_reader.render(term).splitlines(), term)
         # not a tree: a column view before a document, since a table read as
         # prose loses the pairing of value to heading
         lst = guard(f"columns reader, pane {pi}", columns.read_list,
