@@ -216,7 +216,8 @@ def doc_line(line, fine):
     if m:
         level = min(3, len(m.group(1)))
         inner = esc(m.group(2))
-        return f'<div class="sn-h{level}"{cls}>{m.group(1)} {inner}</div>'
+        both = f"sn-h{level}" + (f" sn-{hue}" if hue in HUES else "")
+        return f'<div class="{both}">{m.group(1)} {inner}</div>'
     pad = "&nbsp;" * min(12, indent)
     return f"<div{cls}>{pad}{body}</div>"
 
