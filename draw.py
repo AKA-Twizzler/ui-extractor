@@ -195,6 +195,9 @@ def draw_document(pane):
     fine = []
     out = []
     props, in_props = [], False
+    data = pane.get("data") or {}
+    rows = data.get("rows") or []
+    mono = (data.get("style") or {}).get("family") == "monospace"
     for line in lines:
         if line.strip() == "---":
             if in_props:
@@ -208,15 +211,39 @@ def draw_document(pane):
             continue
         h = doc_line(line, fine)
         if h:
+            # the measured type on this line: leaning words, a rule under
+            # it, a link's blue -- matched to the row the line came from
+            row = next((r for r in rows if r.get("text") and r["text"][:30] in line), None)
+            if row:
+                for w in row.get("italic") or []:
+                    if not w.strip("'").isalnum():
+                        continue
+                    h = h.replace(esc(w), f"<i>{esc(w)}</i>", 1)
+                if row.get("underline"):
+                    h = h.replace("<div", "<div style=\"text-decoration:underline\"", 1)
+                if row.get("link"):
+                    h = h.replace("<div", "<div class=\"sn-link\"", 1)
+                    fine.append(f"a link, blue: {row['text'][:40]!r}")
             out.append(h)
-    return '<div class="sn-doc">' + "".join(out) + "</div>", fine
+    cls = "sn-doc" + (" sn-tree" if mono else "")
+    return f'<div class="{cls}">' + "".join(out) + picture_marks(data) + "</div>", fine
 
 
 def draw_tree(pane):
     lines = content_lines(pane)
     fine = [ln.strip() for ln in (pane.get("lines") or [])
             if ln.strip().startswith("unsettled:")]
-    return '<div class="sn-tree">' + esc("\n".join(lines)) + "</div>", fine
+    rows = (pane.get("data") or {}).get("rows") or []
+    banded = {r["name"] for r in rows if r.get("band")}
+    out = []
+    for ln in lines:
+        h = esc(ln)
+        if banded and any(ln.strip().endswith(n) for n in banded):
+            hue = next(r["band"] for r in rows if r.get("band") and ln.strip().endswith(r["name"]))
+            h = f'<span class="sn-{hue}" style="font-weight:600">{h}</span>'
+            fine.append(f"the {hue} band: the tree row {ln.strip()!r} is drawn on it")
+        out.append(h)
+    return '<div class="sn-tree">' + "\n".join(out) + "</div>" + picture_marks(pane.get("data")), fine
 
 
 def draw_list(pane):
@@ -229,8 +256,16 @@ def draw_list(pane):
         out.append("<table>")
         out.append('<tr class="sn-head">' + "".join(f"<td>{esc(h)}</td>" for h in head) + "</tr>")
         flags = b.get("flags") or []
+        styles = b.get("row_style") or []
         for ri, r in enumerate(rows):
-            out.append("<tr>" + "".join(f"<td>{esc(c)}</td>" for c in r) + "</tr>")
+            st = styles[ri] if ri < len(styles) else {}
+            cls = ' class="sn-selected"' if st.get("band") else ""
+            cells = [esc(c) for c in r]
+            if st.get("icon") and cells:
+                cells[0] = icon_span(st["icon"]) + cells[0]
+            out.append(f"<tr{cls}>" + "".join(f"<td>{c}</td>" for c in cells) + "</tr>")
+            if st.get("band"):
+                fine.append(f"the {st['band']} band: the row {' | '.join(r)[:50]!r} is drawn on it")
             if ri < len(flags):
                 for c, f in zip(r, flags[ri]):
                     if f:
@@ -238,8 +273,8 @@ def draw_list(pane):
         out.append("</table>")
     if not out:
         # the lines are a markdown table already; keep them as read
-        return '<div class="sn-body">' + "<br>".join(esc(ln) for ln in pane.get("lines") or []) + "</div>", fine
-    return '<div class="sn-body">' + "".join(out) + "</div>", fine
+        return '<div class="sn-body">' + "<br>".join(esc(ln) for ln in content_lines(pane)) + "</div>", fine
+    return '<div class="sn-body">' + "".join(out) + picture_marks(data) + "</div>", fine
 
 
 def draw_terminal(pane):
@@ -281,18 +316,24 @@ def draw_loose(pane, as_side=False):
     if video:
         fine.append("over moving video: " + " | ".join(video))
     parts = []
+    readings = (pane.get("data") or {}).get("readings") or []
+    iconed = {r["text"].strip(): r["icon"] for r in readings if r.get("icon")}
     for mark, text in sure:
         items = [esc(x.strip()) for x in text.split(" | ") if x.strip()]
+        if iconed:
+            items = [(icon_span(iconed[x]) if x in iconed else "") + esc(x)
+                     for x in (y.strip() for y in text.split(" | ")) if x]
         if mark == "large":
             items = [f'<span class="sn-title">{x}</span>' for x in items]
         elif mark in HUES:
             items = [f'<span class="sn-{mark}">{x}</span>' for x in items]
         parts.extend(items)
-    if not parts:
+    pics = picture_marks(pane.get("data"))
+    if not parts and not pics:
         return "", fine
     if as_side:
-        return '<div class="sn-side">' + "<br>".join(parts) + "</div>", fine
-    return '<div class="sn-body">' + " &nbsp;·&nbsp; ".join(parts) + "</div>", fine
+        return '<div class="sn-side">' + "<br>".join(parts) + pics + "</div>", fine
+    return '<div class="sn-body">' + " &nbsp;·&nbsp; ".join(parts) + pics + "</div>", fine
 
 
 def remainder_of(pane):
@@ -430,13 +471,17 @@ def draw_window(entry, panes, theme):
     return f'<div class="{cls}">{"".join(head)}{body}{foot}</div>', fine
 
 
-def draw_map(size, rect, share, label):
+def draw_map(size, rect, share, label, pointer=None):
     W, H = size or (1920, 1080)
     sx, sy = 384 / W, 216 / H
     x0, y0, x1, y1 = rect
     win = (f'<rect class="win" x="{x0 * sx:.0f}" y="{y0 * sy:.0f}" '
            f'width="{(x1 - x0) * sx:.0f}" height="{(y1 - y0) * sy:.0f}"/>'
            f'<text x="{x0 * sx + 5:.0f}" y="{y0 * sy + 13:.0f}">{esc(label)}</text>')
+    if pointer:
+        px, py = pointer["box"][0] * sx, pointer["box"][1] * sy
+        win += (f'<circle cx="{px:.0f}" cy="{py:.0f}" r="3" fill="#d33a3a"/>'
+                f'<text class="muted" x="{px + 5:.0f}" y="{py + 4:.0f}" font-size="9">pointer</text>')
     tag = f'<text class="muted" x="290" y="208" font-size="9">screen {share:.0f}%</text>' if share else ""
     return ('<div class="sn-map"><svg viewBox="0 0 384 216" xmlns="http://www.w3.org/2000/svg">'
             '<rect class="frame" x="0.5" y="0.5" width="383" height="215"/>'
@@ -661,11 +706,31 @@ def events(moments, sts):
 
 
 def theme_of(panes):
+    """Dark or light, from the measured look of the window's panes."""
+    votes = {}
     for p in panes:
-        t = (p.get("data") or {}).get("theme")
+        d = p.get("data") or {}
+        t = ((d.get("style") or {}).get("look") or {}).get("theme") or d.get("theme")
         if t:
-            return t
-    return None
+            votes[t] = votes.get(t, 0) + 1
+    return max(votes, key=votes.get) if votes else None
+
+
+def picture_marks(data):
+    """Placeholders for the pictures a pane held where no text was."""
+    pics = (data or {}).get("style", {}).get("pictures") or []
+    out = []
+    for p in pics[:4]:
+        x0, y0, x1, y1 = p["box"]
+        out.append(f'<span class="sn-picture">picture {x1 - x0}×{y1 - y0}'
+                   + (f", {p['hue']}" if p.get("hue") not in (None, "black", "white", "grey") else "")
+                   + "</span>")
+    return " ".join(out)
+
+
+def icon_span(hue):
+    cls = "sn-ico" if hue in ("green",) else ("sn-ico file" if hue == "white" else "sn-ico grey")
+    return f'<span class="{cls}"></span>'
 
 
 def note(records_path, diary_text=None):
@@ -705,7 +770,9 @@ def note(records_path, diary_text=None):
             parts.append("---\n")
             continue
         parts.append(f"## {name} - as at {when}" + (", scrolled" if s["stitched"] else "") + "\n")
-        parts.append(draw_map(s["size"], s["entry"]["rect"], s["share"] or 0, app_name(s["entry"], s["panes"]) or "window") + "\n")
+        pointer = s["moments"][0].get("pointer")
+        parts.append(draw_map(s["size"], s["entry"]["rect"], s["share"] or 0,
+                              app_name(s["entry"], s["panes"]) or "window", pointer) + "\n")
         theme = theme_of(s["panes"])
         h, fine = draw_window(s["entry"], s["panes"], theme)
         parts.append(h + "\n")
@@ -734,6 +801,9 @@ def note(records_path, diary_text=None):
             fp.append(f"its top read at {s['entry']['top_from']}")
         if s["entry"].get("drawn_over"):
             fp.append("drawn over the moving picture")
+        if pointer:
+            fp.append(f"the mouse pointer at {pointer['box'][0]},{pointer['box'][1]} "
+                      f"(matched {pointer['score']:.2f} at scale {pointer['scale']})")
         for x in s["entry"].get("panel_extra") or []:
             fp.append(("read across the window, in no pane: " if x.get("confirmed") else "one engine only, across the window: ") + x["line"])
         fp.extend(fine)
