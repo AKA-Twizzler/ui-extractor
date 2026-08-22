@@ -176,6 +176,7 @@ def window_title(entry, panes):
 HUES = ("red", "orange", "yellow", "green", "cyan", "blue", "purple", "pink")
 SUFFIX = re.compile(r"\s+<- (.*)$")
 BOLD = re.compile(r"\*\*(.+?)\*\*")
+ITALIC = re.compile(r"(?<![*\w])\*([^*\s][^*]*?)\*(?![*\w])")
 
 
 def doc_line(line, fine):
@@ -208,6 +209,7 @@ def doc_line(line, fine):
     cls = f' class="sn-{hue}"' if hue in HUES else ""
     body = esc(text)
     body = BOLD.sub(r"<b>\1</b>", body)
+    body = ITALIC.sub(r"<i>\1</i>", body)
     if cut:
         body += "…"
     if text == "---":
@@ -253,10 +255,6 @@ def draw_document(pane):
             # it, a link's blue -- matched to the row the line came from
             row = next((r for r in rows if r.get("text") and r["text"][:30] in line), None)
             if row:
-                for w in row.get("italic") or []:
-                    if not w.strip("'").isalnum():
-                        continue
-                    h = h.replace(esc(w), f"<i>{esc(w)}</i>", 1)
                 if row.get("underline"):
                     h = h.replace("<div", "<div style=\"text-decoration:underline\"", 1)
                 if row.get("link"):
@@ -339,6 +337,8 @@ def split_loose(pane):
         elif s.startswith("[drawn in "):
             hue = s[len("[drawn in "):].split("]", 1)[0]
             sure.append((hue, s.split("]", 1)[1].strip()))
+        elif s.startswith(("[dark look", "[light look")):
+            continue          # the measured look; the data carries it, the drawing uses it
         elif s.startswith("["):
             doubt.append(s)
         else:
@@ -370,6 +370,13 @@ def draw_loose(pane, as_side=False):
     if not parts and not pics:
         return "", fine
     if as_side:
+        # a sidebar whose items carry marks: an item without one, between
+        # marked items, is a section label (Finder's Favorites, Locations)
+        marked = sum(1 for x in parts if "sn-ico" in x)
+        if marked >= 3 and marked >= len(parts) // 2:
+            parts = [x if "sn-ico" in x else f'<div class="sn-section">{x}</div>' for x in parts]
+            return '<div class="sn-side">' + "".join(
+                x if x.startswith("<div") else x + "<br>" for x in parts) + pics + "</div>", fine
         return '<div class="sn-side">' + "<br>".join(parts) + pics + "</div>", fine
     return '<div class="sn-body">' + " &nbsp;·&nbsp; ".join(parts) + pics + "</div>", fine
 
