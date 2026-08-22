@@ -45,6 +45,7 @@ BLOB_MIN = 7           # runs this wide or wider are glyphs (chevrons, icons)
 GLYPH_COVERAGE = 0.25  # a glyph lights part of the row, not all of it
 COLUMN_TOL = 10        # px tolerance when clustering guide-line columns
 PITCH_TOL = 0.14       # a file tree's rows are evenly pitched, within 14%
+GROW_TOL = 0.2         # a row joins the tree's lattice within 20% of the pitch
 MIN_COLUMN_ROWS = 2    # a column drawn on one row only is noise
 INDENT_MISS = 1.5      # how far a row may start from where its depth puts
                        # it, in row heights: real sidebars measure 0.55 and
@@ -115,7 +116,7 @@ def tree_rows(rows):
     diffs = sorted(b - a for a, b in zip(ys, ys[1:]) if 8 < b - a < 400)
     if not diffs:
         return rows
-    best = []
+    best, best_pitch = [], 0
     for pitch in set(diffs):
         tol = max(4, int(pitch * PITCH_TOL))
         for start in range(len(rows)):
@@ -152,8 +153,63 @@ def tree_rows(rows):
             # to 1. Width settles which ROW to take at a given height, never
             # which set of rows is the tree.
             if len(chain) > len(best):
-                best = chain
-    return [rows[i] for i in best] if len(best) >= 3 else rows
+                best, best_pitch = chain, pitch
+    if len(best) < 3:
+        return rows
+    return [rows[i] for i in grow_lattice(rows, best, best_pitch)]
+
+
+def grow_lattice(rows, chain, pitch):
+    """Extend the winning chain along its own pitch, through one jolted row.
+
+    The chain links each row to the next by a single gap, so one row pushed
+    off the pitch -- the cursor resting on it, the row being dragged -- breaks
+    the chain there and the tree comes back as the longer half. Measured at
+    00:04:10 of the memory-files video: 52 rows read, 30 kept, the break a
+    row 12 px off an 80.6 px pitch, everything below it dropped.
+
+    The chain fixes the lattice -- its first row and its pitch, refined over
+    the chain's whole span -- and every row is then asked how far it sits
+    from the nearest slot. One row per slot, the widest; a slot the jolted
+    row belongs to is still a slot. Growth stops at the ends after two empty
+    slots in a row, so the lattice never walks out of the tree and into the
+    tab strip above it or the status bar below.
+    """
+    if len(chain) < 3:
+        return chain
+    ys = [r["y0"] for r in rows]
+    first = ys[chain[0]]
+    span = ys[chain[-1]] - first
+    pitch = span / (len(chain) - 1) if span > 0 else pitch
+    if pitch <= 0:
+        return chain
+    tol = max(6, pitch * GROW_TOL)
+    taken = {}
+    for i in chain:
+        taken[round((ys[i] - first) / pitch)] = i
+    lo, hi = min(taken), max(taken)
+    for j in range(len(rows)):
+        if j in taken.values():
+            continue
+        slot = round((ys[j] - first) / pitch)
+        if abs(ys[j] - (first + slot * pitch)) > tol:
+            continue
+        have = taken.get(slot)
+        if have is None or (rows[j]["x1"] - rows[j]["x0"]) > (
+                rows[have]["x1"] - rows[have]["x0"]) and not (lo <= slot <= hi):
+            taken[slot] = j
+    keep = set(range(lo, hi + 1)) & set(taken)
+    for step in (1, -1):
+        k, empty = (hi if step > 0 else lo) + step, 0
+        bound = max(taken) if step > 0 else min(taken)
+        while empty < 2 and (k <= bound if step > 0 else k >= bound):
+            if k in taken:
+                keep.add(k)
+                empty = 0
+            else:
+                empty += 1
+            k += step
+    return [taken[k] for k in sorted(keep)]
 
 
 # ------------------------------------------------------------ the gutter
