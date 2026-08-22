@@ -44,6 +44,70 @@ write_box = panes.write_box
 # the end instead of looking clean.
 STUMBLED = []
 
+
+# ------------------------------------------------------ the records foundation
+#
+# Everything a moment SAYS is also kept as DATA, in records.jsonl beside the
+# note: the exact characters printed (so nothing said is ever lost), and the
+# measurements and reader structures those lines came from -- regions,
+# windows and their rectangles, top-strip words, panels, standing text, and
+# for every pane its box, its kind, its lines and marks, and the reader's own
+# structure with row geometry, sizes, weights and colours. A note is then a
+# RENDERING of its records: the shape of the note can change without the
+# video ever being read again, and the drawing layer has the geometry it
+# needs without re-deriving it from prose. render.py turns a records file
+# back into exactly this diary, and the check suite holds the two identical.
+
+class Tee:
+    """Stdout, with every character also kept until taken."""
+
+    def __init__(self, real):
+        self.real = real
+        self.buf = []
+
+    def write(self, s):
+        self.real.write(s)
+        self.buf.append(s)
+
+    def flush(self):
+        self.real.flush()
+
+    def take(self):
+        text = "".join(self.buf)
+        self.buf = []
+        return text
+
+
+def jsonable(x):
+    """The same value, in the shapes JSON can hold.
+
+    Readers answer in numpy scalars, tuples and sets; the record keeps their
+    values and drops nothing -- a value with no JSON shape is kept as its
+    own text rather than thrown away.
+    """
+    if isinstance(x, dict):
+        return {str(k): jsonable(v) for k, v in x.items()}
+    if isinstance(x, (list, tuple)):
+        return [jsonable(v) for v in x]
+    if isinstance(x, (set, frozenset)):
+        return sorted(jsonable(v) for v in x)
+    if isinstance(x, np.ndarray):
+        return x.tolist()
+    if isinstance(x, np.generic):
+        return x.item()
+    if isinstance(x, (str, int, float, bool)) or x is None:
+        return x
+    return str(x)
+
+
+def records_path(out_dir, dense, at):
+    """Where this run's records go: the note's own file for the
+    chronological run, and a file of its own for a probe, so a named-moment
+    check never overwrites a finished video's records."""
+    name = "records.jsonl" if dense else (
+        "records-at.jsonl" if at else "records-screens.jsonl")
+    return os.path.join(out_dir, name)
+
 # What is drawn at twice a pane's own median glyph height is drawn LARGE,
 # and the record says so -- size is layout, and a title is a title because
 # of its size. Two sits in a measured gap: across 21 stored panes, body
