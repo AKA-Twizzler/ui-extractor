@@ -396,8 +396,18 @@ def reach(found, rows, tess_words):
     return kept
 
 
-def read_list(png_path):
-    """Read a column view back as a table, or say plainly that it is not one."""
+def read_list(png_path, readings=None):
+    """Read a column view back as a table, or say plainly that it is not one.
+
+    `readings` is how many texts the recogniser found on the pane at its own
+    size, when the caller has already asked. The reader's own recogniser
+    pass runs on a three-times enlargement and costs eight to ten seconds
+    on a camera pane -- measured on a live stream, the single largest cost
+    per pane in the build -- and a pane with fewer than three texts cannot
+    be a heading and two rows whatever the enlargement finds.
+    """
+    if readings is not None and readings < MIN_ROWS:
+        return {"is_list": False, "why": "too little text to be a list"}
     bgr = cv2.imread(png_path)
     if bgr is None:
         return {"is_list": False, "why": "could not read the image"}
