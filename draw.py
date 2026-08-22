@@ -539,8 +539,12 @@ def draw_window(entry, panes, theme):
     if foot_words:
         foot = '<div class="sn-pathbar">' + " &nbsp;·&nbsp; ".join(esc(w) for w in foot_words) + "</div>"
     if rest["below"]:
-        if any("›" in w or w.endswith(">") for w in rest["below"]) or len(rest["below"]) >= 3:
-            foot += pathbar([w.rstrip(">") for w in rest["below"]])
+        crumbs = [w.rstrip(">").strip() for w in rest["below"]]
+        # a path's crumbs are short names; a sentence below the list is the
+        # window behind showing through, and is kept as words, not a path
+        crumb_like = all(len(c) <= 28 and c.count(" ") <= 2 for c in crumbs)
+        if crumb_like and (any("›" in w or w.endswith(">") for w in rest["below"]) or len(crumbs) >= 3):
+            foot += pathbar(crumbs)
         else:
             foot += '<div class="sn-pathbar">' + " &nbsp;·&nbsp; ".join(esc(w) for w in rest["below"]) + "</div>"
     cls = "sn-window sn-dark" if theme == "dark" else "sn-window"
