@@ -368,7 +368,7 @@ def say_pane(pane_path, pi, engine, drawn=(), camera=None, in_ui=True):
     if (in_ui or texts) and len(texts) >= 3:
         tree = {} if len(texts) < 5 else (
             guard(f"tree reader, pane {pi}", tree_reader.read_tree,
-                  pane_path, sink=notes) or {})
+                  pane_path, res, sink=notes) or {})
         if tree.get("is_tree") and len(tree["rows"]) >= 5:
             got = owned([r["name"] for r in tree["rows"]])
             if got:
@@ -396,7 +396,7 @@ def say_pane(pane_path, pi, engine, drawn=(), camera=None, in_ui=True):
         # not a tree: a column view before a document, since a table read as
         # prose loses the pairing of value to heading
         lst = guard(f"columns reader, pane {pi}", columns.read_list,
-                    pane_path, readings=len(texts), sink=notes) or {}
+                    pane_path, readings=len(texts), res=res, sink=notes) or {}
         if lst.get("is_list"):
             return record("a list of columns",
                           columns.render(lst).splitlines(), lst)

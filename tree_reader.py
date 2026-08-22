@@ -66,8 +66,14 @@ _MEMO = {}
 _MEMO_HITS = 0
 
 
-def ocr_rows(png_path):
-    """Rows of the pane: text with its pixel box, top to bottom."""
+def ocr_rows(png_path, res=None):
+    """Rows of the pane: text with its pixel box, top to bottom.
+
+    `res` is the recogniser's answer on this very file when the caller has
+    it already: the pipeline reads every pane once before any reader runs,
+    and this reader was reading it again -- seven seconds a pane at 4K,
+    measured. Handed in, the rows are built from it and memoised the same.
+    """
     import copy
     import hashlib
     global _ENGINE, _MEMO_HITS
@@ -76,10 +82,11 @@ def ocr_rows(png_path):
     if key in _MEMO:
         _MEMO_HITS += 1
         return copy.deepcopy(_MEMO[key])
-    if _ENGINE is None:
-        from rapidocr_onnxruntime import RapidOCR
-        _ENGINE = RapidOCR()
-    res, _ = _ENGINE(png_path)
+    if res is None:
+        if _ENGINE is None:
+            from rapidocr_onnxruntime import RapidOCR
+            _ENGINE = RapidOCR()
+        res, _ = _ENGINE(png_path)
     if not res:
         if len(_MEMO) > 64:
             _MEMO.clear()
@@ -473,11 +480,11 @@ def strip_chevron(text):
     return t, saw
 
 
-def read_tree(png_path):
+def read_tree(png_path, res=None):
     img = cv2.imread(png_path, cv2.IMREAD_GRAYSCALE)
     if img is None:
         raise ValueError(f"cannot read {png_path}")
-    every = ocr_rows(png_path)
+    every = ocr_rows(png_path, res)
     if not every:
         return {"source": png_path, "rows": []}
     rows = tree_rows(every)

@@ -396,7 +396,49 @@ def reach(found, rows, tess_words):
     return kept
 
 
-def read_list(png_path, readings=None):
+def columnar(res):
+    """Does the pane-scale reading show rows of two or more cells?
+
+    A table has rows with cells apart on one line; prose has one reading a
+    line. Asked of the recogniser's pane-scale answer before the reader
+    enlarges the pane three times and reads it again -- twenty-four seconds
+    on a 4K note page, measured, to conclude it was not a table. Three rows
+    with two cells is the same floor the reader asks of itself (MIN_ROWS);
+    a page whose lines are single readings never reaches it.
+    """
+    boxes = []
+    for quad, text, _ in res or []:
+        if not str(text).strip():
+            continue
+        xs = [p[0] for p in quad]
+        ys = [p[1] for p in quad]
+        boxes.append((min(xs), min(ys), max(xs), max(ys)))
+    if len(boxes) < MIN_ROWS * 2:
+        return False
+    heights = sorted(b[3] - b[1] for b in boxes)
+    h = max(4.0, heights[len(heights) // 2])
+    boxes.sort(key=lambda b: (b[1] + b[3]) / 2)
+    rows, cur, cy = [], [], None
+    for b in boxes:
+        mid = (b[1] + b[3]) / 2
+        if cy is None or abs(mid - cy) <= h * 0.6:
+            cur.append(b)
+            cy = mid if cy is None else (cy + mid) / 2
+        else:
+            rows.append(cur)
+            cur, cy = [b], mid
+    if cur:
+        rows.append(cur)
+    multi = 0
+    for row in rows:
+        row.sort()
+        gaps = [row[i + 1][0] - row[i][2] for i in range(len(row) - 1)]
+        if any(g > 1.5 * h for g in gaps):
+            multi += 1
+    return multi >= MIN_ROWS
+
+
+def read_list(png_path, readings=None, res=None):
     """Read a column view back as a table, or say plainly that it is not one.
 
     `readings` is how many texts the recogniser found on the pane at its own
@@ -408,6 +450,9 @@ def read_list(png_path, readings=None):
     """
     if readings is not None and readings < MIN_ROWS:
         return {"is_list": False, "why": "too little text to be a list"}
+    if res is not None and not columnar(res):
+        return {"is_list": False,
+                "why": "no three rows with two cells at pane scale"}
     bgr = cv2.imread(png_path)
     if bgr is None:
         return {"is_list": False, "why": "could not read the image"}
