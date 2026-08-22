@@ -369,12 +369,14 @@ def say_pane(pane_path, pi, engine, drawn=(), camera=None, in_ui=True):
     # CARRIED text -- no zero-text pane anywhere held a structural claim.
     res, _ = engine(pane_path)
     texts = [t for _, t, _ in (res or [])]
-    # Fewer than three readings and the cascade is skipped: a terminal,
-    # a table, a chat and a document each need three lines to be claimed,
-    # and every reader was running anyway -- 19 seconds on a camera pane
-    # carrying one word, measured on the July 6 stream at 01:00:00. The
-    # readings still arrive, through the loose fallback below.
-    if (in_ui or texts) and len(texts) >= 3:
+    # Skipping the cascade under three readings was tried in the speed
+    # round and refused by the pinned gate stage: a camera pane that
+    # carries ANY text takes the cascade, because one instrument alone may
+    # never excuse a pane. The cost that made it tempting -- 19 seconds on
+    # a camera pane carrying one word -- was the readers' own duplicate
+    # engine passes, which are gone; the cascade on such a pane is now a
+    # few seconds, and the rule stands.
+    if in_ui or texts:
         tree = {} if len(texts) < 5 else (
             guard(f"tree reader, pane {pi}", tree_reader.read_tree,
                   pane_path, res, sink=notes) or {})
@@ -1255,8 +1257,13 @@ def main():
         for rec in records:
             if rec.get("since") or not (rec["lines"] or rec["notes"]):
                 continue
+            # the style line is a measurement of the pixels' look, not a
+            # reading; two moments with the same words and a picture
+            # counted differently are the same reading, said once
             key = (rec["kind"], where(rec["box"], img.shape[1], img.shape[0]),
-                   tuple(rec["lines"]), tuple(rec["notes"]))
+                   tuple(ln for ln in rec["lines"]
+                         if not ln.lstrip().startswith(("[dark look", "[light look"))),
+                   tuple(rec["notes"]))
             if key in said_texts:
                 rec["same_as"] = said_texts[key]
             else:
