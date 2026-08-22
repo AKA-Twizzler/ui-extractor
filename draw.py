@@ -1,0 +1,679 @@
+"""draw.py -- the note, drawn from the records.
+
+    python draw.py <records.jsonl> [<note.md>]
+
+The records file is what a run measured: one line per screen moment, each
+carrying the exact text the run printed and the structures behind it --
+every window's rectangle and top words, every pane's box, kind and reader
+structure. This module turns that into the note a person opens: each window
+on the screen drawn as its own section, on the vault's `screen-notes` style
+sheet, with the words said under it, a map of where it sat, the fine print
+of what stayed unsettled, and the moment-by-moment record folded at the end.
+
+Nothing here reads the video. A changed shape changes this file and the
+notes are redrawn from their records; the readers are untouched.
+"""
+import html
+import json
+import os
+import re
+import sys
+
+
+# ------------------------------------------------------------- the records
+
+def entries(path):
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                yield json.loads(line)
+
+
+def load(path):
+    header, moments, footer = None, [], None
+    for e in entries(path):
+        if e["kind"] == "header":
+            header = e
+        elif e["kind"] == "moment":
+            moments.append(e)
+        elif e["kind"] == "footer":
+            footer = e
+    return header or {}, moments, footer or {}
+
+
+def diary(path):
+    return "".join(e.get("text", "") for e in entries(path))
+
+
+# ------------------------------------------------------------- small helpers
+
+def esc(s):
+    return html.escape(str(s), quote=False)
+
+
+def same_rect(a, b, slack=4):
+    return all(abs(int(x) - int(y)) <= slack for x, y in zip(a, b))
+
+
+CLOCK = re.compile(r"\b(\d{1,2}:\d{2}\s?[AP]M)\b")
+DAY = re.compile(r"\b((Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s?[A-Z][a-z]{2}\s?\d{1,2})")
+
+
+def clock_in(text):
+    m = CLOCK.search(text or "")
+    return m.group(1) if m else None
+
+
+def minutes(secs):
+    secs = int(secs)
+    if secs < 90:
+        return f"{secs} seconds"
+    return f"{secs // 60} minutes"
+
+
+def pane_words(pane):
+    """Every word a pane's record says, flat, for the app signatures."""
+    return " ".join(pane.get("lines") or [])
+
+
+# ------------------------------------------------------------- what a window is
+
+def app_name(entry, panes):
+    """The program, when the window's own contents say which.
+
+    Nothing is guessed from a title alone: a Finder window shows the folder's
+    name, not "Finder". What settles it is furniture only one program has --
+    Finder's sidebar sections, Obsidian's properties panel beside a tree, a
+    browser's address bar. With none of those the window is "a window", and
+    its title, when read, names it.
+    """
+    words = " ".join(pane_words(p) for p in panes)
+    kinds = {p["kind"] for p in panes}
+    if any(w in words for w in ("Recents", "iCloud Drive", "AirDrop")) \
+            and any(w in words for w in ("Favorites", "Locations", "Documents")):
+        return "Finder"
+    if "a file tree" in kinds and ("Properties" in words or "Add property" in words):
+        return "Obsidian"
+    if "Ask Google or type a URL" in words or "New Tab" in words:
+        return "the browser"
+    if "a terminal" in kinds:
+        return "the terminal"
+    if "a chat log" in kinds:
+        return "the chat"
+    return None
+
+
+def window_title(entry, panes):
+    app = app_name(entry, panes)
+    top = entry.get("top")
+    if app and top:
+        return f"The {app} window, titled {top}" if app != "Finder" else f"The Finder window, {top}"
+    if app:
+        return f"The {app} window"
+    if top:
+        return f"A window titled {top}"
+    return "A window"
+
+
+# ------------------------------------------------------------- the drawing
+
+HUES = ("red", "orange", "yellow", "green", "cyan", "blue", "purple", "pink")
+SUFFIX = re.compile(r"\s+<- (.*)$")
+BOLD = re.compile(r"\*\*(.+?)\*\*")
+
+
+def doc_line(line, fine):
+    """One line of a read document, as HTML on the style sheet.
+
+    The reader's markdown marks stay visible where markdown has them -- a
+    heading's hashes, a bullet's dash -- and what markdown cannot say is a
+    class on the style sheet. The reader's doubt suffixes ("<- the other
+    engine read ...") leave the drawing for the fine print.
+    """
+    raw = line.rstrip()
+    indent = len(raw) - len(raw.lstrip(" "))
+    text = raw.strip()
+    hue = None
+    cut = False
+    while True:
+        m = SUFFIX.search(text)
+        if not m:
+            break
+        note = m.group(1)
+        text = text[:m.start()]
+        if note.startswith("drawn in "):
+            hue = note[len("drawn in "):].strip()
+        elif note.startswith("the line runs on past the edge"):
+            cut = True
+            if "read" in note:
+                fine.append(f"a line cut at the pane's edge; past the cut the engines {note.split(';', 1)[-1].strip()}")
+        else:
+            fine.append(f"{text.strip()!r}: {note}")
+    if not text:
+        return ""
+    cls = f' class="sn-{hue}"' if hue in HUES else ""
+    body = esc(text)
+    body = BOLD.sub(r"<b>\1</b>", body)
+    if cut:
+        body += "…"
+    if text == "---":
+        return None                      # a properties fence, handled by the caller
+    m = re.match(r"(#{1,6}) (.*)", text)
+    if m:
+        level = min(3, len(m.group(1)))
+        inner = esc(m.group(2))
+        return f'<div class="sn-h{level}"{cls}>{m.group(1)} {inner}</div>'
+    pad = "&nbsp;" * min(12, indent)
+    return f"<div{cls}>{pad}{body}</div>"
+
+
+def draw_document(pane):
+    lines = pane.get("lines") or []
+    fine = []
+    out = []
+    props, in_props = [], False
+    for line in lines:
+        if line.strip() == "---":
+            if in_props:
+                out.append('<div class="sn-props"><b>Properties</b><br>'
+                           + "<br>".join("☰ " + esc(p) for p in props) + "</div>")
+                props = []
+            in_props = not in_props
+            continue
+        if in_props:
+            props.append(line.strip())
+            continue
+        h = doc_line(line, fine)
+        if h:
+            out.append(h)
+    return '<div class="sn-doc">' + "".join(out) + "</div>", fine
+
+
+def draw_tree(pane):
+    lines = [ln for ln in (pane.get("lines") or [])
+             if not ln.strip().startswith("unsettled:")
+             and not ln.strip().startswith("[also on this pane")]
+    fine = [ln.strip() for ln in (pane.get("lines") or [])
+            if ln.strip().startswith("unsettled:")]
+    return '<div class="sn-tree">' + esc("\n".join(lines)) + "</div>", fine
+
+
+def draw_list(pane):
+    data = pane.get("data") or {}
+    fine = []
+    out = []
+    for b in data.get("blocks") or []:
+        head = b.get("header") or [f"col {i + 1}" for i in range(b.get("columns", 0))]
+        rows = b.get("rows") or []
+        out.append("<table>")
+        out.append('<tr class="sn-head">' + "".join(f"<td>{esc(h)}</td>" for h in head) + "</tr>")
+        flags = b.get("flags") or []
+        for ri, r in enumerate(rows):
+            out.append("<tr>" + "".join(f"<td>{esc(c)}</td>" for c in r) + "</tr>")
+            if ri < len(flags):
+                for c, f in zip(r, flags[ri]):
+                    if f:
+                        fine.append(f"unsettled ({f}): {c!r}")
+        out.append("</table>")
+    if not out:
+        # the lines are a markdown table already; keep them as read
+        return '<div class="sn-body">' + "<br>".join(esc(ln) for ln in pane.get("lines") or []) + "</div>", fine
+    return '<div class="sn-body">' + "".join(out) + "</div>", fine
+
+
+def draw_terminal(pane):
+    lines = pane.get("lines") or []
+    return '<div class="sn-tree">' + esc("\n".join(lines)) + "</div>", []
+
+
+def draw_chat(pane):
+    lines = pane.get("lines") or []
+    return '<div class="sn-doc">' + "".join(f"<div>{esc(ln)}</div>" for ln in lines) + "</div>", []
+
+
+def split_loose(pane):
+    """A loose pane's lines, sorted into what is sure and what is doubt."""
+    sure, doubt, video = [], [], []
+    for ln in pane.get("lines") or []:
+        s = ln.strip()
+        if s.startswith("[only one engine read these]"):
+            doubt.extend(x.strip() for x in s.split("]", 1)[1].split(" | "))
+        elif s.startswith("[these sit over moving video]"):
+            video.extend(x.strip() for x in s.split("]", 1)[1].split(" | "))
+        elif s.startswith("[drawn large]"):
+            sure.append(("large", s.split("]", 1)[1].strip()))
+        elif s.startswith("[drawn in "):
+            hue = s[len("[drawn in "):].split("]", 1)[0]
+            sure.append((hue, s.split("]", 1)[1].strip()))
+        elif s.startswith("["):
+            doubt.append(s)
+        else:
+            sure.append((None, s))
+    return sure, doubt, video
+
+
+def draw_loose(pane, as_side=False):
+    sure, doubt, video = split_loose(pane)
+    fine = []
+    if doubt:
+        fine.append("only one engine read: " + " | ".join(doubt))
+    if video:
+        fine.append("over moving video: " + " | ".join(video))
+    parts = []
+    for mark, text in sure:
+        items = [esc(x.strip()) for x in text.split(" | ") if x.strip()]
+        if mark == "large":
+            items = [f'<span class="sn-title">{x}</span>' for x in items]
+        elif mark in HUES:
+            items = [f'<span class="sn-{mark}">{x}</span>' for x in items]
+        parts.extend(items)
+    if as_side:
+        return '<div class="sn-side">' + "<br>".join(parts) + "</div>", fine
+    return '<div class="sn-body">' + " &nbsp;·&nbsp; ".join(parts) + "</div>", fine
+
+
+def remainder_of(pane):
+    """The readings a structural reader left out, by where they sat."""
+    data = pane.get("data") or {}
+    out = {"above": [], "below": [], "beside": [], "doubt": []}
+    for r in data.get("remainder") or []:
+        if r.get("confirmed"):
+            out[r.get("where") or "beside"].append(r["text"])
+        else:
+            out["doubt"].append(r["text"])
+    return out
+
+
+def draw_pane(pane):
+    kind = pane["kind"]
+    if kind == "an open document":
+        return draw_document(pane)
+    if kind == "a file tree":
+        return draw_tree(pane)
+    if kind == "a list of columns":
+        return draw_list(pane)
+    if kind == "a terminal":
+        return draw_terminal(pane)
+    if kind == "a chat log":
+        return draw_chat(pane)
+    return draw_loose(pane)
+
+
+def toolbar(words, title=None):
+    spans = "".join(f'<span class="sn-btn">{esc(w)}</span>' for w in words)
+    t = f"<b>{esc(title)}</b>" if title else ""
+    return f'<div class="sn-toolbar"><span class="sn-lights"></span>{t}{spans}</div>'
+
+
+def pathbar(words):
+    return '<div class="sn-pathbar">' + "›".join(f"<span>{esc(w)}</span>" for w in words) + "</div>"
+
+
+def draw_window(entry, panes, theme):
+    """One window as the style sheet draws it: furniture, columns, content."""
+    fine = []
+    x0, y0, x1, y1 = entry["rect"]
+    width = max(1, x1 - x0)
+    panes = sorted(panes, key=lambda p: (p["box"][0], p["box"][1]))
+    main = max(panes, key=lambda p: (p["box"][2] - p["box"][0]) * (p["box"][3] - p["box"][1]))
+    rest = remainder_of(main)
+    # the furniture along the top: the window's own words across its top,
+    # and what the main pane's reader found above its structure
+    head = []
+    if entry.get("top"):
+        head.append(toolbar(rest["above"], entry["top"]))
+    elif rest["above"]:
+        head.append(toolbar(rest["above"]))
+    # columns: a narrow pane at the left is a sidebar; a tree beside a
+    # document is the three-column shape
+    side = [p for p in panes if p is not main and (p["box"][2] - p["box"][0]) < 0.36 * width
+            and p["box"][0] <= x0 + 0.05 * width]
+    cols = []
+    if side:
+        s = side[0]
+        if s["kind"] == "a file tree":
+            h, f = draw_tree(s)
+        elif s["kind"] == "text, not a tree":
+            h, f = draw_loose(s, as_side=True)
+        else:
+            h, f = draw_pane(s)
+        fine.extend(f)
+        cols.append(h)
+        sr = remainder_of(s)
+        for where in ("above", "beside", "below"):
+            if sr[where]:
+                fine.append(f"also on the side pane, {where}: " + " | ".join(sr[where]))
+        if sr["doubt"]:
+            fine.append("side pane, only one engine read: " + " | ".join(sr["doubt"]))
+    h, f = draw_pane(main)
+    fine.extend(f)
+    cols.append(h)
+    others = [p for p in panes if p is not main and p not in side]
+    for p in others:
+        h, f = draw_pane(p)
+        fine.extend(f)
+        cols.append(h)
+        pr = remainder_of(p)
+        for where in ("above", "beside", "below"):
+            if pr[where]:
+                fine.append(f"also on the {p.get('where_in') or 'pane'}, {where}: " + " | ".join(pr[where]))
+        if pr["doubt"]:
+            fine.append("only one engine read: " + " | ".join(pr["doubt"]))
+    if rest["beside"]:
+        fine.append("also on the main pane, beside its content: " + " | ".join(rest["beside"]))
+    if rest["doubt"]:
+        fine.append("main pane, only one engine read: " + " | ".join(rest["doubt"]))
+    body = "".join(cols)
+    if len(cols) >= 2:
+        wide = side and (side[0]["box"][2] - side[0]["box"][0]) > 0.22 * width
+        cls = "sn-cols sn-wide-left" if wide else "sn-cols"
+        if len(cols) >= 3:
+            cls = "sn-cols sn-three"
+        body = f'<div class="{cls}">{body}</div>'
+    foot = ""
+    if rest["below"]:
+        if any("›" in w or w.endswith(">") for w in rest["below"]) or len(rest["below"]) >= 3:
+            foot = pathbar([w.rstrip(">") for w in rest["below"]])
+        else:
+            foot = '<div class="sn-pathbar">' + " &nbsp;·&nbsp; ".join(esc(w) for w in rest["below"]) + "</div>"
+    cls = "sn-window sn-dark" if theme == "dark" else "sn-window"
+    return f'<div class="{cls}">{"".join(head)}{body}{foot}</div>', fine
+
+
+def draw_map(size, rect, share, label):
+    W, H = size or (1920, 1080)
+    sx, sy = 384 / W, 216 / H
+    x0, y0, x1, y1 = rect
+    win = (f'<rect class="win" x="{x0 * sx:.0f}" y="{y0 * sy:.0f}" '
+           f'width="{(x1 - x0) * sx:.0f}" height="{(y1 - y0) * sy:.0f}"/>'
+           f'<text x="{x0 * sx + 5:.0f}" y="{y0 * sy + 13:.0f}">{esc(label)}</text>')
+    tag = f'<text class="muted" x="290" y="208" font-size="9">screen {share:.0f}%</text>' if share else ""
+    return ('<div class="sn-map"><svg viewBox="0 0 384 216" xmlns="http://www.w3.org/2000/svg">'
+            '<rect class="frame" x="0.5" y="0.5" width="383" height="215"/>'
+            f'{win}{tag}</svg></div>')
+
+
+# ------------------------------------------------------------- the states
+
+def window_key(rect, seen):
+    """The same drawn rectangle across moments is the same window."""
+    for k, r in seen.items():
+        if same_rect(r, rect, slack=12):
+            return k
+    k = len(seen)
+    seen[k] = rect
+    return k
+
+
+def signature(panes):
+    return tuple((p["kind"], tuple(p.get("lines") or [])) for p in
+                 sorted(panes, key=lambda p: p["pi"]))
+
+
+def pane_rows(pane):
+    """The row names of a tree or list, for stitching a scrolled view."""
+    if pane["kind"] == "a file tree":
+        return [r.get("name") for r in (pane.get("data") or {}).get("rows") or []]
+    if pane["kind"] == "a list of columns":
+        return [tuple(r) for b in (pane.get("data") or {}).get("blocks") or []
+                for r in b.get("rows") or []]
+    return None
+
+
+def overlap(a, b):
+    """How many rows at the end of a reappear at the start of b."""
+    best = 0
+    for n in range(min(len(a), len(b)), 2, -1):
+        if a[-n:] == b[:n]:
+            return n
+    return best
+
+
+def states(moments):
+    """The windows across the video, each as a run of states.
+
+    A state is one window showing one thing. Consecutive moments where the
+    window's panes read the same are one state with several times. A
+    scrolled tree or list -- the rows at the end of one moment at the start
+    of the next -- is one state, stitched. A window that returns to a
+    state it was in before is said once, pointing back.
+    """
+    seen = {}
+    out = []                 # [{"key", "entry", "panes", "times", "moments", "stitched"}]
+    for m in moments:
+        by_wi = {}
+        for p in m.get("panes") or []:
+            if p.get("wi") is not None:
+                by_wi.setdefault(p["wi"], []).append(p)
+        for entry in m.get("windows") or []:
+            panes = by_wi.get(entry["wi"]) or []
+            if not panes:
+                continue
+            key = window_key(entry["rect"], seen)
+            sig = signature(panes)
+            last = next((s for s in reversed(out) if s["key"] == key), None)
+            if last is not None and last is out[-1] and last["sig"] == sig:
+                last["times"].append(m["ts"])
+                last["moments"].append(m)
+                continue
+            if last is not None and last is out[-1]:
+                stitched = stitch(last, panes)
+                if stitched:
+                    last["times"].append(m["ts"])
+                    last["moments"].append(m)
+                    last["stitched"] = True
+                    last["sig"] = sig
+                    continue
+            again = next((s for s in out if s["key"] == key and s["sig"] == sig), None)
+            out.append({"key": key, "entry": entry, "panes": panes, "sig": sig,
+                        "times": [m["ts"]], "moments": [m], "stitched": False,
+                        "again": again, "size": m.get("size"), "share": m.get("share")})
+    return out
+
+
+def stitch(state, panes):
+    """Join a scrolled view onto the state it continues; True when it did."""
+    mine = {p["pi"]: p for p in state["panes"]}
+    theirs = {p["pi"]: p for p in panes}
+    if set(mine) != set(theirs):
+        return False
+    joined = {}
+    for pi, p in theirs.items():
+        q = mine[pi]
+        if p["kind"] != q["kind"]:
+            return False
+        a, b = pane_rows(q), pane_rows(p)
+        if a is None:
+            if (p.get("lines") or []) != (q.get("lines") or []):
+                return False
+            continue
+        n = overlap(a, b)
+        if n == 0 and a != b:
+            return False
+        if n and a != b:
+            joined[pi] = n
+    if not joined:
+        return False
+    for pi, n in joined.items():
+        q, p = mine[pi], theirs[pi]
+        if p["kind"] == "a file tree":
+            q["data"]["rows"] = q["data"]["rows"] + p["data"]["rows"][n:]
+            body = [ln for ln in p["lines"] if ln.strip() and not ln.strip().startswith(("unsettled", "[also"))]
+            q["lines"] = [ln for ln in q["lines"] if not ln.strip().startswith(("unsettled", "[also"))] + body[n:]
+        else:
+            blocks = q["data"]["blocks"]
+            blocks[-1]["rows"] = blocks[-1]["rows"] + [list(r) for r in pane_rows(p)[n:]]
+    return True
+
+
+# ------------------------------------------------------------- the note
+
+def said_block(moments):
+    out = []
+    for m in moments:
+        said = (m.get("said") or "").strip()
+        if not said:
+            continue
+        if len(said) > 700:
+            words = len(said.split())
+            out.append(f'> [!quote]- Jared, {m["ts"]} ({words} words)\n> ' + esc(said).replace("\n", "\n> "))
+        else:
+            out.append(f'Jared, {m["ts"]}: "{esc(said)}"')
+    return "\n\n".join(out)
+
+
+def desktop_section(moments):
+    """What sat on no window: the menu bar, the clock, loose readings."""
+    menubar, clocks, loose = [], [], []
+    for m in moments:
+        for p in m.get("panes") or []:
+            if p.get("wi") is not None:
+                continue
+            sure, doubt, video = split_loose(p) if p["kind"] == "text, not a tree" else ([], [], [])
+            words = [w for _, t in sure for w in t.split(" | ")]
+            text = " ".join(words)
+            c = clock_in(text)
+            if c and (not clocks or clocks[-1][1] != c):
+                clocks.append((m["ts"], c))
+            H = (m.get("size") or [0, 0])[1]
+            if H and p["box"][1] < 0.02 * H and p["box"][3] < 0.06 * H:
+                menubar.extend(w for w in words if w not in menubar)
+            elif p["kind"] != "text, not a tree":
+                loose.append((m["ts"], p))
+            else:
+                loose.append((m["ts"], p))
+    parts = ["## The desktop"]
+    if menubar or clocks:
+        right = f"{clocks[0][1]} at the start, {clocks[-1][1]} at the end" if len(clocks) > 1 else (clocks[0][1] if clocks else "")
+        parts.append(f'<div class="sn-menubar"><span>{" &nbsp; ".join(esc(w) for w in menubar)}</span><span>{esc(right)}</span></div>')
+    if clocks:
+        parts.append('<span class="sn-fine">the desktop clock: ' + "; ".join(f"{c} at {ts}" for ts, c in clocks) + "</span>")
+    seen = set()
+    for ts, p in loose:
+        sig = (p["kind"], tuple(p.get("lines") or []))
+        if sig in seen:
+            continue
+        seen.add(sig)
+        h, f = draw_pane(p)
+        parts.append(f'**{p.get("where") or "on the screen"}, {ts}** ({p["kind"]})\n\n<div class="sn-window">{h}</div>')
+        if f:
+            parts.append('<span class="sn-fine">' + esc("; ".join(f)) + "</span>")
+    return "\n\n".join(parts) if len(parts) > 1 else ""
+
+
+def events(moments, sts):
+    """The order of events: one line per moment, what was on screen."""
+    lines = []
+    for m in moments:
+        what = []
+        for s in sts:
+            if m in s["moments"] and s["moments"][0] is m:
+                what.append(window_title(s["entry"], s["panes"]).replace("The ", "the ", 1).replace("A window", "a window"))
+        kinds = sorted({p["kind"] for p in m.get("panes") or [] if p.get("wi") is None and p["kind"] != "text, not a tree"})
+        newly = [w for e in m.get("windows") or [] for w in (e.get("newly") or [])]
+        bit = "; ".join(what + kinds) or "the same screen"
+        if newly:
+            bit += " -- newly readable: " + " | ".join(newly[:8]) + (f" and {len(newly) - 8} more" if len(newly) > 8 else "")
+        how = m.get("how") or ""
+        if how and "unchanged" in how:
+            bit += " (unchanged)"
+        lines.append(f"- {m['ts']} - {bit}")
+    return "\n".join(lines)
+
+
+def theme_of(panes):
+    for p in panes:
+        t = (p.get("data") or {}).get("theme")
+        if t:
+            return t
+    return None
+
+
+def note(records_path, diary_text=None):
+    header, moments, footer = load(records_path)
+    title = header.get("title") or os.path.basename(os.path.dirname(records_path))
+    sts = states(moments)
+    diary_text = diary_text if diary_text is not None else diary(records_path)
+    secs = (moments[-1]["secs"] - moments[0]["secs"]) if len(moments) > 1 else 0
+    apps = []
+    for s in sts:
+        name = window_title(s["entry"], s["panes"])
+        if name not in apps:
+            apps.append(name)
+    clocks = [c for m in moments for p in m.get("panes") or [] for c in [clock_in(pane_words(p))] if c]
+    parts = []
+    parts.append("---\nstatus: active\nproject: vault\ntype: reference\n---\n")
+    parts.append(f"# {title}\n")
+    head = (f"A screen recording, {minutes(secs)} read, {len(moments)} screen moments"
+            + (" in order" if header.get("dense") else "") + ".")
+    if apps:
+        head += " On screen: " + "; ".join(a[0].lower() + a[1:] for a in apps) + "."
+    if clocks:
+        head += f" The desktop clock read {clocks[0]}" + (f" at the start and {clocks[-1]} at the end." if clocks[-1] != clocks[0] else ".")
+    parts.append(head + "\n")
+    parts.append("**The order of events**\n\n" + events(moments, sts) + "\n\n---\n")
+    for s in sts:
+        name = window_title(s["entry"], s["panes"])
+        times = s["times"]
+        when = times[0] if len(times) == 1 else (f"{times[0]} to {times[-1]}" if len(times) > 2 else f"{times[0]} and {times[1]}")
+        if s["again"]:
+            parts.append(f"## {name} - as at {when}, the same as at {s['again']['times'][0]}\n")
+            said = said_block(s["moments"])
+            if said:
+                parts.append(said + "\n")
+            parts.append("---\n")
+            continue
+        parts.append(f"## {name} - as at {when}" + (", scrolled" if s["stitched"] else "") + "\n")
+        parts.append(draw_map(s["size"], s["entry"]["rect"], s["share"] or 0, app_name(s["entry"], s["panes"]) or "window") + "\n")
+        theme = theme_of(s["panes"])
+        h, fine = draw_window(s["entry"], s["panes"], theme)
+        parts.append(h + "\n")
+        said = said_block(s["moments"])
+        if said:
+            parts.append(said + "\n")
+        x0, y0, x1, y1 = s["entry"]["rect"]
+        W, H = s["size"] or (0, 0)
+        fp = [f"window {x0},{y0} to {x1},{y1} on the {W} by {H} frame, {s['entry'].get('where')}"
+              + (f", {theme} style" if theme else "")]
+        if s["entry"].get("top_from"):
+            fp.append(f"its top read at {s['entry']['top_from']}")
+        if s["entry"].get("drawn_over"):
+            fp.append("drawn over the moving picture")
+        for x in s["entry"].get("panel_extra") or []:
+            fp.append(("read across the window, in no pane: " if x.get("confirmed") else "one engine only, across the window: ") + x["line"])
+        fp.extend(fine)
+        for m in s["moments"]:
+            for p in s["panes"]:
+                for n in p.get("notes") or []:
+                    fp.append(str(n))
+        parts.append('<span class="sn-fine">fine print: ' + esc("; ".join(dict.fromkeys(fp))) + "</span>\n")
+        parts.append("---\n")
+    desk = desktop_section(moments)
+    if desk:
+        parts.append(desk + "\n\n---\n")
+    parts.append(f"> [!note]- The moment-by-moment record, {len(moments)} moments (appendix)\n> ````text\n> "
+                 + diary_text.rstrip("\n").replace("\n", "\n> ") + "\n> ````\n")
+    return "\n".join(parts)
+
+
+def main():
+    if len(sys.argv) < 2:
+        print(__doc__)
+        return 1
+    path = sys.argv[1]
+    text = note(path)
+    if len(sys.argv) > 2:
+        out = sys.argv[2]
+        tmp = out + ".tmp-write"
+        with open(tmp, "w", encoding="utf-8", newline="\n") as f:
+            f.write(text)
+        os.replace(tmp, out)
+        print(f"{out}: {len(text)} characters")
+    else:
+        sys.stdout.write(text)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
