@@ -322,7 +322,8 @@ def say_pane(pane_path, pi, engine, drawn=(), camera=None, in_ui=True):
         if video_words:
             return record("only moving video on it",
                           ["[these sit over moving video] "
-                           + " | ".join(video_words)])
+                           + " | ".join(video_words)],
+                          {"readings": [], "video_words": video_words})
         return None            # nothing on it; the caller says so, once
     got = owned(texts)
     if got:
