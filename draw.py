@@ -856,9 +856,10 @@ def said_block(moments):
     return "\n\n".join(out)
 
 
-def desktop_section(moments):
+def desktop_section(moments, sts=()):
     """What sat on no window: the menu bar, the clock, loose readings."""
     menubar, clocks, loose = [], [], []
+    drawn = {id(p) for s in sts for p in s["panes"]}
     for m in moments:
         H = (m.get("size") or [0, 0])[1]
         lone = [p for p in m.get("panes") or [] if p.get("wi") is None]
@@ -874,7 +875,8 @@ def desktop_section(moments):
             menubar.extend(w for w in words if w not in menubar)
         # a lone pane that is not part of a screen-state (one loose pane
         # on its own) is said here; the rest were drawn as the screen
-        if len(others) == 1 and others[0]["kind"] == "text, not a tree":
+        if (len(others) == 1 and others[0]["kind"] == "text, not a tree"
+                and id(others[0]) not in drawn):
             loose.append((m["ts"], others[0]))
     parts = ["## The desktop"]
     if menubar or clocks:
@@ -1061,7 +1063,7 @@ def note(records_path, diary_text=None):
                     fp.append(str(n))
         parts.append('<span class="sn-fine">fine print: ' + esc("; ".join(dict.fromkeys(fp))) + "</span>\n")
         parts.append("---\n")
-    desk = desktop_section(moments)
+    desk = desktop_section(moments, sts)
     if desk:
         parts.append(desk + "\n\n---\n")
     parts.append(f"> [!note]- The moment-by-moment record, {len(moments)} moments (appendix)\n> ````text\n> "
