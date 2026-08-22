@@ -201,11 +201,100 @@ def say_pane(pane_path, pi, engine, drawn=(), camera=None, in_ui=True):
     """
     notes = []
 
+    # what the structural readers call the thing they read, for the line
+    # that places the readings they left out
+    THING = {"a file tree": "the tree", "a terminal": "the terminal",
+             "a list of columns": "the list", "a chat log": "the chat",
+             "an open document": "the document"}
+
+    def remainder(kind, lines, data):
+        """Place every recogniser reading the structural reader left out.
+
+        A reader keeps what fits its structure and says nothing of the rest:
+        the table reader dropped the Finder's toolbar title and its Size
+        header, the tree reader everything below a jolted row, the document
+        reader the lines a splitter cut. Measured at 00:03:00 and 00:04:10
+        of the memory-files video, and it is silent loss -- the output looks
+        complete. So the pane's own recogniser pass is the measuring stick:
+        a reading is consumed when the structure's text holds it, and the
+        rest is confirmed by the other engine and said beside the structure,
+        placed above, below or beside it. The count of readings and where
+        each went rides in the record as the pane's coverage.
+        """
+        body = verify_names._flat(" ".join(lines))
+        terms = set(verify_names._terms(" ".join(lines)))
+        used, left = [], []
+        for b, t, _ in res:
+            xs = [p[0] for p in b]
+            ys = [p[1] for p in b]
+            box = [int(min(xs)), int(min(ys)), int(max(xs)), int(max(ys))]
+            flat, words = verify_names._flat(t), verify_names._terms(t)
+            if not flat:
+                continue
+            hit = flat in body or (
+                words and sum(w in terms for w in words) >= 0.7 * len(words))
+            (used if hit else left).append((t, box))
+        cov = {"readings": len(used) + len(left), "in_structure": len(used),
+               "also": 0, "unconfirmed": 0, "video": 0}
+        data["coverage"] = cov
+        data["remainder"] = []
+        if not left:
+            return
+        over = []
+        if camera:
+            over = guard(f"camera zones, pane {pi}", camera,
+                         [b for b, _, _ in res], sink=notes) or []
+            by_text = {}
+            for (b, t, _), v in zip(res, over):
+                by_text.setdefault(t, v)
+            video = [t for t, _ in left if by_text.get(t)]
+            left = [(t, box) for t, box in left if not by_text.get(t)]
+            cov["video"] = len(video)
+            if video:
+                lines.append("[these sit over moving video] "
+                             + " | ".join(video))
+        if not left:
+            return
+        marked = guard(f"confirmation, pane {pi}",
+                       verify_names.confirm_readings, pane_path,
+                       [t for t, _ in left], sink=notes)
+        if marked is None:
+            marked = [(t, False) for t, _ in left]
+        top = min((box[1] for _, box in used), default=0)
+        bottom = max((box[3] for _, box in used), default=0)
+        placed = {"above": [], "below": [], "beside": []}
+        doubt = []
+        for (t, ok), (_, box) in zip(marked, left):
+            if used and box[3] <= top:
+                at = "above"
+            elif used and box[1] >= bottom:
+                at = "below"
+            else:
+                at = "beside"
+            data["remainder"].append({"text": t, "confirmed": bool(ok),
+                                      "box": box, "where": at})
+            if ok:
+                placed[at].append(t)
+            else:
+                doubt.append(t)
+        thing = THING.get(kind, "it")
+        for at in ("above", "beside", "below"):
+            if placed[at]:
+                cov["also"] += len(placed[at])
+                lines.append(f"[also on this pane, {at} {thing}] "
+                             + " | ".join(placed[at]))
+        if doubt:
+            cov["unconfirmed"] = len(doubt)
+            lines.append("[also on this pane, only one engine read these] "
+                         + " | ".join(doubt))
+
     def record(kind, lines, data=None):
         # `data` is the reader's own structure -- rows with their geometry,
         # sizes, weights, colours, statuses -- kept whole for the records
         # file; the lines are what the record SAYS, the data is what it
         # MEASURED, and the drawing layer reads the second
+        if kind in THING and data is not None and res:
+            remainder(kind, lines, data)
         return {"pi": pi, "kind": kind, "lines": lines, "notes": notes,
                 "data": data}
 
@@ -306,7 +395,7 @@ def say_pane(pane_path, pi, engine, drawn=(), camera=None, in_ui=True):
     if camera and res:
         over = guard(f"camera zones, pane {pi}",
                      camera, [b for b, _, _ in res], sink=notes) or []
-        video_words = [t for t, v in zip(texts, over) if v][:16]
+        video_words = [t for t, v in zip(texts, over) if v]
         if video_words:
             texts = [t for t, v in zip(texts, over) if not v]
             heights = [h for h, v in zip(heights, over) if not v]
@@ -323,7 +412,11 @@ def say_pane(pane_path, pi, engine, drawn=(), camera=None, in_ui=True):
             return record("only moving video on it",
                           ["[these sit over moving video] "
                            + " | ".join(video_words)],
-                          {"readings": [], "video_words": video_words})
+                          {"readings": [], "video_words": video_words,
+                           "coverage": {"readings": len(video_words),
+                                        "in_structure": 0, "also": 0,
+                                        "unconfirmed": 0,
+                                        "video": len(video_words)}})
         return None            # nothing on it; the caller says so, once
     got = owned(texts)
     if got:
@@ -333,11 +426,15 @@ def say_pane(pane_path, pi, engine, drawn=(), camera=None, in_ui=True):
     # visualizer -- three faint marks one engine calls R78 and the other calls
     # Ris. The rule this build runs on is that a string enters the record only
     # when the instruments confirm it, so say which ones did.
+    # every reading, not the first sixteen: the cap was a silent loss on
+    # any pane with more -- a document the reader refused came back as
+    # sixteen words of forty-three, measured at 00:04:10 of the
+    # memory-files video -- and confirmation costs the same per pane
     marked = guard(f"confirmation, pane {pi}",
-                   verify_names.confirm_readings, pane_path, texts[:16],
+                   verify_names.confirm_readings, pane_path, texts,
                    sink=notes)
     if marked is None:
-        marked = [(t, False) for t in texts[:16]]
+        marked = [(t, False) for t in texts]
     # confirm_readings answers in input order, so heights and boxes still
     # line up. Size speaks first, then colour -- see note_reader's
     # row_ink_color for the colour rule and its measured gap.
@@ -392,7 +489,12 @@ def say_pane(pane_path, pi, engine, drawn=(), camera=None, in_ui=True):
         lines.append("[these sit over moving video] " + " | ".join(video_words))
     return record("text, not a tree", lines,
                   {"readings": readings, "median_height": int(med),
-                   "video_words": video_words})
+                   "video_words": video_words,
+                   "coverage": {"readings": len(readings) + len(video_words),
+                                "in_structure": 0,
+                                "also": len(readings) - len(doubt),
+                                "unconfirmed": len(doubt),
+                                "video": len(video_words)}})
 
 
 def rendered_here(ties, box, bh, bw):
@@ -486,21 +588,32 @@ def top_text(img, win, engine, workdir, tag):
     header claims only the geometry, "across its top", never that the words
     are a title. Only readings the other engine confirms enter the header;
     everything else still arrives through the panes with its own marks.
+
+    A window that writes its title in the toolbar rather than a title bar
+    -- the Finder does -- has nothing in the first strip at all: at
+    00:03:00 of the memory-files video the 56 px strip read nothing while
+    "02 Company A (Info Product)" sat 60 px down. So when the title-bar
+    strip confirms nothing the look is taken again at twice the height,
+    the words are said the same way whichever strip read them.
     """
     a, t, c, d = win
-    sh = max(24, round(img.shape[0] * 0.026))
-    strip = img[t:t + sh, a:c]
-    if strip.size == 0:
-        return []
-    big = cv2.resize(strip, None, fx=3, fy=3, interpolation=cv2.INTER_CUBIC)
-    path = os.path.join(workdir, f"{tag}_top_{a}_{t}.png")
-    cv2.imwrite(path, big)
-    res, _ = engine(path)
-    texts = [x for _, x, _ in (res or [])][:6]
-    if not texts:
-        return []
-    marked = verify_names.confirm_readings(path, texts) or []
-    return [x for x, ok in marked if ok]
+    for share in (0.026, 0.052):
+        sh = max(24, round(img.shape[0] * share))
+        strip = img[t:t + sh, a:c]
+        if strip.size == 0:
+            return []
+        big = cv2.resize(strip, None, fx=3, fy=3, interpolation=cv2.INTER_CUBIC)
+        path = os.path.join(workdir, f"{tag}_top_{a}_{t}_{sh}.png")
+        cv2.imwrite(path, big)
+        res, _ = engine(path)
+        texts = [x for _, x, _ in (res or [])][:8]
+        if not texts:
+            continue
+        marked = verify_names.confirm_readings(path, texts) or []
+        words = [x for x, ok in marked if ok]
+        if words:
+            return words
+    return []
 
 
 def say_panel(panel):
@@ -1056,8 +1169,18 @@ def main():
             print(f"  [panes {', '.join(map(str, unwritten))}: too small to "
                   "cut out, not read]")
         print()
+        # the moment's coverage: every recogniser reading on every pane,
+        # and where each one went -- into a structure, beside it confirmed,
+        # unconfirmed, or over moving video. Nothing silently dropped is
+        # the claim, and this is the number that checks it.
+        cov = {"readings": 0, "in_structure": 0, "also": 0,
+               "unconfirmed": 0, "video": 0}
+        for rec in records:
+            c = (rec.get("data") or {}).get("coverage") or {}
+            for k in cov:
+                cov[k] += int(c.get(k, 0))
         moment.update(panes=records, quiet=quiet, unwritten=unwritten,
-                      text=tee.take())
+                      coverage=cov, text=tee.take())
         keep(moment)
 
     if seen_windows:
