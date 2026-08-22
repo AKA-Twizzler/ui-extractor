@@ -365,9 +365,16 @@ def reconcile_rows(rows, big_path, body_h):
             r["read_status"] = "unverified"
             continue
         text, status = reconcile(r["text"], other)
+        r["text_primary"] = r["text"]
         r["text"] = text
         r["read_status"] = status
         r["text_second"] = other
+        if status == "cut":
+            # both tails ride with the row: the head is the reading, the
+            # tails are what each engine made of the pixels past the cut
+            from verify_names import agreed_head
+            _, tails = agreed_head(r["text_primary"], other)
+            r["cut_tails"] = list(tails or ())
     # Each line's own verdict, measured in the characters it is worth, taken
     # HERE while the lines are still separate. A wrapped paragraph is joined
     # further down and the joined row can only carry one status -- the first
@@ -714,8 +721,10 @@ def properties_block(rows, body_h):
 BACKED = 2 / 3
 
 
+# "cut" is a line both engines read alike up to an edge and as junk past it
+# -- see verify_names.agreed_head; the head is a backed reading
 BACKED_STATUS = ("confident", "reconciled", "ambiguous-symbol",
-                 "ambiguous-glyph")
+                 "ambiguous-glyph", "cut")
 
 
 def backed_share(rows):
@@ -761,6 +770,12 @@ def to_markdown(rows):
             other = r.get("text_second")
             text += ("   <- only one engine read this" if not other
                      else f"   <- the other engine read {other!r}")
+        elif r.get("read_status") == "cut":
+            tails = r.get("cut_tails") or []
+            rest = " / ".join(repr(t) for t in tails if t)
+            text += ("   <- the line runs on past the edge; past it the "
+                     f"engines read {rest}" if rest else
+                     "   <- the line runs on past the edge")
         pad = "  " * max(0, min(4, r["indent"]))
         if r["heading"]:
             line = f"{pad}{'#' * min(6, r['heading'])} {text}"
