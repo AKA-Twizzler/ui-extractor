@@ -790,6 +790,10 @@ def main():
             print(f"{len(runs)} distinct screens found; capturing "
                   f"{min(limit, len(runs))}\n")
 
+    keep({"kind": "header", "title": title, "video": video, "every": every,
+          "dense": dense, "at": at, "moments": len(runs[:limit]),
+          "joined": joined, "text": tee.take()})
+
     from rapidocr_onnxruntime import RapidOCR
     engine = RapidOCR()
     standing = set()
