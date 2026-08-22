@@ -243,6 +243,21 @@ def build_table(pane):
         return out, icon, band
     head_cells = by_column(header)[0] if header else [""] * len(cols)
     body_rows = [by_column(r) for r in body]
+    # a column with no heading and under two cells is a stray reading's
+    # doing; its cells fold into the neighbour on the left (or right)
+    keep = []
+    for i in range(len(cols)):
+        filled = sum(1 for cells_, _, _ in body_rows if cells_[i])
+        if not head_cells[i] and filled < 2 and len(cols) > 1:
+            j = i - 1 if i > 0 else i + 1
+            for cells_, _, _ in body_rows:
+                if cells_[i]:
+                    cells_[j] = (cells_[j] + " " + cells_[i]).strip()
+                    cells_[i] = ""
+        else:
+            keep.append(i)
+    head_cells = [head_cells[i] for i in keep]
+    body_rows = [([cells_[i] for i in keep], icon, band) for cells_, icon, band in body_rows]
     return top, side, head_cells, body_rows, bottom, doubts
 
 
@@ -410,14 +425,41 @@ def window_groups(m):
         title = e.get("top")
         groups.append({"name": name, "title": title, "rect": e["rect"], "panes": panes, "where": e.get("where")})
     rest = [p for p in m["panes"] if p.get("wi") is None or p.get("wi") >= len(wins)]
-    if rest:
-        e = {"rect": [0, 0] + list(m.get("size") or [1920, 1080]), "top": None, "where": "the screen"}
-        if groups:
-            name = "The rest of the screen"
-        else:
-            app = old.app_name(e, rest)
-            name = (app[0].upper() + app[1:]) if app else "The screen"
-        groups.append({"name": name, "title": None, "rect": e["rect"], "panes": rest, "where": None})
+    size = list(m.get("size") or [1920, 1080])
+    if rest and groups:
+        groups.append({"name": "The rest of the screen", "title": None, "rect": [0, 0] + size,
+                       "panes": rest, "where": None})
+    elif rest:
+        # no window was found: each structural pane is a window of its own,
+        # with any narrow loose strip beside it as its sidebar; loose panes
+        # left over stand alone
+        W = size[0]
+        structural = [p for p in rest if p["kind"] in old.STRUCTURAL]
+        loose = [p for p in rest if p["kind"] not in old.STRUCTURAL]
+        taken = set()
+        for sp in sorted(structural, key=lambda p: p["box"][0]):
+            members = [sp]
+            for lp in loose:
+                if id(lp) in taken:
+                    continue
+                narrow = (lp["box"][2] - lp["box"][0]) < 0.3 * W
+                touches = abs(lp["box"][2] - sp["box"][0]) < 0.02 * W or abs(lp["box"][0] - sp["box"][2]) < 0.02 * W
+                if narrow and touches:
+                    members.append(lp)
+                    taken.add(id(lp))
+            e = {"rect": [0, 0] + size, "top": None}
+            app = old.app_name(e, members)
+            name = (app[0].upper() + app[1:]) if app else f"A window, {sp.get('where') or 'on the screen'}"
+            x0 = min(p["box"][0] for p in members); x1 = max(p["box"][2] for p in members)
+            y0 = min(p["box"][1] for p in members); y1 = max(p["box"][3] for p in members)
+            groups.append({"name": name, "title": None, "rect": [x0, y0, x1, y1], "panes": members, "where": sp.get("where")})
+        for lp in loose:
+            if id(lp) in taken:
+                continue
+            e = {"rect": [0, 0] + size, "top": None}
+            app = old.app_name(e, [lp])
+            name = (app[0].upper() + app[1:]) if app else f"Loose words, {lp.get('where') or 'on the screen'}"
+            groups.append({"name": name, "title": None, "rect": lp["box"], "panes": [lp], "where": lp.get("where")})
     groups.sort(key=lambda g: g["rect"][0])
     return groups
 
