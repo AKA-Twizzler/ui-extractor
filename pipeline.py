@@ -7,6 +7,7 @@ It maps the video, captures one frame per distinct screen, and reads whatever
 it can from each: the file tree where there is one, the text where there is
 not. Everything it cannot settle is reported as unsettled rather than guessed.
 """
+import json
 import os
 import re
 import sys
