@@ -1198,9 +1198,9 @@ def main():
             lap("cutting")
             rec = say_pane(pane_path, pi, engine, drawn, camera,
                            in_ui=hits_ui)
-            lap("panes")
             took.setdefault("per_pane", []).append(
-                [pi, round(time.perf_counter() - t0 + took["panes"], 2)])
+                [pi, round(time.perf_counter() - t0, 2)])
+            lap("panes")
             cur_boxes[box_t] = rec
             if rec is None:
                 quiet.append(pi)
