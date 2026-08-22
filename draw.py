@@ -274,7 +274,7 @@ def draw_document(pane):
                     fine.append(f"a link, blue: {row['text'][:40]!r}")
             out.append(h)
     cls = "sn-doc" + (" sn-tree" if mono else "")
-    return f'<div class="{cls}">' + "".join(out) + picture_marks(data) + "</div>", fine
+    return f'<div class="{cls}">' + "".join(out) + picture_marks(data, pane.get("_skip_top")) + "</div>", fine
 
 
 def draw_tree(pane):
@@ -291,7 +291,7 @@ def draw_tree(pane):
             h = f'<span class="sn-{hue}" style="font-weight:600">{h}</span>'
             fine.append(f"the {hue} band: the tree row {ln.strip()!r} is drawn on it")
         out.append(h)
-    return '<div class="sn-tree">' + "\n".join(out) + "</div>" + picture_marks(pane.get("data")), fine
+    return '<div class="sn-tree">' + "\n".join(out) + "</div>" + picture_marks(pane.get("data"), pane.get("_skip_top")), fine
 
 
 def draw_list(pane):
@@ -322,7 +322,7 @@ def draw_list(pane):
     if not out:
         # the lines are a markdown table already; keep them as read
         return '<div class="sn-body">' + "<br>".join(esc(ln) for ln in content_lines(pane)) + "</div>", fine
-    return '<div class="sn-body">' + "".join(out) + picture_marks(data) + "</div>", fine
+    return '<div class="sn-body">' + "".join(out) + picture_marks(data, pane.get("_skip_top")) + "</div>", fine
 
 
 def draw_terminal(pane):
@@ -420,10 +420,27 @@ def draw_pane(pane):
     return draw_loose(pane)
 
 
-def toolbar(words, title=None):
+def toolbar(words, title=None, icons=0):
     spans = "".join(f'<span class="sn-btn">{esc(w)}</span>' for w in words)
+    spans += "".join('<span class="sn-btn">▫</span>' for _ in range(min(icons, 8)))
     t = f"<b>{esc(title)}</b>" if title else ""
     return f'<div class="sn-toolbar"><span class="sn-lights"></span>{t}{spans}</div>'
+
+
+def top_pictures(pane):
+    """How many pictures sit along the top band of a pane: its toolbar's
+    own buttons and icons, drawn as blank buttons."""
+    data = pane.get("data") or {}
+    pics = data.get("style", {}).get("pictures") or []
+    h = max(1, pane["box"][3] - pane["box"][1])
+    # pane pictures are in pane pixels; the pane image may be enlarged, so
+    # the band is judged against the pictures' own frame
+    tops = [p["box"][1] for p in pics]
+    if not tops:
+        return 0, None
+    limit = max(48, int(0.12 * max(p["box"][3] for p in pics) / 0.75)) if pics else 0
+    band = [p for p in pics if p["box"][1] < limit]
+    return len(band), limit
 
 
 def pathbar(words):
@@ -443,10 +460,11 @@ def draw_window(entry, panes, theme):
     head = []
     top = entry.get("top")
     above = [w for w in rest["above"] if not top or w.strip() != top.strip()]
+    n_icons, band_top = top_pictures(main)
     if top:
-        head.append(toolbar(above, top))
-    elif above:
-        head.append(toolbar(above))
+        head.append(toolbar(above, top, n_icons))
+    elif above or n_icons:
+        head.append(toolbar(above, None, n_icons))
     if above:
         fine.append("across the top, above the main pane's content: " + " | ".join(above))
     # columns: a narrow pane at the left is a sidebar; a tree beside a
@@ -470,6 +488,9 @@ def draw_window(entry, panes, theme):
                 fine.append(f"also on the side pane, {where}: " + " | ".join(sr[where]))
         if sr["doubt"]:
             fine.append("side pane, only one engine read: " + " | ".join(sr["doubt"]))
+    if band_top:
+        main = dict(main)
+        main["_skip_top"] = band_top
     h, f = draw_pane(main)
     fine.extend(f)
     cols.append(h)
@@ -807,9 +828,14 @@ def theme_of(panes):
     return max(votes, key=votes.get) if votes else None
 
 
-def picture_marks(data):
-    """Placeholders for the pictures a pane held where no text was."""
+def picture_marks(data, skip_top=None):
+    """Placeholders for the pictures a pane held where no text was.
+
+    `skip_top` leaves out the pictures along the pane's top band, which
+    the window draws in its toolbar instead."""
     pics = (data or {}).get("style", {}).get("pictures") or []
+    if skip_top:
+        pics = [p for p in pics if p["box"][1] >= skip_top]
     out = []
     for p in pics[:4]:
         x0, y0, x1, y1 = p["box"]
