@@ -272,9 +272,13 @@ def say_pane(pane_path, pi, engine, drawn=(), camera=None, in_ui=True):
                              + " | ".join(video))
         if not left:
             return
+        # the other engine has read this pane's enlargement already, for
+        # the structure; its text comes from the memo, not a third run
+        other = guard(f"second engine text, pane {pi}",
+                      note_reader.tess_text_for, pane_path, sink=notes)
         marked = guard(f"confirmation, pane {pi}",
                        verify_names.confirm_readings, pane_path,
-                       [t for t, _ in left], sink=notes)
+                       [t for t, _ in left], other_text=other, sink=notes)
         if marked is None:
             marked = [(t, False) for t, _ in left]
         top = min((box[1] for _, box in used), default=0)
@@ -409,13 +413,13 @@ def say_pane(pane_path, pi, engine, drawn=(), camera=None, in_ui=True):
         # otherwise take it for prose and lose who said what
         chat = guard(f"chat reader, pane {pi}",
                      chat_reader.read_chat, pane_path, engine=engine,
-                     sink=notes) or {}
+                     res=res, sink=notes) or {}
         if chat.get("is_chat"):
             return record("a chat log", chat_reader.render(chat).splitlines(),
                           chat)
         # a document: the words AND the shape
         note = guard(f"document reader, pane {pi}",
-                     note_reader.read_note, pane_path,
+                     note_reader.read_note, pane_path, res=res,
                      sink=notes) or {"markdown": "", "backed": 0}
         # lines of TEXT, not lines of output: the fences round a properties
         # block are structure the reader emits, so counting them lets two

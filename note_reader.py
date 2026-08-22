@@ -346,7 +346,36 @@ def text_at(second, row, pad):
     return text
 
 
-def reconcile_rows(rows, big_path, body_h):
+def rows_from_readings(res, scale=3):
+    """The recogniser's pane-scale answer as boxed rows on the enlargement."""
+    out = []
+    for quad, text, score in res or []:
+        xs = [p[0] for p in quad]
+        ys = [p[1] for p in quad]
+        out.append({"text": str(text).strip(),
+                    "x0": int(min(xs) * scale), "x1": int(max(xs) * scale),
+                    "y0": int(min(ys) * scale), "y1": int(max(ys) * scale),
+                    "score": float(score)})
+    out.sort(key=lambda r: r["y0"])
+    return out
+
+
+def tess_text_for(png_path):
+    """What tesseract read on this pane's enlargement, as one string, from
+    the memo when the enlargement has been read already -- so a
+    confirmation need not run the engine a second time on the same
+    pixels. None when the enlargement was never made."""
+    big = png_path.replace(".png", "_3x.png")
+    if not os.path.exists(big):
+        return None
+    gray = cv2.imread(big, cv2.IMREAD_GRAYSCALE)
+    if gray is None:
+        return None
+    rows = tess_rows(big, gray)
+    return "\n".join(r["text"] for r in rows if r.get("text"))
+
+
+def reconcile_rows(rows, big_path, body_h, second=None):
     """Read every line twice and keep what the two engines agree on.
 
     One engine loses spaces inside a word; the other loses a glyph it cannot
@@ -355,7 +384,8 @@ def reconcile_rows(rows, big_path, body_h):
     wins, because an engine drops what it cannot name and never invents it;
     where they do not, the line is left flagged rather than picked between.
     """
-    second = second_engine_rows(big_path)
+    if second is None:
+        second = second_engine_rows(big_path)
     if not second:
         return rows
     from verify_names import reconcile
@@ -391,7 +421,7 @@ def reconcile_rows(rows, big_path, body_h):
     return rows
 
 
-def read_note(png_path, engine=None):
+def read_note(png_path, engine=None, res=None):
     bgr = cv2.imread(png_path)
     # everything is measured on a 3x enlargement: strokes are two or three
     # pixels at native size and the measurement can only land on whole values
@@ -444,7 +474,23 @@ def read_note(png_path, engine=None):
     # only now is the text read a second time: reconciling first would replace
     # the line and take the drawn bullet off it, and the row would rejoin the
     # line above as if it had never started a new one
-    rows = reconcile_rows(rows, big_path, body)
+    # The second reading, cheaply first: the recogniser's pane-scale
+    # answer, which the pipeline already holds, scaled onto the
+    # enlargement. Running the recogniser on the enlargement itself cost
+    # twenty seconds on a 4K note page, measured, and most pages are
+    # backed well past the gate by the cheap reading. Only a page that
+    # falls short of the gate on it pays for the enlargement pass, with
+    # every row's primary text put back first so the verdicts are clean.
+    cheap = rows_from_readings(res) if res else None
+    rows = reconcile_rows(rows, big_path, body, second=cheap)
+    if cheap is not None and backed_share(rows) < BACKED:
+        for r in rows:
+            if "text_primary" in r:
+                r["text"] = r["text_primary"]
+            for k in ("cut_tails", "text_second", "read_status",
+                      "all_chars", "backed_chars"):
+                r.pop(k, None)
+        rows = reconcile_rows(rows, big_path, body)
 
     # the column's right edge is where full lines end, taken as the busiest
     # right-hand position rather than the furthest, so one stray wide row

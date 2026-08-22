@@ -212,7 +212,7 @@ def _words(text):
     return [w for w in re.findall(r"[a-z0-9]+", text.lower()) if len(w) >= 3]
 
 
-def confirmed_elsewhere(png_path, entries, engine=None):
+def confirmed_elsewhere(png_path, entries, engine=None, res=None):
     """How much of what this reader is about to say the OTHER engine read too.
 
     A chat log is the one view here with no drawing of its own to prove it. A
@@ -230,10 +230,14 @@ def confirmed_elsewhere(png_path, entries, engine=None):
     picture of text, and the reader with the weakest proof of its own is the
     one that should have to show the difference.
     """
-    if engine is None:
-        from rapidocr_onnxruntime import RapidOCR
-        engine = RapidOCR()
-    res, _ = engine(png_path)
+    # the pipeline has read this pane with the recogniser already and
+    # hands its answer in; reading it again here cost a second pass on
+    # every pane the cascade reached
+    if res is None:
+        if engine is None:
+            from rapidocr_onnxruntime import RapidOCR
+            engine = RapidOCR()
+        res, _ = engine(png_path)
     seen = set(_words(" ".join(t for _, t, _ in (res or []))))
     mine = _words(" ".join(f"{e['who']} {e['said']}" for e in entries))
     if not mine:
@@ -241,7 +245,7 @@ def confirmed_elsewhere(png_path, entries, engine=None):
     return sum(1 for w in mine if w in seen) / len(mine)
 
 
-def read_chat(png_path, engine=None):
+def read_chat(png_path, engine=None, res=None):
     bgr = cv2.imread(png_path)
     if bgr is None:
         return {"is_chat": False, "why": "could not read the image"}
@@ -311,7 +315,7 @@ def read_chat(png_path, engine=None):
         return {"is_chat": False,
                 "why": (f"only {len(named)} of {len(entries)} entries carry a "
                         "name; a log is who said what")}
-    share = confirmed_elsewhere(png_path, entries, engine)
+    share = confirmed_elsewhere(png_path, entries, engine, res)
     if share < CONFIRMED:
         return {"is_chat": False,
                 "why": (f"only {share:.0%} of these words are words the other "
