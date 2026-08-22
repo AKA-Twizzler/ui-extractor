@@ -201,8 +201,13 @@ def say_pane(pane_path, pi, engine, drawn=(), camera=None, in_ui=True):
     """
     notes = []
 
-    def record(kind, lines):
-        return {"pi": pi, "kind": kind, "lines": lines, "notes": notes}
+    def record(kind, lines, data=None):
+        # `data` is the reader's own structure -- rows with their geometry,
+        # sizes, weights, colours, statuses -- kept whole for the records
+        # file; the lines are what the record SAYS, the data is what it
+        # MEASURED, and the drawing layer reads the second
+        return {"pi": pi, "kind": kind, "lines": lines, "notes": notes,
+                "data": data}
 
     def owned(lines):
         if not already_drawn(lines, drawn):
