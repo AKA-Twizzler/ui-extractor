@@ -1546,6 +1546,69 @@ def _coverage():
                   f"unconfirmed; tree {len(rows)} rows; note backed {backed:.2f}")
 
 
+@check("style: what a pane looks like is measured and said -- dark or light, "
+       "the band a row is drawn on, the marks before rows, the pictures, the "
+       "words that lean, and where the pointer stood")
+def _style():
+    """The text readers say what is written; nothing said what it looked
+    like. Tristan's own list of what the note must show: the window's
+    furniture, a selected row, the dark or light look, italic and underline
+    and links and the type, pictures and icons and the pointer. Measured on
+    the memory-files video: the Finder's Dev row sits on a green band
+    (45,137,68) on a (31,31,32) background; green folder marks stand before
+    Assets, My Product and Operations; the pointer is at 1798,894 at
+    00:03:00 and, half the size, at 319,929 at 00:04:10 -- on the very tree
+    row the cursor had jolted; the one italic phrase on the note, "Every
+    agent w", leans 9 degrees where upright words read under 5."""
+    import render
+    said = pipeline_says("memfiles", "00:03:00,00:04:10")
+    path = machine.here(
+        f"/mnt/g/Images/{VIDEOS['memfiles']}/records-at.jsonl")
+    moments = [e for e in render.entries(path) if e["kind"] == "moment"]
+    if len(moments) != 2:
+        return False, f"{len(moments)} moments recorded, not 2"
+    finder, obsidian = moments
+
+    def near(found, x, y, slack=24):
+        return found and abs(found["box"][0] - x) <= slack and abs(found["box"][1] - y) <= slack
+
+    if not near(finder.get("pointer"), 1798, 894):
+        return False, f"the pointer at 00:03:00 is not at 1798,894: {finder.get('pointer')}"
+    if not near(obsidian.get("pointer"), 319, 929):
+        return False, f"the pointer at 00:04:10 is not at 319,929: {obsidian.get('pointer')}"
+    lst = [p for p in finder["panes"] if p["kind"] == "a list of columns"]
+    if not lst:
+        return False, "the file list was not read as a list"
+    data = lst[0]["data"]
+    look = (data.get("style") or {}).get("look") or {}
+    if look.get("theme") != "dark":
+        return False, f"the Finder list is not measured dark: {look}"
+    styles = data["blocks"][0].get("row_style") or []
+    rows = data["blocks"][0]["rows"]
+    dev = [st for r, st in zip(rows, styles) if r and r[0].strip() == "Dev"]
+    if not dev or dev[0].get("band") != "green":
+        return False, f"the Dev row carries no green band: {dev}"
+    marks = sum(1 for st in styles if st.get("icon"))
+    if marks < 3:
+        return False, f"{marks} rows carry a mark before them; 3 folders expected at least"
+    if "a green band under: Dev" not in said or "[dark look" not in said:
+        return False, "the style line is not said in the output"
+    doc = [p for p in obsidian["panes"] if p["kind"] == "an open document"]
+    if not doc:
+        return False, "the note at 00:04:10 was not read as a document"
+    lean = [r for r in doc[0]["data"]["rows"] if r.get("italic")]
+    if not any("Everyagentw" in w for r in lean for w in r["italic"]):
+        return False, f"the italic phrase was not found: {[r.get('italic') for r in lean]}"
+    if "*Everyagentw*" not in said:
+        return False, "the leaning word is not marked in the document's lines"
+    fam = (doc[0]["data"].get("style") or {}).get("family")
+    if fam != "proportional":
+        return False, f"the note's type measured {fam!r}, not proportional"
+    return True, (f"pointer at {finder['pointer']['box'][:2]} and {obsidian['pointer']['box'][:2]}; "
+                  f"Dev on a green band; {marks} rows with marks; italic {lean[0]['italic']}; "
+                  f"{fam} type; {look['theme']} look")
+
+
 def main():
     wanted = [a for a in sys.argv[1:] if not a.startswith("-")]
     if "--list" in sys.argv:

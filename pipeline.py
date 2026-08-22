@@ -28,6 +28,7 @@ import note_reader
 import overlay
 import transcript
 import tree_reader
+import style_reader
 import verify_names
 
 
@@ -298,6 +299,31 @@ def say_pane(pane_path, pi, engine, drawn=(), camera=None, in_ui=True):
             lines.append("[also on this pane, only one engine read these] "
                          + " | ".join(doubt))
 
+    def styled(kind, lines, data):
+        """The pane's look, measured and said: one line after its content,
+        and the marks a document's lines carry -- a leaning word between
+        asterisks, a rule or a link named after the line. See
+        style_reader.measure; the numbers ride on the rows in `data`."""
+        line = guard(f"style, pane {pi}", style_reader.measure, pane_path,
+                     kind, data, res, sink=notes)
+        if kind == "an open document":
+            for r in data.get("rows") or []:
+                if not (r.get("italic") or r.get("underline") or r.get("link")):
+                    continue
+                head = (r.get("text") or "")[:30]
+                for i, ln in enumerate(lines):
+                    if head and head in ln and not ln.startswith("["):
+                        for w in r.get("italic") or []:
+                            if w.strip("'").isalnum():
+                                lines[i] = lines[i].replace(w, f"*{w}*", 1)
+                        marks = [m for m, on in (("underlined", r.get("underline")),
+                                                 ("a link", r.get("link"))) if on]
+                        if marks:
+                            lines[i] += "   <- " + ", ".join(marks)
+                        break
+        if line:
+            lines.append(line)
+
     def record(kind, lines, data=None):
         # `data` is the reader's own structure -- rows with their geometry,
         # sizes, weights, colours, statuses -- kept whole for the records
@@ -305,6 +331,8 @@ def say_pane(pane_path, pi, engine, drawn=(), camera=None, in_ui=True):
         # MEASURED, and the drawing layer reads the second
         if kind in THING and data is not None and res:
             remainder(kind, lines, data)
+        if data is not None and res and kind != "the text drawn on the picture, reported above":
+            styled(kind, lines, data)
         return {"pi": pi, "kind": kind, "lines": lines, "notes": notes,
                 "data": data}
 
@@ -970,6 +998,17 @@ def main():
                       size=[img.shape[1], img.shape[0]],
                       said=r.get("said") if joined else None,
                       regions=regions)
+        # the mouse pointer, by its own pixels -- see style_reader.pointer.
+        # Said once per moment with where it stood; None is an answer too
+        # and is not said, since "no pointer found" is most of the frames
+        # of a talking head
+        found = guard(f"pointer at {ts}", style_reader.pointer,
+                      cv2.cvtColor(img, cv2.COLOR_BGR2GRAY))
+        moment["pointer"] = found
+        if found:
+            px, py = found["box"][0], found["box"][1]
+            print(f"  [the mouse pointer at {px},{py} -- "
+                  f"{where(found['box'], img.shape[1], img.shape[0])}]")
         # Both kinds of overlay are read from the WHOLE frame, and before the
         # test for readable interface -- a live stream is mostly camera, and a
         # banner over a shot of the room is exactly the case that test rejects.

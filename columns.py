@@ -384,6 +384,13 @@ def reach(found, rows, tess_words):
         b["header"], b["rows"] = table[0], table[1:]
         b["headflags"], b["flags"] = flags[0], flags[1:]
         b["y0"], b["y1"] = rows[mine[0]]["y0"], rows[mine[-1]]["y1"]
+        # each body row's own box, on the enlargement the reader measures
+        # on, so the style reader can ask what band it sits on and what
+        # mark stands before it
+        b["head_box"] = [rows[mine[0]]["x0"], rows[mine[0]]["y0"],
+                         rows[mine[0]]["x1"], rows[mine[0]]["y1"]]
+        b["row_boxes"] = [[rows[k]["x0"], rows[k]["y0"], rows[k]["x1"], rows[k]["y1"]]
+                          for k in mine[1:]]
         kept.append(b)
     kept.sort(key=lambda b: b["y0"])
     return kept
@@ -486,7 +493,7 @@ def read_list(png_path):
         return {"is_list": False,
                 "why": "no run of rows shares a blank corridor between them"}
     return {"is_list": True, "blocks": found, "space_width": space_w,
-            "columns": max(b["columns"] for b in found)}
+            "columns": max(b["columns"] for b in found), "scale": 3}
 
 
 def render(res):
