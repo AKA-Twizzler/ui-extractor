@@ -161,6 +161,23 @@ def merge_columns(ranges, tol):
     return cols
 
 
+def table_rows(cells, rh):
+    """Cells grouped into rows by the table's own row height: a cell joins
+    the row whose centre sits within half a row of its own."""
+    cells = sorted(cells, key=lambda it: ((it["box"][1] + it["box"][3]) / 2, it["box"][0]))
+    rows, cur, cy = [], [], None
+    for it in cells:
+        c = (it["box"][1] + it["box"][3]) / 2
+        if cy is not None and c - cy > 0.55 * rh:
+            rows.append(cur)
+            cur, cy = [], None
+        cur.append(it)
+        cy = c if cy is None else (cy * (len(cur) - 1) + c) / len(cur)
+    if cur:
+        rows.append(cur)
+    return rows
+
+
 def build_table(pane):
     """The table as the screen showed it: rows by height, columns by the
     header's positions, and the reader's leftovers put back where they sat.
@@ -175,7 +192,7 @@ def build_table(pane):
         return None
     heights = sorted(it["box"][3] - it["box"][1] for it in cells)
     rh = heights[len(heights) // 2] or 20
-    cols = merge_columns([it["col"] for it in cells], tol=rh)
+    cols = merge_columns([it["col"] for it in cells], tol=-0.2 * rh)   # merge only on real overlap
     x_lo, x_hi = cols[0][0], cols[-1][1]
     y_lo = min(it["box"][1] for it in cells)
     y_hi = max(it["box"][3] for it in cells)
@@ -204,7 +221,7 @@ def build_table(pane):
         it["col"] = hit
         it["role"] = "cell"
     cells = cells + inside
-    rows = reading_order(cells, lambda it: it["box"])
+    rows = table_rows(cells, rh)
     # the header row is the one holding the reader's header cells
     header = None
     body = []
@@ -392,8 +409,11 @@ def window_groups(m):
     rest = [p for p in m["panes"] if p.get("wi") is None or p.get("wi") >= len(wins)]
     if rest:
         e = {"rect": [0, 0] + list(m.get("size") or [1920, 1080]), "top": None, "where": "the screen"}
-        app = old.app_name(e, rest)
-        name = (app[0].upper() + app[1:]) if app else ("The rest of the screen" if groups else "The screen")
+        if groups:
+            name = "The rest of the screen"
+        else:
+            app = old.app_name(e, rest)
+            name = (app[0].upper() + app[1:]) if app else "The screen"
         groups.append({"name": name, "title": None, "rect": e["rect"], "panes": rest, "where": None})
     groups.sort(key=lambda g: g["rect"][0])
     return groups
