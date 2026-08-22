@@ -250,7 +250,7 @@ def say_pane(pane_path, pi, engine, drawn=(), camera=None, in_ui=True):
                 lines.append("  unsettled: " + "; ".join(
                     f"{x.get('name_primary')!r}/{x.get('name_second')!r}"
                     for x in flagged))
-            return record("a file tree", lines)
+            return record("a file tree", lines, tree)
         # a terminal first: it is the one screen that proves itself, since
         # nothing else sets every character on one width, and read as
         # anything else it loses the split between what Jared typed and what
