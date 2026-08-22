@@ -814,16 +814,27 @@ def main():
     for r in runs[:limit]:
         secs = r["best"]["t"]
         ts = spot.hms(secs)
+        # this moment's record: filled as the moment is read, written once
+        # the moment is fully said
+        moment = {"kind": "moment", "ts": ts, "secs": secs, "how": None,
+                  "share": None, "said": None, "regions": [], "wins": [],
+                  "panels": [], "standing": [], "drawn": [], "windows": [],
+                  "lone_panels": [], "panes": [], "quiet": [],
+                  "unwritten": [], "rendered": {}}
         try:
             path, how = capture.capture_moment(video, ts, imgs)
         except RuntimeError as why:
             # a damaged patch is the file's problem, not this moment's, and
             # certainly not the other eleven moments' -- say so and go on
             print(f"--- {ts}  (no picture: {why}) ---\n")
+            moment["text"] = tee.take()
+            keep(moment)
             continue
         img = cv2.imread(path)
         if img is None:
             print(f"--- {ts}  (no picture: {path} would not open) ---\n")
+            moment["text"] = tee.take()
+            keep(moment)
             continue
         regions = guard(f"screenness at {ts}",
                         screenness.ui_regions, img, engine) or []
@@ -831,6 +842,10 @@ def main():
         print(f"--- {ts}  ({how}; interface on {share:.0f}% of the frame) ---")
         if joined and r.get("said"):
             print(f"  [said while this screen was up]\n    {r['said']}")
+        moment.update(how=how, share=share, frame=path,
+                      size=[img.shape[1], img.shape[0]],
+                      said=r.get("said") if joined else None,
+                      regions=regions)
         # Both kinds of overlay are read from the WHOLE frame, and before the
         # test for readable interface -- a live stream is mostly camera, and a
         # banner over a shot of the room is exactly the case that test rejects.
