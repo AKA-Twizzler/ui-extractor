@@ -181,6 +181,29 @@ def already_drawn(lines, drawn):
     return known * 2 > len(said)
 
 
+def reading_order(items, box_of):
+    """Items in reading order: rows top to bottom, left to right within a
+    row. Two boxes share a row when their centres sit within half a box
+    height of each other."""
+    items = sorted(items, key=lambda it: ((box_of(it)[1] + box_of(it)[3]) / 2, box_of(it)[0]))
+    rows, cur, cy = [], [], None
+    for it in items:
+        b = box_of(it)
+        c = (b[1] + b[3]) / 2
+        h = max(1, b[3] - b[1])
+        if cy is not None and c - cy > 0.5 * h:
+            rows.append(cur)
+            cur = []
+        cur.append(it)
+        cy = c if cy is None or not cur[:-1] else cy
+    if cur:
+        rows.append(cur)
+    out = []
+    for row in rows:
+        out.extend(sorted(row, key=lambda it: box_of(it)[0]))
+    return out
+
+
 def structure_band(kind, data):
     """Where a reader's structure sits on its pane, top and bottom in pane
     pixels, from the rows it measured -- or (None, None)."""
@@ -313,10 +336,7 @@ def say_pane(pane_path, pi, engine, drawn=(), camera=None, in_ui=True):
         doubt = []
         # reading order: row by row, left to right, so a path bar's crumbs
         # come out as the path reads and not as the engine found them
-        def row_of(box):
-            return (box[1] + box[3]) // max(2, (box[3] - box[1]) or 1)
-        order = sorted(zip(marked, left), key=lambda mb: (row_of(mb[1][1]), mb[1][1][0]))
-        for (t, ok), (_, box) in order:
+        for (t, ok), (_, box) in reading_order(list(zip(marked, left)), lambda mb: mb[1][1]):
             if used and box[3] <= top:
                 at = "above"
             elif used and box[1] >= bottom:

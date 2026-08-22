@@ -393,15 +393,36 @@ def draw_loose(pane, as_side=False):
     return '<div class="sn-body">' + " &nbsp;·&nbsp; ".join(parts) + pics + "</div>", fine
 
 
+def reading_order(items, box_of):
+    """Items in reading order: rows top to bottom, left to right within a
+    row. Two boxes share a row when their centres sit within half a box
+    height of each other."""
+    items = sorted(items, key=lambda it: ((box_of(it)[1] + box_of(it)[3]) / 2, box_of(it)[0]))
+    rows, cur, cy = [], [], None
+    for it in items:
+        b = box_of(it)
+        c = (b[1] + b[3]) / 2
+        h = max(1, b[3] - b[1])
+        if cy is not None and c - cy > 0.5 * h:
+            rows.append(cur)
+            cur = []
+        cur.append(it)
+        cy = c if cy is None or not cur[:-1] else cy
+    if cur:
+        rows.append(cur)
+    out = []
+    for row in rows:
+        out.extend(sorted(row, key=lambda it: box_of(it)[0]))
+    return out
+
+
 def remainder_of(pane):
     """The readings a structural reader left out, by where they sat."""
     data = pane.get("data") or {}
     out = {"above": [], "below": [], "beside": [], "doubt": []}
     rem = data.get("remainder") or []
-
-    def row_of(box):
-        return (box[1] + box[3]) // max(2, (box[3] - box[1]) or 1)
-    rem = sorted(rem, key=lambda r: (row_of(r["box"]), r["box"][0]) if r.get("box") else (0, 0))
+    if all(r.get("box") for r in rem):
+        rem = reading_order(rem, lambda r: r["box"])
     for r in rem:
         if r.get("confirmed"):
             out[r.get("where") or "beside"].append(r["text"])
