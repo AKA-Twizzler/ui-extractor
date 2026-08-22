@@ -770,7 +770,16 @@ def states(moments):
                     now = set(ln for p in panes for ln in content_lines(p))
                     last["times"].append(m["ts"])
                     last["moments"].append(m)
-                    last.setdefault("wobble", []).append((m["ts"], len(now - before)))
+                    # a line a letter off its twin is a wobble; one with no
+                    # near twin at all was read differently
+                    wob = diff = 0
+                    for ln in now - before:
+                        best = max((difflib.SequenceMatcher(None, ln, b).ratio() for b in before), default=0)
+                        if best >= 0.8:
+                            wob += 1
+                        else:
+                            diff += 1
+                    last.setdefault("wobble", []).append((m["ts"], wob, diff))
                     if sum(len(content_lines(p)) for p in panes) > sum(
                             len(content_lines(p)) for p in last["panes"]):
                         last["panes"], last["sig"] = panes, sig
@@ -1003,9 +1012,15 @@ def note(records_path, diary_text=None):
             fp.append(f"the mouse pointer at {pointer['box'][0]},{pointer['box'][1]} "
                       f"(matched {pointer['score']:.2f} at scale {pointer['scale']})")
         if s.get("wobble"):
-            fp.append("the same screen read again at " + ", ".join(
-                f"{ts} ({n} lines read differently)" for ts, n in s["wobble"])
-                + "; the fullest reading is drawn and the record holds each")
+            times = ", ".join(ts for ts, _, _ in s["wobble"])
+            wob = max(n for _, n, _ in s["wobble"])
+            diffs = [(ts, d) for ts, _, d in s["wobble"] if d]
+            line = f"the same screen read again at {times}"
+            if wob:
+                line += f"; letters wobbled in up to {wob} lines"
+            if diffs:
+                line += "; read differently: " + ", ".join(f"{d} lines at {ts}" for ts, d in diffs)
+            fp.append(line + "; the fullest reading is drawn and the record holds each")
         for x in s["entry"].get("panel_extra") or []:
             fp.append(("read across the window, in no pane: " if x.get("confirmed") else "one engine only, across the window: ") + x["line"])
         fp.extend(fine)
