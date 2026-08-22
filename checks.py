@@ -1429,6 +1429,48 @@ def _color_marks():
                   "through the document lines and the fallback both")
 
 
+@check("records: the diary renders back from the records file, byte for byte, with the measurements beside it")
+def _records_render():
+    """Every run now keeps a records file beside its note: the exact
+    characters printed per moment, and the measurements and reader
+    structures those lines came from. A note is a rendering of its
+    records, so the shape of the note can change without the video being
+    read again. The proof that nothing said is lost: render.py's diary
+    rendering of the records must equal the run's own output exactly --
+    and the records must carry the data the drawing layer needs, not
+    just the prose: a pane's box and reader structure, a window's
+    rectangle and top words."""
+    import render
+    said = pipeline_says("memfiles", "00:03:00,00:04:10")
+    path = machine.here(
+        f"/mnt/g/Images/{VIDEOS['memfiles']}/records-at.jsonl")
+    if not os.path.exists(path):
+        return False, "the run wrote no records file"
+    back = render.diary(path)
+    if back != said:
+        return False, (f"the rendering differs from the output: "
+                       f"{len(back)} vs {len(said)} characters")
+    moments = [e for e in render.entries(path) if e["kind"] == "moment"]
+    if len(moments) != 2:
+        return False, f"{len(moments)} moments recorded, not 2"
+    m = moments[0]
+    if not m["windows"] or "rect" not in m["windows"][0]:
+        return False, "the Finder window at 00:03:00 carries no rectangle"
+    panes = [p for p in m["panes"] if p.get("kind") == "a list of columns"]
+    if not panes or not panes[0].get("data", {}).get("blocks"):
+        return False, "the file list carries no reader structure"
+    if not all("box" in p and "image" in p for p in m["panes"]):
+        return False, "a pane lacks its box or its image"
+    tree = [p for p in moments[1]["panes"] if p.get("kind") == "a file tree"]
+    if not tree or not tree[0]["data"].get("rows"):
+        return False, "the tree at 00:04:10 carries no rows"
+    if "x0" not in tree[0]["data"]["rows"][0]:
+        return False, "a tree row lacks its geometry"
+    return True, (f"{len(said)} characters round-trip; {len(m['panes'])} panes "
+                  f"with structure at 00:03:00, {len(tree[0]['data']['rows'])} "
+                  "tree rows with geometry at 00:04:10")
+
+
 def main():
     wanted = [a for a in sys.argv[1:] if not a.startswith("-")]
     if "--list" in sys.argv:
