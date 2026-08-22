@@ -539,14 +539,22 @@ def draw_window(entry, panes, theme):
     if foot_words:
         foot = '<div class="sn-pathbar">' + " &nbsp;·&nbsp; ".join(esc(w) for w in foot_words) + "</div>"
     if rest["below"]:
-        crumbs = [w.rstrip(">").strip() for w in rest["below"]]
-        # a path's crumbs are short names; a sentence below the list is the
-        # window behind showing through, and is kept as words, not a path
-        crumb_like = all(len(c) <= 28 and c.count(" ") <= 2 for c in crumbs)
-        if crumb_like and (any("›" in w or w.endswith(">") for w in rest["below"]) or len(crumbs) >= 3):
+        # a path's crumbs are names: no space, or one space after a capital,
+        # never an apostrophe. A sentence below the list is the window
+        # behind showing through, and stays as words, not a path
+        crumbs, words = [], []
+        for w in rest["below"]:
+            c = w.rstrip(">").strip()
+            name_like = (len(c) <= 28 and "'" not in c and
+                         (" " not in c or (c.count(" ") == 1 and c[:1].isupper())))
+            (crumbs if name_like else words).append(c)
+        marked = any("›" in w or w.endswith(">") for w in rest["below"])
+        if crumbs and (marked or len(crumbs) >= 3):
             foot += pathbar(crumbs)
         else:
-            foot += '<div class="sn-pathbar">' + " &nbsp;·&nbsp; ".join(esc(w) for w in rest["below"]) + "</div>"
+            words = crumbs + words
+        if words:
+            foot += '<div class="sn-pathbar">' + " &nbsp;·&nbsp; ".join(esc(w) for w in words) + "</div>"
     cls = "sn-window sn-dark" if theme == "dark" else "sn-window"
     return f'<div class="{cls}">{"".join(head)}{body}{foot}</div>', fine
 
