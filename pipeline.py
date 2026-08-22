@@ -386,7 +386,8 @@ def say_pane(pane_path, pi, engine, drawn=(), camera=None, in_ui=True):
         # so a stream's leaderboard came back as prose -- "# 3 & Dr. Paris
         # Woods", "a @& Alex Palencia" -- with one line in eight backed.
         if (note_reader.body_lines(note["markdown"]) >= 3
-                and note["backed"] >= note_reader.BACKED):
+                and note["backed"] >= note_reader.BACKED
+                and not note.get("is_figures")):
             got = owned(note["markdown"].splitlines())
             if got:
                 return got

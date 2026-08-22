@@ -492,9 +492,17 @@ def read_note(png_path, engine=None):
     if props:
         md = ("---\n" + "\n".join(f"{k}: {v}" for k, v in props)
               + "\n---\n" + md)
+    # a column of figures is a table's column, not prose: rows that begin
+    # with a number and are not a numbered list -- "55 bytes Markdo...",
+    # fourteen of them, off the strip of a Finder window behind another.
+    # Both engines read such rows alike, so backing cannot refuse them;
+    # their shape does
+    figures = sum(1 for r in rows
+                  if r["text"][:1].isdigit() and not r.get("number"))
     return {"rows": rows, "properties": props, "body_rows": body_rows,
             "body_height": body, "levels": levels, "backed": backed_share(rows),
-            "body_stroke": round(body_stroke, 2), "markdown": md}
+            "body_stroke": round(body_stroke, 2), "markdown": md,
+            "is_figures": len(rows) >= 4 and figures >= 0.7 * len(rows)}
 
 
 # Colour is claimed only where it is unmistakable, and the bound is
@@ -721,7 +729,11 @@ def properties_block(rows, body_h):
         # bar's icons across the top of a wider crop -- splits at a wide gap
         # like a field does and arrives here as ".: he . C8 @we eo @ #.",
         # which is not a field name and must not become frontmatter.
-        if kv and any(ch.isalpha() for ch in kv[0]) and not is_button(kv[0]):
+        # -- and a label BEGINS with a letter: "53 bytes" paired with
+        # "Markdo..." is a Finder's Size and Kind cells, which read as ten
+        # fields on a strip of a window behind another
+        if (kv and kv[0].lstrip(" :=+©@")[:1].isalpha()
+                and not is_button(kv[0])):
             fields.append((i, kv, r))
             last = i
     if len(fields) < 2:
