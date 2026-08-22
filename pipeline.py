@@ -1081,6 +1081,11 @@ def main():
         for note in STUMBLED:
             print("   " + note)
 
+    keep({"kind": "footer", "windows_seen": seen_windows,
+          "stumbled": STUMBLED, "text": tee.take()})
+    recs.close()
+    sys.stdout = tee.real
+
 
 if __name__ == "__main__":
     main()
