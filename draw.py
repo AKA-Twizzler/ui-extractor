@@ -56,13 +56,27 @@ def same_rect(a, b, slack=4):
     return all(abs(int(x) - int(y)) <= slack for x, y in zip(a, b))
 
 
-CLOCK = re.compile(r"\b(\d{1,2}:\d{2}\s?[AP]M)\b")
-DAY = re.compile(r"\b((Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s?[A-Z][a-z]{2}\s?\d{1,2})")
+CLOCK = re.compile(r"^(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s?[A-Z][a-z]{2}\s?\d{1,2}\s*)?"
+                   r"(\d{1,2}:\d{2}\s?[AP]M)$")
 
 
-def clock_in(text):
-    m = CLOCK.search(text or "")
-    return m.group(1) if m else None
+def clock_in(pane):
+    """The desktop clock, when a reading on this pane IS one.
+
+    A time inside a file list's Date Modified column is not the clock; the
+    clock is a reading on its own -- "FriJul3 9:19PM" -- with nothing else
+    in it, so each reading is asked separately and a year disqualifies.
+    """
+    data = pane.get("data") or {}
+    texts = [r.get("text") or "" for r in data.get("readings") or []]
+    if not texts:
+        texts = [w.strip() for ln in (pane.get("lines") or []) if not ln.startswith("[")
+                 for w in ln.split(" | ")]
+    for t in texts:
+        m = CLOCK.match(t.strip())
+        if m:
+            return m.group(1)
+    return None
 
 
 def minutes(secs):
@@ -109,10 +123,14 @@ def window_title(entry, panes):
     top = entry.get("top")
     if app and top:
         return f"The {app} window, titled {top}" if app != "Finder" else f"The Finder window, {top}"
+    if app and entry.get("screen"):
+        return f"{app[0].upper() + app[1:]}, filling the screen"
     if app:
         return f"The {app} window"
     if top:
         return f"A window titled {top}"
+    if entry.get("screen"):
+        return "The screen"
     return "A window"
 
 
@@ -133,23 +151,21 @@ def doc_line(line, fine):
     """
     raw = line.rstrip()
     indent = len(raw) - len(raw.lstrip(" "))
-    text = raw.strip()
+    parts = re.split(r"\s+<- ", raw.strip())
+    text = parts[0].strip()
     hue = None
     cut = False
-    while True:
-        m = SUFFIX.search(text)
-        if not m:
-            break
-        note = m.group(1)
-        text = text[:m.start()]
+    for note in parts[1:]:
+        note = note.strip()
         if note.startswith("drawn in "):
             hue = note[len("drawn in "):].strip()
         elif note.startswith("the line runs on past the edge"):
             cut = True
-            if "read" in note:
-                fine.append(f"a line cut at the pane's edge; past the cut the engines {note.split(';', 1)[-1].strip()}")
+            if ";" in note:
+                fine.append(f"{text[:40]!r}… runs past the pane's edge; "
+                            + note.split(";", 1)[1].strip())
         else:
-            fine.append(f"{text.strip()!r}: {note}")
+            fine.append(f"{text[:40]!r}: {note}")
     if not text:
         return ""
     cls = f' class="sn-{hue}"' if hue in HUES else ""
@@ -168,8 +184,14 @@ def doc_line(line, fine):
     return f"<div{cls}>{pad}{body}</div>"
 
 
+def content_lines(pane):
+    """A structural pane's own lines: not the leftovers, not the doubt."""
+    return [ln for ln in (pane.get("lines") or [])
+            if not ln.strip().startswith(("[also on this pane", "unsettled:"))]
+
+
 def draw_document(pane):
-    lines = pane.get("lines") or []
+    lines = content_lines(pane)
     fine = []
     out = []
     props, in_props = [], False
@@ -191,9 +213,7 @@ def draw_document(pane):
 
 
 def draw_tree(pane):
-    lines = [ln for ln in (pane.get("lines") or [])
-             if not ln.strip().startswith("unsettled:")
-             and not ln.strip().startswith("[also on this pane")]
+    lines = content_lines(pane)
     fine = [ln.strip() for ln in (pane.get("lines") or [])
             if ln.strip().startswith("unsettled:")]
     return '<div class="sn-tree">' + esc("\n".join(lines)) + "</div>", fine
@@ -223,12 +243,12 @@ def draw_list(pane):
 
 
 def draw_terminal(pane):
-    lines = pane.get("lines") or []
+    lines = content_lines(pane)
     return '<div class="sn-tree">' + esc("\n".join(lines)) + "</div>", []
 
 
 def draw_chat(pane):
-    lines = pane.get("lines") or []
+    lines = content_lines(pane)
     return '<div class="sn-doc">' + "".join(f"<div>{esc(ln)}</div>" for ln in lines) + "</div>", []
 
 
@@ -321,10 +341,12 @@ def draw_window(entry, panes, theme):
     # the furniture along the top: the window's own words across its top,
     # and what the main pane's reader found above its structure
     head = []
-    if entry.get("top"):
-        head.append(toolbar(rest["above"], entry["top"]))
-    elif rest["above"]:
-        head.append(toolbar(rest["above"]))
+    top = entry.get("top")
+    above = [w for w in rest["above"] if not top or w.strip() != top.strip()]
+    if top:
+        head.append(toolbar(above, top))
+    elif above:
+        head.append(toolbar(above))
     # columns: a narrow pane at the left is a sidebar; a tree beside a
     # document is the three-column shape
     side = [p for p in panes if p is not main and (p["box"][2] - p["box"][0]) < 0.36 * width
@@ -396,6 +418,14 @@ def draw_map(size, rect, share, label):
 
 # ------------------------------------------------------------- the states
 
+def is_menubar(pane, H):
+    """A strip along the very top of the frame: the menu bar and the clock."""
+    if not H:
+        return False
+    x0, y0, x1, y1 = pane["box"]
+    return y0 < 0.02 * H and y1 < 0.07 * H
+
+
 def window_key(rect, seen):
     """The same drawn rectangle across moments is the same window."""
     for k, r in seen.items():
@@ -446,7 +476,21 @@ def states(moments):
         for p in m.get("panes") or []:
             if p.get("wi") is not None:
                 by_wi.setdefault(p["wi"], []).append(p)
-        for entry in m.get("windows") or []:
+        windows = list(m.get("windows") or [])
+        # panes in no found window: when the interface fills the frame no
+        # window edge is found, and the panes are the screen itself. They
+        # are drawn as one screen, on the frame's own rectangle; the menu
+        # bar strip along the top stays with the desktop
+        W, H = m.get("size") or (0, 0)
+        lone = [p for p in m.get("panes") or []
+                if p.get("wi") is None and not is_menubar(p, H)]
+        if lone and (len(lone) >= 2 or lone[0]["kind"] != "text, not a tree"):
+            windows.append({"wi": "screen", "rect": [0, 0, W, H],
+                            "where": "filling the screen", "top": None,
+                            "top_from": None, "drawn_over": False,
+                            "newly": [], "panel_extra": [], "screen": True})
+            by_wi["screen"] = lone
+        for entry in windows:
             panes = by_wi.get(entry["wi"]) or []
             if not panes:
                 continue
@@ -527,22 +571,22 @@ def desktop_section(moments):
     """What sat on no window: the menu bar, the clock, loose readings."""
     menubar, clocks, loose = [], [], []
     for m in moments:
-        for p in m.get("panes") or []:
-            if p.get("wi") is not None:
-                continue
-            sure, doubt, video = split_loose(p) if p["kind"] == "text, not a tree" else ([], [], [])
-            words = [w for _, t in sure for w in t.split(" | ")]
-            text = " ".join(words)
-            c = clock_in(text)
+        H = (m.get("size") or [0, 0])[1]
+        lone = [p for p in m.get("panes") or [] if p.get("wi") is None]
+        strips = [p for p in lone if is_menubar(p, H)]
+        others = [p for p in lone if p not in strips]
+        for p in lone:
+            c = clock_in(p)
             if c and (not clocks or clocks[-1][1] != c):
                 clocks.append((m["ts"], c))
-            H = (m.get("size") or [0, 0])[1]
-            if H and p["box"][1] < 0.02 * H and p["box"][3] < 0.06 * H:
-                menubar.extend(w for w in words if w not in menubar)
-            elif p["kind"] != "text, not a tree":
-                loose.append((m["ts"], p))
-            else:
-                loose.append((m["ts"], p))
+        for p in strips:
+            sure, doubt, video = split_loose(p) if p["kind"] == "text, not a tree" else ([], [], [])
+            words = [w for _, t in sure for w in t.split(" | ") if not CLOCK.match(w.strip())]
+            menubar.extend(w for w in words if w not in menubar)
+        # a lone pane that is not part of a screen-state (one loose pane
+        # on its own) is said here; the rest were drawn as the screen
+        if len(others) == 1 and others[0]["kind"] == "text, not a tree":
+            loose.append((m["ts"], others[0]))
     parts = ["## The desktop"]
     if menubar or clocks:
         right = f"{clocks[0][1]} at the start, {clocks[-1][1]} at the end" if len(clocks) > 1 else (clocks[0][1] if clocks else "")
@@ -556,9 +600,11 @@ def desktop_section(moments):
             continue
         seen.add(sig)
         h, f = draw_pane(p)
-        parts.append(f'**{p.get("where") or "on the screen"}, {ts}** ({p["kind"]})\n\n<div class="sn-window">{h}</div>')
+        sure, _, _ = split_loose(p)
+        if sure:
+            parts.append(f'**{p.get("where") or "on the screen"}, {ts}**\n\n<div class="sn-window">{h}</div>')
         if f:
-            parts.append('<span class="sn-fine">' + esc("; ".join(f)) + "</span>")
+            parts.append('<span class="sn-fine">' + esc(f"{p.get('where') or 'on the screen'}, {ts}: " + "; ".join(f)) + "</span>")
     return "\n\n".join(parts) if len(parts) > 1 else ""
 
 
@@ -601,7 +647,7 @@ def note(records_path, diary_text=None):
         name = window_title(s["entry"], s["panes"])
         if name not in apps:
             apps.append(name)
-    clocks = [c for m in moments for p in m.get("panes") or [] for c in [clock_in(pane_words(p))] if c]
+    clocks = [c for m in moments for p in m.get("panes") or [] for c in [clock_in(p)] if c]
     parts = []
     parts.append("---\nstatus: active\nproject: vault\ntype: reference\n---\n")
     parts.append(f"# {title}\n")
