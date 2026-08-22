@@ -558,10 +558,8 @@ def draw_window(entry, panes, theme):
                 fine.append(f"also on the side pane, {where}: " + " | ".join(sr[where]))
         if sr["doubt"]:
             fine.append("side pane, only one engine read: " + " | ".join(sr["doubt"]))
-    if band_top:
-        main = dict(main)
-        main["_skip_top"] = band_top
-    h, f = draw_pane(main)
+    drawn_main = dict(main, _skip_top=band_top) if band_top else main
+    h, f = draw_pane(drawn_main)
     fine.extend(f)
     cols.append(h)
     others = [p for p in panes if p is not main and p not in side]
