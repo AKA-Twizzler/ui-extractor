@@ -291,7 +291,8 @@ def say_pane(pane_path, pi, engine, drawn=(), camera=None, in_ui=True):
             got = owned(note["markdown"].splitlines())
             if got:
                 return got
-            return record("an open document", note["markdown"].splitlines())
+            return record("an open document", note["markdown"].splitlines(),
+                          note)
     # each reading's own glyph height rides along, for the LARGE mark
     # below -- and its box, for the colour ask
     heights = [max(p[1] for p in b) - min(p[1] for p in b)
