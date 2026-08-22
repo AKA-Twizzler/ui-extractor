@@ -151,10 +151,12 @@ def tree_band(pane):
 # ------------------------------------------------------------- the table, rebuilt
 
 def merge_columns(ranges, tol):
-    """Column x-ranges merged where they overlap, sorted left to right."""
+    """Column x-ranges clustered by where they start: two bands are one
+    column when their left edges sit within `tol` of each other. Touching
+    bands are neighbours, never one column."""
     cols = []
     for r in sorted(ranges, key=lambda r: r[0]):
-        if cols and r[0] <= cols[-1][1] + tol:
+        if cols and abs(r[0] - cols[-1][0]) <= tol:
             cols[-1] = [min(cols[-1][0], r[0]), max(cols[-1][1], r[1])]
         else:
             cols.append([r[0], r[1]])
@@ -187,19 +189,17 @@ def build_table(pane):
     items = items_of(pane)
     cells = [it for it in items if it["role"] in ("head", "cell")]
     left = [it for it in items if it["role"] == "left"]
-    doubts = [it["text"] for it in items if not it["ok"]]
+    doubts = []
     if not cells:
         return None
     heights = sorted(it["box"][3] - it["box"][1] for it in cells)
     rh = heights[len(heights) // 2] or 20
-    cols = merge_columns([it["col"] for it in cells], tol=-0.2 * rh)   # merge only on real overlap
+    cols = merge_columns([it["col"] for it in cells], tol=1.5 * rh)
     x_lo, x_hi = cols[0][0], cols[-1][1]
     y_lo = min(it["box"][1] for it in cells)
     y_hi = max(it["box"][3] for it in cells)
     top, side, bottom, inside = [], [], [], []
     for it in left:
-        if not it["ok"]:
-            continue
         cx = (it["box"][0] + it["box"][2]) / 2
         cy = (it["box"][1] + it["box"][3]) / 2
         if it["box"][2] <= x_lo - rh and cy >= y_lo - rh:
@@ -236,7 +236,8 @@ def build_table(pane):
         for it in sorted(r, key=lambda it: it["box"][0]):
             cx = (it["box"][0] + it["box"][2]) / 2
             ci = min(range(len(cols)), key=lambda i: 0 if cols[i][0] - rh <= cx <= cols[i][1] + rh else abs(cx - (cols[i][0] + cols[i][1]) / 2))
-            out[ci] = (out[ci] + " " + it["text"]).strip()
+            text = it["text"] if it["ok"] else f"*{it['text']}*"
+            out[ci] = (out[ci] + " " + text).strip()
             icon = icon or it.get("icon")
             band = band or it.get("band")
         return out, icon, band
@@ -280,17 +281,19 @@ def block_list(pane):
     if not built:
         return lines, doubts
     top, side, head, rows, bottom, doubts = built
+    def say(it):
+        return it["text"] if it["ok"] else f"*{it['text']}*"
     if top:
-        lines.append("**Toolbar:** " + " · ".join(it["text"] for it in sorted(top, key=lambda it: it["box"][0])))
+        lines.append("**Toolbar:** " + " · ".join(say(it) for it in sorted(top, key=lambda it: it["box"][0])))
     if side:
-        lines.append("**Sidebar:** " + " · ".join(it["text"] for it in sorted(side, key=lambda it: it["box"][1])))
+        lines.append("**Sidebar:** " + " · ".join(say(it) for it in sorted(side, key=lambda it: it["box"][1])))
     if top or side:
         lines.append("")
     lines.extend(md_table(head, rows))
     if bottom:
         items = sorted(bottom, key=lambda it: (round(it["box"][1] / 10), it["box"][0]))
-        crumbs = [it["text"].rstrip(">").strip() for it in items if crumb_like(it["text"])]
-        words = [it["text"] for it in items if not crumb_like(it["text"])]
+        crumbs = [say(it).rstrip(">").strip() for it in items if crumb_like(it["text"])]
+        words = [say(it) for it in items if not crumb_like(it["text"])]
         if len(crumbs) >= 2:
             lines.append("")
             lines.append("**Path:** " + " › ".join(crumbs))
