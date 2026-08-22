@@ -12,6 +12,7 @@ import json
 import os
 import re
 import sys
+import time
 
 import cv2
 import numpy as np
@@ -973,6 +974,18 @@ def main():
                   "panels": [], "standing": [], "drawn": [], "windows": [],
                   "lone_panels": [], "panes": [], "quiet": [],
                   "unwritten": [], "rendered": {}}
+        # where the seconds go, phase by phase: kept in the record and said
+        # on stderr, never in the diary. The speed question cannot be
+        # answered without it -- see the speed round
+        t0 = time.perf_counter()
+        took = {}
+
+        def lap(name):
+            nonlocal t0
+            now = time.perf_counter()
+            took[name] = round(took.get(name, 0.0) + now - t0, 2)
+            t0 = now
+
         try:
             path, how = capture.capture_moment(video, ts, imgs)
         except RuntimeError as why:
@@ -982,6 +995,7 @@ def main():
             moment["text"] = tee.take()
             keep(moment)
             continue
+        lap("capture")
         img = cv2.imread(path)
         if img is None:
             print(f"--- {ts}  (no picture: {path} would not open) ---\n")
@@ -991,6 +1005,7 @@ def main():
         regions = guard(f"screenness at {ts}",
                         screenness.ui_regions, img, engine) or []
         share = sum(x["share"] for x in regions) * 100
+        lap("screenness")
         print(f"--- {ts}  ({how}; interface on {share:.0f}% of the frame) ---")
         if joined and r.get("said"):
             print(f"  [said while this screen was up]\n    {r['said']}")
@@ -1005,6 +1020,7 @@ def main():
         found = guard(f"pointer at {ts}", style_reader.pointer,
                       cv2.cvtColor(img, cv2.COLOR_BGR2GRAY))
         moment["pointer"] = found
+        lap("pointer")
         if found:
             px, py = found["box"][0], found["box"][1]
             print(f"  [the mouse pointer at {px},{py} -- "
@@ -1027,6 +1043,7 @@ def main():
             (guard(f"panel reader at {ts}", overlay.read_overlays,
                    path, engine) or {"panels": []})["panels"],
             regions, img.shape[1], screenness.WORK_WIDTH, wins))
+        lap("overlays")
 
         # Text with no panel round it -- a banner, a lower third -- is proved
         # by watching its spot over minutes: an overlay holds still while the
@@ -1178,8 +1195,12 @@ def main():
                 ties, tuple(int(v * tie_scale) for v in box_t),
                 block_h, block_w)
             moment["rendered"][pi] = bool(hits_ui)
+            lap("cutting")
             rec = say_pane(pane_path, pi, engine, drawn, camera,
                            in_ui=hits_ui)
+            lap("panes")
+            took.setdefault("per_pane", []).append(
+                [pi, round(time.perf_counter() - t0 + took["panes"], 2)])
             cur_boxes[box_t] = rec
             if rec is None:
                 quiet.append(pi)
@@ -1229,6 +1250,11 @@ def main():
             c = (rec.get("data") or {}).get("coverage") or {}
             for k in cov:
                 cov[k] += int(c.get(k, 0))
+        lap("compose")
+        took["total"] = round(sum(v for k, v in took.items() if k != "per_pane"), 2)
+        moment["took"] = took
+        sys.stderr.write(f"[{ts} took {took['total']:.1f} s: " + ", ".join(
+            f"{k} {v}" for k, v in took.items() if k not in ("per_pane", "total")) + "]\n")
         moment.update(panes=records, quiet=quiet, unwritten=unwritten,
                       coverage=cov, text=tee.take())
         keep(moment)
