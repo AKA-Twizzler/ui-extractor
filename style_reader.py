@@ -377,3 +377,142 @@ def pointer(gray, floor=POINTER_FLOOR):
                             int(loc[0] + tt.shape[1]), int(loc[1] + tt.shape[0])],
                     "scale": round(sc, 2), "score": round(float(val), 3)}
     return best
+
+
+# --------------------------------------------------------- the whole pane
+
+def _box(quad):
+    xs = [p[0] for p in quad]
+    ys = [p[1] for p in quad]
+    return [int(min(xs)), int(min(ys)), int(max(xs)), int(max(ys))]
+
+
+def _rows_of(kind, data):
+    """The rows a structure has, each with its box in pane pixels, and the
+    dict the style marks go on. The readers measure at different scales:
+    the tree at pane size, the document and the list at three times it."""
+    if kind == "a file tree":
+        return [(r, [r["x0"], r["y0"], r["x1"], r["y1"]], r) for r in data.get("rows") or []]
+    if kind == "an open document":
+        out = []
+        for r in data.get("rows") or []:
+            out.append((r, [v / 3 for v in (r["x0"], r["y0"], r["x1"], r["y1"])], r))
+        return out
+    if kind == "a list of columns":
+        out = []
+        sc = data.get("scale") or 3
+        for b in data.get("blocks") or []:
+            b.setdefault("row_style", [{} for _ in b.get("rows") or []])
+            for i, box in enumerate(b.get("row_boxes") or []):
+                if i < len(b["row_style"]):
+                    out.append((b["rows"][i], [v / sc for v in box], b["row_style"][i]))
+        return out
+    if kind in ("text, not a tree", "only moving video on it"):
+        return [(r, r["box"], r) for r in data.get("readings") or []]
+    return []
+
+
+def _name(row):
+    if isinstance(row, dict):
+        return (row.get("name") or row.get("text") or "").strip()
+    if isinstance(row, (list, tuple)):
+        return " | ".join(str(c) for c in row).strip()
+    return str(row)
+
+
+def measure(pane_path, kind, data, res):
+    """What this pane looks like, attached to its record, said in one line.
+
+    The look (dark or light), the bands rows are painted on, the marks
+    before rows, the pictures where no text is, and -- on a document --
+    which words lean, which are ruled under, which are links, and whether
+    the type is monospace. Every verdict rides on the row it belongs to,
+    with the numbers behind it, and the line returned says only what was
+    found. None when the pane could not be read.
+    """
+    img = cv2.imread(pane_path)
+    if img is None or data is None:
+        return None
+    out = {"look": look(img)}
+    bd = bands(img)
+    out["bands"] = bd
+    boxes = [_box(q) for q, _, _ in (res or [])]
+    rows = _rows_of(kind, data)
+    geo = [{"x0": int(b[0]), "y0": int(b[1]), "x1": int(b[2]), "y1": int(b[3])} for _, b, _ in rows]
+    icons = icons_before(img, geo) if geo else []
+    said = [f"{out['look']['theme']} look"]
+    banded, iconed, icon_hues = [], 0, {}
+    for (row, _, mark), g, ic in zip(rows, geo, icons):
+        b = band_of(bd, g["y0"], g["y1"])
+        if b and b["hue"] not in ("black", "white"):
+            mark["band"] = b["hue"]
+            mark["band_colour"] = b["colour"]
+            banded.append((b["hue"], _name(row)[:40]))
+        if ic:
+            mark["icon"] = ic["hue"]
+            mark["icon_box"] = ic["box"]
+            iconed += 1
+            icon_hues[ic["hue"]] = icon_hues.get(ic["hue"], 0) + 1
+    for hue, name in banded[:4]:
+        said.append(f"a {hue} band under: {name}")
+    if len(banded) > 4:
+        said.append(f"and {len(banded) - 4} more banded rows")
+    if iconed:
+        hues = ", ".join(f"{n} {h}" for h, n in sorted(icon_hues.items(), key=lambda kv: -kv[1]))
+        said.append(f"marks before {iconed} rows ({hues})")
+    icon_boxes = [ic["box"] for ic in icons if ic]
+    pics = pictures(img, boxes + icon_boxes)
+    out["pictures"] = pics
+    if pics:
+        H, W = img.shape[:2]
+        p0 = pics[0]
+        x0, y0, x1, y1 = p0["box"]
+        where = ("top" if y0 < H * 0.25 else "bottom" if y1 > H * 0.75 else "middle")
+        side = ("left" if x0 < W * 0.25 else "right" if x1 > W * 0.75 else "centre")
+        said.append(f"{len(pics)} picture{'s' if len(pics) > 1 else ''}, the largest "
+                    f"{x1 - x0} by {y1 - y0} px at the {where} {side}")
+    # a document's type: lean, rules, links, pitch -- on the 3x enlargement
+    # the document reader measured on
+    if kind == "an open document":
+        big = cv2.imread(pane_path.replace(".png", "_3x.png"), cv2.IMREAD_GRAYSCALE)
+        if big is not None:
+            mask = ink_mask(big)
+            italics, ruled, links, mono, total = [], [], [], 0, 0
+            for r in data.get("rows") or []:
+                cell = mask[int(r["y0"]):int(r["y1"]), int(r["x0"]):int(r["x1"])]
+                if cell.size == 0:
+                    continue
+                total += 1
+                xh = float(r.get("xh") or 10)
+                words = [(w[0], w[1] - r["x0"], w[2] - r["x0"]) for w in (r.get("words") or [])]
+                it = italic_words(cell, words, xh)
+                if it:
+                    r["italic"] = [w["word"] for w in it]
+                    r["italic_slant"] = [w["slant"] for w in it]
+                    italics.extend(w["word"] for w in it)
+                ul = underline(cell, xh)
+                if ul:
+                    r["underline"] = ul
+                    ruled.append(_name(r)[:40])
+                pt = pitch(cell, xh)
+                if pt:
+                    r["family"] = pt["family"]
+                    r["pitch"] = pt["pitch"]
+                    if pt["family"] == "monospace":
+                        mono += 1
+                if r.get("color") == "blue" and (ul or kind == "an open document"):
+                    r["link"] = True
+                    links.append(_name(r)[:40])
+            if italics:
+                said.append("italic: " + ", ".join(italics[:6]) + (" and more" if len(italics) > 6 else ""))
+            if ruled:
+                said.append("ruled under: " + "; ".join(ruled[:3]))
+            if links:
+                said.append("links (blue): " + "; ".join(links[:3]))
+            if total and mono >= 0.7 * total:
+                said.append("monospace type")
+                out["family"] = "monospace"
+            elif total:
+                out["family"] = "proportional"
+    data["style"] = out
+    return "[" + "; ".join(said) + "]"
