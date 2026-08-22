@@ -1,3 +1,4 @@
+import sys; sys.path.insert(0, r"G:\AI\Ethereal\ui-extractor")
 import tree_reader, machine
 p = machine.here("/mnt/g/Images/Move Memory Files Out of Claude Code Into Obsidian/Images/00-04-10_pane0.png")
 rows = tree_reader.ocr_rows(p)
