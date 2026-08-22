@@ -596,7 +596,7 @@ def same_rect(a, b, slack=4):
 
 
 def compose(records, wins, panels_found, img, engine, workdir, tag,
-            memory=None, texts=None):
+            memory=None, texts=None, moment=None):
     """Say the moment as the screen it was, not as a bag of numbered panes.
 
     Windows speak first, top to bottom, each pane under the window that
