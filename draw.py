@@ -288,6 +288,8 @@ def draw_loose(pane, as_side=False):
         elif mark in HUES:
             items = [f'<span class="sn-{mark}">{x}</span>' for x in items]
         parts.extend(items)
+    if not parts:
+        return "", fine
     if as_side:
         return '<div class="sn-side">' + "<br>".join(parts) + "</div>", fine
     return '<div class="sn-body">' + " &nbsp;·&nbsp; ".join(parts) + "</div>", fine
@@ -347,6 +349,8 @@ def draw_window(entry, panes, theme):
         head.append(toolbar(above, top))
     elif above:
         head.append(toolbar(above))
+    if above:
+        fine.append("across the top, above the main pane's content: " + " | ".join(above))
     # columns: a narrow pane at the left is a sidebar; a tree beside a
     # document is the three-column shape
     side = [p for p in panes if p is not main and (p["box"][2] - p["box"][0]) < 0.36 * width
@@ -372,33 +376,56 @@ def draw_window(entry, panes, theme):
     fine.extend(f)
     cols.append(h)
     others = [p for p in panes if p is not main and p not in side]
+    height = max(1, y1 - y0)
+    tabs, below, foot_words = [], [], []
     for p in others:
-        h, f = draw_pane(p)
-        fine.extend(f)
-        cols.append(h)
         pr = remainder_of(p)
         for where in ("above", "beside", "below"):
             if pr[where]:
                 fine.append(f"also on the {p.get('where_in') or 'pane'}, {where}: " + " | ".join(pr[where]))
         if pr["doubt"]:
             fine.append("only one engine read: " + " | ".join(pr["doubt"]))
+        if p["kind"] == "text, not a tree":
+            sure, doubt, video = split_loose(p)
+            if doubt:
+                fine.append(f"{p.get('where_in') or 'a pane'}, only one engine read: " + " | ".join(doubt))
+            if video:
+                fine.append(f"{p.get('where_in') or 'a pane'}, over moving video: " + " | ".join(video))
+            words = [w.strip() for _, t in sure for w in t.split(" | ") if w.strip()]
+            if not words:
+                continue
+            # a strip of words along the window's top is its tab strip or
+            # toolbar; along its bottom, a status line; anything else is
+            # content and stacks under the columns
+            if p["box"][1] < y0 + 0.08 * height and (p["box"][3] - p["box"][1]) < 0.2 * height:
+                tabs.extend(words)
+                continue
+            if p["box"][3] > y1 - 0.06 * height and (p["box"][3] - p["box"][1]) < 0.12 * height:
+                foot_words.extend(words)
+                continue
+        h, f = draw_pane(p)
+        fine.extend(f)
+        below.append(h)
     if rest["beside"]:
         fine.append("also on the main pane, beside its content: " + " | ".join(rest["beside"]))
     if rest["doubt"]:
         fine.append("main pane, only one engine read: " + " | ".join(rest["doubt"]))
+    if tabs:
+        head.insert(0, '<div class="sn-tabs">' + "".join(f'<span class="sn-tab">{esc(w)}</span>' for w in tabs) + "</div>")
     body = "".join(cols)
     if len(cols) >= 2:
         wide = side and (side[0]["box"][2] - side[0]["box"][0]) > 0.22 * width
         cls = "sn-cols sn-wide-left" if wide else "sn-cols"
-        if len(cols) >= 3:
-            cls = "sn-cols sn-three"
         body = f'<div class="{cls}">{body}</div>'
+    body += "".join(below)
     foot = ""
+    if foot_words:
+        foot = '<div class="sn-pathbar">' + " &nbsp;·&nbsp; ".join(esc(w) for w in foot_words) + "</div>"
     if rest["below"]:
         if any("›" in w or w.endswith(">") for w in rest["below"]) or len(rest["below"]) >= 3:
-            foot = pathbar([w.rstrip(">") for w in rest["below"]])
+            foot += pathbar([w.rstrip(">") for w in rest["below"]])
         else:
-            foot = '<div class="sn-pathbar">' + " &nbsp;·&nbsp; ".join(esc(w) for w in rest["below"]) + "</div>"
+            foot += '<div class="sn-pathbar">' + " &nbsp;·&nbsp; ".join(esc(w) for w in rest["below"]) + "</div>"
     cls = "sn-window sn-dark" if theme == "dark" else "sn-window"
     return f'<div class="{cls}">{"".join(head)}{body}{foot}</div>', fine
 
@@ -484,12 +511,15 @@ def states(moments):
         W, H = m.get("size") or (0, 0)
         lone = [p for p in m.get("panes") or []
                 if p.get("wi") is None and not is_menubar(p, H)]
-        if lone and (len(lone) >= 2 or lone[0]["kind"] != "text, not a tree"):
+        around = []
+        if lone and not any(by_wi.get(e["wi"]) for e in windows):
             windows.append({"wi": "screen", "rect": [0, 0, W, H],
                             "where": "filling the screen", "top": None,
                             "top_from": None, "drawn_over": False,
                             "newly": [], "panel_extra": [], "screen": True})
             by_wi["screen"] = lone
+        else:
+            around = lone
         for entry in windows:
             panes = by_wi.get(entry["wi"]) or []
             if not panes:
@@ -512,7 +542,8 @@ def states(moments):
             again = next((s for s in out if s["key"] == key and s["sig"] == sig), None)
             out.append({"key": key, "entry": entry, "panes": panes, "sig": sig,
                         "times": [m["ts"]], "moments": [m], "stitched": False,
-                        "again": again, "size": m.get("size"), "share": m.get("share")})
+                        "again": again, "size": m.get("size"), "share": m.get("share"),
+                        "around": around})
     return out
 
 
@@ -615,7 +646,8 @@ def events(moments, sts):
         what = []
         for s in sts:
             if m in s["moments"] and s["moments"][0] is m:
-                what.append(window_title(s["entry"], s["panes"]).replace("The ", "the ", 1).replace("A window", "a window"))
+                name = window_title(s["entry"], s["panes"])
+                what.append((name[0].lower() + name[1:]) if name.startswith(("The ", "A ")) else name)
         kinds = sorted({p["kind"] for p in m.get("panes") or [] if p.get("wi") is None and p["kind"] != "text, not a tree"})
         newly = [w for e in m.get("windows") or [] for w in (e.get("newly") or [])]
         bit = "; ".join(what + kinds) or "the same screen"
@@ -654,7 +686,8 @@ def note(records_path, diary_text=None):
     head = (f"A screen recording, {minutes(secs)} read, {len(moments)} screen moments"
             + (" in order" if header.get("dense") else "") + ".")
     if apps:
-        head += " On screen: " + "; ".join(a[0].lower() + a[1:] for a in apps) + "."
+        head += " On screen: " + "; ".join(
+            (a[0].lower() + a[1:]) if a.startswith(("The ", "A ")) else a for a in apps) + "."
     if clocks:
         head += f" The desktop clock read {clocks[0]}" + (f" at the start and {clocks[-1]} at the end." if clocks[-1] != clocks[0] else ".")
     parts.append(head + "\n")
@@ -678,6 +711,20 @@ def note(records_path, diary_text=None):
         said = said_block(s["moments"])
         if said:
             parts.append(said + "\n")
+        around = []
+        for p in s.get("around") or []:
+            sure, doubt, video = split_loose(p) if p["kind"] == "text, not a tree" else ([], [], [])
+            if p["kind"] != "text, not a tree":
+                around.append(f"{p.get('where') or 'on the screen'}: {p['kind']}: "
+                              + " | ".join(content_lines(p))[:400])
+            elif sure:
+                around.append(f"{p.get('where') or 'on the screen'}: "
+                              + " | ".join(t for _, t in sure))
+            if doubt:
+                around.append(f"{p.get('where') or 'on the screen'}, one engine only: " + " | ".join(doubt))
+        if around:
+            parts.append('<span class="sn-fine">around the window, on no window of its own: '
+                         + esc("; ".join(around)) + "</span>\n")
         x0, y0, x1, y1 = s["entry"]["rect"]
         W, H = s["size"] or (0, 0)
         fp = [f"window {x0},{y0} to {x1},{y1} on the {W} by {H} frame, {s['entry'].get('where')}"
