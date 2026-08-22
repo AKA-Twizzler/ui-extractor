@@ -141,6 +141,8 @@ def describe(panes):
     if kind == "an open document":
         body = [re.split(r"\s+<- ", ln)[0] for ln in lines if not re.match(r"^[a-z_ ]+: ", ln)]
         body = [ln for ln in body if not is_bar(ln)]
+        if main["box"][1] == 0 and len(body) > 1:
+            body = body[1:]   # a pane touching the frame's top begins with the menu or title bar
         heads = [ln for ln in body if ln.startswith("#")]
         pick = heads[0] if heads else max(body[:6], key=lambda ln: len(ln.split()), default="")
         pick = pick.strip("#* ")
