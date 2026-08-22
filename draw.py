@@ -140,6 +140,7 @@ def describe(panes):
     lines = [ln.strip() for ln in content_lines(main) if ln.strip() and ln.strip() != "---"]
     if kind == "an open document":
         body = [re.split(r"\s+<- ", ln)[0] for ln in lines if not re.match(r"^[a-z_ ]+: ", ln)]
+        body = [ln for ln in body if not is_bar(ln)]
         heads = [ln for ln in body if ln.startswith("#")]
         pick = heads[0] if heads else max(body[:6], key=lambda ln: len(ln.split()), default="")
         pick = pick.strip("#* ")
@@ -217,6 +218,11 @@ def doc_line(line, fine):
         body += "…"
     if text == "---":
         return None                      # a properties fence, handled by the caller
+    if is_bar(text):
+        # a menu bar, a tab strip or an address bar read into the document:
+        # clusters of words with wide gaps between, drawn as the strip it is
+        clusters = [c.strip() for c in re.split(r"\s{4,}", text.lstrip("# ")) if c.strip()]
+        return '<div class="sn-menubar">' + "".join(f"<span>{esc(c)}</span>" for c in clusters) + "</div>"
     m = re.match(r"(#{1,6}) (.*)", text)
     if m:
         level = min(3, len(m.group(1)))
@@ -225,6 +231,13 @@ def doc_line(line, fine):
         return f'<div class="{both}">{m.group(1)} {inner}</div>'
     pad = "&nbsp;" * min(12, indent)
     return f"<div{cls}>{pad}{body}</div>"
+
+
+def is_bar(text):
+    """Three or more word clusters with wide gaps between them on one line:
+    a bar across the window, not a heading or a sentence."""
+    clusters = [c for c in re.split(r"\s{4,}", text.strip().lstrip("# ")) if c.strip()]
+    return len(clusters) >= 3
 
 
 def content_lines(pane):
