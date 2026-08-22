@@ -692,6 +692,8 @@ def compose(records, wins, panels_found, img, engine, workdir, tag,
                         line += f" | and {len(new) - 24} more"
                     print(f"    [newly readable since {known[-1]['ts']}] "
                           + line)
+                    entry["newly"] = new
+                    entry["newly_since"] = known[-1]["ts"]
                 known[-1].update(ts=tag.replace("-", ":"), rect=win,
                                  words={w.lower() for w in cur})
             else:
@@ -713,9 +715,15 @@ def compose(records, wins, panels_found, img, engine, workdir, tag,
                     mark = ("  <- only one engine read this"
                             if ln in unsettled else "")
                     print(f"      {ln}{mark}")
+                    entry["panel_extra"].append(
+                        {"line": ln, "confirmed": ln not in unsettled})
+        if moment is not None:
+            moment["windows"].append(entry)
     loose = [r for r in records if r["pi"] not in owner]
     for rec in sorted(loose, key=lambda r: (r["box"][1], r["box"][0])):
-        say_record(rec, "  ", where(rec["box"], W, H))
+        rec["wi"] = None
+        rec["where"] = where(rec["box"], W, H)
+        say_record(rec, "  ", rec["where"])
     return True
 
 
