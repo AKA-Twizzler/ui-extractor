@@ -238,8 +238,39 @@ def style_line(pane):
     """The pane's measured look, as the diary said it, for the fine print."""
     for ln in pane.get("lines") or []:
         if ln.strip().startswith(("[dark look", "[light look")):
-            return ln.strip()[1:-1]
+            return fold_bands(ln.strip()[1:-1])
     return None
+
+
+def fold_bands(text):
+    """'a grey band under: X; a grey band under: Y; and 5 more banded rows'
+    said once per colour: 'grey bands under 7 rows: X; Y'."""
+    parts = [p.strip() for p in text.split("; ")]
+    bands, rest, more = {}, [], 0
+    for p in parts:
+        m = re.match(r"an? (\w+) band under: (.*)$", p)
+        if m:
+            bands.setdefault(m.group(1), []).append(m.group(2))
+            continue
+        m = re.match(r"and (\d+) more banded rows?$", p)
+        if m:
+            more = int(m.group(1))
+            continue
+        rest.append(p)
+    if not bands:
+        return text
+    said = []
+    for hue, rows in bands.items():
+        n = len(rows) + (more if hue == list(bands)[-1] else 0)
+        more_note = f" and {more} more" if more and hue == list(bands)[-1] else ""
+        if n == 1:
+            said.append(f"a {hue} band under: {rows[0]}")
+        else:
+            said.append(f"{hue} bands under {n} rows: " + "; ".join(rows) + more_note)
+    # the look comes first, then the bands, then the rest as said
+    head = rest[:1] if rest and rest[0].endswith(" look") else []
+    tail = rest[len(head):]
+    return "; ".join(head + said + tail)
 
 
 def draw_document(pane):
