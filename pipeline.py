@@ -181,6 +181,25 @@ def already_drawn(lines, drawn):
     return known * 2 > len(said)
 
 
+def structure_band(kind, data):
+    """Where a reader's structure sits on its pane, top and bottom in pane
+    pixels, from the rows it measured -- or (None, None)."""
+    ys = []
+    if kind == "a list of columns":
+        sc = data.get("scale") or 3
+        ys = [v / sc for b in data.get("blocks") or [] for v in (b.get("y0"), b.get("y1"))
+              if v is not None]
+    elif kind == "a file tree":
+        ys = [v for r in data.get("rows") or [] for v in (r.get("y0"), r.get("y1"))
+              if v is not None]
+    elif kind == "an open document":
+        ys = [v / 3 for r in data.get("rows") or [] for v in (r.get("y0"), r.get("y1"))
+              if v is not None]
+    if not ys:
+        return None, None
+    return min(ys), max(ys)
+
+
 def say_pane(pane_path, pi, engine, drawn=(), camera=None, in_ui=True):
     """Read one pane every way there is, and say what it turned out to be.
 
@@ -281,8 +300,15 @@ def say_pane(pane_path, pi, engine, drawn=(), camera=None, in_ui=True):
                        [t for t, _ in left], other_text=other, sink=notes)
         if marked is None:
             marked = [(t, False) for t, _ in left]
-        top = min((box[1] for _, box in used), default=0)
-        bottom = max((box[3] for _, box in used), default=0)
+        # the structure's own band, from the reader's geometry where it has
+        # one: the table's rows, the tree's rows, the document's rows. The
+        # consumed readings' boxes were the band before, and the Finder's
+        # path bar sat "beside" the list because its last crumb, "Dev",
+        # is a word the table holds and its box dragged the band down.
+        top, bottom = structure_band(kind, data)
+        if top is None:
+            top = min((box[1] for _, box in used), default=0)
+            bottom = max((box[3] for _, box in used), default=0)
         placed = {"above": [], "below": [], "beside": []}
         doubt = []
         for (t, ok), (_, box) in zip(marked, left):
