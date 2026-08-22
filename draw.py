@@ -397,7 +397,12 @@ def remainder_of(pane):
     """The readings a structural reader left out, by where they sat."""
     data = pane.get("data") or {}
     out = {"above": [], "below": [], "beside": [], "doubt": []}
-    for r in data.get("remainder") or []:
+    rem = data.get("remainder") or []
+
+    def row_of(box):
+        return (box[1] + box[3]) // max(2, (box[3] - box[1]) or 1)
+    rem = sorted(rem, key=lambda r: (row_of(r["box"]), r["box"][0]) if r.get("box") else (0, 0))
+    for r in rem:
         if r.get("confirmed"):
             out[r.get("where") or "beside"].append(r["text"])
         else:

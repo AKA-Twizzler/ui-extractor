@@ -311,7 +311,12 @@ def say_pane(pane_path, pi, engine, drawn=(), camera=None, in_ui=True):
             bottom = max((box[3] for _, box in used), default=0)
         placed = {"above": [], "below": [], "beside": []}
         doubt = []
-        for (t, ok), (_, box) in zip(marked, left):
+        # reading order: row by row, left to right, so a path bar's crumbs
+        # come out as the path reads and not as the engine found them
+        def row_of(box):
+            return (box[1] + box[3]) // max(2, (box[3] - box[1]) or 1)
+        order = sorted(zip(marked, left), key=lambda mb: (row_of(mb[1][1]), mb[1][1][0]))
+        for (t, ok), (_, box) in order:
             if used and box[3] <= top:
                 at = "above"
             elif used and box[1] >= bottom:
