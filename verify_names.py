@@ -14,6 +14,7 @@ holds for both engines: OCR drops spaces, it does not invent them. So
 Nothing is silently preferred. A row the two engines disagree on leaves this
 module marked uncertain, and it must reach the record marked that way too.
 """
+import difflib
 import re
 import subprocess
 import tempfile
@@ -176,8 +177,55 @@ def merge_readings(a, b):
     return "".join(out), clashes
 
 
+CUT_MIN = 8        # an agreed head counts from this many letters
+CUT_SHARE = 0.6    # and when it covers this much of the shorter reading
+
+
+def agreed_head(p, s):
+    """The head both engines read, when what follows it is no reading at all.
+
+    A line that runs out of the pane -- under the webcam inset, behind a
+    splitter, past the frame's edge -- reads cleanly up to the cut and as
+    different junk after it from each engine. Whole-line agreement called
+    every such line uncertain, and a note whose every line is cut at the
+    same edge fell out of the document reader: measured at 00:04:10 of the
+    memory-files video, 28 rows read, 0.47 backed against the 0.67 gate, and
+    the page came back as sixteen loose words. The head the engines agree
+    on is kept and the line is marked cut; both tails ride beside it in the
+    row, so nothing read is lost. A tail the engines broadly AGREE on is not
+    junk but a substitution, and that stays a disagreement, never a cut.
+
+    Returns (head, (tail_p, tail_s)), or (None, None).
+    """
+    fp, mp = _flat_with_map(p)
+    fs, ms = _flat_with_map(s)
+    if mp is None or not fp or not fs:
+        return None, None
+    n = 0
+    while n < min(len(fp), len(fs)) and fp[n] == fs[n]:
+        n += 1
+    if n == len(fp) or n == len(fs):
+        return None, None       # one contains the other: merge territory
+    if n < CUT_MIN or n < CUT_SHARE * min(len(fp), len(fs)):
+        return None, None
+    tp, ts = fp[n:], fs[n:]
+    if tp and ts and difflib.SequenceMatcher(None, tp, ts).ratio() >= 0.6:
+        return None, None
+    end = mp[n - 1] + 1
+    # the cut falls inside a word more often than not; a half word is not
+    # a reading, so the head ends at the last whole word when one is left
+    if end < len(p) and p[end].isalnum():
+        back = p.rfind(" ", 0, end)
+        if back > 0 and len(_flat(p[:back])) >= CUT_MIN:
+            end = back
+    head = p[:end].rstrip()
+    tail_p = p[end:].strip()
+    tail_s = s[ms[n]:].strip() if ms is not None and n < len(ms) else ts
+    return head, (tail_p, tail_s)
+
+
 def reconcile(primary, second):
-    """Return (name, status) — status in confident | reconciled | uncertain."""
+    """Return (name, status) — status in confident | reconciled | cut | uncertain."""
     p = strip_arrow_junk(" ".join(primary.split()))
     s = strip_arrow_junk(" ".join(second.split()))
     if not s:
@@ -201,6 +249,9 @@ def reconcile(primary, second):
         return merged, ("ambiguous-symbol" if clashes else "reconciled")
     if only_homoglyph_diff(letters(p), letters(s)):
         return p, "ambiguous-glyph"
+    head, _ = agreed_head(p, s)
+    if head is not None:
+        return head, "cut"
     return p, "uncertain"
 
 
