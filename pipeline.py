@@ -266,7 +266,7 @@ def say_pane(pane_path, pi, engine, drawn=(), camera=None, in_ui=True):
                     pane_path, sink=notes) or {}
         if lst.get("is_list"):
             return record("a list of columns",
-                          columns.render(lst).splitlines())
+                          columns.render(lst).splitlines(), lst)
         # a live stream's chat log, before the document reader, which would
         # otherwise take it for prose and lose who said what
         chat = guard(f"chat reader, pane {pi}",
