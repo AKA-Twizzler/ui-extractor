@@ -160,45 +160,65 @@ def tree_rows(rows):
 
 
 def grow_lattice(rows, chain, pitch):
-    """Extend the winning chain along its own pitch, through one jolted row.
+    """Extend the winning chain along its own lattice, through a jolted row.
 
     The chain links each row to the next by a single gap, so one row pushed
     off the pitch -- the cursor resting on it, the row being dragged -- breaks
     the chain there and the tree comes back as the longer half. Measured at
     00:04:10 of the memory-files video: 52 rows read, 30 kept, the break a
-    row 12 px off an 80.6 px pitch, everything below it dropped.
+    row 12 px off an 80.6 px pitch, the 22 rows above it dropped.
 
-    The chain fixes the lattice -- its first row and its pitch, refined over
-    the chain's whole span -- and every row is then asked how far it sits
-    from the nearest slot. One row per slot, the widest; a slot the jolted
-    row belongs to is still a slot. Growth stops at the ends after two empty
-    slots in a row, so the lattice never walks out of the tree and into the
-    tab strip above it or the status bar below.
+    The lattice is fitted to the whole chain by least squares -- phase and
+    pitch together -- because anchoring it on the chain's first row put the
+    jolted row itself at the anchor and the lattice 12 px off from the
+    start, drifting further each slot up. Every row is then asked how far
+    it sits from its nearest slot, the lattice is refitted on everything
+    admitted, and the question is asked once more. One row per slot, the
+    widest. Growth stops at either end after two empty slots in a row, so
+    the lattice never walks out of the tree into the tab strip above it or
+    the status bar below.
     """
     if len(chain) < 3:
         return chain
     ys = [r["y0"] for r in rows]
-    first = ys[chain[0]]
-    span = ys[chain[-1]] - first
-    pitch = span / (len(chain) - 1) if span > 0 else pitch
-    if pitch <= 0:
+
+    def fit(pairs):
+        n = len(pairs)
+        mk = sum(k for k, _ in pairs) / n
+        my = sum(y for _, y in pairs) / n
+        sxx = sum((k - mk) ** 2 for k, _ in pairs)
+        if sxx <= 0:
+            return None
+        slope = sum((k - mk) * (y - my) for k, y in pairs) / sxx
+        return my - slope * mk, slope
+
+    def admit(a, p):
+        tol = max(6, p * GROW_TOL)
+        taken = {}
+        for j in range(len(rows)):
+            k = round((ys[j] - a) / p)
+            if abs(ys[j] - (a + k * p)) > tol:
+                continue
+            have = taken.get(k)
+            if have is None or (rows[j]["x1"] - rows[j]["x0"]) > (
+                    rows[have]["x1"] - rows[have]["x0"]):
+                taken[k] = j
+        return taken
+
+    line = fit([(k, ys[i]) for k, i in enumerate(chain)])
+    if line is None or line[1] <= 0:
         return chain
-    tol = max(6, pitch * GROW_TOL)
-    taken = {}
-    for i in chain:
-        taken[round((ys[i] - first) / pitch)] = i
-    lo, hi = min(taken), max(taken)
-    for j in range(len(rows)):
-        if j in taken.values():
-            continue
-        slot = round((ys[j] - first) / pitch)
-        if abs(ys[j] - (first + slot * pitch)) > tol:
-            continue
-        have = taken.get(slot)
-        if have is None or (rows[j]["x1"] - rows[j]["x0"]) > (
-                rows[have]["x1"] - rows[have]["x0"]) and not (lo <= slot <= hi):
-            taken[slot] = j
-    keep = set(range(lo, hi + 1)) & set(taken)
+    taken = admit(*line)
+    line = fit([(k, ys[j]) for k, j in taken.items()]) or line
+    if line[1] <= 0:
+        return chain
+    taken = admit(*line)
+    if not taken:
+        return chain
+    # the chain's own slots are the core; grow outward from it
+    core = sorted({round((ys[i] - line[0]) / line[1]) for i in chain})
+    lo, hi = core[0], core[-1]
+    keep = {k for k in taken if lo <= k <= hi}
     for step in (1, -1):
         k, empty = (hi if step > 0 else lo) + step, 0
         bound = max(taken) if step > 0 else min(taken)
