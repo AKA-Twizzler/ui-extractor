@@ -1471,6 +1471,81 @@ def _records_render():
                   "tree rows with geometry at 00:04:10")
 
 
+@check("coverage: every recogniser reading on a pane is placed -- in the "
+       "structure, beside it, or said unconfirmed -- and the counts prove it")
+def _coverage():
+    """The structural readers kept what fitted their structure and said
+    nothing of the rest. Measured at 00:03:00 and 00:04:10 of the
+    memory-files video: the Finder's toolbar title and Size header were
+    dropped by the table reader and the 56 px title strip read nothing;
+    the tree came back as 30 of 45 rows, broken at one cursor-jolted row;
+    the note fell out of the document reader at 0.47 backed because every
+    line a splitter cut read as junk past the cut, and the loose fallback
+    then kept sixteen of its forty-three readings.
+
+    Now: a second, taller title strip; a lattice fitted over the whole
+    chain; an agreed-head rule for cut lines; the sixteen-reading cap
+    gone; and a remainder rule -- what a reader leaves out is confirmed
+    and said beside the structure, placed above, below or beside it. Each
+    pane's record carries the count: readings, in the structure, beside
+    it, unconfirmed, over video -- and they must add up, pane by pane."""
+    import render
+    said = pipeline_says("memfiles", "00:03:00,00:04:10")
+    path = machine.here(
+        f"/mnt/g/Images/{VIDEOS['memfiles']}/records-at.jsonl")
+    moments = [e for e in render.entries(path) if e["kind"] == "moment"]
+    if len(moments) != 2:
+        return False, f"{len(moments)} moments recorded, not 2"
+    for m in moments:
+        for p in m["panes"]:
+            c = (p.get("data") or {}).get("coverage")
+            if not c:
+                return False, f"pane {p['pi']} at {m['ts']} carries no coverage"
+            total = c["in_structure"] + c["also"] + c["unconfirmed"] + c["video"]
+            if total != c["readings"]:
+                return False, (f"pane {p['pi']} at {m['ts']}: {c['readings']} "
+                               f"readings, {total} placed")
+    finder = moments[0]
+    top = (finder["windows"] or [{}])[0].get("top") or ""
+    if "Company A" not in top:
+        return False, f"the Finder's title did not reach the header: {top!r}"
+    lst = [p for p in finder["panes"] if p["kind"] == "a list of columns"]
+    if not lst:
+        return False, "the file list was not read as a list"
+    rest = [r["text"] for r in lst[0]["data"].get("remainder") or []
+            if r["confirmed"]]
+    if not any("Size" in r for r in rest):
+        return False, f"the Size header is not among the list's leftovers: {rest}"
+    if not any("above the list] 02 Company A" in ln for ln in lst[0]["lines"]):
+        return False, "the toolbar title is not said above the list"
+    obsidian = moments[1]
+    tree = [p for p in obsidian["panes"] if p["kind"] == "a file tree"]
+    if not tree:
+        return False, "the tree at 00:04:10 was not read as a tree"
+    rows = tree[0]["data"]["rows"]
+    if len(rows) < 45 or not rows[0]["name"].startswith("feedback_subject"):
+        return False, (f"{len(rows)} tree rows, first {rows[0]['name']!r}; "
+                       "45 from feedback_subject_line expected")
+    doc = [p for p in obsidian["panes"] if p["kind"] == "an open document"]
+    if not doc:
+        return False, "the note at 00:04:10 was not read as a document"
+    backed = doc[0]["data"]["backed"]
+    if backed < 0.9:
+        return False, f"the note is backed {backed:.2f}, under 0.9"
+    if "so it can find anything:" not in said:
+        return False, "the column clip still takes real words off a long line"
+    strip = [p for p in finder["panes"] if p["pi"] == 0]
+    if strip and strip[0]["kind"] == "an open document":
+        return False, "the Finder's Size/Kind strip is claimed as a document"
+    cov = [m["coverage"] for m in moments]
+    return True, (f"00:03:00 {cov[0]['readings']} readings, {cov[0]['in_structure']} "
+                  f"in structures, {cov[0]['also']} beside them, "
+                  f"{cov[0]['unconfirmed']} unconfirmed; 00:04:10 "
+                  f"{cov[1]['readings']} readings, {cov[1]['in_structure']} in "
+                  f"structures, {cov[1]['also']} beside, {cov[1]['unconfirmed']} "
+                  f"unconfirmed; tree {len(rows)} rows; note backed {backed:.2f}")
+
+
 def main():
     wanted = [a for a in sys.argv[1:] if not a.startswith("-")]
     if "--list" in sys.argv:
