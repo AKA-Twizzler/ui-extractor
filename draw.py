@@ -227,7 +227,16 @@ def doc_line(line, fine):
 def content_lines(pane):
     """A structural pane's own lines: not the leftovers, not the doubt."""
     return [ln for ln in (pane.get("lines") or [])
-            if not ln.strip().startswith(("[also on this pane", "unsettled:"))]
+            if not ln.strip().startswith(("[also on this pane", "unsettled:",
+                                          "[dark look", "[light look"))]
+
+
+def style_line(pane):
+    """The pane's measured look, as the diary said it, for the fine print."""
+    for ln in pane.get("lines") or []:
+        if ln.strip().startswith(("[dark look", "[light look")):
+            return ln.strip()[1:-1]
+    return None
 
 
 def draw_document(pane):
@@ -854,6 +863,10 @@ def note(records_path, diary_text=None):
         for x in s["entry"].get("panel_extra") or []:
             fp.append(("read across the window, in no pane: " if x.get("confirmed") else "one engine only, across the window: ") + x["line"])
         fp.extend(fine)
+        for p in s["panes"]:
+            st = style_line(p)
+            if st:
+                fp.append(f"{p.get('where_in') or p.get('where') or 'pane'}: {st}")
         for m in s["moments"]:
             for p in s["panes"]:
                 for n in p.get("notes") or []:
