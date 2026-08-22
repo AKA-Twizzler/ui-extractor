@@ -900,16 +900,21 @@ def main():
                                       workdir=os.path.join(imgs, "_looks")),
                 engine=engine)) or []) if share < 50 else []):
             drawn.add(found["text"].strip())
+            moment["standing"].append(found)
             if found["text"] in standing:
                 continue
             standing.add(found["text"])
             print("  [drawn on the picture, standing while the shot moved]"
                   f"\n    {found['text']}")
+        moment.update(wins=wins, panels=panels_found, drawn=sorted(drawn))
 
         if not regions:
             for panel in panels_found:
                 say_panel(panel)
             print("    no readable interface at full size\n")
+            moment["lone_panels"] = list(panels_found)
+            moment["text"] = tee.take()
+            keep(moment)
             continue
 
         # The webcam inset is the one part of a screen that is not the
