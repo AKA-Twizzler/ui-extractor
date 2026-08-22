@@ -35,12 +35,16 @@ def main():
         sys.stderr.write(r.stderr or f"pipeline exited {r.returncode}\n")
         return r.returncode or 1
     note = os.path.join(out_dir, f"{title}.md")
-    text = (f"# {title}\n\n"
-            "The screen's own story, chronological: every distinct screen, "
-            "and every moment one changed. Text and interface only; two "
-            "engines confirm every reading, and the record's own marks say "
-            "what stayed unsettled.\n\n"
-            "````text\n" + body + "\n````\n")
+    # the note is drawn from the run's records -- each window on the screen
+    # as its own section, on the vault's style sheet -- and the run's own
+    # output rides at the end as the moment-by-moment appendix. See draw.py;
+    # a changed shape changes that file, never the readers
+    import draw
+    records = os.path.join(out_dir, "records.jsonl")
+    if os.path.exists(records):
+        text = draw.note(records, diary_text=body)
+    else:
+        text = (f"# {title}\n\n````text\n" + body + "\n````\n")
     tmp = note + ".tmp-write"
     with open(tmp, "w", encoding="utf-8", newline="\n") as f:
         f.write(text)

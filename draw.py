@@ -681,7 +681,8 @@ def note(records_path, diary_text=None):
             apps.append(name)
     clocks = [c for m in moments for p in m.get("panes") or [] for c in [clock_in(p)] if c]
     parts = []
-    parts.append("---\nstatus: active\nproject: vault\ntype: reference\n---\n")
+    # no frontmatter here: the master note lives beside the video's images,
+    # and vault_sync adds the vault's own when it copies the note in
     parts.append(f"# {title}\n")
     head = (f"A screen recording, {minutes(secs)} read, {len(moments)} screen moments"
             + (" in order" if header.get("dense") else "") + ".")
