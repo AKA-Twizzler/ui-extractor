@@ -1014,6 +1014,7 @@ def main():
             hits_ui = rendered_here(
                 ties, tuple(int(v * tie_scale) for v in box_t),
                 block_h, block_w)
+            moment["rendered"][pi] = bool(hits_ui)
             rec = say_pane(pane_path, pi, engine, drawn, camera,
                            in_ui=hits_ui)
             cur_boxes[box_t] = rec
@@ -1021,6 +1022,7 @@ def main():
                 quiet.append(pi)
             else:
                 rec["box"] = box_t
+                rec["image"] = pane_path
                 records.append(rec)
         prev = {"ts": ts, "how": how, "grey": grey, "boxes": cur_boxes}
         # a reading identical to one already said in full -- same kind, same
