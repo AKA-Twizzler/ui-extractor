@@ -95,12 +95,26 @@ def bands(bgr):
     return kept
 
 
-def band_of(bands_, y0, y1):
-    """The band a row sits on, if most of the row's height is inside one."""
+def band_of(bands_, y0, y1, bgr=None, x0=None, x1=None):
+    """The band a row sits on, if most of the row's height is inside one.
+
+    Given the image and the row's own span, the band must hold THERE too:
+    a scan line's median colour can come from a webcam inset on the right
+    while the row's own words sit on plain background -- measured on a
+    note page, where a "purple band" was the camera, not a highlight.
+    """
     for b in bands_:
         top, bottom = max(b["y0"], y0), min(b["y1"], y1)
-        if bottom - top >= 0.6 * max(1, y1 - y0):
-            return b
+        if bottom - top < 0.6 * max(1, y1 - y0):
+            continue
+        if bgr is not None and x0 is not None and x1 > x0:
+            region = bgr[max(0, top):bottom, max(0, int(x0)):int(x1)]
+            if region.size == 0:
+                continue
+            med = np.median(region.reshape(-1, 3), axis=0)
+            if np.abs(med - np.array(b["colour"])).sum() > 60:
+                continue
+        return b
     return None
 
 
@@ -128,7 +142,8 @@ def icons_before(bgr, rows, reach=2.2):
             out.append(None)
             continue
         cell = mask[max(0, y0 - 2):min(H, y1 + 2), a:b]
-        if cell.size == 0 or int(cell.sum()) < max(12, 0.04 * cell.size):
+        # a chevron is thin: forty pixels of ink in a cell of four thousand
+        if cell.size == 0 or int(cell.sum()) < max(12, 0.008 * cell.size):
             out.append(None)
             continue
         ys, xs = np.where(cell)
@@ -443,7 +458,7 @@ def measure(pane_path, kind, data, res):
     said = [f"{out['look']['theme']} look"]
     banded, iconed, icon_hues = [], 0, {}
     for (row, _, mark), g, ic in zip(rows, geo, icons):
-        b = band_of(bd, g["y0"], g["y1"])
+        b = band_of(bd, g["y0"], g["y1"], img, g["x0"], g["x1"])
         if b and b["hue"] not in ("black", "white"):
             mark["band"] = b["hue"]
             mark["band_colour"] = b["colour"]
