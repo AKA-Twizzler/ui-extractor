@@ -1043,7 +1043,8 @@ def main():
         # list rather than out of the record.
         if guard(f"compose at {ts}", compose, records, wins, panels_found,
                  img, engine, imgs, ts.replace(":", "-"),
-                 memory=seen_windows, texts=window_texts) is None:
+                 memory=seen_windows, texts=window_texts,
+                 moment=moment) is None:
             for panel in panels_found:
                 say_panel(panel)
             for rec in records:
@@ -1055,6 +1056,9 @@ def main():
             print(f"  [panes {', '.join(map(str, unwritten))}: too small to "
                   "cut out, not read]")
         print()
+        moment.update(panes=records, quiet=quiet, unwritten=unwritten,
+                      text=tee.take())
+        keep(moment)
 
     if seen_windows:
         # the words each window carried across its top, collected once --
