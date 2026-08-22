@@ -916,8 +916,22 @@ def events(moments, sts):
         how = m.get("how") or ""
         if how and "unchanged" in how:
             bit += " (unchanged)"
-        lines.append(f"- {m['ts']} - {bit}")
-    return "\n".join(lines)
+        lines.append((m["ts"], bit))
+    # a run of "the same screen" folds into one line naming its span
+    out, i = [], 0
+    while i < len(lines):
+        ts, bit = lines[i]
+        if bit == "the same screen":
+            j = i
+            while j + 1 < len(lines) and lines[j + 1][1] == "the same screen":
+                j += 1
+            if j > i:
+                out.append(f"- {ts} to {lines[j][0]} - the same screen, read {j - i + 1} times")
+                i = j + 1
+                continue
+        out.append(f"- {ts} - {bit}")
+        i += 1
+    return "\n".join(out)
 
 
 def theme_of(panes):
@@ -963,7 +977,7 @@ def note(records_path, diary_text=None):
     for s in sts:
         app = app_name(s["entry"], s["panes"])
         name = (f"{app[0].upper() + app[1:]}" if app else None) or window_title(s["entry"], s["panes"])
-        if name not in apps:
+        if name not in apps and name.lower() not in ("the screen", "a window"):
             apps.append(name)
     clocks = [c for m in moments for p in m.get("panes") or [] for c in [clock_in(p)] if c]
     parts = []
