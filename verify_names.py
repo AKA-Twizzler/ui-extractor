@@ -179,49 +179,81 @@ def merge_readings(a, b):
 
 CUT_MIN = 8        # an agreed head counts from this many letters
 CUT_SHARE = 0.6    # and when it covers this much of the shorter reading
+EDGE_JUNK = 3      # letters an engine invents at a cut edge, at most
+
+
+def _cut_at(text, where, n):
+    """`text` up to its n-th kept letter, ending on a whole word."""
+    end = where[n - 1] + 1
+    # the cut falls inside a word more often than not; a half word is not
+    # a reading, so the head ends at the last whole word when one is left
+    if end < len(text) and text[end].isalnum():
+        back = text.rfind(" ", 0, end)
+        if back > 0 and len(_flat(text[:back])) >= CUT_MIN:
+            end = back
+    return text[:end].rstrip(), text[end:].strip()
 
 
 def agreed_head(p, s):
-    """The head both engines read, when what follows it is no reading at all.
+    """What two readings that differ in their letters still agree on.
 
-    A line that runs out of the pane -- under the webcam inset, behind a
-    splitter, past the frame's edge -- reads cleanly up to the cut and as
-    different junk after it from each engine. Whole-line agreement called
-    every such line uncertain, and a note whose every line is cut at the
-    same edge fell out of the document reader: measured at 00:04:10 of the
-    memory-files video, 28 rows read, 0.47 backed against the 0.67 gate, and
-    the page came back as sixteen loose words. The head the engines agree
-    on is kept and the line is marked cut; both tails ride beside it in the
-    row, so nothing read is lost. A tail the engines broadly AGREE on is not
-    junk but a substitution, and that stays a disagreement, never a cut.
+    Whole-line agreement, measured on the note at 00:04:10 of the
+    memory-files video, called 15 of 28 lines uncertain and the page fell
+    out of the document reader at 0.47 backed. Read line by line, the
+    disagreements were four kinds, none of them a disagreement about what
+    is written:
 
-    Returns (head, (tail_p, tail_s)), or (None, None).
+      - the same letters in different case -- "MEMORY.md" and "MEMoRY.md";
+      - a line that runs out of the pane, under the webcam inset or past a
+        splitter, read alike up to the cut and as different junk after it;
+      - one to three letters invented at that edge by one engine and not
+        the other -- "Kn" and "Knd";
+      - the second engine reading this line joined to the one before it.
+
+    The head both engines read is the reading. Where something was read
+    past it, the line is marked cut and both tails ride beside it in the
+    row, so nothing read is lost. A tail the engines broadly AGREE on is
+    not junk but a substitution, and that stays a disagreement, never a cut.
+
+    Returns (text, status, tails), or None when the readings disagree.
     """
     fp, mp = _flat_with_map(p)
     fs, ms = _flat_with_map(s)
     if mp is None or not fp or not fs:
-        return None, None
+        return None
+    if fp == fs:
+        return p, "reconciled", None
     n = 0
     while n < min(len(fp), len(fs)) and fp[n] == fs[n]:
         n += 1
-    if n == len(fp) or n == len(fs):
-        return None, None       # one contains the other: merge territory
-    if n < CUT_MIN or n < CUT_SHARE * min(len(fp), len(fs)):
-        return None, None
-    tp, ts = fp[n:], fs[n:]
-    if tp and ts and difflib.SequenceMatcher(None, tp, ts).ratio() >= 0.6:
-        return None, None
-    end = mp[n - 1] + 1
-    # the cut falls inside a word more often than not; a half word is not
-    # a reading, so the head ends at the last whole word when one is left
-    if end < len(p) and p[end].isalnum():
-        back = p.rfind(" ", 0, end)
-        if back > 0 and len(_flat(p[:back])) >= CUT_MIN:
-            end = back
-    head = p[:end].rstrip()
-    tail_p = p[end:].strip()
-    tail_s = s[ms[n]:].strip() if ms is not None and n < len(ms) else ts
-    return head, (tail_p, tail_s)
+    if n >= CUT_MIN and n >= CUT_SHARE * min(len(fp), len(fs)):
+        rp, rs = fp[n:], fs[n:]
+        if not rp or not rs:
+            if len(rp or rs) <= EDGE_JUNK:
+                if rp:
+                    head, tail = _cut_at(p, mp, n)
+                    return head, "cut", (tail, "")
+                tail_s = s[ms[n]:].strip() if ms is not None else rs
+                return p, "cut", ("", tail_s)
+            # the fuller reading wins: an engine drops what it cannot
+            # name and never invents a whole word of it
+            if not rs:
+                return p, "reconciled", None
+            extra = s[ms[n]:].strip() if ms is not None else rs
+            return (p + " " + extra).strip(), "reconciled", None
+        if difflib.SequenceMatcher(None, rp, rs).ratio() >= 0.6:
+            return None
+        head, tail = _cut_at(p, mp, n)
+        tail_s = s[ms[n]:].strip() if ms is not None else rs
+        return head, "cut", (tail, tail_s)
+    # the other engine read this line joined to its neighbour: the head of
+    # this reading sits whole inside the other, just not at its start
+    m = len(fp)
+    while m >= max(CUT_MIN, CUT_SHARE * len(fp)) and fp[:m] not in fs:
+        m -= 1
+    if m >= max(CUT_MIN, CUT_SHARE * len(fp)):
+        return p, "reconciled", None
+    return None
 
 
 def reconcile(primary, second):
@@ -249,9 +281,9 @@ def reconcile(primary, second):
         return merged, ("ambiguous-symbol" if clashes else "reconciled")
     if only_homoglyph_diff(letters(p), letters(s)):
         return p, "ambiguous-glyph"
-    head, _ = agreed_head(p, s)
-    if head is not None:
-        return head, "cut"
+    agreed = agreed_head(p, s)
+    if agreed is not None:
+        return agreed[0], agreed[1]
     return p, "uncertain"
 
 

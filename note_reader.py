@@ -372,9 +372,11 @@ def reconcile_rows(rows, big_path, body_h):
         if status == "cut":
             # both tails ride with the row: the head is the reading, the
             # tails are what each engine made of the pixels past the cut
-            from verify_names import agreed_head
-            _, tails = agreed_head(r["text_primary"], other)
-            r["cut_tails"] = list(tails or ())
+            from verify_names import agreed_head, strip_arrow_junk
+            agreed = agreed_head(
+                strip_arrow_junk(" ".join(r["text_primary"].split())),
+                strip_arrow_junk(" ".join(other.split())))
+            r["cut_tails"] = list((agreed or (0, 0, None))[2] or ())
     # Each line's own verdict, measured in the characters it is worth, taken
     # HERE while the lines are still separate. A wrapped paragraph is joined
     # further down and the joined row can only carry one status -- the first
