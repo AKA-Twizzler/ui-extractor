@@ -571,8 +571,23 @@ def clip_to_column(rows, right_edge):
             continue
         if len(kept) != len(words):
             r = dict(r)
+            raw = " ".join(w[0] for w in words)
+            text = r["text"]
+            if text == raw:
+                text = " ".join(w[0] for w in kept)
+            else:
+                # the row has been reconciled already and its text is the
+                # agreed reading, not the raw words; rebuilding it from the
+                # words put the junk back -- a stripped bullet, the letter
+                # the other engine never saw -- so the dropped words come
+                # off the end of the agreed text where they still stand
+                for w in reversed([w[0] for w in words if w[1] > right_edge]):
+                    if text.endswith(w):
+                        text = text[:-len(w)].rstrip()
+                    else:
+                        break
             r["words"] = kept
-            r["text"] = " ".join(w[0] for w in kept)
+            r["text"] = text
             r["x1"] = max(w[2] for w in kept)
         out.append(r)
     return out
