@@ -547,7 +547,8 @@ def draw_window(entry, panes, theme):
                 foot_words.extend(words)
                 continue
         h, f = draw_pane(p)
-        fine.extend(f)
+        if p["kind"] != "text, not a tree":
+            fine.extend(f)  # a loose pane's doubts were said above, with their place
         below.append(h)
     if rest["beside"]:
         fine.append("also on the main pane, beside its content: " + " | ".join(rest["beside"]))
