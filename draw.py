@@ -13,6 +13,7 @@ of what stayed unsettled, and the moment-by-moment record folded at the end.
 Nothing here reads the video. A changed shape changes this file and the
 notes are redrawn from their records; the readers are untouched.
 """
+import difflib
 import html
 import json
 import os
@@ -138,9 +139,11 @@ def describe(panes):
     kind = main["kind"]
     lines = [ln.strip() for ln in content_lines(main) if ln.strip() and ln.strip() != "---"]
     if kind == "an open document":
-        first = next((ln for ln in lines if not re.match(r"^[a-z_ ]+: ", ln)), lines[0] if lines else "")
-        first = re.split(r"\s+<- ", first)[0].strip("#* ")
-        return f"a note: {first[:60]}" if first else "a note"
+        body = [re.split(r"\s+<- ", ln)[0] for ln in lines if not re.match(r"^[a-z_ ]+: ", ln)]
+        heads = [ln for ln in body if ln.startswith("#")]
+        pick = heads[0] if heads else max(body[:6], key=lambda ln: len(ln.split()), default="")
+        pick = pick.strip("#* ")
+        return f"a note: {pick[:60]}" if pick else "a note"
     if kind == "a file tree":
         rows = (main.get("data") or {}).get("rows") or []
         first = (rows[0].get("name") if rows else "") or ""
@@ -567,6 +570,28 @@ def signature(panes):
                  sorted(panes, key=lambda p: p["pi"]))
 
 
+SAME_SCREEN = 0.9   # character-level likeness at which two readings are one screen
+
+
+def flat_text(panes):
+    return re.sub(r"[^a-z0-9]", "", " ".join(
+        ln for p in sorted(panes, key=lambda p: p["pi"]) for ln in content_lines(p)).lower())
+
+
+def likeness(a, b):
+    """How alike two states' readings are, by their letters.
+
+    Exact lines cannot say it: the same file grid read seven times in a
+    row shares only 0.63 to 0.68 of its lines, a third of them wobbling by
+    a letter, and it was drawn seven times. By letters those repeats score
+    0.93 to 0.97 and a real change 0.78 or under (measured on two videos).
+    """
+    A, B = flat_text(a), flat_text(b)
+    if not A or not B:
+        return 0.0
+    return difflib.SequenceMatcher(None, A, B, autojunk=False).ratio()
+
+
 def pane_rows(pane):
     """The row names of a tree or list, for stitching a scrolled view."""
     if pane["kind"] == "a file tree":
@@ -637,6 +662,18 @@ def states(moments):
                     last["moments"].append(m)
                     last["stitched"] = True
                     last["sig"] = sig
+                    continue
+                if likeness(last["panes"], panes) >= SAME_SCREEN:
+                    # the same screen read again: one state, the fullest
+                    # reading drawn, the others' differences counted
+                    before = set(ln for p in last["panes"] for ln in content_lines(p))
+                    now = set(ln for p in panes for ln in content_lines(p))
+                    last["times"].append(m["ts"])
+                    last["moments"].append(m)
+                    last.setdefault("wobble", []).append((m["ts"], len(now - before)))
+                    if sum(len(content_lines(p)) for p in panes) > sum(
+                            len(content_lines(p)) for p in last["panes"]):
+                        last["panes"], last["sig"] = panes, sig
                     continue
             again = next((s for s in out if s["key"] == key and s["sig"] == sig), None)
             out.append({"key": key, "entry": entry, "panes": panes, "sig": sig,
@@ -860,6 +897,10 @@ def note(records_path, diary_text=None):
         if pointer:
             fp.append(f"the mouse pointer at {pointer['box'][0]},{pointer['box'][1]} "
                       f"(matched {pointer['score']:.2f} at scale {pointer['scale']})")
+        if s.get("wobble"):
+            fp.append("the same screen read again at " + ", ".join(
+                f"{ts} ({n} lines read differently)" for ts, n in s["wobble"])
+                + "; the fullest reading is drawn and the record holds each")
         for x in s["entry"].get("panel_extra") or []:
             fp.append(("read across the window, in no pane: " if x.get("confirmed") else "one engine only, across the window: ") + x["line"])
         fp.extend(fine)
