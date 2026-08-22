@@ -10,6 +10,7 @@ that the text readers do not ask:
     pictures(bgr, boxes)      regions with no text on them but plenty of
                               picture: an image, a thumbnail, a chart
     slant(mask)               the lean of a row's strokes -- italic
+    italic_words(mask, words, xh)  the words of a row that lean
     underline(mask, xh)       a rule drawn under a row's words
     pitch(mask, xh)           monospace or proportional, by glyph advance
     pointer(gray)             the mouse pointer, by its arrow shape
@@ -223,7 +224,35 @@ def slant(mask):
         score = float((prof ** 2).sum())
         if score > best_score:
             best_score, best = score, float(deg)
-    return best
+    # the shear that straightens a right-leaning stroke is a negative
+    # angle here; the answer is given the way a person reads it, so
+    # italic -- leaning right -- is positive
+    return -best
+
+
+def italic_words(mask, words, xh, floor=ITALIC_DEG):
+    """Which of a row's words lean: each word measured on its own.
+
+    A row's lean is the lean of most of its words, so one italic phrase in
+    a line of upright prose is invisible at row level -- measured: "Every
+    agent w", the only italic on a note page, read 9 degrees as a word and
+    the row it sat on read 0. Words with a slash or a bracket in them are
+    not asked: a diagonal stroke leans the whole measurement, and "Notes/"
+    read 20 degrees upright.
+    """
+    out = []
+    for w in words or []:
+        text, x0, x1 = w[0], int(w[1]), int(w[2])
+        core = text.strip(".,;:!?'\"")
+        if len(core) < 4 or not core.replace("'", "").isalnum():
+            continue
+        cell = mask[:, max(0, x0):x1]
+        if cell.size == 0:
+            continue
+        deg = slant(cell)
+        if deg >= floor:
+            out.append({"word": text, "slant": deg, "x0": x0, "x1": x1})
+    return out
 
 
 # ------------------------------------------------------------- underline
