@@ -583,7 +583,18 @@ def draw_window(entry, panes, theme):
         if words:
             foot += '<div class="sn-pathbar">' + " &nbsp;·&nbsp; ".join(esc(w) for w in words) + "</div>"
     cls = "sn-window sn-dark" if theme == "dark" else "sn-window"
-    return f'<div class="{cls}">{"".join(head)}{body}{foot}</div>', fine
+    # a doubt reaches the fine print by two roads (the leftover record and
+    # the pane's own line); say each payload once, under its first label
+    seen, once = set(), []
+    for f in fine:
+        payload = f.split(": ", 1)[1] if ": " in f else f
+        label = "doubt" if "only one engine read" in f else "video" if "over moving video" in f else None
+        key = (label, payload) if label else f
+        if key in seen:
+            continue
+        seen.add(key)
+        once.append(f)
+    return f'<div class="{cls}">{"".join(head)}{body}{foot}</div>', once
 
 
 def draw_map(size, rect, share, label, pointer=None):
