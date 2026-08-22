@@ -25,7 +25,7 @@ BAND_DIFF = 40        # a band's colour differs from the background by this much
 BAND_MIN_H = 4        # and is at least this tall, so a hairline rule is not a band
 INK_MARGIN = 40
 ITALIC_DEG = 7.0      # strokes leaning past this are italic
-UNDERLINE_FILL = 0.55 # a rule covers this much of the words' width
+UNDERLINE_FILL = 0.6  # one unbroken run covers this much of the words' width
 MONO_SHARE = 0.7      # this share of advances on one pitch is monospace
 
 _HUES = ((10, "red"), (22, "orange"), (33, "yellow"), (78, "green"),
@@ -136,6 +136,13 @@ def icons_before(bgr, rows, reach=2.2):
         crop = bgr[by0:by1, bx0:bx1]
         inkpx = crop[mask[by0:by1, bx0:bx1]] if crop.size else np.zeros((0, 3))
         colour = np.median(inkpx.reshape(-1, 3), axis=0) if len(inkpx) else np.array([0, 0, 0])
+        # a coloured mark beside a grey chevron: the colour is the mark's,
+        # so the saturated pixels name it when there are enough of them
+        if len(inkpx):
+            hsv = cv2.cvtColor(inkpx.reshape(-1, 1, 3).astype(np.uint8), cv2.COLOR_BGR2HSV)[:, 0, :]
+            sat = inkpx[hsv[:, 1] > 60]
+            if len(sat) >= 20 and len(sat) >= 0.25 * len(inkpx):
+                colour = np.median(sat.reshape(-1, 3), axis=0)
         out.append({"box": [bx0, by0, bx1, by1], "fill": round(float(cell.mean()), 3),
                     "colour": [int(v) for v in colour], "hue": hue_name(colour)})
     return out
@@ -160,6 +167,9 @@ def pictures(bgr, text_boxes, cell=48, min_cells=4):
     covered = np.zeros((H, W), bool)
     for x0, y0, x1, y1 in text_boxes:
         covered[max(0, y0 - 4):min(H, y1 + 4), max(0, x0 - 4):min(W, x1 + 4)] = True
+    # a painted band's edges are not a picture
+    for b in bands(bgr):
+        covered[max(0, b["y0"] - 2):min(H, b["y1"] + 3), :] = True
     for j in range(ny):
         for i in range(nx):
             ys, xs = slice(j * cell, (j + 1) * cell), slice(i * cell, (i + 1) * cell)
@@ -219,11 +229,13 @@ def slant(mask):
 # ------------------------------------------------------------- underline
 
 def underline(mask, xh):
-    """A rule under the words: a near-solid horizontal run below the baseline.
+    """A rule under the words: one unbroken horizontal run below the letters.
 
-    The lowest rows of the mask are asked for a line that spans most of the
-    ink's width and stands one to three pixels tall. Descenders cannot do
-    that: they are sparse across the width.
+    Fill alone cannot tell a rule from a baseline -- the bottoms of the
+    letters on a line of prose fill 0.55 of its width, measured on every
+    row of a note -- but they never touch: the gaps between letters and
+    words break the run. A rule is one run, unbroken, across most of the
+    words' width, one to three pixels tall, in the lower part of the row.
     """
     h, w = mask.shape
     if h < 6 or w < 10:
@@ -232,19 +244,27 @@ def underline(mask, xh):
     if len(cols) == 0:
         return None
     span = cols.max() - cols.min() + 1
-    fills = mask.sum(axis=1) / max(1, span)
-    # a rule sits in the lower third of the row box
-    lo = int(h * 0.6)
+    lo = int(h * 0.55)
+    found = None
     for y in range(h - 1, lo, -1):
-        if fills[y] >= UNDERLINE_FILL:
-            top = y
-            while top - 1 > lo and fills[top - 1] >= UNDERLINE_FILL:
-                top -= 1
-            thick = y - top + 1
-            if thick <= max(3, xh * 0.2):
-                return {"y": int(top), "thickness": int(thick), "fill": round(float(fills[y]), 2)}
-            return None
-    return None
+        row = mask[y]
+        # the longest unbroken run on this scan line
+        best, run = 0, 0
+        for v in row:
+            run = run + 1 if v else 0
+            best = max(best, run)
+        if best >= UNDERLINE_FILL * span:
+            if found is None:
+                found = {"y": y, "thickness": 1, "run": best}
+            else:
+                found["y"] = y
+                found["thickness"] += 1
+        elif found is not None:
+            break
+    if found is None or found["thickness"] > max(3, xh * 0.25):
+        return None
+    found["fill"] = round(found["run"] / span, 2)
+    return found
 
 
 # ----------------------------------------------------------------- pitch
@@ -283,35 +303,48 @@ def pitch(mask, xh):
 
 # --------------------------------------------------------------- pointer
 
-def _arrow(size):
-    """The pointer's shape at one size: a black arrow with a white rim."""
-    s = size
-    pts = np.array([[0, 0], [0, int(s * 0.93)], [int(s * 0.22), int(s * 0.72)],
-                    [int(s * 0.37), int(s * 1.0)], [int(s * 0.5), int(s * 0.94)],
-                    [int(s * 0.36), int(s * 0.67)], [int(s * 0.64), int(s * 0.67)]],
-                   np.int32)
-    img = np.full((int(s * 1.1) + 4, int(s * 0.75) + 4, 1), 128, np.uint8)
-    cv2.fillPoly(img, [pts + 2], 0)
-    cv2.polylines(img, [pts + 2], True, 255, 1)
-    return img[:, :, 0]
+POINTER_FLOOR = 0.7     # a normalised match this strong is the pointer; frames
+                        # with none measured 0.55 at best
+_POINTER = None
 
 
-def pointer(gray, sizes=(18, 24, 32, 40, 48, 56), floor=0.72):
-    """Where the mouse pointer is, by matching the arrow's shape.
+def _template():
+    global _POINTER
+    if _POINTER is None:
+        import os
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pointer.png")
+        _POINTER = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
+    return _POINTER
 
-    The macOS pointer is a black arrow with a white rim, pointing up-left,
-    its height about 1.5% of the frame's. A normalised match against that
-    shape at several sizes finds it when it is over flat paint; over busy
-    pixels it may not, and then the answer is None, never a guess.
+
+def pointer(gray, floor=POINTER_FLOOR):
+    """Where the mouse pointer is, by matching the real pointer's pixels.
+
+    The template is the pointer itself, cut from a 4K frame of the
+    memory-files video at 00:03:00: a black arrow with a white rim, 29 by
+    50 pixels at 2160 lines. A drawn polygon was tried first and never
+    matched above 0.6; the real pixels match at 1.0 on their own frame and
+    0.875 on another where the pointer stood at half the size. A frame
+    with no pointer on it tops out near 0.55, so the floor sits at 0.7.
+    The size is not assumed: a ladder of scales, set by the frame's height,
+    finds the pointer at whatever size the screen was captured at.
     """
+    t = _template()
+    if t is None:
+        return None
+    unit = gray.shape[0] / 2160.0
     best = None
-    for s in sizes:
-        t = _arrow(s)
-        if gray.shape[0] < t.shape[0] * 2 or gray.shape[1] < t.shape[1] * 2:
+    for sc in (0.35, 0.5, 0.75, 1.0, 1.25):
+        f = sc * unit
+        if f <= 0:
             continue
-        res = cv2.matchTemplate(gray, t, cv2.TM_CCOEFF_NORMED)
+        tt = cv2.resize(t, None, fx=f, fy=f, interpolation=cv2.INTER_AREA)
+        if tt.shape[0] < 8 or gray.shape[0] < tt.shape[0] * 2 or gray.shape[1] < tt.shape[1] * 2:
+            continue
+        res = cv2.matchTemplate(gray, tt, cv2.TM_CCOEFF_NORMED)
         _, val, _, loc = cv2.minMaxLoc(res)
         if val >= floor and (best is None or val > best["score"]):
-            best = {"box": [int(loc[0]), int(loc[1]), int(loc[0] + t.shape[1]), int(loc[1] + t.shape[0])],
-                    "size": s, "score": round(float(val), 3)}
+            best = {"box": [int(loc[0]), int(loc[1]),
+                            int(loc[0] + tt.shape[1]), int(loc[1] + tt.shape[0])],
+                    "scale": round(sc, 2), "score": round(float(val), 3)}
     return best
