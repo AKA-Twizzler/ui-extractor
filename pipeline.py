@@ -7,6 +7,7 @@ It maps the video, captures one frame per distinct screen, and reads whatever
 it can from each: the file tree where there is one, the text where there is
 not. Everything it cannot settle is reported as unsettled rather than guessed.
 """
+import difflib
 import json
 import os
 import re
@@ -233,6 +234,15 @@ def say_pane(pane_path, pi, engine, drawn=(), camera=None, in_ui=True):
                 continue
             hit = flat in body or (
                 words and sum(w in terms for w in words) >= 0.7 * len(words))
+            if not hit and len(flat) >= 8:
+                # the recogniser runs words together and misreads a glyph
+                # at the head of a line the document reader has whole --
+                # "oe Inbox/:thetwo-wayhandoff" for "00 Inbox/ : the
+                # two-way handoff" -- so a reading most of which sits
+                # inside the structure's text, in one piece, is consumed
+                m = difflib.SequenceMatcher(None, flat, body, autojunk=False)
+                run = m.find_longest_match(0, len(flat), 0, len(body))
+                hit = run.size >= 0.6 * len(flat)
             (used if hit else left).append((t, box))
         cov = {"readings": len(used) + len(left), "in_structure": len(used),
                "also": 0, "unconfirmed": 0, "video": 0}

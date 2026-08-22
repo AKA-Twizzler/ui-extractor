@@ -569,6 +569,18 @@ def clip_to_column(rows, right_edge):
         kept = [w for w in words if w[1] <= right_edge]
         if not kept:
             continue
+        # Chrome sits past a GAP; a sentence does not. The busiest right
+        # edge is short on a note whose lines are mostly cut by a webcam
+        # inset, and the few uncut lines ran past it -- "so it can find
+        # anything:" was clipped off a line at 00:04:10 of the memory-files
+        # video as if it were a status bar. A word that continues the line
+        # at an ordinary word gap is the line's own; only words beyond a
+        # gap wider than the row's letters stand tall are chrome.
+        if len(kept) < len(words):
+            i = len(kept)
+            gap = words[i][1] - words[i - 1][2]
+            if gap < max(12, 3 * r.get("xh", 0)):
+                kept = words
         if len(kept) != len(words):
             r = dict(r)
             raw = " ".join(w[0] for w in words)
