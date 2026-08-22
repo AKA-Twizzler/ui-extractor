@@ -118,12 +118,23 @@ def app_name(entry, panes):
     return None
 
 
+STRUCTURAL = ("an open document", "a file tree", "a list of columns", "a terminal", "a chat log")
+
+
+def main_pane(panes):
+    """The pane a window is about: a structured one with the most to say,
+    else the biggest. The biggest alone was wrong on a desktop where the
+    largest pane was a terminal's title strip read as loose words."""
+    return max(panes, key=lambda p: (p["kind"] in STRUCTURAL, len(content_lines(p)),
+                                     (p["box"][2] - p["box"][0]) * (p["box"][3] - p["box"][1])))
+
+
 def describe(panes):
     """What the main pane shows, in a few words: the note's first line,
     the tree's size and first row, the table's headings."""
     if not panes:
         return ""
-    main = max(panes, key=lambda p: (p["box"][2] - p["box"][0]) * (p["box"][3] - p["box"][1]))
+    main = main_pane(panes)
     kind = main["kind"]
     lines = [ln.strip() for ln in content_lines(main) if ln.strip() and ln.strip() != "---"]
     if kind == "an open document":
@@ -405,7 +416,7 @@ def draw_window(entry, panes, theme):
     x0, y0, x1, y1 = entry["rect"]
     width = max(1, x1 - x0)
     panes = sorted(panes, key=lambda p: (p["box"][0], p["box"][1]))
-    main = max(panes, key=lambda p: (p["box"][2] - p["box"][0]) * (p["box"][3] - p["box"][1]))
+    main = main_pane(panes)
     rest = remainder_of(main)
     # the furniture along the top: the window's own words across its top,
     # and what the main pane's reader found above its structure
