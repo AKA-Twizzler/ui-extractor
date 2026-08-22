@@ -432,13 +432,11 @@ def top_pictures(pane):
     own buttons and icons, drawn as blank buttons."""
     data = pane.get("data") or {}
     pics = data.get("style", {}).get("pictures") or []
-    h = max(1, pane["box"][3] - pane["box"][1])
-    # pane pictures are in pane pixels; the pane image may be enlarged, so
-    # the band is judged against the pictures' own frame
-    tops = [p["box"][1] for p in pics]
-    if not tops:
+    if not pics:
         return 0, None
-    limit = max(48, int(0.12 * max(p["box"][3] for p in pics) / 0.75)) if pics else 0
+    # picture boxes are in the pane's own pixels, the same scale as its box
+    h = max(1, pane["box"][3] - pane["box"][1])
+    limit = max(48, int(0.12 * h))
     band = [p for p in pics if p["box"][1] < limit]
     return len(band), limit
 
