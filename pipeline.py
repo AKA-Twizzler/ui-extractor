@@ -12,7 +12,9 @@ import json
 import os
 import re
 import sys
+import threading
 import time
+import concurrent.futures
 
 import cv2
 import numpy as np
@@ -46,6 +48,9 @@ write_box = panes.write_box
 # Every reader that fell over during a run, so a run that limped says so at
 # the end instead of looking clean.
 STUMBLED = []
+# panes read side by side per moment: one run uses about four cores this
+# way, which is the share that leaves room for two more runs beside it
+PANE_WORKERS = int(os.environ.get("PANE_WORKERS", "3"))
 
 
 # ------------------------------------------------------ the records foundation
@@ -1117,20 +1122,24 @@ def main():
         # claimed -- a wrong label is worse than the unconfirmed mark those
         # words already carry.
         zone_state = {}
+        zone_lock = threading.Lock()
 
         def over_video(cx, cy, moving=("moving" in how)):
             if moving:
                 return False
             if any(a <= cx < c and b <= cy < d for a, b, c, d in wins):
                 return False
-            if "z" not in zone_state:
-                looks = overlay.frames_across(
-                    video, secs, span=overlay.ZONE_SPAN,
-                    looks=overlay.ZONE_LOOKS,
-                    workdir=os.path.join(imgs, "_zones"))
-                got = guard(f"camera zones at {ts}",
-                            overlay.moving_zones, looks)
-                zone_state["z"] = got[0] if got else []
+            # the zones are measured once per moment; panes are read on
+            # several threads, so the first to ask measures and the rest wait
+            with zone_lock:
+                if "z" not in zone_state:
+                    looks = overlay.frames_across(
+                        video, secs, span=overlay.ZONE_SPAN,
+                        looks=overlay.ZONE_LOOKS,
+                        workdir=os.path.join(imgs, "_zones"))
+                    got = guard(f"camera zones at {ts}",
+                                overlay.moving_zones, looks)
+                    zone_state["z"] = got[0] if got else []
             return any(a <= cx < c and b <= cy < d
                        for a, b, c, d in zone_state["z"])
 
@@ -1154,6 +1163,7 @@ def main():
                      and "moving" not in prev["how"]
                      and grey.shape == prev["grey"].shape)
         cur_boxes = {}
+        jobs = []
         # the tie map, once per moment: each pane below asks it whether
         # anything under the pane is rendered -- see rendered_here
         work_img = screenness.to_working_size(img)
@@ -1200,12 +1210,31 @@ def main():
                 ties, tuple(int(v * tie_scale) for v in box_t),
                 block_h, block_w)
             moment["rendered"][pi] = bool(hits_ui)
-            lap("cutting")
+            jobs.append((pi, box_t, pane_path, camera, hits_ui))
+        lap("cutting")
+        # The panes are read side by side, PANE_WORKERS at a time. Each
+        # reader works on its own pane file and its own rows; the shared
+        # things -- the recogniser, the memo tables, the stumble list -- were
+        # tried from three threads on five panes and answered identically to
+        # the one-thread run, in a quarter of the time. The readers print
+        # nothing (every print in them sits under __main__), so the diary
+        # is written here, in pane order, exactly as before.
+
+        def read_job(job):
+            pi, box_t, pane_path, camera, hits_ui = job
+            ta = time.perf_counter()
             rec = say_pane(pane_path, pi, engine, drawn, camera,
                            in_ui=hits_ui)
-            took.setdefault("per_pane", []).append(
-                [pi, round(time.perf_counter() - t0, 2)])
-            lap("panes")
+            return pi, rec, round(time.perf_counter() - ta, 2)
+
+        if len(jobs) > 1 and PANE_WORKERS > 1:
+            with concurrent.futures.ThreadPoolExecutor(
+                    max_workers=PANE_WORKERS) as pool:
+                answers = list(pool.map(read_job, jobs))
+        else:
+            answers = [read_job(j) for j in jobs]
+        for (pi, box_t, pane_path, _, _), (_, rec, secs_taken) in zip(jobs, answers):
+            took.setdefault("per_pane", []).append([pi, secs_taken])
             cur_boxes[box_t] = rec
             if rec is None:
                 quiet.append(pi)
@@ -1213,6 +1242,7 @@ def main():
                 rec["box"] = box_t
                 rec["image"] = pane_path
                 records.append(rec)
+        lap("panes")
         prev = {"ts": ts, "how": how, "grey": grey, "boxes": cur_boxes}
         # a reading identical to one already said in full -- same kind, same
         # place on the screen, every line and mark the same -- points back
