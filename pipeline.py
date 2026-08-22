@@ -746,6 +746,17 @@ def main():
     cache = os.path.join(out_dir, "scan.json")
     dense = "--dense" in sys.argv
 
+    # everything printed from here is also kept, moment by moment, in the
+    # records file -- see the records foundation above
+    tee = Tee(sys.stdout)
+    sys.stdout = tee
+    rec_path = records_path(out_dir, dense, at)
+    recs = open(rec_path, "w", encoding="utf-8")
+
+    def keep(obj):
+        recs.write(json.dumps(jsonable(obj), ensure_ascii=False) + "\n")
+        recs.flush()
+
     print(f"=== {title} ===")
     if at:
         runs = [{"best": {"t": int(capture._to_seconds(s.strip()))}} for s in at]
