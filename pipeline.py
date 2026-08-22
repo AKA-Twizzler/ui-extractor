@@ -273,7 +273,8 @@ def say_pane(pane_path, pi, engine, drawn=(), camera=None, in_ui=True):
                      chat_reader.read_chat, pane_path, engine=engine,
                      sink=notes) or {}
         if chat.get("is_chat"):
-            return record("a chat log", chat_reader.render(chat).splitlines())
+            return record("a chat log", chat_reader.render(chat).splitlines(),
+                          chat)
         # a document: the words AND the shape
         note = guard(f"document reader, pane {pi}",
                      note_reader.read_note, pane_path,
