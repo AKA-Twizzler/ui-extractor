@@ -37,6 +37,29 @@ def norm(s):
     return re.sub(r"[^a-z0-9]+", "", str(s).lower())
 
 
+MAX_NAMES = 6
+
+
+def junky(s):
+    """A reading with no word in it: letters the engines guessed at."""
+    toks = re.findall(r"[A-Za-z][A-Za-z'\u2019_.]*", s)
+    if not toks:
+        return True
+    good = sum(1 for t in toks if re.search(r"[aeiouyAEIOUY]", t) and len(t) >= 3)
+    return good * 2 < len(toks) or len(re.sub(r"[^A-Za-z0-9]", "", s)) < 4
+
+
+def flat(s):
+    return re.sub(r"[^a-z0-9]", "", s.lower())
+
+
+FOLD = str.maketrans({"0": "o", "1": "l", "i": "l"})
+
+
+def fold(s):
+    return s.translate(FOLD)
+
+
 # ------------------------------------------------------------- content models
 #
 # Every pane kind reduces to one of three content shapes, merged across the
@@ -1060,29 +1083,6 @@ def build_states(moments):
                 home.said.append((m["ts"], said))
     harmonise(states)
     return states
-
-
-MAX_NAMES = 6
-
-
-def junky(s):
-    """A reading with no word in it: letters the engines guessed at."""
-    toks = re.findall(r"[A-Za-z][A-Za-z'\u2019_.]*", s)
-    if not toks:
-        return True
-    good = sum(1 for t in toks if re.search(r"[aeiouyAEIOUY]", t) and len(t) >= 3)
-    return good * 2 < len(toks) or len(re.sub(r"[^A-Za-z0-9]", "", s)) < 4
-
-
-def flat(s):
-    return re.sub(r"[^a-z0-9]", "", s.lower())
-
-
-FOLD = str.maketrans({"0": "o", "1": "l", "i": "l"})
-
-
-def fold(s):
-    return s.translate(FOLD)
 
 
 def rebuild_line(h, t):
