@@ -1238,9 +1238,6 @@ def harmonise(states):
                     full = next((c for c in clean if c != w and len(w) >= 5 and c.endswith(w)), None)
                     fixed_side.append(full or w)
                 table.side = fixed_side
-                dotted = sum(1 for r in table.rows if r["cells"] and r["cells"][0].startswith("."))
-                named = sum(1 for r in table.rows if r["cells"] and r["cells"][0])
-                lost_dots = []
                 for r in table.rows:
                     if not r["cells"] or not r["cells"][0]:
                         continue
@@ -1256,9 +1253,16 @@ def harmonise(states):
                         n = b
                     if n != orig and flat(n) != flat(orig):
                         st.fine.append(f"{orig} read as {n} elsewhere")
-                    if dotted * 3 >= named * 2 and not n.startswith("."):
-                        lost_dots.append(n)
-                        r["cells"][0] = "." + n
+                # a list of hidden files: when two names in three start with
+                # a dot, a name without one lost it to the reader
+                dotted = sum(1 for r in table.rows if r["cells"] and r["cells"][0].startswith("."))
+                named = sum(1 for r in table.rows if r["cells"] and r["cells"][0])
+                lost_dots = []
+                if named and dotted * 3 >= named * 2:
+                    for r in table.rows:
+                        if r["cells"] and r["cells"][0] and not r["cells"][0].startswith("."):
+                            lost_dots.append(r["cells"][0])
+                            r["cells"][0] = "." + r["cells"][0]
                 if lost_dots:
                     st.fine.append("read with the leading dot lost: " + ", ".join(lost_dots))
                 # the path bar's crumbs completed from the same pool (Finder
