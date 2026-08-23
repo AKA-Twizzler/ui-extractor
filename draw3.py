@@ -68,7 +68,16 @@ def same_line(a, b):
     return difflib.SequenceMatcher(None, a, b, autojunk=False).ratio() >= 0.85
 
 
-def stitch(old_items, new_items, key, same=same_text):
+def same_name(a, b):
+    """Two readings of one file name: alike, or the same length with at
+    most two letters read differently (0olnbox / ooInbox)."""
+    if same_text(a, b):
+        return True
+    a, b = norm(a), norm(b)
+    return bool(a) and len(a) == len(b) and len(a) <= 12 and sum(1 for x, y in zip(a, b) if x != y) <= 2
+
+
+def stitch(old_items, new_items, key, same=same_text, merge=None):
     """Extend `old_items` with what `new_items` adds, in place: find where
     the new run overlaps the old (by `key` likeness) and append what lies
     past the overlap; rows the old run lacks inside the overlap are put
@@ -79,14 +88,16 @@ def stitch(old_items, new_items, key, same=same_text):
         return old_items
     # the longest matching stretch: for each new item find the old twin
     pairs = []
+    out = list(old_items)
     for j, n in enumerate(new_items):
         for i, o in enumerate(old_items):
             if same(key(o), key(n)):
                 pairs.append((i, j))
+                if merge is not None:
+                    out[i] = merge(o, n)
                 break
     if not pairs:
         return old_items + list(new_items)
-    out = list(old_items)
     # walk the new run; unmatched items go after their nearest matched
     # predecessor's twin, and those before the first twin go just before it
     matched = {j: i for i, j in pairs}      # new index -> old index
@@ -172,7 +183,19 @@ class Table:
                 plain[j] = (plain[j] + " " + c.replace("*", "")).strip()
                 italics[j] = italics[j] or it
             new_rows.append({"cells": plain, "italic": italics, "band": band})
-        self.rows = stitch(self.rows, new_rows, key=lambda r: r["cells"][0] if r["cells"] else "")
+        def keep(o, n):
+            # twins: the confirmed reading stands over the doubtful one,
+            # and a cell the old row lacks is filled from the new
+            if o["italic"] and o["italic"][0] and n["cells"] and n["cells"][0] and not (n["italic"] and n["italic"][0]):
+                o = {"cells": [n["cells"][0]] + o["cells"][1:], "italic": [False] + o["italic"][1:], "band": o["band"] or n["band"]}
+            cells = list(o["cells"])
+            italics = list(o["italic"])
+            for i, c in enumerate(n["cells"]):
+                if i < len(cells) and not cells[i] and c:
+                    cells[i] = c
+                    italics[i] = n["italic"][i] if i < len(n["italic"]) else False
+            return {"cells": cells, "italic": italics, "band": o["band"] or n["band"]}
+        self.rows = stitch(self.rows, new_rows, key=lambda r: r["cells"][0] if r["cells"] else "", same=same_name, merge=keep)
         # a row whose name was missed folds into the row with the same
         # other cells; a nameless row alone is the window behind
         named = [r for r in self.rows if r["cells"] and r["cells"][0]]
@@ -194,7 +217,7 @@ class Table:
             full = next((w for w in draw2.SIDEBAR_WORDS if w != t and len(t) >= 4 and w.endswith(t)), None)
             if full:
                 t = full
-            elif t.endswith((".", ",")) or t.count(" ") >= 2 or len(t) < 3:
+            elif t.endswith((".", ",")) or t.count(" ") >= 2 or len(t) < 3 or (" " in t and t[:1].islower()):
                 continue
             if not any(same_text(t, s) for s in self.side):
                 self.side.append(t)

@@ -417,7 +417,7 @@ def _build_table(items, spill=None):
                 break
             text = it["text"] if it["ok"] else f"*{it['text']}*"
             cells_[hit] = (cells_[hit] + " " + text).strip()
-        if placed and any(cells_):
+        if placed and any(cells_) and not (len(r) == 1 and not r[0]["ok"]):
             body_rows.append((cells_, None, None))
             last_y = max(it["box"][3] for it in r)
         else:
@@ -503,8 +503,13 @@ def table_from_items(items):
                 it["above"] = (hy - cy) / rh
             top.extend(r)
             continue
+        if len(r) >= 2 and all(crumb_like(it["text"]) or it["text"].endswith(">") for it in r) and cy > hy + 3 * rh:
+            bottom.extend(it for it in r if it["box"][2] > x_lo - rh)
+            continue
         in_list = [it for it in r if it["box"][2] > x_lo - rh and it["box"][0] <= x_end
                    and not (len(it["text"]) > 40 and it["text"].count(" ") >= 5)]
+        if len(in_list) == 1 and not in_list[0]["ok"]:
+            continue              # a lone doubtful word is not a row
         left = [it for it in r if it["box"][2] <= x_lo - rh]
         side.extend(it for it in left if len(it["text"]) <= 18 and it["text"].count(" ") <= 1
                     and not it["text"].endswith((".", ",")) and ".md" not in it["text"])
