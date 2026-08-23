@@ -1154,30 +1154,46 @@ def harmonise(states):
                     if len(n) >= 3 and "..." not in n and n not in clean:
                         clean.append(n)
 
+    # one canonical spelling per name: among every reading that flattens
+    # alike, the one with the most of its letters intact (capitals, dots,
+    # spaces survive OCR worst, so the fullest form is the truest)
+    canon = {}
+    for c in clean + [w for w in draw2.SIDEBAR_WORDS if len(w) >= 5]:
+        f = flat(c)
+        cur = canon.get(f)
+        rank = (sum(1 for ch in c if ch.isupper()), len(c))
+        if cur is None or rank > (sum(1 for ch in cur if ch.isupper()), len(cur)):
+            canon[f] = c
+
+    def exact_fix(name):
+        f = flat(name)
+        c = canon.get(f)
+        if c and c != name:
+            return c
+        if c is None and f.endswith("md") and len(f) >= 10:
+            base = canon.get(f[:-2])
+            if base and len(flat(base)) >= 8 and not base.lower().endswith(".md"):
+                return base + ".md"
+        return None
+
     def better(name, fuzzy=False):
         f = flat(name)
         if len(f) < 4:
             return None
-        exact = []
-        for c in clean:
-            cf = flat(c)
-            if cf == f and c != name:
-                exact.append(c)
-            elif cf + "md" == f and not c.lower().endswith(".md"):
-                exact.append(c + ".md")
-        if exact:
-            return max(exact, key=len)      # the fullest spelling of the same name
+        b = exact_fix(name)
+        if b:
+            return b
         if name in clean:
             return None
         for c in clean:
             cf = flat(c)
             if fuzzy and len(cf) >= 6 and difflib.SequenceMatcher(None, cf, f, autojunk=False).ratio() >= 0.85:
-                return c
+                return canon.get(cf, c)
             if "..." in name:
-                a, _, b = name.partition("...")
-                af, bf = flat(a), flat(b)
+                a, _, b2 = name.partition("...")
+                af, bf = flat(a), flat(b2)
                 if af and bf and cf.startswith(af) and cf.endswith(bf) and len(af) + len(bf) >= 8:
-                    return c
+                    return canon.get(cf, c)
         return None
 
     def rescue(name):
