@@ -480,6 +480,8 @@ def name_of(entry, panes):
     """The program, from its furniture; a list under Finder's own column
     headings is Finder even with its sidebar out of view."""
     app = old.app_name(entry, panes)
+    if any(p["kind"] == "a file tree" for p in panes):
+        app = "Obsidian"        # a file tree is the vault's; a browser shows none
     if not app:
         for p in panes:
             if p["kind"] == "a list of columns":
