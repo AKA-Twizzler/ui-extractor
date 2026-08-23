@@ -1148,7 +1148,12 @@ def crumb_same(a, b):
     fa, fb = flat(a), flat(b)
     if not fa or not fb:
         return False
-    return fa == fb or (min(len(fa), len(fb)) >= 4 and (fa.startswith(fb) or fb.startswith(fa)))
+    if fa == fb:
+        return True
+    if min(len(fa), len(fb)) >= 4 and abs(len(fa) - len(fb)) <= 10 and (fa.startswith(fb) or fb.startswith(fa)):
+        return True
+    return (min(len(fa), len(fb)) >= 4 and abs(len(fa) - len(fb)) <= 6 and fa[:3] == fb[:3]
+            and difflib.SequenceMatcher(None, fa, fb, autojunk=False).ratio() >= 0.7)
 
 
 def chain_paths(paths):
@@ -1186,7 +1191,8 @@ def complete_docs(states):
             continue
         fixed, mended = [], 0
         for t, h in model.lines:
-            if "…</div>" not in h or t.startswith("---") or re.search(r"[.!?]$", t.strip()):
+            unfinished = "…</div>" in h or not re.search(r"[.!?:)\u201d\"]$", t.strip())
+            if not unfinished or t.startswith("---"):
                 fixed.append((t, h))
                 continue
             ft, _ = _flatmap(t)
@@ -1212,9 +1218,35 @@ def complete_docs(states):
                     t, h = t2, h2.replace("…</div>", "</div>") if best.endswith((".", ")", ":")) else h2
                     mended += 1
             fixed.append((t, h))
-        model.lines = fixed
+        # a completed line runs on into what the next drawn line already
+        # says: the two join at their overlap and read as one
+        joined = []
+        for t, h in fixed:
+            if joined and not t.startswith("---") and not joined[-1][0].startswith("---"):
+                pt, ph = joined[-1]
+                fi, mi = _flatmap(pt)
+                fj, mj = _flatmap(t)
+                hit = None
+                for k in range(14, 7, -1):
+                    if len(fi) >= k and len(fj) >= k:
+                        p = fj.find(fi[-k:], 0, 40)
+                        if p != -1:
+                            hit = (k, p)
+                            break
+                if hit and len(fj) - (hit[1] + hit[0]) >= 6:
+                    k, p = hit
+                    head = pt[:mi[len(fi) - k]]
+                    tail = t[mj[p]:]
+                    t2 = head + tail
+                    h2 = rebuild_line(ph, t2)
+                    if h2 is not None:
+                        joined[-1] = (t2, h2)
+                        mended += 1
+                        continue
+            joined.append((t, h))
+        model.lines = joined
         if mended:
-            st.fine.append(f"{mended} cut lines completed from another window's copy of the same text")
+            st.fine.append(f"{mended} cut lines completed from another reading of the same text")
 
 
 def harmonise(states):
