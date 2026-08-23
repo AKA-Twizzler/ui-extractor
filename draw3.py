@@ -1193,11 +1193,11 @@ def complete_docs(states):
         for t, h in model.lines:
             unfinished = "…</div>" in h or not re.search(r"[.!?:)\u201d\"]$", t.strip())
             if not unfinished or t.startswith("---"):
-                fixed.append((t, h))
+                fixed.append((t, h, False))
                 continue
             ft, _ = _flatmap(t)
             if len(ft) < 16:
-                fixed.append((t, h))
+                fixed.append((t, h, False))
                 continue
             suffix = ft[-14:]
             best = ""
@@ -1211,19 +1211,23 @@ def complete_docs(states):
                         if len(tail) > len(best) and len(tail) <= 220:
                             best = tail
                     pos = fu.find(suffix, pos + 1)
+            done = False
             if best:
                 t2 = t.rstrip() + best
                 h2 = rebuild_line(h, t2)
                 if h2 is not None:
                     t, h = t2, h2.replace("…</div>", "</div>") if best.endswith((".", ")", ":")) else h2
                     mended += 1
-            fixed.append((t, h))
+                    done = True
+            fixed.append((t, h, done))
         # a completed line runs on into what the next drawn line already
         # says: the two join at their overlap and read as one
         joined = []
-        for t, h in fixed:
-            if joined and not t.startswith("---") and not joined[-1][0].startswith("---"):
-                pt, ph = joined[-1]
+        for row3 in fixed:
+            t, h = row3[0], row3[1]
+            prev_done = joined and joined[-1][2]
+            if prev_done and not t.startswith("---"):
+                pt, ph = joined[-1][0], joined[-1][1]
                 fi, mi = _flatmap(pt)
                 fj, mj = _flatmap(t)
                 hit = None
@@ -1240,11 +1244,11 @@ def complete_docs(states):
                     t2 = head + tail
                     h2 = rebuild_line(ph, t2)
                     if h2 is not None:
-                        joined[-1] = (t2, h2)
+                        joined[-1] = (t2, h2, True)
                         mended += 1
                         continue
-            joined.append((t, h))
-        model.lines = joined
+            joined.append(row3 if len(row3) == 3 else (t, h, False))
+        model.lines = [(t, h) for t, h, _ in joined]
         if mended:
             st.fine.append(f"{mended} cut lines completed from another reading of the same text")
 
