@@ -342,7 +342,7 @@ class Lines:
             # wider or narrower, the lines re-wrapped) is the same line, and
             # the longer reading of it stands
             self.lines = stitch(self.lines, pairs, key=lambda p: p[0], same=same_doc_line,
-                                merge=lambda o, n: n if len(norm(n[0])) > len(norm(o[0])) else o)
+                                merge=lambda o, n: n if (len(norm(n[0])), n[0].count("*")) > (len(norm(o[0])), o[0].count("*")) else o)
             kept = []
             for i, (t, h) in enumerate(self.lines):
                 n = plain_line(t)
