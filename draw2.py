@@ -557,7 +557,21 @@ def flat(lines):
 
 
 def alike(a, b):
-    return difflib.SequenceMatcher(None, flat(a), flat(b), autojunk=False).ratio()
+    """1.0 when every line of one drawing has a near twin in the other (a
+    letter wobble is a twin; a new line or a vanished one is not)."""
+    def norm(lines):
+        return [flat([ln]) for ln in lines if flat([ln])]
+    A, B = norm(a), norm(b)
+    if not A or not B:
+        return 0.0
+    def covered(xs, ys):
+        for x in xs:
+            best = max((difflib.SequenceMatcher(None, x, y, autojunk=False).ratio() for y in ys
+                        if abs(len(x) - len(y)) <= max(4, 0.3 * len(x))), default=0.0)
+            if best < 0.8:
+                return False
+        return True
+    return 1.0 if covered(A, B) and covered(B, A) else 0.0
 
 
 def group_key(g, W):
