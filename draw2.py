@@ -279,8 +279,8 @@ def md_table(head, rows):
     for cells, icon, band in rows:
         cells = list(cells) + [""] * (n - len(cells))
         cells = [cell(c) for c in cells]
-        if icon in ICON and cells and cells[0]:
-            cells[0] = ICON[icon] + " " + cells[0]
+        # no icon boxes in cells: they collide with the names, and the Kind
+        # column already says folder or file
         if band:
             cells = [f"**{c}**" if c else c for c in cells]
         out.append("| " + " | ".join(cells) + " |")
@@ -314,6 +314,7 @@ def block_list(pane):
         if len(crumbs) >= 2:
             lines.append("")
             lines.append("**Path:** " + " › ".join(crumbs))
+            pane["_path_end"] = crumbs[-1].strip("*")
         if words:
             lines.append("")
             lines.append(" · ".join(words))
@@ -534,6 +535,12 @@ def draw_group(g):
         body.append(f"*{r}*")
     if not body:
         return [], doubts
+    if not g.get("title"):
+        # a Finder window is told by the folder its path ends in
+        end = next((p.get("_path_end") for p in panes if p.get("_path_end")), None)
+        if end:
+            title = f"{g['name']} - {end}"
+            g["title"] = end
     out = [f"> [!window] {title}"]
     for ln in body:
         out.append("> " + ln if ln else ">")
@@ -667,7 +674,7 @@ def note(records_path, diary_text=None):
     for m in moments:
         for g in window_groups(m):
             n = g["name"]
-            if n not in apps and n not in ("The screen", "The rest of the screen", "A window"):
+            if n not in apps and not n.startswith(("The screen", "The rest of the screen", "A window", "Loose words")):
                 apps.append(n)
     clocks = [c for m in moments for p in m.get("panes") or [] for c in [old.clock_in(p)] if c]
     parts = [f"# {title}", ""]
