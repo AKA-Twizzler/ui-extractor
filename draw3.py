@@ -174,7 +174,7 @@ class Table:
             t = it["text"]
             if not any(same_text(t, s) for s in self.top):
                 self.top.append(t)
-                self.top_items.append((t, (it["box"][0] + it["box"][2]) / 2, it["ok"]))
+                self.top_items.append((t, (it["box"][0] + it["box"][2]) / 2, it["ok"], it.get("above", 99)))
         rows_below = draw2.reading_order([it for it in bottom if it["ok"]], lambda it: it["box"])
         best = []
         for row in rows_below:
@@ -393,20 +393,19 @@ class State:
             # failing that, the top word that is also a crumb of the path;
             # failing that, the path's last crumb
             tpart = next((q for q in self.parts if q["fam"] == "table" and q["model"] is table), None)
-            tops = [(t, cx) for t, cx, ok in table.top_items
-                    if ok and not re.fullmatch(r"[0O]+", t) and len(t) >= 3 and t not in FINDER_WORDS]
+            tops = [(t, cx) for t, cx, ok, above in table.top_items
+                    if ok and above <= 4 and not re.fullmatch(r"[0O]+", t) and len(t) >= 3 and t not in FINDER_WORDS]
             hit = None
-            if tpart and tpart["x0"] is not None and tops:
+            for c in reversed(table.path):
+                hit = next((t for t, _ in tops if same_text(t, c) or norm(t).startswith(norm(c))), None)
+                if hit:
+                    break
+            if not hit and tpart and tpart["x0"] is not None and tops:
                 mid = (tpart["x0"] + tpart["x1"]) / 2
                 width = max(1, tpart["x1"] - tpart["x0"])
                 near = min(tops, key=lambda tc: abs(tc[1] - mid))
                 if abs(near[1] - mid) <= 0.25 * width:
                     hit = near[0]
-            if not hit:
-                for c in reversed(table.path):
-                    hit = next((t for t, _ in tops if same_text(t, c) or norm(t).startswith(norm(c))), None)
-                    if hit:
-                        break
             end = table.path[-1] if table.path else ""
             if hit:
                 self.title = hit

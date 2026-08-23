@@ -212,6 +212,7 @@ def build_table(pane):
         if it["box"][2] <= x_lo - rh and cy >= y_lo - rh:
             side.append(it)
         elif it["box"][3] <= y_lo - 0.3 * rh:
+            it["above"] = (y_lo - it["box"][3]) / rh     # rows above the list's top
             top.append(it)
         elif it["box"][1] >= y_hi + 0.3 * rh:
             bottom.append(it)
@@ -297,6 +298,8 @@ def table_from_loose(pane):
             continue
         cy = (r[0]["box"][1] + r[0]["box"][3]) / 2
         if cy < hy - rh:
+            for it in r:
+                it["above"] = (hy - cy) / rh
             top.extend(r)
             continue
         in_list = [it for it in r if it["box"][2] > x_lo - rh]
