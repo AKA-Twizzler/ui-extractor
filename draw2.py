@@ -268,7 +268,60 @@ def build_table(pane):
             keep.append(i)
     head_cells = [head_cells[i] for i in keep]
     body_rows = [([cells_[i] for i in keep], icon, band) for cells_, icon, band in body_rows]
+    cols = [cols[i] for i in keep]
+    # a column headed by a sidebar word (Recents, Favorites) is the
+    # sidebar, read into the list because its heading sat level with "Name"
+    side_x = None
+    if head_cells and head_cells[0] in SIDEBAR_HEADS:
+        side_x = cols[0]
+        side_words = [head_cells[0]] + [cells_[0] for cells_, _, _ in body_rows if cells_[0]]
+        side = [{"text": w, "box": [side_x[0], y_lo + k * rh, side_x[1], y_lo + (k + 1) * rh], "ok": True, "role": "left"}
+                for k, w in enumerate(side_words)] + side
+        head_cells = head_cells[1:]
+        body_rows = [(cells_[1:], icon, band) for cells_, icon, band in body_rows if any(cells_[1:])]
+        cols = cols[1:]
+        x_lo = cols[0][0] if cols else x_lo
+    # the list goes on below the reader's block: a leftover row whose words
+    # sit in the columns is a row; a row of crumbs is the path bar; a word in
+    # the sidebar's strip is the sidebar's; a sentence is the window behind
+    rest = []
+    last_y = y_hi
+    for r in table_rows(sorted(bottom, key=lambda it: it["box"][1]), rh):
+        r = sorted(r, key=lambda it: it["box"][0])
+        ry0 = min(it["box"][1] for it in r)
+        if all(crumb_like(it["text"]) for it in r) and len(r) >= 2 and rest == [] and ry0 - last_y > 2 * rh:
+            rest.extend(r)
+            continue
+        if side_x and all(it["box"][2] <= side_x[1] + rh for it in r):
+            side.extend(r)
+            continue
+        if ry0 - last_y > 3 * rh or rest:
+            rest.extend(r)
+            continue
+        cells_ = [""] * len(cols)
+        placed = True
+        for it in r:
+            if side_x and it["box"][2] <= side_x[1] + rh:
+                side.append(it)
+                continue
+            cx = (it["box"][0] + it["box"][2]) / 2
+            hit = next((i for i in range(len(cols)) if cols[i][0] - rh <= cx <= cols[i][1] + rh), None)
+            wide = it["box"][2] - it["box"][0] > 1.6 * (cols[-1][1] - cols[0][0]) / max(1, len(cols))
+            if hit is None or it["box"][0] < x_lo - rh or (wide and len(cols) > 1) or (len(it["text"]) > 40 and it["text"].count(" ") >= 5):
+                placed = False
+                break
+            text = it["text"] if it["ok"] else f"*{it['text']}*"
+            cells_[hit] = (cells_[hit] + " " + text).strip()
+        if placed and any(cells_):
+            body_rows.append((cells_, None, None))
+            last_y = max(it["box"][3] for it in r)
+        else:
+            rest.extend(r)
+    bottom = rest
     return top, side, head_cells, body_rows, bottom, doubts
+
+
+SIDEBAR_HEADS = {"Recents", "Shared", "Favorites", "Locations", "Tags", "iCloud", "AirDrop"}
 
 
 def table_from_loose(pane):
