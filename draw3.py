@@ -352,6 +352,9 @@ class Lines:
                 continue
             if n in blob_flat:
                 continue
+            olds = [plain(o) for o, _ in self.lines if not o.startswith("---") and len(plain(o)) >= 12]
+            if any(difflib.SequenceMatcher(None, o, n, autojunk=False).ratio() >= 0.7 for o in olds):
+                continue          # the same line, a few letters read differently
             holds = [i for i, (o, _) in enumerate(self.lines) if not o.startswith("---") and len(plain(o)) >= 12 and plain(o) in n]
             if holds:
                 first = holds[0]
@@ -902,6 +905,8 @@ def harmonise(states):
                     lead = t[:len(t) - len(t.lstrip("│ ˃˅"))]
                     name = t[len(lead):]
                     b = better(name)
+                    if b:
+                        b = re.sub(r"\.md$", "", b)      # the tree shows names without .md
                     if b and b != name:
                         st.fine.append(f"{name} read as {b} in the list")
                         t2 = lead + b
