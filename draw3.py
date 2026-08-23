@@ -305,6 +305,14 @@ class State:
                 pairs = [(ln, esc(ln)) for ln in old.content_lines(p) if ln.strip()]
                 part["model"].add(pairs)
             else:
+                built = draw2.table_from_loose(p)
+                if built:
+                    # a list the reader left loose: its table, rebuilt
+                    self.parts.remove(part)
+                    tpart = self.part_for("a list of columns", slot)
+                    tpart["x0"], tpart["x1"] = p["box"][0], p["box"][2]
+                    tpart["model"].add(built)
+                    continue
                 lines, fine = draw2.block_loose(p, rect)
                 self.fine.extend(fine)
                 words = part["model"]
@@ -352,6 +360,12 @@ class State:
     def words(self):
         return [w for q in self.parts if q["fam"] == "words" for w in q["model"]]
 
+    def fragment(self):
+        """An untitled sliver of a list: under three rows and nothing else."""
+        t = self.main_table()
+        others = [q for q in self.parts if q["fam"] in ("tree", "doc", "term")]
+        return bool(t) and not self.title and len(t.rows) < 3 and not others
+
     def has_content(self):
         return any((q["model"].rows if q["fam"] == "table" else q["model"].lines if q["fam"] in ("tree", "doc", "term") else q["model"]) for q in self.parts)
 
@@ -366,6 +380,9 @@ class State:
         ta, tb = self.main_table(), other.main_table()
         if ta and tb:
             a, b = set(ta.names()), set(tb.names())
+            # a fragment of a window already drawn: the same folder name
+            if self.title and other.title and same_text(self.title, other.title) and min(len(a), len(b)) < 3:
+                return True
             if not a or not b:
                 return False
             if len(a & b) / min(len(a), len(b)) >= 0.5:
@@ -576,7 +593,7 @@ def note(records_path, diary_text=None):
     title = header.get("title") or os.path.basename(os.path.dirname(records_path))
     diary_text = diary_text if diary_text is not None else old.diary(records_path)
     secs = (moments[-1]["secs"] - moments[0]["secs"]) if len(moments) > 1 else 0
-    states = [st for st in build_states(moments) if st.window_html()]
+    states = [st for st in build_states(moments) if st.window_html() and not st.fragment()]
     real = [st for st in states if is_real_window(st.name)]
     shown = real if real else states          # a video with no named window shows its screens
     windows = []                               # names in order of first appearance

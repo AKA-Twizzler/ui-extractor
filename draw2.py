@@ -263,6 +263,62 @@ def build_table(pane):
     return top, side, head_cells, body_rows, bottom, doubts
 
 
+def table_from_loose(pane):
+    """A list the reader left loose, rebuilt from the words' positions when
+    its column headings (Name, Date Modified, Size, Kind) sit on one row:
+    columns start where the headings start, rows are the word rows below,
+    a word left of the first column is the sidebar, above is the toolbar,
+    a row of crumbs below is the path. Same return shape as build_table."""
+    items = items_of(pane)
+    if not items:
+        return None
+    rows = reading_order(items, lambda it: it["box"])
+    head_row = None
+    for r in rows:
+        heads = [it for it in r if it["text"] in FINDER_HEADS]
+        if len(heads) >= 2:
+            head_row = r
+            break
+    if head_row is None:
+        return None
+    heads = [it for it in head_row if it["text"] in FINDER_HEADS]
+    cols = [[it["box"][0], it["box"][2]] for it in sorted(heads, key=lambda it: it["box"][0])]
+    hy = (head_row[0]["box"][1] + head_row[0]["box"][3]) / 2
+    x_lo = cols[0][0]
+    rh = sorted(it["box"][3] - it["box"][1] for it in items)[len(items) // 2] or 20
+    top, side, body, bottom = [], [], [], []
+    for r in rows:
+        if r is head_row:
+            continue
+        cy = (r[0]["box"][1] + r[0]["box"][3]) / 2
+        if cy < hy - rh:
+            top.extend(r)
+            continue
+        in_list = [it for it in r if it["box"][2] > x_lo - rh]
+        left = [it for it in r if it["box"][2] <= x_lo - rh]
+        side.extend(left)
+        if not in_list:
+            continue
+        if all(crumb_like(it["text"]) for it in in_list) and len(in_list) >= 2 and cy > hy + 3 * rh:
+            bottom.extend(in_list)
+            continue
+        cells = [""] * len(cols)
+        for it in in_list:
+            cx = it["box"][0]
+            ci = max((i for i in range(len(cols)) if cols[i][0] - rh <= cx), default=0)
+            text = it["text"] if it["ok"] else f"*{it['text']}*"
+            cells[ci] = (cells[ci] + " " + text).strip()
+        if any(cells):
+            body.append((cells, None, None))
+    if len(body) < 2:
+        return None
+    head = [it["text"] for it in sorted(heads, key=lambda it: it["box"][0])]
+    return top, side, head, body, bottom, []
+
+
+FINDER_HEADS = {"Name", "Date Modified", "Size", "Kind", "Date Created", "Date Added"}
+
+
 # ------------------------------------------------------------- pane blocks, as markdown
 
 ICON = {"green": '<span class="sn-ico"></span>', "grey": '<span class="sn-ico grey"></span>',
@@ -414,9 +470,6 @@ def block_of(pane, window_rect):
 
 
 # ------------------------------------------------------------- windows and moments
-
-FINDER_HEADS = {"Name", "Date Modified", "Size", "Kind", "Date Created", "Date Added"}
-
 
 def name_of(entry, panes):
     """The program, from its furniture; a list under Finder's own column
