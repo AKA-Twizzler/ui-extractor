@@ -553,13 +553,16 @@ def table_from_items(items):
             bottom.extend(in_list)
             continue
         cells = [""] * len(cols)
+        icon = band = None
         for it in in_list:
             cx = it["box"][0]
             ci = max((i for i in range(len(cols)) if cols[i][0] - rh <= cx), default=0)
             text = it["text"] if it["ok"] else f"*{it['text']}*"
             cells[ci] = (cells[ci] + " " + text).strip()
+            icon = icon or it.get("icon")
+            band = band or it.get("band")
         if any(cells):
-            body.append((cells, None, None))
+            body.append((cells, icon, band))
     if len(body) < (4 if lone else 2):
         return None
     head = [name for name, _, _ in heads]
