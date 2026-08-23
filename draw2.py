@@ -187,13 +187,44 @@ def table_rows(cells, rh):
     return rows
 
 
+def build_tables(pane):
+    """Every list on the pane, each built by build_table's rules. Two
+    Finder windows side by side read as one wide list; a second "Name"
+    heading far to the right of the first is the second window's, and the
+    items from there on are its own list."""
+    items = items_of(pane)
+    names = sorted((it for it in items if it["text"] == "Name" and it["role"] in ("head", "left")), key=lambda it: it["box"][0])
+    width = pane["box"][2] - pane["box"][0]
+    cuts = []
+    for a, b in zip(names, names[1:]):
+        if b["box"][0] - a["box"][0] > 0.3 * width:
+            cuts.append(b["box"][0] - (b["box"][3] - b["box"][1]))
+    groups = []
+    lo = float("-inf")
+    for cut in cuts + [float("inf")]:
+        groups.append([it for it in items if lo <= it["box"][0] < cut])
+        lo = cut
+    out = []
+    for g in groups:
+        built = _build_table(g)
+        if built:
+            out.append(built)
+    return out
+
+
 def build_table(pane):
+    """The pane's list, as the screen showed it (the biggest when the pane
+    held two windows' lists)."""
+    tables = build_tables(pane)
+    return max(tables, key=lambda t: len(t[3])) if tables else None
+
+
+def _build_table(items):
     """The table as the screen showed it: rows by height, columns by the
     header's positions, and the reader's leftovers put back where they sat.
 
     Returns (top_items, side_items, header, rows, bottom_items, doubts);
     rows are lists of (cells, icon, band)."""
-    items = items_of(pane)
     cells = [it for it in items if it["role"] in ("head", "cell")]
     left = [it for it in items if it["role"] == "left"]
     doubts = []
@@ -337,11 +368,12 @@ def table_from_loose(pane):
     head_row = None
     for r in rows:
         heads = [it for it in r if it["text"] in FINDER_HEADS]
-        if len(heads) >= 2:
+        if len(heads) >= 2 or (len(heads) == 1 and heads[0]["text"] == "Name"):
             head_row = r
             break
     if head_row is None:
         return None
+    lone = len([it for it in head_row if it["text"] in FINDER_HEADS]) == 1
     heads = [it for it in head_row if it["text"] in FINDER_HEADS]
     cols = [[it["box"][0], it["box"][2]] for it in sorted(heads, key=lambda it: it["box"][0])]
     hy = (head_row[0]["box"][1] + head_row[0]["box"][3]) / 2
@@ -374,7 +406,7 @@ def table_from_loose(pane):
             cells[ci] = (cells[ci] + " " + text).strip()
         if any(cells):
             body.append((cells, None, None))
-    if len(body) < 2:
+    if len(body) < (4 if lone else 2):
         return None
     head = [it["text"] for it in sorted(heads, key=lambda it: it["box"][0])]
     return top, side, head, body, bottom, []

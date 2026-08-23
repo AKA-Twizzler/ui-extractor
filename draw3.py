@@ -385,9 +385,22 @@ class State:
             part["x0"] = p["box"][0] if part["x0"] is None else min(part["x0"], p["box"][0])
             part["x1"] = p["box"][2] if part["x1"] is None else max(part["x1"], p["box"][2])
             if k == "a list of columns":
-                built = draw2.build_table(p)
+                tables = draw2.build_tables(p)
+                built = max(tables, key=lambda t: len(t[3])) if tables else None
+                if built and len(built[3]) < 3:
+                    # the reader's block was a sliver; the words' positions
+                    # may hold the whole list
+                    loose = draw2.table_from_loose(p)
+                    if loose and len(loose[3]) > len(built[3]):
+                        built = loose
                 if built:
                     part["model"].add(built)
+                    xs = [it["box"][0] for it in built[1]] + [it["box"][0] for it in built[0]]
+                    if len(tables) > 1:
+                        # this list's own span, not the pane's two windows
+                        ext = [x for t in [built] for it in t[0] + t[1] + t[4] for x in (it["box"][0], it["box"][2])]
+                        if ext:
+                            part["x0"], part["x1"] = min(ext), max(ext)
             elif k == "a file tree":
                 pairs, fine = tree_pairs(p)
                 part["model"].add(pairs)
@@ -425,7 +438,7 @@ class State:
         if m["ts"] not in self.times:
             self.times.append(m["ts"])
         table = self.main_table()
-        if not self.title and table:
+        if table and (not self.title or not getattr(self, "title_sure", False) or getattr(self, "title_from_path", False)):
             # the folder's name. Finder centres it in the title bar, so the
             # confirmed top word nearest the list's centre is the title;
             # failing that, the top word that is also a crumb of the path;
@@ -438,8 +451,13 @@ class State:
                 hit = next((t for t, _ in tops if same_text(t, c) or norm(t).startswith(norm(c))), None)
                 if hit:
                     break
-            self.title_sure = bool(hit)
-            if not hit and tpart and tpart["x0"] is not None and tops:
+            if hit:
+                self.title, self.title_sure, self.title_from_path = hit, True, False
+                return
+            if self.title:
+                return                # keep what an earlier moment gave
+            self.title_sure = False
+            if tpart and tpart["x0"] is not None and tops:
                 mid = (tpart["x0"] + tpart["x1"]) / 2
                 width = max(1, tpart["x1"] - tpart["x0"])
                 near = min(tops, key=lambda tc: abs(tc[1] - mid))
@@ -451,6 +469,7 @@ class State:
             elif end and norm(end) not in GENERIC:
                 self.title = end
                 self.title_sure = True
+                self.title_from_path = True
 
     # --------------------------------------------------------- identity
 
