@@ -1402,6 +1402,7 @@ def harmonise(states):
                                 r["italic"][ki] = False
             elif q["fam"] == "doc":
                 mend_doc(q["model"], st, clean)
+    complete_docs(states)
 
 
 def desktop(moments):
