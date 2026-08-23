@@ -1133,6 +1133,59 @@ def mend_numbered(name, siblings):
     return name
 
 
+def _flatmap(s):
+    """The text flattened to lowercase letters and digits, with each flat
+    character's index back into the original string."""
+    out, idx = [], []
+    for i, ch in enumerate(s):
+        if ch.isalnum():
+            out.append(ch.lower())
+            idx.append(i)
+    return "".join(out), idx
+
+
+def complete_docs(states):
+    """A note cut at a pane's edge, showing whole in another window on the
+    same screen (the browser beside Obsidian held the same note wider):
+    the cut line takes its tail from the fuller reading, letter for letter."""
+    docs = [(st, q["model"]) for st in states for q in st.parts if q["fam"] == "doc"]
+    for st, model in docs:
+        sources = [(u, h2) for st2, m2 in docs if m2 is not model for u, h2 in m2.lines]
+        if not sources:
+            continue
+        fixed, mended = [], 0
+        for t, h in model.lines:
+            if "…</div>" not in h or t.startswith("---") or re.search(r"[.!?]$", t.strip()):
+                fixed.append((t, h))
+                continue
+            ft, _ = _flatmap(t)
+            if len(ft) < 16:
+                fixed.append((t, h))
+                continue
+            suffix = ft[-14:]
+            best = ""
+            for u, _h in sources:
+                fu, iu = _flatmap(u)
+                pos = fu.find(suffix)
+                while pos != -1:
+                    end = pos + len(suffix)
+                    if len(fu) - end >= 8 and end - 1 < len(iu):
+                        tail = u[iu[end - 1] + 1:].rstrip()
+                        if len(tail) > len(best) and len(tail) <= 220:
+                            best = tail
+                    pos = fu.find(suffix, pos + 1)
+            if best:
+                t2 = t.rstrip() + best
+                h2 = rebuild_line(h, t2)
+                if h2 is not None:
+                    t, h = t2, h2.replace("…</div>", "</div>") if best.endswith((".", ")", ":")) else h2
+                    mended += 1
+            fixed.append((t, h))
+        model.lines = fixed
+        if mended:
+            st.fine.append(f"{mended} cut lines completed from another window's copy of the same text")
+
+
 def harmonise(states):
     """One name, read clean somewhere, stands everywhere it was read badly:
     a tree row or a doubtful list cell that reads alike a confirmed name
