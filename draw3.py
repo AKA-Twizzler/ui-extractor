@@ -1144,6 +1144,37 @@ def _flatmap(s):
     return "".join(out), idx
 
 
+def crumb_same(a, b):
+    fa, fb = flat(a), flat(b)
+    if not fa or not fb:
+        return False
+    return fa == fb or (min(len(fa), len(fb)) >= 4 and (fa.startswith(fb) or fb.startswith(fa)))
+
+
+def chain_paths(paths):
+    """Partial readings of one path bar joined: the longest read is the
+    spine, and crumbs the other reads carry between its anchors slot in
+    where they sat."""
+    paths = [p for p in paths if p]
+    if not paths:
+        return []
+    base = list(max(paths, key=len))
+    for p in paths:
+        if p is base:
+            continue
+        at = 0                     # insertion point in base
+        for c in p:
+            j = next((k for k in range(len(base)) if crumb_same(base[k], c)), None)
+            if j is not None:
+                if len(flat(c)) > len(flat(base[j])):
+                    base[j] = c    # the fuller reading of the same crumb
+                at = j + 1
+            else:
+                base.insert(at, c)
+                at += 1
+    return base
+
+
 def complete_docs(states):
     """A note cut at a pane's edge, showing whole in another window on the
     same screen (the browser beside Obsidian held the same note wider):
@@ -1356,13 +1387,22 @@ def harmonise(states):
                     for i, c in enumerate(path):
                         f = flat(c)
                         b = exact_fix(c)
-                        if not b and len(f) >= 4 and f not in canon:
+                        if not b and len(f) >= 4 and canon.get(f, c) == c:
                             starts = [p for p in canon.values()
                                       if flat(p).startswith(f) and flat(p) != f and flat(p) != f + "md"]
                             if len({flat(p) for p in starts}) == 1:
                                 b = starts[0]
+                            elif not starts and len(f) >= 8:
+                                close = [p for p in canon.values() if abs(len(flat(p)) - len(f)) <= 3
+                                         and difflib.SequenceMatcher(None, flat(p), f, autojunk=False).ratio() >= 0.85]
+                                if len({flat(p) for p in close}) == 1 and flat(close[0]) != f:
+                                    b = close[0]
                         if b:
                             path[i] = b
+                # the crumbs read at different moments chain into the one
+                # bar the window carried (each partial read skipped what
+                # its engines missed)
+                table.path = chain_paths([table.path] + table.paths)
                 # a date cell no engine read whole, whose digits are a clean
                 # date's digits, is that date; a kind cell read twice over
                 # keeps one telling of itself
