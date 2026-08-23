@@ -54,7 +54,21 @@ def same_text(a, b):
     return difflib.SequenceMatcher(None, a, b, autojunk=False).ratio() >= STITCH_MIN
 
 
-def stitch(old_items, new_items, key):
+def same_line(a, b):
+    """Two lines of a note are the same line when they read nearly alike;
+    a line that merely begins another is not it."""
+    a, b = norm(a), norm(b)
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+    short, long_ = (a, b) if len(a) <= len(b) else (b, a)
+    if long_.startswith(short) and len(short) >= 0.7 * len(long_):
+        return True
+    return difflib.SequenceMatcher(None, a, b, autojunk=False).ratio() >= 0.85
+
+
+def stitch(old_items, new_items, key, same=same_text):
     """Extend `old_items` with what `new_items` adds, in place: find where
     the new run overlaps the old (by `key` likeness) and append what lies
     past the overlap; rows the old run lacks inside the overlap are put
@@ -67,7 +81,7 @@ def stitch(old_items, new_items, key):
     pairs = []
     for j, n in enumerate(new_items):
         for i, o in enumerate(old_items):
-            if same_text(key(o), key(n)):
+            if same(key(o), key(n)):
                 pairs.append((i, j))
                 break
     if not pairs:
@@ -219,6 +233,20 @@ class Table:
         return "".join(out)
 
 
+def doc_html(model):
+    """The note as drawn: its title line large when the first line is short
+    and sits above the properties; scraps without a letter left out."""
+    lines = [(t, h) for t, h in model.lines if re.search(r"[A-Za-z0-9]", t)]
+    out = []
+    for i, (t, h) in enumerate(lines):
+        plain = t.strip().strip("#*> ").strip()
+        if i == 0 and len(plain) <= 40 and not t.startswith("---") and "<div class=\"sn-h" not in h:
+            out.append(f'<div class="sn-title">{esc(plain)}</div>')
+            continue
+        out.append(h)
+    return "".join(out)
+
+
 def tree_depth(text):
     return len(text) - len(text.lstrip("│ "))
 
@@ -230,7 +258,8 @@ class Lines:
         self.lines = []         # (text, html)
 
     def add(self, pairs):
-        self.lines = stitch(self.lines, list(pairs), key=lambda p: p[0])
+        same = same_line if self.kind == "an open document" else same_text
+        self.lines = stitch(self.lines, list(pairs), key=lambda p: p[0], same=same)
         if self.kind == "a file tree":
             # a folder with rows under it deeper than itself is open
             fixed = []
@@ -301,7 +330,9 @@ def doc_pairs(pane):
             in_props = not in_props
             continue
         if in_props:
-            props.append(s)
+            k, _, v = s.partition(":")
+            if re.fullmatch(r"[a-z_][a-z0-9_-]*", k.strip()) and len(v.strip()) >= 2:
+                props.append(s)
             continue
         # a heading whose text begins lowercase is a cut line ranked by its
         # letter height, not a heading; an unpaired bold mark is a scrap
@@ -589,7 +620,7 @@ class State:
             elif fam == "tree":
                 cols.append(('<div class="sn-tree">' + "\n".join(h for _, h in model.lines) + "</div>", width))
             elif fam == "doc":
-                cols.append(('<div class="sn-doc">' + "".join(h for _, h in model.lines) + "</div>", width))
+                cols.append(('<div class="sn-doc">' + doc_html(model) + "</div>", width))
             elif fam == "term":
                 cols.append(('<div class="sn-tree">' + "\n".join(h for _, h in model.lines) + "</div>", width))
             else:
