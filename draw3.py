@@ -1340,6 +1340,7 @@ def harmonise(states):
     # one canonical spelling per name: among every reading that flattens
     # alike, the one with the most of its letters intact (capitals, dots,
     # spaces survive OCR worst, so the fullest form is the truest)
+    strong_flats = {flat(s) for s in strong}
     canon, canon_fold = {}, {}
     def rank_of(c):
         return (sum(1 for ch in c if ch.isupper()), sum(1 for ch in c if not ch.isalnum()), len(c))
@@ -1462,7 +1463,7 @@ def harmonise(states):
                     for i, c in enumerate(path):
                         f = flat(c)
                         b = exact_fix(c)
-                        if not b and len(f) >= 4 and canon.get(f, c) == c:
+                        if not b and len(f) >= 4 and f not in strong_flats and canon.get(f, c) == c:
                             starts = [p for p in canon.values()
                                       if flat(p).startswith(f) and flat(p) != f and flat(p) != f + "md"
                                       and len(flat(p)) - len(f) <= 12]
@@ -1472,7 +1473,7 @@ def harmonise(states):
                                 b = starts[0]
                             elif not starts and len(f) >= 8:
                                 close = [p for p in canon.values() if flat(p) != f
-                                         and abs(len(flat(p)) - len(f)) <= 3
+                                         and len(f) < len(flat(p)) <= len(f) + 3
                                          and difflib.SequenceMatcher(None, flat(p), f, autojunk=False).ratio() >= 0.85]
                                 if len({flat(p) for p in close}) == 1:
                                     b = close[0]
