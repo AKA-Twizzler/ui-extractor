@@ -1345,6 +1345,10 @@ def harmonise(states):
                     n = t.lstrip("│ ˃˅")
                     if len(n) >= 6 and "..." not in n and "…" not in n and n not in clean and " " not in n[:1]:
                         clean.append(n)
+            if q["fam"] == "doc":
+                dt = q["model"].title()
+                if dt and len(dt) >= 4 and dt not in clean:
+                    clean.append(dt)
             if q["fam"] != "table":
                 continue
             for c in q["model"].path:
@@ -1428,7 +1432,7 @@ def harmonise(states):
         if len(f) < 8:
             return None
         scored = sorted(((difflib.SequenceMatcher(None, re.sub(r"md$", "", flat(c)), f, autojunk=False).ratio(), c)
-                         for c in clean if len(flat(c)) >= 8), reverse=True)
+                         for c in clean if len(flat(c)) >= 8 and re.sub(r"md$", "", flat(c)) != f), reverse=True)
         if scored and scored[0][0] >= 0.5 and (len(scored) == 1 or scored[0][0] - scored[1][0] >= 0.08):
             c = scored[0][1]
             if re.search(r"(\.md|\bmd)$", name.strip()) and not c.lower().endswith(".md"):
