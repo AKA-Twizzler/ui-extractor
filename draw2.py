@@ -320,8 +320,9 @@ def _build_table(items):
     for r in table_rows(sorted(bottom, key=lambda it: it["box"][1]), rh):
         r = sorted(r, key=lambda it: it["box"][0])
         ry0 = min(it["box"][1] for it in r)
-        if all(crumb_like(it["text"]) for it in r) and len(r) >= 2 and rest == [] and ry0 - last_y > 2 * rh:
-            rest.extend(r)
+        crumbs = sum(1 for it in r if crumb_like(it["text"]) or it["text"].endswith(">"))
+        if crumbs >= 2 and crumbs >= len(r) - 1 and not rest:
+            rest.extend(r)        # the path bar: the list ends above it
             continue
         if side_x and all(it["box"][2] <= side_x[1] + rh for it in r):
             side.extend(r)
@@ -337,8 +338,8 @@ def _build_table(items):
                 continue
             cx = (it["box"][0] + it["box"][2]) / 2
             hit = next((i for i in range(len(cols)) if cols[i][0] - rh <= cx <= cols[i][1] + rh), None)
-            wide = it["box"][2] - it["box"][0] > 1.6 * (cols[-1][1] - cols[0][0]) / max(1, len(cols))
-            if hit is None or it["box"][0] < x_lo - rh or (wide and len(cols) > 1) or (len(it["text"]) > 40 and it["text"].count(" ") >= 5):
+            wide = hit is not None and it["box"][2] > cols[hit][1] + (cols[hit + 1][0] - cols[hit][1]) / 2 if hit is not None and hit + 1 < len(cols) else False
+            if hit is None or it["box"][0] < x_lo - rh or wide or (len(it["text"]) > 40 and it["text"].count(" ") >= 5):
                 placed = False
                 break
             text = it["text"] if it["ok"] else f"*{it['text']}*"
