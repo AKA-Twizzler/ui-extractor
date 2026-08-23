@@ -971,18 +971,44 @@ class State:
         return out
 
     def fine_html(self):
-        seen, kept = set(), []
+        """The fine print in plain words: what one name was read as
+        instead, what one engine alone saw, and how much ran past the
+        pane's edge -- counted, not recited."""
+        names, engine, cut, other = [], [], 0, []
+        seen = set()
         for f in self.fine:
             f = re.sub(r"\s+", " ", f).strip()
-            if not re.search(r" / | read as |only one engine|underlin|wobbl|off the|not read", f):
-                continue          # a bare word says nothing
-            if f and f not in seen:
-                seen.add(f)
-                kept.append(f)
-        if not kept:
+            if not f or f in seen:
+                continue
+            seen.add(f)
+            if "runs past the pane" in f:
+                cut += 1
+                continue
+            m = re.match(r"^(.+?) read as (.+?)(?: (?:elsewhere|in the list))?$", f)
+            if m:
+                was, now = m.group(1).strip(), m.group(2).strip()
+                if junky(was) or junky(now) or flat(was) == flat(now):
+                    continue      # the change was not worth a reader's time
+                names.append((was, now))
+                continue
+            if "only one engine" in f or " / " in f:
+                engine.append(f)
+                continue
+            if "cut lines completed" in f or "leading dot" in f:
+                other.append(f)
+        bits = []
+        if names:
+            shown = names[:MAX_NAMES]
+            bits.append("read as: " + "; ".join(f"{esc(a)} \u2192 {esc(b)}" for a, b in shown)
+                        + (f"; and {len(names) - MAX_NAMES} more" if len(names) > MAX_NAMES else ""))
+        if cut:
+            bits.append(f"{cut} line{'s' if cut != 1 else ''} ran past the pane's edge and could not be read whole")
+        if engine:
+            bits.append(f"{len(engine)} reading{'s' if len(engine) != 1 else ''} only one engine backed")
+        bits.extend(esc(o) for o in other)
+        if not bits:
             return ""
-        more = f"; and {len(kept) - MAX_DOUBT} more" if len(kept) > MAX_DOUBT else ""
-        return '<span class="sn-fine">fine print: ' + "; ".join(esc(x) for x in kept[:MAX_DOUBT]) + more + "</span>"
+        return '<span class="sn-fine">fine print: ' + "; ".join(bits) + "</span>"
 
 
 def build_states(moments):
@@ -1034,6 +1060,18 @@ def build_states(moments):
                 home.said.append((m["ts"], said))
     harmonise(states)
     return states
+
+
+MAX_NAMES = 6
+
+
+def junky(s):
+    """A reading with no word in it: letters the engines guessed at."""
+    toks = re.findall(r"[A-Za-z][A-Za-z'\u2019_.]*", s)
+    if not toks:
+        return True
+    good = sum(1 for t in toks if re.search(r"[aeiouyAEIOUY]", t) and len(t) >= 3)
+    return good * 2 < len(toks) or len(re.sub(r"[^A-Za-z0-9]", "", s)) < 4
 
 
 def flat(s):
