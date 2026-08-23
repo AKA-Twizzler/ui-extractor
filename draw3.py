@@ -407,54 +407,6 @@ class Lines:
         self.kind = kind
         self.lines = []         # (text, html)
 
-    def add(self, pairs):
-        pairs = list(pairs)
-        if self.kind == "an open document" and self.lines:
-            pairs = self.rewrapped(pairs)
-        same = same_line if self.kind == "an open document" else same_text
-        self.lines = stitch(self.lines, pairs, key=lambda p: p[0], same=same)
-        if self.kind == "a file tree":
-            # a folder with rows under it deeper than itself is open
-            fixed = []
-            for i, (t, h) in enumerate(self.lines):
-                after = [x for x, _ in self.lines[i + 1:i + 3]]
-                if "˃" in t and len(after) == 2 and all(tree_depth(x) > tree_depth(t) for x in after):
-                    t2 = t.replace("˃", "˅", 1)
-                    h = h.replace(esc(t), esc(t2)) if esc(t) in h else esc(t2)
-                    t = t2
-                fixed.append((t, h))
-            self.lines = fixed
-
-    def rewrapped(self, pairs):
-        """The new lines against the note's text so far: one whose words are
-        already there (the window wider or narrower, the lines re-wrapped)
-        is dropped; one holding an old line whole takes its place."""
-        def plain(t):
-            return norm(t.strip().strip("#*> ").strip())
-        blob = " ".join(plain(t) for t, _ in self.lines if not t.startswith("---"))
-        blob_flat = blob.replace(" ", "")
-        out = []
-        for t, h in pairs:
-            n = plain(t)
-            if t.startswith("---") or len(n) < 12:
-                out.append((t, h))
-                continue
-            if n in blob_flat:
-                continue
-            olds = [plain(o) for o, _ in self.lines if not o.startswith("---") and len(plain(o)) >= 12]
-            if any(difflib.SequenceMatcher(None, o, n, autojunk=False).ratio() >= 0.7 for o in olds):
-                continue          # the same line, a few letters read differently
-            holds = [i for i, (o, _) in enumerate(self.lines) if not o.startswith("---") and len(plain(o)) >= 12 and plain(o) in n]
-            if holds:
-                first = holds[0]
-                self.lines[first] = (t, h)
-                for i in reversed(holds[1:]):
-                    del self.lines[i]
-                blob_flat = " ".join(plain(x) for x, _ in self.lines if not x.startswith("---")).replace(" ", "")
-                continue
-            out.append((t, h))
-        return out
-
     def identity(self):
         """The first stretch of the text, marks stripped: a note is the same
         note when this reads alike, whatever rank the reader gave a line."""
