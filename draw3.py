@@ -256,7 +256,7 @@ class State:
             if part["fam"] == fam and abs(part["slot"] - slot) <= 1:
                 return part
         model = Table() if fam == "table" else (Lines(kind) if fam in ("tree", "doc", "term") else [])
-        part = {"fam": fam, "slot": slot, "model": model}
+        part = {"fam": fam, "slot": slot, "model": model, "x0": None, "x1": None}
         self.parts.append(part)
         self.parts.sort(key=lambda q: q["slot"])
         return part
@@ -269,25 +269,28 @@ class State:
                 continue
             k = p["kind"]
             slot = int(8 * p["box"][0] / max(1, W))
+            part = self.part_for(k, slot)
+            part["x0"] = p["box"][0] if part["x0"] is None else min(part["x0"], p["box"][0])
+            part["x1"] = p["box"][2] if part["x1"] is None else max(part["x1"], p["box"][2])
             if k == "a list of columns":
                 built = draw2.build_table(p)
                 if built:
-                    self.part_for(k, slot)["model"].add(built)
+                    part["model"].add(built)
             elif k == "a file tree":
                 pairs, fine = tree_pairs(p)
-                self.part_for(k, slot)["model"].add(pairs)
+                part["model"].add(pairs)
                 self.fine.extend(fine)
             elif k == "an open document":
                 pairs, fine = doc_pairs(p)
-                self.part_for(k, slot)["model"].add(pairs)
+                part["model"].add(pairs)
                 self.fine.extend(fine)
             elif k in ("a terminal", "a chat log"):
                 pairs = [(ln, esc(ln)) for ln in old.content_lines(p) if ln.strip()]
-                self.part_for(k, slot)["model"].add(pairs)
+                part["model"].add(pairs)
             else:
                 lines, fine = draw2.block_loose(p, rect)
                 self.fine.extend(fine)
-                words = self.part_for(k, slot)["model"]
+                words = part["model"]
                 for ln in lines:
                     label, _, rest = ln.partition(":** ")
                     for w in (rest or ln).replace(" &nbsp; ", " · ").split(" · "):
@@ -390,45 +393,47 @@ class State:
         side_words, top_words, path, bottom = [], [], [], []
         if table:
             side_words, top_words, path, bottom = list(table.side), list(table.top), list(table.path), list(table.bottom)
-        cols = []
-        extra = []
-        first_slot = self.parts[0]["slot"] if self.parts else 0
+        cols = []       # (html, width in frame pixels)
         for q in self.parts:
             fam, model = q["fam"], q["model"]
+            width = max(1, (q["x1"] or 0) - (q["x0"] or 0))
             if fam == "table":
-                cols.append('<div class="sn-body">' + model.html() + "</div>")
+                cols.append(('<div class="sn-body">' + model.html() + "</div>", width))
             elif fam == "tree":
-                cols.append('<div class="sn-tree">' + "\n".join(h for _, h in model.lines) + "</div>")
+                cols.append(('<div class="sn-tree">' + "\n".join(h for _, h in model.lines) + "</div>", width))
             elif fam == "doc":
-                cols.append('<div class="sn-doc">' + "".join(h for _, h in model.lines) + "</div>")
+                cols.append(('<div class="sn-doc">' + "".join(h for _, h in model.lines) + "</div>", width))
             elif fam == "term":
-                cols.append('<div class="sn-tree">' + "\n".join(h for _, h in model.lines) + "</div>")
+                cols.append(('<div class="sn-tree">' + "\n".join(h for _, h in model.lines) + "</div>", width))
             else:
                 if not model:
                     continue
-                # a strip of words: the left-most one is the sidebar when no
-                # table brought its own; a top strip is the title bar's
-                # words; the rest sit beside the content
-                if q is self.parts[0] and not side_words and len(self.parts) > 1:
-                    side_words = list(model)
-                elif not cols and not side_words and len(self.parts) == 1:
-                    cols.append('<div class="sn-body">' + " &nbsp;·&nbsp; ".join(esc(w) for w in model) + "</div>")
+                # a strip of words stands as a side panel where it stood; a
+                # lone strip is the window's whole content
+                if len(self.parts) == 1:
+                    cols.append(('<div class="sn-body">' + " &nbsp;·&nbsp; ".join(esc(w) for w in model) + "</div>", width))
                 else:
-                    extra.append('<div class="sn-side">' + "<br>".join(esc(w) for w in model) + "</div>")
-        if not (cols or side_words or extra):
+                    cols.append(('<div class="sn-side">' + "<br>".join(esc(w) for w in model) + "</div>", width))
+        if not (cols or side_words):
             return ""
         title_bar = ""
         tops = [w for w in top_words if w != self.title and not re.fullmatch(r"[0O]+", w)]
         if self.title or tops:
             t = f"<b>{esc(self.title)}</b> " if self.title else ""
             title_bar = '<div class="sn-titlebar">' + t + " &nbsp; ".join(esc(w) for w in tops) + "</div>"
-        side_html = ('<div class="sn-side">' + "<br>".join(esc(w) for w in side_words) + "</div>") if side_words else ""
-        n = len(cols) + (1 if side_html else 0) + len(extra)
-        if n >= 2:
-            cls = "sn-cols sn-wide-left" if (self.tree() and not side_html) else ("sn-cols sn-three" if n >= 3 else "sn-cols")
-            body = f'<div class="{cls}">' + side_html + "".join(cols) + "".join(extra) + "</div>"
+        if side_words:
+            # the list's own sidebar: a fifth of the table's width, at its left
+            table_part = next((q for q in self.parts if q["fam"] == "table" and q["model"] is table), None)
+            tw = max(1, (table_part["x1"] or 0) - (table_part["x0"] or 0)) if table_part else 1000
+            side = ('<div class="sn-side">' + "<br>".join(esc(w) for w in side_words) + "</div>", max(160, int(0.22 * tw)))
+            at = cols.index(next(c for c in cols if c[0].startswith('<div class="sn-body">'))) if table_part else 0
+            cols.insert(at, side)
+        if len(cols) >= 2:
+            total = sum(w for _, w in cols) or 1
+            fr = " ".join(f"{max(8, round(100 * w / total))}fr" for _, w in cols)
+            body = f'<div class="sn-cols" style="grid-template-columns: {fr}">' + "".join(h for h, _ in cols) + "</div>"
         else:
-            body = side_html + "".join(cols) + "".join(extra)
+            body = "".join(h for h, _ in cols)
         foot = ""
         if path:
             foot = '<div class="sn-pathbar">' + "›".join(f"<span>{esc(c)}</span>" for c in path) + "</div>"
