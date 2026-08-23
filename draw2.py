@@ -205,8 +205,11 @@ def build_tables(pane):
         groups.append([it for it in items if lo <= (it["box"][0] + it["box"][2]) / 2 < cut])
         lo = cut
     out = []
+    spill = []
     for g in groups:
-        built = _build_table(g)
+        g = spill + g
+        spill = []
+        built = _build_table(g, spill)
         if not built and any(it["role"] == "left" for it in g):
             built = table_from_items(g)       # the second window: words only
         if built:
@@ -221,9 +224,11 @@ def build_table(pane):
     return max(tables, key=lambda t: len(t[3])) if tables else None
 
 
-def _build_table(items):
+def _build_table(items, spill=None):
     """The table as the screen showed it: rows by height, columns by the
     header's positions, and the reader's leftovers put back where they sat.
+    Words beyond the last column's reach are another window's; they go to
+    `spill` when given.
 
     Returns (top_items, side_items, header, rows, bottom_items, doubts);
     rows are lists of (cells, icon, band)."""
@@ -236,6 +241,11 @@ def _build_table(items):
     rh = heights[len(heights) // 2] or 20
     cols = merge_columns([it["col"] for it in cells], tol=1.5 * rh)
     x_lo, x_hi = cols[0][0], cols[-1][1]
+    bound = min(x_hi + rh, x_lo + 12 * rh if len(cols) == 1 else cols[-1][0] + 12 * rh)
+    beyond = [it for it in left if it["box"][0] > bound]
+    left = [it for it in left if it["box"][0] <= bound]
+    if spill is not None:
+        spill.extend(beyond)
     y_lo = min(it["box"][1] for it in cells)
     y_hi = max(it["box"][3] for it in cells)
     top, side, bottom, inside = [], [], [], []
@@ -254,8 +264,6 @@ def _build_table(items):
     # a leftover inside the table's band joins a column by its x, or opens one
     for it in inside:
         cx = (it["box"][0] + it["box"][2]) / 2
-        if it["box"][0] > min(x_hi + rh, x_lo + 12 * rh if len(cols) == 1 else cols[-1][0] + 12 * rh):
-            continue              # right of the last column: not this list's
         hit = next((c for c in cols if c[0] - rh <= cx <= c[1] + rh), None)
         if hit is None:
             hit = [it["box"][0], it["box"][2]]
