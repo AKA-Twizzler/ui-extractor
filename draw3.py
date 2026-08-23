@@ -141,6 +141,39 @@ def stitch(old_items, new_items, key, same=same_text, merge=None):
     return result
 
 
+MONTHS3 = {m.lower(): m for m in ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]}
+DATE_RX = re.compile(r"^\s*(?:(Today|Yesterday|today|yesterday)|([A-Za-z]{3})\s*(\d{1,2})\s*[,.]?\s*(\d{4}))"
+                     r"\s*at\s*(\d{1,2})\s*[:.°º*/]?\s*(\d{2})\s*([AaPp])\s*[Mm]\s*$")
+SIZE_RX = re.compile(r"^\s*(\d+(?:[.,]\d+)?)\s*(bytes?|[KMGT]B)\b\s*N?\s*(.*)$", re.I)
+
+
+def tidy_date(s):
+    """A Finder date rebuilt to the shape the screen drew it in, or None:
+    'Jun30,2026at5:51PM' -> 'Jun 30, 2026 at 5:51 PM'."""
+    m = DATE_RX.match(s.replace("*", ""))
+    if not m:
+        return None
+    if m.group(2):
+        mon = MONTHS3.get(m.group(2).lower())
+        if not mon:
+            return None
+        day = f"{mon} {int(m.group(3))}, {m.group(4)}"
+    else:
+        day = m.group(1).capitalize()
+    return f"{day} at {int(m.group(5))}:{m.group(6)} {m.group(7).upper()}M"
+
+
+def tidy_size(s):
+    """A size leading a cell split from what follows it: '2KB Markdo...text
+    file' -> ('2 KB', 'Markdo...text file'); None when no size leads."""
+    m = SIZE_RX.match(s.replace("*", ""))
+    if not m:
+        return None
+    unit = m.group(2)
+    unit = "bytes" if unit.lower().startswith("byte") else unit.upper()
+    return f"{m.group(1)} {unit}", m.group(3).strip()
+
+
 class Table:
     def __init__(self):
         self.header = []
