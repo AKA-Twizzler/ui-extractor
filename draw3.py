@@ -1015,6 +1015,9 @@ def note(records_path, diary_text=None):
         for ln in latest.said_html():
             parts.append(ln)
             parts.append("")
+        if latest.fine_html():
+            parts.append(latest.fine_html())
+            parts.append("")
         if earlier:
             parts.append("Earlier states of this same window: " + " · ".join(
                 f"{e.times[0]} {state_label(e)}" for e in earlier) + " (each drawn the same way below)")
