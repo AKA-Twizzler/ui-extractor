@@ -54,6 +54,23 @@ def same_text(a, b):
     return difflib.SequenceMatcher(None, a, b, autojunk=False).ratio() >= STITCH_MIN
 
 
+def plain_line(t):
+    return norm(t.strip().strip("#*> ").strip())
+
+
+def same_doc_line(a, b):
+    """The same line of a note: alike, or one holding the other whole (the
+    note re-wrapped to a wider window), or most letters in common."""
+    if a.startswith("---") or b.startswith("---"):
+        return norm(a) == norm(b)
+    if same_line(a, b):
+        return True
+    x, y = plain_line(a), plain_line(b)
+    if len(x) >= 12 and len(y) >= 12 and (x in y or y in x):
+        return True
+    return len(x) >= 12 and len(y) >= 12 and difflib.SequenceMatcher(None, x, y, autojunk=False).ratio() >= 0.7
+
+
 def same_line(a, b):
     """Two lines of a note are the same line when they read nearly alike;
     a line that merely begins another is not it."""
@@ -274,6 +291,78 @@ class Table:
 
     def names(self):
         return [norm(r["cells"][0]) for r in self.rows if r["cells"] and r["cells"][0]]
+
+    def identity(self):
+        """What folder the list shows: its rows' names."""
+        return " ".join(self.names())
+
+    def html(self):
+        n = max([len(self.header)] + [len(r["cells"]) for r in self.rows] + [0])
+        out = ["<table>"]
+        if self.header and any(self.header):
+            out.append("<tr class=\"sn-head\">" + "".join(f"<td>{esc(h)}</td>" for h in list(self.header) + [""] * (n - len(self.header))) + "</tr>")
+        for r in self.rows:
+            cells = list(r["cells"]) + [""] * (n - len(r["cells"]))
+            it = list(r["italic"]) + [False] * (n - len(r["italic"]))
+            cls = ' class="sn-selected"' if r.get("band") else ""
+            tds = "".join(f"<td>{'<i>' + esc(c) + '</i>' if it[i] and c else esc(c)}</td>" for i, c in enumerate(cells))
+            out.append(f"<tr{cls}>{tds}</tr>")
+        out.append("</table>")
+        return "".join(out)
+
+
+def doc_html(model):
+    """The note as drawn: its title line large when the first line is short
+    and sits above the properties; scraps without a letter left out."""
+    lines = [(t, h) for t, h in model.lines if re.search(r"[A-Za-z0-9]", t)]
+    out = []
+    for i, (t, h) in enumerate(lines):
+        plain = t.strip().strip("#*> ").strip()
+        if i == 0 and len(plain) <= 40 and not t.startswith("---") and "<div class=\"sn-h" not in h:
+            out.append(f'<div class="sn-title">{esc(plain)}</div>')
+            continue
+        out.append(h)
+    return "".join(out)
+
+
+def tree_depth(text):
+    return len(text) - len(text.lstrip("│ "))
+
+
+class Lines:
+    """A tree or a document, as lines that grow when the pane scrolls."""
+    def __init__(self, kind):
+        self.kind = kind
+        self.lines = []         # (text, html)
+
+    def add(self, pairs):
+        pairs = list(pairs)
+        if self.kind == "an open document":
+            # a note grows by its text: a line already there (the window
+            # wider or narrower, the lines re-wrapped) is the same line, and
+            # the longer reading of it stands
+            self.lines = stitch(self.lines, pairs, key=lambda p: p[0], same=same_doc_line,
+                                merge=lambda o, n: n if len(norm(n[0])) > len(norm(o[0])) else o)
+            kept = []
+            for i, (t, h) in enumerate(self.lines):
+                n = plain_line(t)
+                if len(n) >= 12 and any(j != i and len(plain_line(u)) > len(n) and n in plain_line(u) for j, (u, _) in enumerate(self.lines)):
+                    continue          # held whole by a longer line
+                kept.append((t, h))
+            self.lines = kept
+        else:
+            self.lines = stitch(self.lines, pairs, key=lambda p: p[0], same=same_text)
+        if self.kind == "a file tree":
+            # a folder with rows under it deeper than itself is open
+            fixed = []
+            for i, (t, h) in enumerate(self.lines):
+                after = [x for x, _ in self.lines[i + 1:i + 3]]
+                if "˃" in t and len(after) == 2 and all(tree_depth(x) > tree_depth(t) for x in after):
+                    t2 = t.replace("˃", "˅", 1)
+                    h = h.replace(esc(t), esc(t2)) if esc(t) in h else esc(t2)
+                    t = t2
+                fixed.append((t, h))
+            self.lines = fixed
 
     def identity(self):
         """What folder the list shows: its rows' names."""
