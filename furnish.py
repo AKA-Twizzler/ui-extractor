@@ -238,7 +238,13 @@ def obsidian(st):
                 rest = rest[1:].lstrip()
             else:
                 rest = rest.lstrip()
-            lines.append(guides + chev + esc(rest))
+            body = esc(rest)
+            if "<i>" in h:
+                body = f"<i>{body}</i>"      # a name no engine read cleanly
+            m = re.search(r'<span class="(sn-[a-z]+)"', h)
+            if m:
+                body = f'<span class="{m.group(1)}" style="font-weight:600">{body}</span>'
+            lines.append(guides + chev + body)
         count = getattr(st, "explorer_count", "")
         explorer = ('<div class="sn-explorer"><div class="sn-explorer-head"><span class="sn-g">✎</span><span class="sn-g">▱+</span>'
                     '<span class="sn-g">⇅</span><span class="sn-g">⊟</span><span class="sn-g">⌃</span></div>'

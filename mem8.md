@@ -100,7 +100,7 @@ Earlier states of this same window: 00:00:00 vault-demo · 00:00:00 jaredrhodeni
 <span class="sn-guide">│</span>   project_company_b_local_ad_
 <span class="sn-guide">│</span>   project_company_b_seasonal.
 <span class="sn-guide">│</span>   project_email_broadcast_ma..
-<span class="sn-guide">│</span>   project \hembership_subscrip...
+<span class="sn-guide">│</span>   <i>project \hembership_subscrip...</i>
 <span class="sn-guide">│</span>   project_pricing_page_revamp
 <span class="sn-guide">│</span>   project_quiz_lead_magnet
 <span class="sn-guide">│</span>   project_webapp_member_tip.....
