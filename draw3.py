@@ -1063,13 +1063,6 @@ def mend_doc(model, st, clean):
         m = re.match(r"^(\s*[*•\-]\s*)([0-9@OoQ]{2})(?=\s+\S)", t)
         if m and not m.group(2).isdigit():
             t = t[:m.start(2)] + re.sub(r"[@OoQ]", "0", m.group(2)) + t[m.end(2):]
-        m = re.match(r"^(\s*[*•\-]\s*)(\d\d)\s+(\w+)", t)
-        if m:
-            good = nums.get(m.group(3).lower(), set())
-            if good and m.group(2) not in good:
-                pick = [g for g in good if sum(1 for x, y in zip(g, m.group(2)) if x != y) <= 1]
-                if len(pick) == 1:
-                    t = t[:m.start(2)] + pick[0] + t[m.end(2):]
         if "…</div>" in h:
             while True:
                 t2 = re.sub(r"\s*[:;'\"‘’|_.\]})]+$", "", t)
