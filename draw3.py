@@ -1562,6 +1562,8 @@ def harmonise(states):
                                 head = fp[:len(f)]
                                 return sum(1 for x, y in zip(head, f) if x != y) <= (0 if len(f) < 6 else 1)
                             starts = [p for p in canon.values() if opens(p)]
+                            exact = [p for p in starts if flat(p).startswith(f)]
+                            starts = exact or starts      # a clean opening beats a slipped one
                             if starts:
                                 longest = max(starts, key=lambda p: len(flat(p)))
                                 if all(crumb_same(p, longest) for p in starts):
