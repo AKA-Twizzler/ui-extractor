@@ -286,6 +286,14 @@ def _build_table(items):
         return out, icon, band
     head_cells = by_column(header)[0] if header else [""] * len(cols)
     body_rows = [by_column(r) for r in body]
+    # the reader takes the first file for the header when the real headings
+    # sit above its block: a header with none of Finder's words and a
+    # file-like first cell is a row
+    if header and not any(split_heads(h) for h in head_cells if h) and head_cells[0] and (
+            "." in head_cells[0] or re.search(r"\d{4}", " ".join(head_cells))):
+        body_rows.insert(0, by_column(header))
+        head_cells = [""] * len(cols)
+        header = None
     # the list goes on above the reader's block: leftover rows whose words
     # sit in the columns are rows; the row of headings is the header and
     # ends the climb; what is left above stays above
