@@ -1372,18 +1372,30 @@ def harmonise(states):
         if canon_fold.get(g) is None or rank_of(c) > rank_of(canon_fold[g]):
             canon_fold[g] = c
 
+    # a name read with its dot, space or capital intact anywhere upgrades
+    # the barer readings of the same letters ("VaultIndex.md" takes the
+    # form "Vault Index" + ".md" once both were seen)
+    for f in list(canon):
+        if f.endswith("md") and len(f) >= 10:
+            base = canon.get(f[:-2])
+            if base and len(f[:-2]) >= 8 and not base.lower().endswith(".md"):
+                cand = base + ".md"
+                if rank_of(cand) > rank_of(canon[f]):
+                    canon[f] = cand
+                g2 = fold(f)
+                if rank_of(cand) > rank_of(canon_fold.get(g2, "")):
+                    canon_fold[g2] = cand
+
     def exact_fix(name):
         f = flat(name)
-        c = canon.get(f)
-        if c and c != name:
-            return c
-        g = canon_fold.get(fold(f))
-        if g and g != name and rank_of(g) > rank_of(name):
-            return g
-        if c is None and f.endswith("md") and len(f) >= 10:
+        cands = [c for c in (canon.get(f), canon_fold.get(fold(f))) if c]
+        if not cands and f.endswith("md") and len(f) >= 10:
             base = canon.get(f[:-2])
             if base and len(flat(base)) >= 8 and not base.lower().endswith(".md"):
-                return base + ".md"
+                cands.append(base + ".md")
+        best = max(cands, key=rank_of, default=None)
+        if best and best != name and rank_of(best) >= rank_of(name):
+            return best
         return None
 
     def better(name, fuzzy=False):
@@ -1455,8 +1467,9 @@ def harmonise(states):
                     n = r["cells"][0]
                     orig = r.pop("_orig", n)
                     doubtful = (r["italic"] and r["italic"][0]) or "..." in n
+                    garbage = " " in n and "_" not in n and "..." not in n
                     b = better(n, fuzzy=doubtful)
-                    if not b and doubtful and not any(c for c in r["cells"][1:] if tidy_date(c) or tidy_size(c)):
+                    if not b and (doubtful or garbage) and not any(c for c in r["cells"][1:] if tidy_date(c) or tidy_size(c)):
                         b = rescue(n)
                     if b and b != n:
                         r["cells"][0] = b
