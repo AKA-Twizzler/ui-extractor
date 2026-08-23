@@ -147,8 +147,11 @@ def items_of(pane):
                 put(r["text"], [b[0] + ox, b[1] + oy, b[2] + ox, b[3] + oy], ok=r.get("confirmed", False), role="left")
     # a selection band the reader measured but no row carried: an item whose
     # middle sits inside a row-height band on this pane is on that band
+    look_bg = ((d.get("style") or {}).get("look") or {}).get("background") or [0, 0, 0]
+    bg_lum = sum(look_bg) / max(1, len(look_bg))
     bands = [b for b in ((d.get("style") or {}).get("bands") or [])
-             if b.get("hue") and b["hue"] not in ("black", "white")]
+             if b.get("hue") and b["hue"] not in ("black", "white")
+             and abs(sum(b.get("colour") or [0]) / max(1, len(b.get("colour") or [0])) - bg_lum) >= 20]
     for it in out:
         if it.get("band") or it["role"] == "head":
             continue
