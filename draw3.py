@@ -1413,6 +1413,8 @@ def harmonise(states):
             return None
         for c in clean:
             cf = flat(c)
+            if cf + "md" == f or f + "md" == cf:
+                continue              # the same name, one read with its .md: not a fuzzy fix
             if fuzzy and len(cf) >= 6 and difflib.SequenceMatcher(None, cf, f, autojunk=False).ratio() >= 0.85:
                 return canon.get(cf, c)
             if "..." in name:
