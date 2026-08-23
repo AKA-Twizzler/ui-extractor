@@ -276,14 +276,18 @@ class Table:
                 self.top.append(t)
                 self.top_items.append((t, (it["box"][0] + it["box"][2]) / 2, it["ok"], it.get("above", 99)))
         rows_below = draw2.reading_order([it for it in bottom if it["ok"]], lambda it: it["box"])
+        known = {norm(r["cells"][0]) for r in self.rows if r["cells"] and r["cells"][0]}
+        known |= {norm(t) for t, _, _, _ in self.top_items if t}
         best = []
         for row in rows_below:
             # the path is the leading run of crumbs on a row; words after
-            # it are the window behind showing through
+            # it are the window behind showing through. A crumb that is the
+            # list's own folder or a row's name continues the run whatever
+            # its shape (the path bar names what the window shows).
             run = []
             for it in row:
                 c = it["text"].rstrip(">").strip()
-                if draw2.crumb_like(it["text"]) and not (run and norm(c) == norm(run[0])):
+                if (draw2.crumb_like(it["text"]) or norm(c) in known) and not (run and norm(c) == norm(run[0])):
                     run.append(c)
                 else:
                     break
