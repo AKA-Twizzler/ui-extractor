@@ -390,6 +390,8 @@ def _build_table(items, spill=None):
     rest = []
     last_y = y_hi
     below_rows = [sorted(r, key=lambda it: it["box"][0]) for r in table_rows(sorted(bottom, key=lambda it: it["box"][1]), rh)]
+    below_rows = [[it for it in r if it["box"][0] <= x_hi + 3 * rh] for r in below_rows]
+    below_rows = [r for r in below_rows if r]     # another window's words, right of this one
     last_wide = max((i for i, r in enumerate(below_rows) if len(r) >= 2), default=-1)
     for bi, r in enumerate(below_rows):
         ry0 = min(it["box"][1] for it in r)
