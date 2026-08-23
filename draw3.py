@@ -1499,6 +1499,10 @@ def harmonise(states):
                             st.fine.append(f"{name} read as {b} in the list")
                         t2 = lead + b
                         fixed.append((t2, h.replace(esc(name), esc(b)) if esc(name) in h else esc(t2)))
+                    elif re.search(r"[\\|{}<>@]", name) and "<i>" not in h:
+                        st.fine.append(f"{name} was not read cleanly")
+                        fixed.append((t, h.replace(esc(name), "<i>" + esc(name) + "</i>")
+                                      if esc(name) in h else esc(lead) + "<i>" + esc(name) + "</i>"))
                     else:
                         fixed.append((t, h))
                 q["model"].lines = fixed
