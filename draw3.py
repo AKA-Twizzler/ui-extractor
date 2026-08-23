@@ -1073,6 +1073,11 @@ def harmonise(states):
         if st.title and len(st.title) >= 3 and st.title not in clean:
             clean.append(st.title)
         for q in st.parts:
+            if q["fam"] == "tree":
+                for t, _ in q["model"].lines:
+                    n = t.lstrip("│ ˃˅")
+                    if len(n) >= 6 and "..." not in n and "…" not in n and n not in clean and " " not in n[:1]:
+                        clean.append(n)
             if q["fam"] != "table":
                 continue
             for c in q["model"].path:
@@ -1083,22 +1088,48 @@ def harmonise(states):
                     n = r["cells"][0]
                     if len(n) >= 3 and "..." not in n and n not in clean:
                         clean.append(n)
-    def better(name):
+
+    def better(name, fuzzy=False):
+        f = flat(name)
+        if len(f) < 4:
+            return None
+        exact = []
+        for c in clean:
+            cf = flat(c)
+            if cf == f and c != name:
+                exact.append(c)
+            elif cf + "md" == f and not c.lower().endswith(".md"):
+                exact.append(c + ".md")
+        if exact:
+            return max(exact, key=len)      # the fullest spelling of the same name
         if name in clean:
             return None
-        flat = re.sub(r"[^a-z0-9]", "", name.lower())
-        if len(flat) < 4:
-            return None
         for c in clean:
-            cf = re.sub(r"[^a-z0-9]", "", c.lower())
-            if cf == flat or (len(cf) >= 6 and difflib.SequenceMatcher(None, cf, flat, autojunk=False).ratio() >= 0.85):
+            cf = flat(c)
+            if fuzzy and len(cf) >= 6 and difflib.SequenceMatcher(None, cf, f, autojunk=False).ratio() >= 0.85:
                 return c
             if "..." in name:
                 a, _, b = name.partition("...")
-                af, bf = re.sub(r"[^a-z0-9]", "", a.lower()), re.sub(r"[^a-z0-9]", "", b.lower())
+                af, bf = flat(a), flat(b)
                 if af and bf and cf.startswith(af) and cf.endswith(bf) and len(af) + len(bf) >= 8:
                     return c
         return None
+
+    def rescue(name):
+        """A name every engine mangled: the one pool name it still half
+        resembles, when no other comes close."""
+        f = re.sub(r"(md|m d)$", "", flat(name))
+        if len(f) < 8:
+            return None
+        scored = sorted(((difflib.SequenceMatcher(None, re.sub(r"md$", "", flat(c)), f, autojunk=False).ratio(), c)
+                         for c in clean if len(flat(c)) >= 8), reverse=True)
+        if scored and scored[0][0] >= 0.5 and (len(scored) == 1 or scored[0][0] - scored[1][0] >= 0.08):
+            c = scored[0][1]
+            if re.search(r"(\.md|\bmd)$", name.strip()) and not c.lower().endswith(".md"):
+                c += ".md"
+            return c
+        return None
+
     for st in states:
         for q in st.parts:
             if q["fam"] == "tree":
@@ -1106,7 +1137,7 @@ def harmonise(states):
                 for t, h in q["model"].lines:
                     lead = t[:len(t) - len(t.lstrip("│ ˃˅"))]
                     name = t[len(lead):]
-                    b = better(name)
+                    b = better(name, fuzzy=True)
                     if b:
                         b = re.sub(r"\.md$", "", b)      # the tree shows names without .md
                     if b and b != name:
@@ -1117,21 +1148,89 @@ def harmonise(states):
                         fixed.append((t, h))
                 q["model"].lines = fixed
             elif q["fam"] == "table":
+                table = q["model"]
                 fixed_side = []
-                for w in q["model"].side:
+                for w in table.side:
                     full = next((c for c in clean if c != w and len(w) >= 5 and c.endswith(w)), None)
                     fixed_side.append(full or w)
-                q["model"].side = fixed_side
-                for r in q["model"].rows:
+                table.side = fixed_side
+                dotted = sum(1 for r in table.rows if r["cells"] and r["cells"][0].startswith("."))
+                named = sum(1 for r in table.rows if r["cells"] and r["cells"][0])
+                lost_dots = []
+                for r in table.rows:
                     if not r["cells"] or not r["cells"][0]:
                         continue
                     n = r["cells"][0]
-                    if (r["italic"] and r["italic"][0]) or "..." in n:
-                        b = better(n)
-                        if b and b != n:
-                            st.fine.append(f"{n} read as {b} elsewhere")
-                            r["cells"][0] = b
-                            r["italic"][0] = False
+                    doubtful = (r["italic"] and r["italic"][0]) or "..." in n
+                    b = better(n, fuzzy=doubtful)
+                    if not b and doubtful and not any(c for c in r["cells"][1:] if tidy_date(c) or tidy_size(c)):
+                        b = rescue(n)
+                    if b and b != n:
+                        st.fine.append(f"{n} read as {b} elsewhere")
+                        r["cells"][0] = b
+                        r["italic"][0] = False
+                        n = b
+                    if dotted * 3 >= named * 2 and not n.startswith("."):
+                        lost_dots.append(n)
+                        r["cells"][0] = "." + n
+                if lost_dots:
+                    st.fine.append("read with the leading dot lost: " + ", ".join(lost_dots))
+                # the path bar's crumbs completed from the same pool (Finder
+                # cuts long crumbs short; the folder's real name stands)
+                pool = clean + [w for w in draw2.SIDEBAR_WORDS if len(w) >= 5]
+                for path in [table.path] + table.paths:
+                    for i, c in enumerate(path):
+                        f = flat(c)
+                        b = next((p for p in pool if flat(p) == f and p != c), None)
+                        if not b and len(f) >= 4:
+                            starts = [p for p in pool if flat(p).startswith(f) and flat(p) != f]
+                            if len({flat(p) for p in starts}) == 1:
+                                b = starts[0]
+                        if b:
+                            path[i] = b
+                # a date cell no engine read whole, whose digits are a clean
+                # date's digits, is that date; a kind cell read twice over
+                # keeps one telling of itself
+                di = next((i for i, h in enumerate(table.header) if h == "Date Modified"), None)
+                ki = next((i for i, h in enumerate(table.header) if h == "Kind"), None)
+                if di is not None:
+                    pool_dates = {re.sub(r"\D", "", c): c for r in table.rows
+                                  for c in [r["cells"][di] if di < len(r["cells"]) else ""] if c and tidy_date(c) is None or c and DATE_RX.match(c)}
+                    pool_dates = {}
+                    for r in table.rows:
+                        if di < len(r["cells"]) and r["cells"][di] and not (r["italic"][di] if di < len(r["italic"]) else False):
+                            pool_dates.setdefault(re.sub(r"\D", "", r["cells"][di]), r["cells"][di])
+                    for r in table.rows:
+                        if di < len(r["cells"]) and r["cells"][di] and tidy_date(r["cells"][di]) is None and DATE_RX.match(r["cells"][di]) is None:
+                            hit = pool_dates.get(re.sub(r"\D", "", r["cells"][di]))
+                            if hit and hit != r["cells"][di]:
+                                st.fine.append(f"{r['cells'][di]} read as {hit} elsewhere")
+                                r["cells"][di] = hit
+                                if di < len(r["italic"]):
+                                    r["italic"][di] = False
+                if ki is not None:
+                    kinds = {}
+                    for r in table.rows:
+                        if ki < len(r["cells"]) and r["cells"][ki]:
+                            kinds[r["cells"][ki]] = kinds.get(r["cells"][ki], 0) + 1
+                    dominant = max(kinds, key=kinds.get) if kinds else ""
+                    kindish = re.compile(r"(Folder|Document|file|File|JSON|Application|Image|Alias)")
+                    for r in table.rows:
+                        if ki >= len(r["cells"]) or not r["cells"][ki] or kindish.search(r["cells"][ki]):
+                            continue
+                        c = r["cells"][ki]
+                        half = c[:len(c) // 2].strip()
+                        rest2 = c[len(c) // 2:].strip()
+                        if half and difflib.SequenceMatcher(None, flat(half), flat(rest2), autojunk=False).ratio() >= 0.6:
+                            c = half              # the two engines' readings run together
+                        if dominant and kinds.get(dominant, 0) >= 3 and \
+                                difflib.SequenceMatcher(None, flat(c), flat(dominant), autojunk=False).ratio() >= 0.5:
+                            st.fine.append(f"{r['cells'][ki]} read as {dominant} elsewhere")
+                            r["cells"][ki] = dominant
+                            if ki < len(r["italic"]):
+                                r["italic"][ki] = False
+            elif q["fam"] == "doc":
+                mend_doc(q["model"], st, clean)
 
 
 def desktop(moments):
