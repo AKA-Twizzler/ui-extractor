@@ -568,6 +568,11 @@ def doc_pairs(pane):
         if h is None or not s:
             continue
         text = re.split(r"\s+<- ", raw.rstrip())[0].strip()
+        key = norm(text)[:36]
+        if big and h.startswith("<div>") and len(key) >= 6:
+            scale = next((v for k, v in big.items() if k.startswith(key[:24]) or key.startswith(k[:24])), None)
+            if scale:
+                h = f'<div class="{"sn-h1" if scale >= 1.45 else "sn-h2"}">' + h[len("<div>"):]
         out.append((text, h))
         if "one engine" in tail:
             doubt.add(text)
