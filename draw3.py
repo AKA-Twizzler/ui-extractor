@@ -477,7 +477,15 @@ class State:
             return False
         ra, rb = self.tree(), other.tree()
         if ra and rb:
-            return difflib.SequenceMatcher(None, ra.identity(), rb.identity(), autojunk=False).ratio() >= 0.8
+            # the same tree, scrolled: rows in common, or one's end at the
+            # other's start
+            a = [norm(t) for t, _ in ra.lines if norm(t)]
+            b = [norm(t) for t, _ in rb.lines if norm(t)]
+            if not a or not b:
+                return False
+            if len(set(a) & set(b)) / min(len(a), len(b)) >= 0.3:
+                return True
+            return any(x == b[0] for x in a[-3:]) or any(x == a[0] for x in b[-3:])
         if ra or rb:
             return False
         wa, wb = norm(" ".join(self.words())), norm(" ".join(other.words()))
