@@ -217,6 +217,14 @@ def doc_pairs(pane):
 
 # ------------------------------------------------------------- states
 
+GENERIC = {"macintoshhd", "users", "documents", "jaredr", "jaredrhodenizer", "jaredrhodenize"}
+
+
+def folder_marks(table):
+    """The crumbs that name the folder, the generic ones left out."""
+    return {norm(c) for c in table.path if norm(c) not in GENERIC and len(norm(c)) >= 3}
+
+
 class State:
     def __init__(self, group, ts):
         self.name = group["name"]
@@ -280,12 +288,13 @@ class State:
         if m["ts"] not in self.times:
             self.times.append(m["ts"])
         if not self.title and self.table:
-            # the folder's name: the title-bar word the path ends in, else
-            # the longest title-bar word, else the path's last crumb
+            # the folder's name: the path's last crumb, completed by the
+            # title-bar word it begins (a crumb is often cut: "jaredr")
             end = self.table.path[-1] if self.table.path else ""
-            tops = [t for t in self.table.top if not re.fullmatch(r"[0O]+", t)]
-            hit = next((t for t in tops if end and (norm(t).startswith(norm(end)) or norm(end).startswith(norm(t)))), None)
-            self.title = hit or (max(tops, key=len) if tops else end) or None
+            if end and norm(end) not in GENERIC:
+                tops = [t for t in self.table.top if not re.fullmatch(r"[0O]+", t)]
+                hit = next((t for t in tops if norm(t).startswith(norm(end)) and len(t) > len(end)), None)
+                self.title = hit or end
         self.key = self.identity()
 
     def identity(self):
@@ -314,8 +323,11 @@ class State:
                 return True
             # scrolled: the new list's first rows are the old list's last rows
             an, bn = self.table.names(), other.table.names()
-            edge = any(x == bn[0] for x in an[-3:]) or any(x == an[0] for x in bn[-3:])
-            return edge
+            if any(x == bn[0] for x in an[-3:]) or any(x == an[0] for x in bn[-3:]):
+                return True
+            # scrolled past any overlap: the path names the same folder
+            fa, fb = folder_marks(self.table), folder_marks(other.table)
+            return bool(fa and fb and fa & fb)
         if self.doc and other.doc:
             return self.doc.identity() == other.doc.identity() or difflib.SequenceMatcher(
                 None, self.doc.identity(), other.doc.identity(), autojunk=False).ratio() >= 0.8

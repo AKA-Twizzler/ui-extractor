@@ -425,7 +425,9 @@ def name_of(entry, panes):
     if not app:
         for p in panes:
             if p["kind"] == "a list of columns":
-                heads = {h for b in (p.get("data") or {}).get("blocks") or [] for h in (b.get("header") or [])}
+                d = p.get("data") or {}
+                heads = {h for b in d.get("blocks") or [] for h in (b.get("header") or [])}
+                heads |= {r["text"] for r in d.get("remainder") or [] if r.get("where") in ("above", "beside")}
                 if len(heads & FINDER_HEADS) >= 2:
                     app = "Finder"
     return (app[0].upper() + app[1:]) if app else None
