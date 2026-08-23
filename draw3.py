@@ -784,6 +784,11 @@ def desktop(moments):
             strip = [it for it in draw2.items_of(p) if it["ok"] and it["box"][1] <= 0.015 * H and it["box"][3] <= 0.035 * H]
             words.extend(strip)
         menubar = []
+        if words:
+            # the bar is the topmost row of words alone; a tab strip below it is a window's
+            top_it = min(words, key=lambda it: it["box"][1])
+            cy0, h0 = (top_it["box"][1] + top_it["box"][3]) / 2, max(1, top_it["box"][3] - top_it["box"][1])
+            words = [it for it in words if abs((it["box"][1] + it["box"][3]) / 2 - cy0) <= 0.6 * h0]
         for it in sorted(words, key=lambda it: it["box"][0]):
             w = it["text"]
             if not old.CLOCK.match(w) and not any(same_text(w, x) for x in menubar) and len(w) <= 24 and " " not in w.strip():
