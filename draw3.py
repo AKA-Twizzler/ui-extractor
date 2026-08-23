@@ -333,6 +333,46 @@ class Table:
             self.path = best
         if best and best not in self.paths:
             self.paths.append(best)
+        self.tidy()
+
+    def tidy(self):
+        """Cells put back the way Finder drew them: dates in Finder's date
+        shape (a date that parses is its own confirmation), a size leading a
+        Kind cell split out into the Size column -- the column added when the
+        reader missed its heading."""
+        hdr = self.header
+        di = next((i for i, h in enumerate(hdr) if h == "Date Modified"), None)
+        si = next((i for i, h in enumerate(hdr) if h == "Size"), None)
+        ki = next((i for i, h in enumerate(hdr) if h == "Kind"), None)
+        if si is None and ki is not None and any(
+                ki < len(r["cells"]) and (lambda m: m and m[1])(tidy_size(r["cells"][ki])) for r in self.rows):
+            si = ki
+            hdr.insert(si, "Size")
+            for r in self.rows:
+                r["cells"].insert(si, "")
+                r["italic"].insert(si, False)
+            ki += 1
+        for r in self.rows:
+            cs, its = r["cells"], r["italic"]
+            if di is not None and di < len(cs) and cs[di]:
+                d = tidy_date(cs[di])
+                if d:
+                    cs[di], its[di] = d, False
+            if ki is not None and ki < len(cs) and cs[ki]:
+                m = tidy_size(cs[ki])
+                if m:
+                    size, rest = m
+                    if si is not None and si < len(cs) and not cs[si]:
+                        cs[si], cs[ki] = size, rest
+                        its[ki] = its[ki] and bool(rest)
+            if si is not None and si < len(cs) and cs[si]:
+                m = tidy_size(cs[si])
+                if m:
+                    size, rest = m
+                    cs[si] = size
+                    its[si] = False
+                    if rest and ki is not None and ki < len(cs) and not cs[ki]:
+                        cs[ki] = rest
 
     def names(self):
         return [norm(r["cells"][0]) for r in self.rows if r["cells"] and r["cells"][0]]
