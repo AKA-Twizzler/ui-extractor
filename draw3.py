@@ -329,7 +329,7 @@ class Table:
             if len(run) >= 2 and len(run) > len(best):
                 best = run
             for it in row[len(run):]:
-                if it["text"] not in self.bottom:
+                if it["ok"] and it["text"] not in self.bottom:
                     self.bottom.append(it["text"])
         if len(best) >= len(self.path):
             self.path = best
@@ -1215,10 +1215,11 @@ def harmonise(states):
                         t = lead + b
                     fixed.append((t, h))
                 q["model"].lines = fixed
-    clean = []
+    clean, strong = [], set()
     for st in states:
         if st.title and len(st.title) >= 3 and st.title not in clean:
             clean.append(st.title)
+            strong.add(st.title)
         for q in st.parts:
             if q["fam"] == "tree":
                 for t, _ in q["model"].lines:
@@ -1235,6 +1236,7 @@ def harmonise(states):
                     n = r["cells"][0]
                     if len(n) >= 3 and "..." not in n and n not in clean:
                         clean.append(n)
+                        strong.add(n)
 
     # one canonical spelling per name: among every reading that flattens
     # alike, the one with the most of its letters intact (capitals, dots,
@@ -1265,7 +1267,7 @@ def harmonise(states):
         b = exact_fix(name)
         if b:
             return b
-        if name in clean:
+        if name in strong:
             return None
         for c in clean:
             cf = flat(c)
