@@ -693,6 +693,17 @@ def name_of(entry, panes):
     app = old.app_name(entry, panes)
     if any(p["kind"] == "a file tree" for p in panes):
         app = "Obsidian"        # a file tree is the vault's; a browser shows none
+    elif app in (None, "the browser"):
+        # a note with a properties panel is Obsidian's, whatever tab strip
+        # shows behind it
+        for p in panes:
+            if p["kind"] != "an open document":
+                continue
+            d = p.get("data") or {}
+            words = " ".join(r.get("text", "") for r in d.get("remainder") or []) + " " + old.pane_words(p)
+            if d.get("properties") or "Properties" in words or "Add property" in words:
+                app = "Obsidian"
+                break
     if not app:
         for p in panes:
             if p["kind"] == "a list of columns":
