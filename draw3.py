@@ -427,6 +427,13 @@ class Lines:
             # a note grows by its text: a line already there (the window
             # wider or narrower, the lines re-wrapped) is the same line, and
             # the longer reading of it stands
+            def wordy(s):
+                toks = re.findall(r"[A-Za-z][A-Za-z'’]*", s)
+                if not toks:
+                    return 0.0
+                good = sum(1 for t in toks if re.search(r"[aeiouyAEIOUY]", t) and (len(t) <= 14 or "_" in s))
+                return good / len(toks)
+
             def merge(o, n):
                 lo, ln = len(norm(o[0])), len(norm(n[0]))
                 od, nd = o[0] in self.doubt, n[0] in self.doubt
@@ -435,12 +442,26 @@ class Lines:
                 po, pn = plain_line(o[0]), plain_line(n[0])
                 if po != pn and (pn.startswith(po) or po.startswith(pn)) and abs(lo - ln) <= 5:
                     return o if lo < ln else n     # a scrap on the end of the same line: the line without it
+                wo, wn = wordy(o[0]), wordy(n[0])
+                if abs(wo - wn) > 0.25:
+                    return o if wo > wn else n     # the reading made of words stands over the squashed one
                 return n if (ln, n[0].count("*")) > (lo, o[0].count("*")) else o
             self.lines = stitch(self.lines, pairs, key=lambda p: p[0], same=same_doc_line, merge=merge)
+            plains = [plain_line(t) for t, _ in self.lines]
+            joined = set()
+            for i, p in enumerate(plains):
+                # a line that is two other lines run together (one reading
+                # took the wrapped pair as one) gives way to the pair
+                inside = [j for j, q in enumerate(plains) if j != i and len(q) >= 10 and q in p and len(q) < len(p)]
+                if len(inside) >= 2 and sum(len(plains[j]) for j in inside[:3]) >= 0.7 * len(p):
+                    joined.add(i)
             kept = []
             for i, (t, h) in enumerate(self.lines):
+                if i in joined:
+                    continue
                 n = plain_line(t)
-                if len(n) >= 12 and any(j != i and len(plain_line(u)) > len(n) and n in plain_line(u) for j, (u, _) in enumerate(self.lines)):
+                if len(n) >= 12 and any(j != i and j not in joined and len(plain_line(u)) > len(n) and n in plain_line(u)
+                                        for j, (u, _) in enumerate(self.lines)):
                     continue          # held whole by a longer line
                 kept.append((t, h))
             self.lines = kept
