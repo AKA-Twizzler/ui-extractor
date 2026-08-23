@@ -329,43 +329,6 @@ def tree_depth(text):
     return len(text) - len(text.lstrip("│ "))
 
 
-    def identity(self):
-        """What folder the list shows: its rows' names."""
-        return " ".join(self.names())
-
-    def html(self):
-        n = max([len(self.header)] + [len(r["cells"]) for r in self.rows] + [0])
-        out = ["<table>"]
-        if self.header and any(self.header):
-            out.append("<tr class=\"sn-head\">" + "".join(f"<td>{esc(h)}</td>" for h in list(self.header) + [""] * (n - len(self.header))) + "</tr>")
-        for r in self.rows:
-            cells = list(r["cells"]) + [""] * (n - len(r["cells"]))
-            it = list(r["italic"]) + [False] * (n - len(r["italic"]))
-            cls = ' class="sn-selected"' if r.get("band") else ""
-            tds = "".join(f"<td>{'<i>' + esc(c) + '</i>' if it[i] and c else esc(c)}</td>" for i, c in enumerate(cells))
-            out.append(f"<tr{cls}>{tds}</tr>")
-        out.append("</table>")
-        return "".join(out)
-
-
-def doc_html(model):
-    """The note as drawn: its title line large when the first line is short
-    and sits above the properties; scraps without a letter left out."""
-    lines = [(t, h) for t, h in model.lines if re.search(r"[A-Za-z0-9]", t)]
-    out = []
-    for i, (t, h) in enumerate(lines):
-        plain = t.strip().strip("#*> ").strip()
-        if i == 0 and len(plain) <= 40 and not t.startswith("---") and "<div class=\"sn-h" not in h:
-            out.append(f'<div class="sn-title">{esc(plain)}</div>')
-            continue
-        out.append(h)
-    return "".join(out)
-
-
-def tree_depth(text):
-    return len(text) - len(text.lstrip("│ "))
-
-
 class Lines:
     """A tree or a document, as lines that grow when the pane scrolls."""
     def __init__(self, kind):
