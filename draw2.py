@@ -95,11 +95,17 @@ def items_of(pane):
         out.append(it)
 
     if kind == "text, not a tree":
-        for r in d.get("readings") or []:
-            b = r.get("box")
-            if not b:
-                continue
-            put(r["text"], [b[0] / SCALE + ox, b[1] / SCALE + oy, b[2] / SCALE + ox, b[3] / SCALE + oy],
+        # a narrow pane was read enlarged and its boxes came back enlarged;
+        # a wide one was read as it stood. A box reaching past the pane's
+        # own width or height says which, so the boxes land in frame pixels
+        # either way
+        reads = [r for r in (d.get("readings") or []) if r.get("box")]
+        pw, ph = pane["box"][2] - ox, pane["box"][3] - oy
+        big = any(r["box"][2] > 1.2 * pw or r["box"][3] > 1.2 * ph for r in reads)
+        s = SCALE if big else 1
+        for r in reads:
+            b = r["box"]
+            put(r["text"], [b[0] / s + ox, b[1] / s + oy, b[2] / s + ox, b[3] / s + oy],
                 ok=r.get("confirmed", True), role="loose", hue=r.get("hue"), icon=r.get("icon"),
                 large=r.get("large"))
     elif kind == "a list of columns":
