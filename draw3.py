@@ -1547,8 +1547,11 @@ def harmonise(states):
                     st.fine.append("read with the leading dot lost: " + ", ".join(lost_dots))
                 # the path bar's crumbs completed from the same pool (Finder
                 # cuts long crumbs short; the folder's real name stands)
+                sibling_names = [p for p in canon.values()]
                 for path in [table.path] + table.paths:
                     for i, c in enumerate(path):
+                        c = mend_numbered(c, sibling_names)   # o3 is a nought
+                        path[i] = c
                         f = flat(c)
                         b = exact_fix(c)
                         if not b and len(f) >= 4 and f not in strong_flats and canon.get(f, c) == c:
@@ -1560,7 +1563,7 @@ def harmonise(states):
                                 if len(fp) <= len(f) or len(fp) - len(f) > 16:
                                     return False
                                 head = fp[:len(f)]
-                                return sum(1 for x, y in zip(head, f) if x != y) <= (0 if len(f) < 6 else 1)
+                                return sum(1 for x, y in zip(head, f) if x != y) <= (0 if len(f) < 5 else 1)
                             starts = [p for p in canon.values() if opens(p)]
                             exact = [p for p in starts if flat(p).startswith(f)]
                             starts = exact or starts      # a clean opening beats a slipped one
