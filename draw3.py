@@ -150,6 +150,10 @@ class Table:
         if head and not head[0] and sum(1 for h in head if h in FINDER_WORDS) >= 2 and "Name" not in head:
             head[0] = "Name"
         for i, h in enumerate(head):
+            parts_ = draw2.split_heads(h)
+            if len(parts_) >= 2:
+                head[i] = parts_[0]     # two headings read as one: the column is the first's
+        for i, h in enumerate(head):
             if h and i < len(self.header) and not self.header[i] and not any(same_text(h, g) for g in self.header if g):
                 self.header[i] = h
         # a later reading's columns map onto the first by heading name; a
@@ -165,8 +169,15 @@ class Table:
                 if j is None and not h and i < len(self.header) and not self.header[i]:
                     j = i
                 if j is None and h:
-                    self.header.append(h)
-                    j = len(self.header) - 1
+                    # in at its own place: after the column the previous heading maps to
+                    at = (mapping[-1] + 1) if mapping and mapping[-1] is not None else len(self.header)
+                    at = min(at, len(self.header))
+                    self.header.insert(at, h)
+                    for r in self.rows:
+                        r["cells"].insert(at, "")
+                        r["italic"].insert(at, False)
+                    mapping = [k + 1 if k is not None and k >= at else k for k in mapping]
+                    j = at
                 mapping.append(j if j is not None else i)
         new_rows = []
         for cells, icon, band in rows:
@@ -233,8 +244,9 @@ class Table:
             # it are the window behind showing through
             run = []
             for it in row:
-                if draw2.crumb_like(it["text"]):
-                    run.append(it["text"].rstrip(">").strip())
+                c = it["text"].rstrip(">").strip()
+                if draw2.crumb_like(it["text"]) and not (run and norm(c) == norm(run[0])):
+                    run.append(c)
                 else:
                     break
             if len(run) >= 2 and len(run) > len(best):
