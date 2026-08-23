@@ -256,6 +256,7 @@ class Table:
             if twin is None and rest and len(named) < 2:
                 kept.append(r)
         self.rows = kept
+        new_side = []
         for it in sorted(side, key=lambda it: it["box"][1]):
             t = it["text"].strip("*")
             full = next((w for w in draw2.SIDEBAR_WORDS if w != t and len(t) >= 4 and w.endswith(t)), None)
@@ -263,8 +264,9 @@ class Table:
                 t = full
             elif t.endswith((".", ",")) or t.count(" ") >= 2 or len(t) < 3 or (" " in t and t[:1].islower()):
                 continue
-            if not any(same_text(t, s) for s in self.side):
-                self.side.append(t)
+            if not any(same_text(t, s) for s in new_side):
+                new_side.append(t)
+        self.side = stitch(self.side, new_side, key=lambda w: w)
         for it in sorted(top, key=lambda it: it["box"][0]):
             t = it["text"]
             if not any(same_text(t, s) for s in self.top):

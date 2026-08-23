@@ -521,7 +521,7 @@ def table_from_items(items):
                     and not it["text"].endswith((".", ",")) and ".md" not in it["text"])
         if not in_list:
             continue
-        if all(crumb_like(it["text"]) for it in in_list) and len(in_list) >= 2 and cy > hy + 3 * rh:
+        if all(crumb_like(it["text"]) for it in in_list) and len(in_list) >= 2 and cy > hy + 3 * rh and ri >= last_listy:
             bottom.extend(in_list)
             continue
         cells = [""] * len(cols)
