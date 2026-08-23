@@ -310,7 +310,7 @@ class Table:
             if not any(same_text(t, s) for s in self.top):
                 self.top.append(t)
                 self.top_items.append((t, (it["box"][0] + it["box"][2]) / 2, it["ok"], it.get("above", 99)))
-        rows_below = draw2.reading_order([it for it in bottom if it["ok"]], lambda it: it["box"])
+        rows_below = draw2.reading_order(list(bottom), lambda it: it["box"])
         known = {norm(r["cells"][0]) for r in self.rows if r["cells"] and r["cells"][0]}
         known |= {norm(t) for t, _, _, _ in self.top_items if t}
         best = []
@@ -438,6 +438,9 @@ class Lines:
 
             def merge(o, n):
                 lo, ln = len(norm(o[0])), len(norm(n[0]))
+                ho, hn = "sn-h" in o[1], "sn-h" in n[1]
+                if ho != hn and abs(lo - ln) <= 15:
+                    return n if ho else o          # a heading one moment, plain the others: plain
                 od, nd = o[0] in self.doubt, n[0] in self.doubt
                 if od != nd and abs(lo - ln) <= 8:
                     return n if od else o          # the reading both engines backed
@@ -447,9 +450,6 @@ class Lines:
                 wo, wn = wordy(o[0]), wordy(n[0])
                 if abs(wo - wn) > 0.25:
                     return o if wo > wn else n     # the reading made of words stands over the squashed one
-                ho, hn = "sn-h" in o[1], "sn-h" in n[1]
-                if ho != hn and abs(lo - ln) <= 15:
-                    return n if ho else o          # a heading one moment, plain the others: plain
                 # a longer variant whose extra tail is another line's text
                 # swallowed two lines in one reading: the shorter stands
                 po2, pn2 = plain_line(o[0]), plain_line(n[0])
