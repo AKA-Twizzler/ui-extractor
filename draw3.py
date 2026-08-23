@@ -152,7 +152,20 @@ class Table:
         for i, h in enumerate(head):
             parts_ = draw2.split_heads(h)
             if len(parts_) >= 2:
-                head[i] = parts_[0]     # two headings read as one: the column is the first's
+                # two headings read as one: the column is the one its cells
+                # belong to, told by what the cells hold
+                col = [c for cells_, _, _ in rows if i < len(cells_) and cells_[i] for c in [cells_[i]]]
+                def share(rx):
+                    return sum(1 for c in col if re.search(rx, c)) * 2 >= max(1, len(col))
+                if col and share(r"(Folder|Document|text file|JSON|Log File|Image|Application)"):
+                    pick = "Kind"
+                elif col and share(r"(\d{4}|Today|Yesterday)"):
+                    pick = "Date Modified" if "Date Modified" in parts_ else parts_[0]
+                elif col and share(r"\d+\s?(bytes|KB|MB|GB)"):
+                    pick = "Size"
+                else:
+                    pick = parts_[0]
+                head[i] = pick if pick in parts_ else parts_[0]
         for i, h in enumerate(head):
             if h and i < len(self.header) and not self.header[i] and not any(same_text(h, g) for g in self.header if g):
                 self.header[i] = h
