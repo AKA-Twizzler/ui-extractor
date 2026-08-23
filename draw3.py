@@ -1073,6 +1073,7 @@ def mend_doc(model, st, clean):
         m = re.match(r"^(\s*[*•\-]\s*)([0-9@OoQ]{2})(?=\s+\S)", t)
         if m and not m.group(2).isdigit():
             t = t[:m.start(2)] + re.sub(r"[@OoQ]", "0", m.group(2)) + t[m.end(2):]
+        t = re.sub(r"\s+[*•\-]\s*$", "", t)
         if "…</div>" in h:
             while True:
                 t2 = re.sub(r"\s*[:;'\"‘’|_.\]})]+$", "", t)
@@ -1093,9 +1094,13 @@ def mend_doc(model, st, clean):
     for t, h in fixed:
         hit = None
         if not t.startswith("---"):
+            ftl = flat(t)
             for k in range(max(0, len(folded) - 3), len(folded)):
                 u = folded[k][0]
-                if not u.startswith("---") and same_doc_line(u, t):
+                ful = flat(u)
+                alike = same_doc_line(u, t) or (len(ftl) >= 30 and len(ful) >= 30 and ftl[:24] == ful[:24]
+                        and difflib.SequenceMatcher(None, ftl, ful, autojunk=False).ratio() >= 0.55)
+                if not u.startswith("---") and alike:
                     hit = k
                     break
         if hit is not None:
@@ -1465,7 +1470,14 @@ def harmonise(states):
                     dominant = max(kinds, key=kinds.get) if kinds else ""
                     kindish = re.compile(r"(Folder|Document|file|File|JSON|Application|Image|Alias)")
                     for r in table.rows:
-                        if ki >= len(r["cells"]) or not r["cells"][ki] or kindish.search(r["cells"][ki]):
+                        if ki >= len(r["cells"]) or not r["cells"][ki]:
+                            continue
+                        if dominant and flat(r["cells"][ki]) == flat(dominant):
+                            r["cells"][ki] = dominant
+                            if ki < len(r["italic"]):
+                                r["italic"][ki] = False
+                            continue
+                        if kindish.search(r["cells"][ki]):
                             continue
                         c = r["cells"][ki]
                         half = c[:len(c) // 2].strip()
