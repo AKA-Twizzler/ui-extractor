@@ -119,6 +119,7 @@ class Table:
         self.top_items = []     # (text, centre x) for the title rule
         self.span = None        # the list's x-span
         self.path = []
+        self.paths = []         # every path bar read, latest last
         self.bottom = []
         self.banded_names = set()
 
@@ -210,6 +211,8 @@ class Table:
                     self.bottom.append(it["text"])
         if len(best) >= len(self.path):
             self.path = best
+        if best and best not in self.paths:
+            self.paths.append(best)
 
     def names(self):
         return [norm(r["cells"][0]) for r in self.rows if r["cells"] and r["cells"][0]]
@@ -492,7 +495,8 @@ class State:
             tops = [(t, cx) for t, cx, ok, above in table.top_items
                     if ok and above <= 4 and not re.fullmatch(r"[0O]+", t) and len(t) >= 3 and t not in FINDER_WORDS]
             hit = None
-            for c in reversed(table.path):
+            crumbs = [c for path in reversed(table.paths) for c in reversed(path)]
+            for c in crumbs:
                 hit = next((t for t, _ in tops if same_text(t, c) or norm(t).startswith(norm(c))), None)
                 if hit:
                     break
@@ -819,8 +823,8 @@ def note(records_path, diary_text=None):
     parts += ["", "---", ""]
     for w in windows:
         sts = [st for st in shown if st.name == w]
-        latest = sts[-1]
-        earlier = sts[:-1]
+        latest = max(sts, key=lambda st: st.times[-1])     # the last one on screen
+        earlier = [st for st in sts if st is not latest]
         parts.append(f"## {w} - as at {span_of(latest)}" + (f", {latest.title}" if latest.title else ""))
         parts.append("")
         parts.append(latest.window_html())
