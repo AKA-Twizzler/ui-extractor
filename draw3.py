@@ -300,13 +300,20 @@ class State:
             self.times.append(m["ts"])
         table = self.main_table()
         if not self.title and table:
-            # the folder's name: the path's last crumb, completed by the
-            # title-bar word it begins (a crumb is often cut: "jaredr")
+            # the folder's name: the title-bar word that is also a crumb of
+            # the path (Finder's title is the folder shown; the path's last
+            # crumb may be the selection), else the path's last crumb
+            tops = [t for t in table.top if not re.fullmatch(r"[0O]+", t) and len(t) >= 3]
+            hit = None
+            for c in reversed(table.path):
+                hit = next((t for t in tops if same_text(t, c) or norm(t).startswith(norm(c))), None)
+                if hit:
+                    break
             end = table.path[-1] if table.path else ""
-            if end and norm(end) not in GENERIC:
-                tops = [t for t in table.top if not re.fullmatch(r"[0O]+", t)]
-                hit = next((t for t in tops if norm(t).startswith(norm(end)) and len(t) > len(end)), None)
-                self.title = hit or end
+            if hit:
+                self.title = hit
+            elif end and norm(end) not in GENERIC:
+                self.title = end
 
     # --------------------------------------------------------- identity
 
