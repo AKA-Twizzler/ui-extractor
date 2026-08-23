@@ -1023,6 +1023,68 @@ def flat(s):
     return re.sub(r"[^a-z0-9]", "", s.lower())
 
 
+def rebuild_line(h, t):
+    """A plain doc line's HTML rebuilt around mended text, its class,
+    indent and cut mark kept; None when the line is not a plain div."""
+    m = re.match(r'<div( class="[^"]*")?>((?:&nbsp;)*)', h)
+    if not m:
+        return None
+    body = esc(t.strip())
+    body = old.BOLD.sub(r"<b>\1</b>", body)
+    body = old.ITALIC.sub(r"<i>\1</i>", body)
+    return f"<div{m.group(1) or ''}>{m.group(2) or ''}{body}{'…' if '…</div>' in h else ''}</div>"
+
+
+def mend_doc(model, st, clean):
+    """A note's lines mended from the pool: numbered map entries take their
+    real numbers, scraps the camera cut loose drop away, and a line cut at
+    the pane's edge sheds the junk the cut left on its end."""
+    nums = {}
+    for c in clean:
+        m = re.match(r"^(\d\d) (\w+)", c)
+        if m:
+            nums.setdefault(m.group(2).lower(), set()).add(m.group(1))
+    fixed = []
+    for t, h in model.lines:
+        old_t = t
+        if not t.startswith("---"):
+            plain = plain_line(t)
+            if len(plain) <= 4 and len(re.findall(r"[A-Za-z]+", t)) <= 1:
+                continue                       # a scrap cut loose from its line
+            m = re.match(r"^\s*(\d+) files, (\d+) folders\s*$", t)
+            if m:
+                st.explorer_count = t.strip()  # the explorer's count, read into the note
+                continue
+        m = re.match(r"^(\s*[*•\-]\s*)([0-9@OoQ]{2})(?=\s+\S)", t)
+        if m and not m.group(2).isdigit():
+            t = t[:m.start(2)] + re.sub(r"[@OoQ]", "0", m.group(2)) + t[m.end(2):]
+        m = re.match(r"^(\s*[*•\-]\s*)(\d\d)\s+(\w+)", t)
+        if m:
+            good = nums.get(m.group(3).lower(), set())
+            if good and m.group(2) not in good:
+                pick = [g for g in good if sum(1 for x, y in zip(g, m.group(2)) if x != y) <= 1]
+                if len(pick) == 1:
+                    t = t[:m.start(2)] + pick[0] + t[m.end(2):]
+        if "…</div>" in h:
+            while True:
+                t2 = re.sub(r"\s*[:;'\"‘’|_.\]})]+$", "", t)
+                if re.search(r"[A-Za-z]{2}\s+[A-Za-z]$", t2):
+                    t2 = re.sub(r"\s+[A-Za-z]$", "", t2)
+                if t2 == t:
+                    break
+                t = t2
+        if t != old_t:
+            h2 = rebuild_line(h, t)
+            if h2 is None:
+                t = old_t
+            else:
+                if old_t.strip() != t.strip():
+                    st.fine.append(f"{old_t.strip()} read as {t.strip()}")
+                h = h2
+        fixed.append((t, h))
+    model.lines = fixed
+
+
 NUM_RX = re.compile(r"^([0OoQ][0-9OoQ])(?=[ A-Za-z])")
 
 
