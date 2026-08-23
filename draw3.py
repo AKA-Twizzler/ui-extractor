@@ -1068,46 +1068,49 @@ def mend_doc(model, st, clean):
         m = re.match(r"^(\d\d) (\w+)", c)
         if m:
             nums.setdefault(m.group(2).lower(), set()).add(m.group(1))
-    fixed = []
-    for t, h in model.lines:
-        old_t = t
-        if not t.startswith("---"):
-            plain = plain_line(t)
-            if len(plain) <= 4 and len(re.findall(r"[A-Za-z]+", t)) <= 1:
-                continue                       # a scrap cut loose from its line
-            m = re.match(r"^\s*(\d+) files, (\d+) folders\s*$", t)
-            if m:
-                st.explorer_count = t.strip()  # the explorer's count, read into the note
-                continue
-        m = re.match(r"^(\s*[*•\-]\s*)([0-9@OoQ]{2})(?=\s+\S)", t)
-        if m and not m.group(2).isdigit():
-            t = t[:m.start(2)] + re.sub(r"[@OoQ]", "0", m.group(2)) + t[m.end(2):]
-        t = re.sub(r"\s+[*•\-]\s*$", "", t)
-        t = re.sub(r"\s*[|}{\]‘’]+\s*$", "", t)
-        if "…</div>" in h:
-            while True:
-                t2 = re.sub(r"\s*[:;'\"‘’|_.\]})]+$", "", t)
-                if re.search(r"[A-Za-z]{2}\s+[A-Za-z]$", t2):
-                    t2 = re.sub(r"\s+[A-Za-z]$", "", t2)
-                if t2 == t:
-                    break
-                t = t2
-        if t != old_t:
-            h2 = rebuild_line(h, t)
-            if h2 is None:
-                t = old_t
-            else:
-                h = h2
-        m = re.search(r"\s(\*)\s+[A-Z0-9]", t)
-        if m and not re.match(r"^\s*[*•\-]\s", t) and rebuild_line(h, t) is not None:
-            # a new bullet read into the line before it: two lines
-            t1, t2 = t[:m.start()].rstrip(), t[m.start(1):]
-            if len(plain_line(t1)) >= 8 and len(plain_line(t2)) >= 12:
-                fixed.append((t1, rebuild_line(h, t1)))
-                ind = "&nbsp;" * 2
-                fixed.append((t2, f"<div>{ind}{esc(t2)}</div>"))
-                continue
-        fixed.append((t, h))
+    for _pass in range(2):
+        fixed = []
+        for t, h in model.lines:
+            old_t = t
+            if not t.startswith("---"):
+                plain = plain_line(t)
+                if len(plain) <= 4 and len(re.findall(r"[A-Za-z]+", t)) <= 1:
+                    continue                       # a scrap cut loose from its line
+                m = re.match(r"^\s*(\d+) files, (\d+) folders\s*$", t)
+                if m:
+                    st.explorer_count = t.strip()  # the explorer's count, read into the note
+                    continue
+            m = re.match(r"^(\s*[*•\-]\s*)([0-9@OoQ]{2})(?=\s+\S)", t)
+            if m and not m.group(2).isdigit():
+                t = t[:m.start(2)] + re.sub(r"[@OoQ]", "0", m.group(2)) + t[m.end(2):]
+            t = re.sub(r"\s+[*•\-]\s*$", "", t)
+            t = re.sub(r"\s*[|}{\]‘’]+\s*$", "", t)
+            if "…</div>" in h:
+                while True:
+                    t2 = re.sub(r"\s*[:;'\"‘’|_.\]})]+$", "", t)
+                    if re.search(r"[A-Za-z]{2}\s+[A-Za-z]$", t2):
+                        t2 = re.sub(r"\s+[A-Za-z]$", "", t2)
+                    if t2 == t:
+                        break
+                    t = t2
+            if t != old_t:
+                h2 = rebuild_line(h, t)
+                if h2 is None:
+                    t = old_t
+                else:
+                    h = h2
+            m = re.search(r"\s(\*)\s+[A-Z0-9]", t)
+            if m and not re.match(r"^\s*[*•\-]\s", t) and rebuild_line(h, t) is not None:
+                # a new bullet read into the line before it: two lines
+                t1, t2 = t[:m.start()].rstrip(), t[m.start(1):]
+                if len(plain_line(t1)) >= 8 and len(plain_line(t2)) >= 12:
+                    fixed.append((t1, rebuild_line(h, t1)))
+                    ind = "&nbsp;" * 2
+                    fixed.append((t2, f"<div>{ind}{esc(t2)}</div>"))
+                    continue
+            fixed.append((t, h))
+        model.lines = fixed
+    fixed = model.lines
     # the same line kept twice under two misreadings folds to one
     folded = []
     for t, h in fixed:
