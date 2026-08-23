@@ -132,12 +132,12 @@ class Table:
             if not draw2.crumb_like(it["text"]) and it["ok"] and it["text"] not in self.bottom:
                 self.bottom.append(it["text"])
 
+    def names(self):
+        return [norm(r["cells"][0]) for r in self.rows if r["cells"] and r["cells"][0]]
+
     def identity(self):
-        """What folder the list shows: the path's last crumb, else its
-        first rows."""
-        if self.path:
-            return norm(self.path[-1])
-        return norm(" ".join(r["cells"][0] for r in self.rows[:3] if r["cells"]))
+        """What folder the list shows: its rows' names."""
+        return " ".join(self.names())
 
     def html(self):
         n = max([len(self.header)] + [len(r["cells"]) for r in self.rows] + [0])
@@ -279,9 +279,13 @@ class State:
         self.theme = self.theme or th
         if m["ts"] not in self.times:
             self.times.append(m["ts"])
-        if not self.title:
-            if self.table and self.table.path:
-                self.title = self.table.path[-1]
+        if not self.title and self.table:
+            # the folder's name: the title-bar word the path ends in, else
+            # the longest title-bar word, else the path's last crumb
+            end = self.table.path[-1] if self.table.path else ""
+            tops = [t for t in self.table.top if not re.fullmatch(r"[0O]+", t)]
+            hit = next((t for t in tops if end and (norm(t).startswith(norm(end)) or norm(end).startswith(norm(t)))), None)
+            self.title = hit or (max(tops, key=len) if tops else end) or None
         self.key = self.identity()
 
     def identity(self):
@@ -294,16 +298,35 @@ class State:
             parts.append("tree:" + self.tree.identity()[:30])
         return "|".join(parts)
 
-    def same_thing(self, other_key):
-        """The same window showing the same thing: the list's folder, the
-        note's title; a tree alone is judged by likeness of its first rows."""
-        a, b = self.key, other_key
-        if a == b:
-            return True
-        ta, tb = a.split("|", 1), b.split("|", 1)
-        if ta[0] != tb[0] or len(ta) < 2 or len(tb) < 2:
+    def same_thing(self, other):
+        """The same window showing the same thing. A list shows the same
+        folder when half its row names are shared (a scrolled list shares
+        fewer but overlaps at an edge, which stitch() then extends); a note
+        is the same note by its title; a tree alone by its first rows."""
+        if self.name != other.name:
             return False
-        return difflib.SequenceMatcher(None, ta[1], tb[1], autojunk=False).ratio() >= 0.8
+        if self.table and other.table:
+            a, b = set(self.table.names()), set(other.table.names())
+            if not a or not b:
+                return False
+            shared = len(a & b) / min(len(a), len(b))
+            if shared >= 0.5:
+                return True
+            # scrolled: the new list's first rows are the old list's last rows
+            an, bn = self.table.names(), other.table.names()
+            edge = any(x == bn[0] for x in an[-3:]) or any(x == an[0] for x in bn[-3:])
+            return edge
+        if self.doc and other.doc:
+            return self.doc.identity() == other.doc.identity() or difflib.SequenceMatcher(
+                None, self.doc.identity(), other.doc.identity(), autojunk=False).ratio() >= 0.8
+        if self.tree and other.tree and not (self.doc or other.doc):
+            a, b = self.tree.identity(), other.tree.identity()
+            return difflib.SequenceMatcher(None, a, b, autojunk=False).ratio() >= 0.8
+        if self.words and other.words and not (self.table or self.doc or self.tree or other.table or other.doc or other.tree):
+            a = " ".join(w for _, ws in self.words for w in ws)
+            b = " ".join(w for _, ws in other.words for w in ws)
+            return difflib.SequenceMatcher(None, norm(a), norm(b), autojunk=False).ratio() >= 0.8
+        return bool(self.table) == bool(other.table) and bool(self.doc) == bool(other.doc) and bool(self.tree) == bool(other.tree) and False
 
     # --------------------------------------------------------- the drawing
 
@@ -392,18 +415,23 @@ def build_states(moments):
     """Walk the moments; each window group joins the open state showing
     the same thing, or opens a new state."""
     states = []
-    open_by_name = {}          # window name -> its current state
+    open_by_slot = {}          # window name + where it stands -> its current state
     for m in moments:
         groups = draw2.window_groups(m)
-        seen_names = set()
+        W = (m.get("size") or [1920])[0]
+        seen = set()
         for g in groups:
             probe = State(g, m["ts"])
             probe.absorb(g, m)
             if not (probe.table or probe.tree or probe.doc or probe.term or probe.words):
                 continue
-            cur = open_by_name.get(g["name"])
+            slot = draw2.group_key(g, W)
             all_repeat = all(p.get("since") or p.get("same_as") for p in g["panes"])
-            if cur is not None and (all_repeat or cur.same_thing(probe.key)):
+            # the open state of the same window, in this slot or any slot
+            # of the same name (a window moves)
+            cands = [open_by_slot[k] for k in open_by_slot if k == slot or k.split("@")[0] == g["name"]]
+            cur = next((c for c in cands if all_repeat or c.same_thing(probe)), None)
+            if cur is not None:
                 if not all_repeat:
                     cur.absorb(g, m)
                 elif m["ts"] not in cur.times:
@@ -412,13 +440,13 @@ def build_states(moments):
             else:
                 st = probe
                 states.append(st)
-                open_by_name[g["name"]] = st
-            seen_names.add(g["name"])
+            open_by_slot[slot] = st
+            seen.add(slot)
         said = (m.get("said") or "").strip()
         if said:
             # the words go under the window that was the moment's subject:
             # the biggest state touched this moment
-            touched = [open_by_name[n] for n in seen_names if n in open_by_name]
+            touched = [open_by_slot[k] for k in seen if k in open_by_slot]
             if touched:
                 home = max(touched, key=lambda s: (s.rect[2] - s.rect[0]) * (s.rect[3] - s.rect[1]))
                 home.said.append((m["ts"], said))
@@ -492,10 +520,10 @@ def note(records_path, diary_text=None):
         if f:
             parts.append(f)
             parts.append("")
-        others = [o for o in by_name[s.name] if o is not s]
-        if others:
-            parts.append("Other states of this same window: " + " · ".join(
-                f"{o.times[0]} {o.title or 'as drawn there'}" for o in others))
+        earlier = [o for o in by_name[s.name] if o is not s and o.times[0] < s.times[0]]
+        if earlier:
+            parts.append("Earlier states of this same window: " + " · ".join(
+                f"{o.times[0]} {o.title or 'as drawn there'}" for o in earlier))
             parts.append("")
         parts.append("---")
         parts.append("")
