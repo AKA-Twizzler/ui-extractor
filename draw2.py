@@ -152,13 +152,17 @@ def items_of(pane):
     bands = [b for b in ((d.get("style") or {}).get("bands") or [])
              if b.get("hue") and b["hue"] not in ("black", "white")
              and abs(sum(b.get("colour") or [0]) / max(1, len(b.get("colour") or [0])) - bg_lum) >= 20]
+    # a narrow pane was read enlarged, so its bands were measured enlarged
+    # too; a band reaching past the pane's own height tells which it is
+    tall = max((b.get("y1", 0) for b in bands), default=0)
+    band_scale = SCALE if tall > 1.2 * (pane["box"][3] - pane["box"][1]) else 1
     for it in out:
         if it.get("band") or it["role"] == "head":
             continue
         h = it["box"][3] - it["box"][1]
         cy = (it["box"][1] + it["box"][3]) / 2
-        hit = next((b for b in bands if b["y0"] + oy <= cy <= b["y1"] + oy
-                    and 0.8 * h <= b["height"] <= 3.2 * h), None)
+        hit = next((b for b in bands if b["y0"] / band_scale + oy <= cy <= b["y1"] / band_scale + oy
+                    and 0.8 * h <= b["height"] / band_scale <= 3.2 * h), None)
         if hit:
             it["band"] = hit["hue"]
     return out
