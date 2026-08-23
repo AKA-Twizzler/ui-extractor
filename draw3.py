@@ -1124,11 +1124,8 @@ def mend_doc(model, st, clean):
             t = re.sub(r"\s+[*•\-]\s*$", "", t)
             t = re.sub(r"\s*[|}{\]‘’]+\s*$", "", t)
             t = re.sub(r"\s\|(?=\s)", "", t)
-            # a scrap the reader dropped between two words: stray marks and
-            # loose one- or two-letter pieces, when words stand either side
-            t = re.sub(r"(?<=[a-z,;])\s+(?:[|_@<>{}\[\]]+|[a-z0-9]{1,2}(?:\s+[a-z0-9]{1,2}){0,2})\s+(?=[a-z(])",
-                       " ", t)
-            t = re.sub(r"\s+([,.;:)])", r"\1", t)
+            # a scrap of stray marks the reader dropped between two words
+            t = re.sub(r"(?<=[a-z,;])\s+[|_@<>{}\[\]]+\s+(?=[a-z(])", " ", t)
             t = re.sub(r"(?<=[.!?])\s+[a-z]{1,3}(\s+[a-z]{1,3})?\s*$", "", t)
             t = re.sub(r"\s*<\s*[a-z]{0,4}\s*$", "", t)
             if "…</div>" in h:
