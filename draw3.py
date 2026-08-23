@@ -1198,7 +1198,10 @@ def harmonise(states):
 
     def rescue(name):
         """A name every engine mangled: the one pool name it still half
-        resembles, when no other comes close."""
+        resembles, when no other comes close. Only a name that no longer
+        looks like a file name at all is up for rescue."""
+        if "_" in name or "..." in name or " " not in name:
+            return None
         f = re.sub(r"(md|m d)$", "", flat(name))
         if len(f) < 8:
             return None
