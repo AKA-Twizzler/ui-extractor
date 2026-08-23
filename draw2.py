@@ -202,11 +202,13 @@ def build_tables(pane):
     groups = []
     lo = float("-inf")
     for cut in cuts + [float("inf")]:
-        groups.append([it for it in items if lo <= it["box"][0] < cut])
+        groups.append([it for it in items if lo <= (it["box"][0] + it["box"][2]) / 2 < cut])
         lo = cut
     out = []
     for g in groups:
         built = _build_table(g)
+        if not built and any(it["role"] == "left" for it in g):
+            built = table_from_items(g)       # the second window: words only
         if built:
             out.append(built)
     return out
@@ -366,7 +368,10 @@ def table_from_loose(pane):
     columns start where the headings start, rows are the word rows below,
     a word left of the first column is the sidebar, above is the toolbar,
     a row of crumbs below is the path. Same return shape as build_table."""
-    items = items_of(pane)
+    return table_from_items(items_of(pane))
+
+
+def table_from_items(items):
     if not items:
         return None
     rows = reading_order(items, lambda it: it["box"])
@@ -393,8 +398,12 @@ def table_from_loose(pane):
             heads.append((names[0], it["box"][0], it["box"][2]))
             continue
         nxt = next((j["box"][0] for j in sorted(head_row, key=lambda j: j["box"][0]) if j["box"][0] > it["box"][2]), float("inf"))
-        below = sorted({round(j["box"][0] / (2 * rh)) * 2 * rh for j in items
-                        if j not in head_row and it["box"][0] - rh <= j["box"][0] < nxt - rh and j["box"][1] > hy})
+        crumb_rows = [r for r in rows if len(r) >= 2 and all(crumb_like(j["text"]) or j["text"].endswith(">") for j in r)
+                      and (r[0]["box"][1] + r[0]["box"][3]) / 2 > hy + 3 * rh]
+        skip = {id(j) for r in crumb_rows for j in r}
+        below = sorted({round(j["box"][0] / (3 * rh)) * 3 * rh for j in items
+                        if j not in head_row and id(j) not in skip and it["box"][0] - rh <= j["box"][0] < nxt - rh
+                        and j["box"][1] > hy and not (len(j["text"]) > 40 and j["text"].count(" ") >= 5)})
         for k, name in enumerate(names):
             if k < len(below):
                 x0 = below[k] if k else it["box"][0]
@@ -415,7 +424,8 @@ def table_from_loose(pane):
                 it["above"] = (hy - cy) / rh
             top.extend(r)
             continue
-        in_list = [it for it in r if it["box"][2] > x_lo - rh and it["box"][0] <= x_end]
+        in_list = [it for it in r if it["box"][2] > x_lo - rh and it["box"][0] <= x_end
+                   and not (len(it["text"]) > 40 and it["text"].count(" ") >= 5)]
         left = [it for it in r if it["box"][2] <= x_lo - rh]
         side.extend(it for it in left if len(it["text"]) <= 18 and it["text"].count(" ") <= 1
                     and not it["text"].endswith((".", ",")) and ".md" not in it["text"])
