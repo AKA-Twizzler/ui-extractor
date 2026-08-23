@@ -170,12 +170,10 @@ class Lines:
         self.lines = stitch(self.lines, list(pairs), key=lambda p: p[0])
 
     def identity(self):
-        if self.kind == "an open document":
-            body = [t for t, _ in self.lines if t.strip() and t.strip() != "---" and not re.match(r"^[a-z_ ]+: ", t.strip())]
-            heads = [t for t in body if t.lstrip().startswith("#")]
-            pick = heads[0] if heads else (body[0] if body else "")
-            return norm(pick.strip("#* "))[:40]
-        return norm(" ".join(t for t, _ in self.lines[:3]))
+        """The first stretch of the text, marks stripped: a note is the same
+        note when this reads alike, whatever rank the reader gave a line."""
+        body = [t.strip("#*> ") for t, _ in self.lines if t.strip() and not t.startswith("---")]
+        return norm(" ".join(body))[:240]
 
 
 # ------------------------------------------------------------- pane -> content
@@ -357,7 +355,7 @@ class State:
         da, db = self.main_doc(), other.main_doc()
         if da and db:
             x, y = da.identity(), db.identity()
-            return x == y or difflib.SequenceMatcher(None, x, y, autojunk=False).ratio() >= 0.8
+            return x == y or difflib.SequenceMatcher(None, x, y, autojunk=False).ratio() >= 0.75
         if da or db:
             return False
         ra, rb = self.tree(), other.tree()
