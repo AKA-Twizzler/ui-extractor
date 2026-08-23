@@ -1109,7 +1109,8 @@ def harmonise(states):
     a tree row or a doubtful list cell that reads alike a confirmed name
     from a list takes that name. The golden drawing did this by hand
     ("03 Company B (Landscape Company)" from the tree where it read clean)."""
-    # numbered names mended first, so the pool itself is clean
+    # numbered names mended first, so the pool itself is clean; the fine
+    # print waits for the settled name at the end of the pass
     for st in states:
         for q in st.parts:
             if q["fam"] == "table":
@@ -1118,7 +1119,7 @@ def harmonise(states):
                     if r["cells"] and r["cells"][0]:
                         b = mend_numbered(r["cells"][0], names)
                         if b != r["cells"][0]:
-                            st.fine.append(f"{r['cells'][0]} read as {b}")
+                            r["_orig"] = r["cells"][0]
                             r["cells"][0] = b
             elif q["fam"] == "tree":
                 names = [t.lstrip("│ ˃˅") for t, _ in q["model"].lines]
@@ -1128,7 +1129,6 @@ def harmonise(states):
                     name = t[len(lead):]
                     b = mend_numbered(name, names)
                     if b != name:
-                        st.fine.append(f"{name} read as {b}")
                         h = h.replace(esc(name), esc(b)) if esc(name) in h else esc(lead + b)
                         t = lead + b
                     fixed.append((t, h))
