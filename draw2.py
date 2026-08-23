@@ -401,9 +401,16 @@ def table_from_items(items):
         crumb_rows = [r for r in rows if len(r) >= 2 and all(crumb_like(j["text"]) or j["text"].endswith(">") for j in r)
                       and (r[0]["box"][1] + r[0]["box"][3]) / 2 > hy + 3 * rh]
         skip = {id(j) for r in crumb_rows for j in r}
-        below = sorted({round(j["box"][0] / (3 * rh)) * 3 * rh for j in items
-                        if j not in head_row and id(j) not in skip and it["box"][0] - rh <= j["box"][0] < nxt - rh
-                        and j["box"][1] > hy and not (len(j["text"]) > 40 and j["text"].count(" ") >= 5)})
+        xs = sorted(j["box"][0] for j in items
+                    if j not in head_row and id(j) not in skip and it["box"][0] - rh <= j["box"][0] < nxt - rh
+                    and j["box"][1] > hy and not (len(j["text"]) > 40 and j["text"].count(" ") >= 5))
+        below = []                    # each cluster of left edges, by its leftmost
+        for x in xs:
+            if below and x - below[-1][-1] <= 1.5 * rh:
+                below[-1].append(x)
+            else:
+                below.append([x])
+        below = [min(c) for c in below]
         for k, name in enumerate(names):
             if k < len(below):
                 x0 = below[k] if k else it["box"][0]
