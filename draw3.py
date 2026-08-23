@@ -422,8 +422,9 @@ class State:
                                   and min(q["x1"], p["box"][2]) - max(q["x0"], p["box"][0]) >= 0.5 * (p["box"][2] - p["box"][0])), None)
                 if tree_part:
                     names = [t for t, _ in doc_pairs(p)[0]]
-                    names = [n.strip().strip("#*> ").strip() for n in names if not n.startswith("---")]
-                    namelike = [n for n in names if n.count(" ") <= 2 and "..." not in n and re.search(r"[a-z]{4}", n)]
+                    names = [re.sub(r"(\.{2,}|…)$", "...", n.strip().strip("#*> ").strip()) for n in names if not n.startswith("---")]
+                    namelike = [n for n in names if n.rstrip(".").count(" ") <= 2 and "..." not in n.rstrip(".")
+                                and re.search(r"[a-z]{4}", n) and not old.CLOCK.match(n)]
                     if names and len(namelike) >= 0.6 * len(names):
                         tree = tree_part["model"]
                         twin = next((t for t, _ in tree.lines if any(same_text(t.strip("│ ˃˅"), n) for n in namelike)), None)
