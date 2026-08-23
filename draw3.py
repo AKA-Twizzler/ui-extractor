@@ -1245,15 +1245,17 @@ def harmonise(states):
                     if not r["cells"] or not r["cells"][0]:
                         continue
                     n = r["cells"][0]
+                    orig = r.pop("_orig", n)
                     doubtful = (r["italic"] and r["italic"][0]) or "..." in n
                     b = better(n, fuzzy=doubtful)
                     if not b and doubtful and not any(c for c in r["cells"][1:] if tidy_date(c) or tidy_size(c)):
                         b = rescue(n)
                     if b and b != n:
-                        st.fine.append(f"{n} read as {b} elsewhere")
                         r["cells"][0] = b
                         r["italic"][0] = False
                         n = b
+                    if n != orig and flat(n) != flat(orig):
+                        st.fine.append(f"{orig} read as {n} elsewhere")
                     if dotted * 3 >= named * 2 and not n.startswith("."):
                         lost_dots.append(n)
                         r["cells"][0] = "." + n
