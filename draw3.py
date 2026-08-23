@@ -68,6 +68,9 @@ def same_doc_line(a, b):
     x, y = plain_line(a), plain_line(b)
     if len(x) >= 12 and len(y) >= 12 and (x in y or y in x):
         return True
+    xs, ys = re.sub(r"[0-9]{0,2}$", "", x), re.sub(r"[0-9]{0,2}$", "", y)
+    if len(xs) >= 12 and len(ys) >= 12 and (xs in y or ys in x):
+        return True                 # the same line with a scrap on its end
     return len(x) >= 12 and len(y) >= 12 and difflib.SequenceMatcher(None, x, y, autojunk=False).ratio() >= 0.7
 
 
@@ -339,6 +342,7 @@ class Lines:
     def __init__(self, kind):
         self.kind = kind
         self.lines = []         # (text, html)
+        self.doubt = set()      # texts one engine alone read
 
     def add(self, pairs):
         pairs = list(pairs)
@@ -346,8 +350,13 @@ class Lines:
             # a note grows by its text: a line already there (the window
             # wider or narrower, the lines re-wrapped) is the same line, and
             # the longer reading of it stands
-            self.lines = stitch(self.lines, pairs, key=lambda p: p[0], same=same_doc_line,
-                                merge=lambda o, n: n if (len(norm(n[0])), n[0].count("*")) > (len(norm(o[0])), o[0].count("*")) else o)
+            def merge(o, n):
+                lo, ln = len(norm(o[0])), len(norm(n[0]))
+                od, nd = o[0] in self.doubt, n[0] in self.doubt
+                if od != nd and abs(lo - ln) <= 8:
+                    return n if od else o          # the reading both engines backed
+                return n if (ln, n[0].count("*")) > (lo, o[0].count("*")) else o
+            self.lines = stitch(self.lines, pairs, key=lambda p: p[0], same=same_doc_line, merge=merge)
             kept = []
             for i, (t, h) in enumerate(self.lines):
                 n = plain_line(t)
@@ -415,6 +424,7 @@ def tree_pairs(pane):
 
 def doc_pairs(pane):
     out, fine, props, in_props = [], [], [], False
+    doubt = set()
     for raw in pane.get("lines") or []:
         s = raw.strip()
         if s.startswith(("[also on this pane", "unsettled:", "[dark look", "[light look")):
@@ -448,6 +458,9 @@ def doc_pairs(pane):
             continue
         text = re.split(r"\s+<- ", raw.rstrip())[0].strip()
         out.append((text, h))
+        if "one engine" in tail:
+            doubt.add(text)
+    doc_pairs.doubt = doubt
     return out, fine
 
 
@@ -562,6 +575,7 @@ class State:
                         self.furniture.append(r["text"])
             elif k == "an open document":
                 pairs, fine = doc_pairs(p)
+                part["model"].doubt |= doc_pairs.doubt
                 part["model"].add(pairs)
                 self.fine.extend(fine)
             elif k in ("a terminal", "a chat log"):
@@ -953,6 +967,11 @@ def harmonise(states):
                         fixed.append((t, h))
                 q["model"].lines = fixed
             elif q["fam"] == "table":
+                fixed_side = []
+                for w in q["model"].side:
+                    full = next((c for c in clean if c != w and len(w) >= 5 and c.endswith(w)), None)
+                    fixed_side.append(full or w)
+                q["model"].side = fixed_side
                 for r in q["model"].rows:
                     if not r["cells"] or not r["cells"][0]:
                         continue

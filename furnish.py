@@ -44,15 +44,17 @@ def finder(st):
     if not table or not table.rows:
         return None
     side_words = list(table.side)
-    if not side_words:
-        # a strip of short words to the left of the list is its sidebar
-        tpart = next((q for q in st.parts if q["fam"] == "table" and q["model"] is table), None)
-        for q in st.parts:
-            if q["fam"] == "words" and tpart and q["x1"] is not None and tpart["x0"] is not None \
-                    and q["x1"] <= tpart["x0"] + 0.02 * (tpart["x1"] - tpart["x0"]) \
-                    and len(q["model"]) >= 3 and all(len(w) <= 24 for w in q["model"]):
-                side_words = list(q["model"])
-                break
+    # a strip of short words to the left of the list is its sidebar too;
+    # what it holds that the list's own sidebar lacks goes in at its place
+    tpart = next((q for q in st.parts if q["fam"] == "table" and q["model"] is table), None)
+    for q in st.parts:
+        if q["fam"] == "words" and tpart and q["x1"] is not None and tpart["x0"] is not None \
+                and q["x1"] <= tpart["x0"] + 0.02 * (tpart["x1"] - tpart["x0"]) \
+                and len(q["model"]) >= 3 and all(len(w) <= 24 for w in q["model"]):
+            strip = [w for w in q["model"] if w in SECTIONS or w in SIDE_GLYPH or (w.count(" ") <= 1 and not w.endswith((".", ",")))]
+            import draw3
+            side_words = draw3.stitch(side_words, strip, key=lambda w: w) if side_words else strip
+            break
     # the sidebar: lights at its top, then the items with their icons and
     # the section labels where they were read
     side = ""
@@ -108,8 +110,9 @@ def finder(st):
         cls = f' class="sn-selected sn-band-{r["band"]}"' if r.get("band") else ""
         out.append(f"<tr{cls}>" + "".join(tds) + "</tr>")
     # the empty striped rows below the last file, as many as the window held
-    empty = 3
-    if st.rect and table.rh:
+    empty = 2
+    measured = st.rect and not (st.rect[0] == 0 and st.rect[1] == 0 and st.rect[2] >= 3000 and st.rect[3] >= 1500)
+    if measured and table.rh:
         hgt = st.rect[3] - st.rect[1]
         used = (len(table.rows) + 1) * table.rh
         empty = int(max(2, min(14, (0.78 * hgt - used) / table.rh)))
@@ -158,6 +161,14 @@ def browser_behind(st):
             right += [t for t in texts if re.search(r"Gemini", t)]
     if not (tabs or address):
         return ""
+    def fold(words):
+        keep = []
+        for w in sorted(words, key=len, reverse=True):
+            nw = re.sub(r"[^a-z0-9]", "", w.lower())
+            if nw and not any(nw in re.sub(r"[^a-z0-9]", "", k.lower()) for k in keep):
+                keep.append(w)
+        return [w for w in words if w in keep]
+    tabs, right = fold(tabs), fold(right)
     out = ['<div class="sn-browser">']
     if tabs:
         out.append('<div class="sn-tabs">' + "".join(
@@ -243,10 +254,22 @@ def note_html(st, doc, title):
                        + ('<div class="sn-prop sn-addprop">+ Add property</div>' if add_property else "") + "</div>")
             props_done = True
             continue
-        out.append(h)
+        out.append(bulleted(h))
     if st.covered:
         out.append('<span class="sn-covered">the camera picture covered this corner of the window</span>')
     return "".join(out)
+
+
+def bulleted(h):
+    """A line that begins with a list marker is drawn as a bullet with a
+    hanging indent, as the program draws it."""
+    m = re.match(r'^(<div(?: class="[^"]*")?>)((?:&nbsp;)*)\s*([*\-•]) (.*)$', h)
+    if not m:
+        return h
+    tag, indent, _, rest = m.groups()
+    depth = len(indent) // 12
+    cls = ' class="sn-li"' if 'class="' not in tag else tag[4:-1].replace('class="', 'class="sn-li ')
+    return f'<div{cls} style="margin-left:{depth * 14}px"><span class="sn-bullet">•</span>{rest}</div>'
 
 
 # ------------------------------------------------------------------ entry
