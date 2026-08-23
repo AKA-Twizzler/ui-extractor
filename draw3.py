@@ -1081,13 +1081,17 @@ def mend_doc(model, st, clean):
     # the same line kept twice under two misreadings folds to one
     folded = []
     for t, h in fixed:
-        twin = next((k for k, (u, _) in enumerate(folded[-3:]) if not t.startswith("---")
-                     and not u.startswith("---") and same_doc_line(u, t)), None)
-        if twin is not None:
-            k = len(folded) - len(folded[-3:]) + twin
-            u, uh = folded[k]
-            keepnew = (len(norm(t)), t.count("*")) > (len(norm(u)), u.count("*"))
-            folded[k] = (t, h) if keepnew else (u, uh)
+        hit = None
+        if not t.startswith("---"):
+            for k in range(max(0, len(folded) - 3), len(folded)):
+                u = folded[k][0]
+                if not u.startswith("---") and same_doc_line(u, t):
+                    hit = k
+                    break
+        if hit is not None:
+            u, uh = folded[hit]
+            if (len(norm(t)), t.count("*")) > (len(norm(u)), u.count("*")):
+                folded[hit] = (t, h)
             continue
         folded.append((t, h))
     # a short line flush at the left margin, capitalised and unpunctuated,
@@ -1097,7 +1101,7 @@ def mend_doc(model, st, clean):
         s = t.strip()
         if (h.startswith("<div>") and not h.startswith("<div>&nbsp;") and t == s
                 and 3 <= len(s) <= 45 and s[:1].isupper() and not re.search(r"[.:;,]$", s)
-                and not re.match(r"^[*•\-]", s) and " " in s and "…" not in h):
+                and not re.match(r"^[*•\-]", s) and " " in s):
             h = '<div class="sn-h2">' + h[len("<div>"):]
         out.append((t, h))
     model.lines = out
