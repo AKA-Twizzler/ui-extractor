@@ -426,7 +426,7 @@ def _build_table(items, spill=None):
     span = [min(c[0] for c in cols), max(c[1] for c in cols)] if cols else None
     if side:
         span[0] = min(span[0], min(it["box"][0] for it in side))
-    return top, side, head_cells, body_rows, bottom, doubts, span
+    return top, side, head_cells, body_rows, bottom, doubts, span, rh
 
 
 SIDEBAR_HEADS = {"Recents", "Shared", "Favorites", "Locations", "Tags", "iCloud", "AirDrop"}
@@ -530,7 +530,7 @@ def table_from_items(items):
         return None
     head = [name for name, _, _ in heads]
     span = [min([x_lo] + [it["box"][0] for it in side]), cols[-1][1]]
-    return top, side, head, body, bottom, [], span
+    return top, side, head, body, bottom, [], span, rh
 
 
 def split_heads(text):

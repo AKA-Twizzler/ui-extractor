@@ -148,6 +148,7 @@ class Table:
         self.span = None        # the list's x-span
         self.path = []
         self.paths = []         # every path bar read, latest last
+        self.rh = 0.0           # a row's height in frame pixels
         self.bottom = []
         self.banded_names = set()
 
@@ -210,6 +211,8 @@ class Table:
                     j = at
                 mapping.append(j if j is not None else i)
         new_rows = []
+        if len(built) > 7 and built[7]:
+            self.rh = max(self.rh, float(built[7]))
         for cells, icon, band in rows:
             width = max(len(self.header), max(mapping, default=-1) + 1, len(cells))
             plain = [""] * width
@@ -223,19 +226,19 @@ class Table:
                 it = c.startswith("*") and c.endswith("*") and len(c) > 2
                 plain[j] = (plain[j] + " " + c.replace("*", "")).strip()
                 italics[j] = italics[j] or it
-            new_rows.append({"cells": plain, "italic": italics, "band": band})
+            new_rows.append({"cells": plain, "italic": italics, "band": band, "icon": icon})
         def keep(o, n):
             # twins: the confirmed reading stands over the doubtful one,
             # and a cell the old row lacks is filled from the new
             if o["italic"] and o["italic"][0] and n["cells"] and n["cells"][0] and not (n["italic"] and n["italic"][0]):
-                o = {"cells": [n["cells"][0]] + o["cells"][1:], "italic": [False] + o["italic"][1:], "band": o["band"] or n["band"]}
+                o = {"cells": [n["cells"][0]] + o["cells"][1:], "italic": [False] + o["italic"][1:], "band": o["band"] or n["band"], "icon": o.get("icon") or n.get("icon")}
             cells = list(o["cells"])
             italics = list(o["italic"])
             for i, c in enumerate(n["cells"]):
                 if i < len(cells) and not cells[i] and c:
                     cells[i] = c
                     italics[i] = n["italic"][i] if i < len(n["italic"]) else False
-            return {"cells": cells, "italic": italics, "band": o["band"] or n["band"]}
+            return {"cells": cells, "italic": italics, "band": o["band"] or n["band"], "icon": o.get("icon") or n.get("icon")}
         self.rows = stitch(self.rows, new_rows, key=lambda r: r["cells"][0] if r["cells"] else "", same=same_name, merge=keep)
         # a row whose name was missed folds into the row with the same
         # other cells; a nameless row alone is the window behind
@@ -484,6 +487,8 @@ class State:
         self.parts = []         # {"kind", "slot", "model"}
         self.fine = []
         self.furniture = []      # words read above a tree: tab strips, menus
+        self.topwords = []       # (text, x0, y0, x1, y1, ok) read along the top of the frame
+        self.covered = False     # the camera picture covered part of the window
         self.said = []
         self.theme = None
 
@@ -580,6 +585,15 @@ class State:
                             words.append(w)
         th = old.theme_of(group["panes"])
         self.theme = self.theme or th
+        H = (m.get("size") or [0, 2160])[1]
+        for p in group["panes"]:
+            for it in draw2.items_of(p):
+                if it["box"][3] <= 0.09 * H and it["role"] in ("loose", "left"):
+                    if not any(same_text(it["text"], t[0]) and abs(t[2] - it["box"][1]) < 0.01 * H for t in self.topwords):
+                        self.topwords.append((it["text"], it["box"][0], it["box"][1], it["box"][2], it["box"][3], it["ok"]))
+            d = p.get("data") or {}
+            if d.get("video_words") or any("runs past the pane" in ln for ln in (p.get("lines") or [])):
+                self.covered = True
         t = self.main_table()
         if t and not is_real_window(self.name) and sum(1 for h in t.header if h in FINDER_WORDS) >= 2:
             self.name = "The Finder window"
@@ -730,6 +744,13 @@ class State:
         return f"## {self.name}{what} - as at {span}"
 
     def window_html(self):
+        import furnish
+        html = furnish.window(self)
+        if html is not None:
+            return html
+        return self.plain_window_html()
+
+    def plain_window_html(self):
         table = self.main_table()
         side_words, top_words, path, bottom = [], [], [], []
         if table:
