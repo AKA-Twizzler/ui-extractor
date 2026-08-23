@@ -1078,7 +1078,29 @@ def mend_doc(model, st, clean):
             else:
                 h = h2
         fixed.append((t, h))
-    model.lines = fixed
+    # the same line kept twice under two misreadings folds to one
+    folded = []
+    for t, h in fixed:
+        twin = next((k for k, (u, _) in enumerate(folded[-3:]) if not t.startswith("---")
+                     and not u.startswith("---") and same_doc_line(u, t)), None)
+        if twin is not None:
+            k = len(folded) - len(folded[-3:]) + twin
+            u, uh = folded[k]
+            keepnew = (len(norm(t)), t.count("*")) > (len(norm(u)), u.count("*"))
+            folded[k] = (t, h) if keepnew else (u, uh)
+            continue
+        folded.append((t, h))
+    # a short line flush at the left margin, capitalised and unpunctuated,
+    # between paragraphs: a heading, drawn one step up
+    out = []
+    for t, h in folded:
+        s = t.strip()
+        if (h.startswith("<div>") and not h.startswith("<div>&nbsp;") and t == s
+                and 3 <= len(s) <= 45 and s[:1].isupper() and not re.search(r"[.:;,]$", s)
+                and not re.match(r"^[*•\-]", s) and " " in s and "…" not in h):
+            h = '<div class="sn-h2">' + h[len("<div>"):]
+        out.append((t, h))
+    model.lines = out
 
 
 NUM_RX = re.compile(r"^([0OoQ][0-9OoQ])(?=[ A-Za-z])")
