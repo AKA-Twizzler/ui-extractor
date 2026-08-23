@@ -298,6 +298,8 @@ class Table:
             full = next((w for w in draw2.SIDEBAR_WORDS if w != t and len(t) >= 4 and w.endswith(t)), None)
             if full:
                 t = full
+            elif t in draw2.SIDEBAR_WORDS:
+                pass
             elif t.endswith((".", ",")) or t.count(" ") >= 2 or len(t) < 3 or (" " in t and t[:1].islower()):
                 continue
             if not any(same_text(t, s) for s in new_side):
