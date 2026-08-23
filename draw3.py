@@ -355,6 +355,9 @@ class Lines:
                 od, nd = o[0] in self.doubt, n[0] in self.doubt
                 if od != nd and abs(lo - ln) <= 8:
                     return n if od else o          # the reading both engines backed
+                po, pn = plain_line(o[0]), plain_line(n[0])
+                if po != pn and (pn.startswith(po) or po.startswith(pn)) and abs(lo - ln) <= 5:
+                    return o if lo < ln else n     # a scrap on the end of the same line: the line without it
                 return n if (ln, n[0].count("*")) > (lo, o[0].count("*")) else o
             self.lines = stitch(self.lines, pairs, key=lambda p: p[0], same=same_doc_line, merge=merge)
             kept = []

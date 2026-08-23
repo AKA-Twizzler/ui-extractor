@@ -143,6 +143,11 @@ def finder(st):
 
 # -------------------------------------------------------------- Obsidian
 
+def old_clock(t):
+    import draw as old
+    return bool(old.CLOCK.match(t.strip()))
+
+
 def top_rows(st):
     """The words along the top of the frame, as rows: the menu bar first,
     then whatever strips sit under it (a browser's tabs, its address bar)."""
@@ -163,8 +168,13 @@ def browser_behind(st):
             address = next((t for t in texts if re.search(r"URL|https?://", t)), joined)
             right += [t for t in texts if t != address and re.search(r"Relaunch|Gemini|update", t)]
         elif any(re.search(r"New Tab|YouTube|Facebook|Creating|×|tab", t) for t in texts) and len(texts) >= 2:
-            tabs = [t for t in texts if not re.search(r"Gemini", t)]
-            right += [t for t in texts if re.search(r"Gemini", t)]
+            # the tab strip, read at more than one moment: every tab once, by its place
+            for it in r:
+                if re.search(r"Gemini", it["text"]):
+                    right.append(it["text"])
+                elif not any(abs(it["box"][0] - x) < 40 for _, x in tabs) and not old_clock(it["text"]):
+                    tabs.append((it["text"], it["box"][0]))
+    tabs = [t for t, _ in sorted(tabs, key=lambda tx: tx[1])]
     if not (tabs or address):
         return ""
     def fold(words):
@@ -276,7 +286,7 @@ def bulleted(h):
     rest = re.sub(r"</div>\s*$", "", rest)
     depth = len(indent) // 12
     cls = ' class="sn-li"' if 'class="' not in tag else tag[4:-1].replace('class="', 'class="sn-li ')
-    return f'<div{cls} style="margin-left:{depth * 14}px"><span class="sn-bullet">•</span>{rest}</div>'
+    return f'<div{cls} style="margin-left:{depth * 14}px"><span class="sn-bullet">•</span><span class="sn-litext">{rest}</span></div>'
 
 
 # ------------------------------------------------------------------ entry
