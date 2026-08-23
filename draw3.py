@@ -998,11 +998,55 @@ def build_states(moments):
     return states
 
 
+def flat(s):
+    return re.sub(r"[^a-z0-9]", "", s.lower())
+
+
+NUM_RX = re.compile(r"^([0OoQ][0-9OoQ])(?=[ A-Za-z])")
+
+
+def mend_numbered(name, siblings):
+    """In a numbered family ("00 Inbox", "01 Daily Notes"...) a leading
+    o/O/Q is a misread 0, and the space after the number comes back."""
+    if sum(1 for s in siblings if re.match(r"^\d\d[ A-Z]", s)) < 2:
+        return name
+    m = NUM_RX.match(name)
+    if m and not m.group(1).isdigit():
+        name = m.group(1).replace("o", "0").replace("O", "0").replace("Q", "0") + name[2:]
+    if re.match(r"^\d\d[A-Za-z]", name):
+        name = name[:2] + " " + name[2:]
+    return name
+
+
 def harmonise(states):
     """One name, read clean somewhere, stands everywhere it was read badly:
     a tree row or a doubtful list cell that reads alike a confirmed name
     from a list takes that name. The golden drawing did this by hand
     ("03 Company B (Landscape Company)" from the tree where it read clean)."""
+    # numbered names mended first, so the pool itself is clean
+    for st in states:
+        for q in st.parts:
+            if q["fam"] == "table":
+                names = [r["cells"][0] for r in q["model"].rows if r["cells"] and r["cells"][0]]
+                for r in q["model"].rows:
+                    if r["cells"] and r["cells"][0]:
+                        b = mend_numbered(r["cells"][0], names)
+                        if b != r["cells"][0]:
+                            st.fine.append(f"{r['cells'][0]} read as {b}")
+                            r["cells"][0] = b
+            elif q["fam"] == "tree":
+                names = [t.lstrip("│ ˃˅") for t, _ in q["model"].lines]
+                fixed = []
+                for t, h in q["model"].lines:
+                    lead = t[:len(t) - len(t.lstrip("│ ˃˅"))]
+                    name = t[len(lead):]
+                    b = mend_numbered(name, names)
+                    if b != name:
+                        st.fine.append(f"{name} read as {b}")
+                        h = h.replace(esc(name), esc(b)) if esc(name) in h else esc(lead + b)
+                        t = lead + b
+                    fixed.append((t, h))
+                q["model"].lines = fixed
     clean = []
     for st in states:
         if st.title and len(st.title) >= 3 and st.title not in clean:
