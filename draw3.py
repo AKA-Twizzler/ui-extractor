@@ -74,10 +74,11 @@ def stitch(old_items, new_items, key):
         return old_items + list(new_items)
     out = list(old_items)
     # walk the new run; unmatched items go after their nearest matched
-    # predecessor's twin
-    last_old = -1
-    insert_at = {}
+    # predecessor's twin, and those before the first twin go just before it
     matched = {j: i for i, j in pairs}      # new index -> old index
+    first_old = matched[min(matched)]
+    last_old = first_old - 1
+    insert_at = {}
     for j, n in enumerate(new_items):
         if j in matched:
             last_old = matched[j]
@@ -215,6 +216,10 @@ class Table:
         return "".join(out)
 
 
+def tree_depth(text):
+    return len(text) - len(text.lstrip("│ "))
+
+
 class Lines:
     """A tree or a document, as lines that grow when the pane scrolls."""
     def __init__(self, kind):
@@ -223,6 +228,17 @@ class Lines:
 
     def add(self, pairs):
         self.lines = stitch(self.lines, list(pairs), key=lambda p: p[0])
+        if self.kind == "a file tree":
+            # a folder with rows under it deeper than itself is open
+            fixed = []
+            for i, (t, h) in enumerate(self.lines):
+                nxt = self.lines[i + 1][0] if i + 1 < len(self.lines) else ""
+                if "˃" in t and nxt and tree_depth(nxt) > tree_depth(t):
+                    t2 = t.replace("˃", "˅", 1)
+                    h = h.replace(esc(t), esc(t2)) if esc(t) in h else esc(t2)
+                    t = t2
+                fixed.append((t, h))
+            self.lines = fixed
 
     def identity(self):
         """The first stretch of the text, marks stripped: a note is the same
