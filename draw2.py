@@ -482,6 +482,8 @@ def window_groups(m):
                         continue
                     if q["kind"] not in old.STRUCTURAL and not narrow(q):
                         continue
+                    if q["kind"] == "a list of columns" and any(r["kind"] == "a list of columns" for r in members):
+                        continue      # two lists are two windows, one behind the other
                     if any(touching(q["box"], r["box"], W) for r in members):
                         members.append(q)
                         grew = True
