@@ -565,10 +565,16 @@ def alike(a, b):
     if not A or not B:
         return 0.0
     def covered(xs, ys):
+        scraps = 0
         for x in xs:
             best = max((difflib.SequenceMatcher(None, x, y, autojunk=False).ratio() for y in ys
                         if abs(len(x) - len(y)) <= max(4, 0.3 * len(x))), default=0.0)
             if best < 0.8:
+                # a short scrap with no twin is the engines' noise; a real
+                # line with no twin is a change on the screen
+                if len(x) < 16 and scraps < 2:
+                    scraps += 1
+                    continue
                 return False
         return True
     return 1.0 if covered(A, B) and covered(B, A) else 0.0
