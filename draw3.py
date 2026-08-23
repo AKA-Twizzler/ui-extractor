@@ -322,7 +322,8 @@ class Table:
             run = []
             for it in row:
                 c = it["text"].rstrip(">").strip()
-                if (draw2.crumb_like(it["text"]) or norm(c) in known) and not (run and norm(c) == norm(run[0])):
+                trusted = it["ok"] or it["text"].rstrip().endswith(">")
+                if trusted and (draw2.crumb_like(it["text"]) or norm(c) in known) and not (run and norm(c) == norm(run[0])):
                     run.append(c)
                 else:
                     break
@@ -1430,7 +1431,8 @@ def harmonise(states):
                         b = exact_fix(c)
                         if not b and len(f) >= 4 and canon.get(f, c) == c:
                             starts = [p for p in canon.values()
-                                      if flat(p).startswith(f) and flat(p) != f and flat(p) != f + "md"]
+                                      if flat(p).startswith(f) and flat(p) != f and flat(p) != f + "md"
+                                      and len(flat(p)) - len(f) <= 12]
                             if len({flat(p) for p in starts}) == 1:
                                 b = starts[0]
                             elif not starts and len(f) >= 8:
