@@ -1082,6 +1082,7 @@ def mend_doc(model, st, clean):
         if m and not m.group(2).isdigit():
             t = t[:m.start(2)] + re.sub(r"[@OoQ]", "0", m.group(2)) + t[m.end(2):]
         t = re.sub(r"\s+[*•\-]\s*$", "", t)
+        t = re.sub(r"\s*[|}{\]‘’]+\s*$", "", t)
         if "…</div>" in h:
             while True:
                 t2 = re.sub(r"\s*[:;'\"‘’|_.\]})]+$", "", t)
@@ -1096,6 +1097,15 @@ def mend_doc(model, st, clean):
                 t = old_t
             else:
                 h = h2
+        m = re.search(r"\s(\*)\s+[A-Z0-9]", t)
+        if m and not re.match(r"^\s*[*•\-]\s", t) and rebuild_line(h, t) is not None:
+            # a new bullet read into the line before it: two lines
+            t1, t2 = t[:m.start()].rstrip(), t[m.start(1):]
+            if len(plain_line(t1)) >= 8 and len(plain_line(t2)) >= 12:
+                fixed.append((t1, rebuild_line(h, t1)))
+                ind = "&nbsp;" * 2
+                fixed.append((t2, f"<div>{ind}{esc(t2)}</div>"))
+                continue
         fixed.append((t, h))
     # the same line kept twice under two misreadings folds to one
     folded = []
@@ -1121,10 +1131,10 @@ def mend_doc(model, st, clean):
     # between paragraphs: a heading, drawn one step up
     out = []
     for t, h in folded:
-        s = t.strip()
-        if (h.startswith("<div>") and not h.startswith("<div>&nbsp;") and t == s
+        s = t.strip().strip("*").strip()
+        if (h.startswith("<div>") and not h.startswith("<div>&nbsp;") and t == t.strip()
                 and 3 <= len(s) <= 45 and s[:1].isupper() and not re.search(r"[.:;,]$", s)
-                and not re.match(r"^[*•\-]", s) and " " in s):
+                and not re.match(r"^[*•\-]\s", t.strip()) and " " in s):
             h = '<div class="sn-h2">' + h[len("<div>"):]
         out.append((t, h))
     model.lines = out
@@ -1211,6 +1221,11 @@ def complete_docs(states):
             if not unfinished or t.startswith("---"):
                 fixed.append((t, h, False))
                 continue
+            t_str = re.sub(r"\s*[:;'\"‘’|_.\]}{@+<>«»]+$", "", t.rstrip())
+            if re.search(r"[A-Za-z]{2}\s+[A-Za-z]$", t_str):
+                t_str = re.sub(r"\s+[A-Za-z]$", "", t_str)
+            if len(t_str) >= 12:
+                t = t_str
             ft, _ = _flatmap(t)
             if len(ft) < 16:
                 fixed.append((t, h, False))
@@ -1242,7 +1257,8 @@ def complete_docs(states):
         for row3 in fixed:
             t, h = row3[0], row3[1]
             prev_done = joined and joined[-1][2]
-            if prev_done and not t.startswith("---"):
+            first_alpha = next((ch for ch in t if ch.isalpha()), "")
+            if prev_done and not t.startswith("---") and first_alpha.islower():
                 pt, ph = joined[-1][0], joined[-1][1]
                 fi, mi = _flatmap(pt)
                 fj, mj = _flatmap(t)
