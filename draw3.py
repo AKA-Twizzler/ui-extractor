@@ -127,14 +127,19 @@ class Table:
         rows_below = draw2.reading_order([it for it in bottom if it["ok"]], lambda it: it["box"])
         best = []
         for row in rows_below:
-            if len(row) >= 2 and all(draw2.crumb_like(it["text"]) for it in row):
-                crumbs = [it["text"].rstrip(">").strip() for it in row]
-                if len(crumbs) > len(best):
-                    best = crumbs
-            else:
-                for it in row:
-                    if it["text"] not in self.bottom:
-                        self.bottom.append(it["text"])
+            # the path is the leading run of crumbs on a row; words after
+            # it are the window behind showing through
+            run = []
+            for it in row:
+                if draw2.crumb_like(it["text"]):
+                    run.append(it["text"].rstrip(">").strip())
+                else:
+                    break
+            if len(run) >= 2 and len(run) > len(best):
+                best = run
+            for it in row[len(run):]:
+                if it["text"] not in self.bottom:
+                    self.bottom.append(it["text"])
         if len(best) >= len(self.path):
             self.path = best
 
@@ -364,6 +369,8 @@ class State:
         """An untitled sliver of a list: under three rows and nothing else."""
         t = self.main_table()
         others = [q for q in self.parts if q["fam"] in ("tree", "doc", "term")]
+        if not self.title and not t and not others:
+            return True           # words only: a window behind, showing through
         return bool(t) and not self.title and len(t.rows) < 3 and not others
 
     def has_content(self):

@@ -37,9 +37,14 @@ def cell(s):
 
 
 def crumb_like(c):
+    """A path crumb is a name: no space (up to 48 letters, a project folder
+    can be long), or one space after a capital; never an apostrophe."""
     c = c.rstrip(">").strip()
-    return (len(c) <= 28 and "'" not in c
-            and (" " not in c or (c.count(" ") == 1 and c[:1].isupper())))
+    if "'" in c or not c:
+        return False
+    if " " not in c:
+        return len(c) <= 48
+    return len(c) <= 28 and c.count(" ") == 1 and c[:1].isupper()
 
 
 def reading_order(items, box_of):
