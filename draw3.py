@@ -325,9 +325,12 @@ class State:
             an, bn = self.table.names(), other.table.names()
             if any(x == bn[0] for x in an[-3:]) or any(x == an[0] for x in bn[-3:]):
                 return True
-            # scrolled past any overlap: the path names the same folder
-            fa, fb = folder_marks(self.table), folder_marks(other.table)
-            return bool(fa and fb and fa & fb)
+            # scrolled past any overlap: two long lists with no row in
+            # common, whose paths name the same folder
+            if len(an) >= 10 and len(bn) >= 10 and not (a & b):
+                fa, fb = folder_marks(self.table), folder_marks(other.table)
+                return bool(fa and fb and fa & fb)
+            return False
         if self.doc and other.doc:
             return self.doc.identity() == other.doc.identity() or difflib.SequenceMatcher(
                 None, self.doc.identity(), other.doc.identity(), autojunk=False).ratio() >= 0.8
@@ -439,10 +442,16 @@ def build_states(moments):
                 continue
             slot = draw2.group_key(g, W)
             all_repeat = all(p.get("since") or p.get("same_as") for p in g["panes"])
-            # the open state of the same window, in this slot or any slot
-            # of the same name (a window moves)
-            cands = [open_by_slot[k] for k in open_by_slot if k == slot or k.split("@")[0] == g["name"]]
-            cur = next((c for c in cands if all_repeat or c.same_thing(probe)), None)
+            # the open state in this slot first (a repeat is judged against
+            # it), then every earlier state of the same window, latest
+            # first: a window can scroll back to what it showed before
+            here = open_by_slot.get(slot)
+            cands = ([here] if here else []) + [st for st in reversed(states) if st.name == g["name"] and st is not here]
+            cur = None
+            if here and all_repeat:
+                cur = here
+            else:
+                cur = next((c for c in cands if c.same_thing(probe)), None)
             if cur is not None:
                 if not all_repeat:
                     cur.absorb(g, m)
