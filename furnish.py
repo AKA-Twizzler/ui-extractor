@@ -100,8 +100,15 @@ def finder(st):
                 cells[kind_i] = kind = m.group(2)
                 if size_i is not None and not cells[size_i]:
                     cells[size_i] = m.group(1)
-        folder = bool(FOLDER_KIND.match(kind)) or (r.get("icon") == "green") or (
-            kind_i is None and "." not in cells[name_i] and not re.search(r"\d", cells[name_i]))
+        # what the Kind column says, first; a green icon means a folder only
+        # where no kind was read and no selection colour could have stained it
+        name = cells[name_i]
+        if kind:
+            folder = bool(FOLDER_KIND.match(kind))
+        elif r.get("icon") == "green" and not r.get("band"):
+            folder = True
+        else:
+            folder = "." not in name and not re.search(r"\d", name)
         tds = []
         for i, c in enumerate(cells):
             t = esc(c)
