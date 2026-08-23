@@ -1103,7 +1103,7 @@ def mend_doc(model, st, clean):
                 else:
                     h = h2
             m = re.search(r"\s(\*)\s+[A-Z0-9@]", t)
-            if m and not re.match(r"^\s*[*•\-]\s", t) and rebuild_line(h, t) is not None:
+            if m and rebuild_line(h, t) is not None:
                 # a new bullet read into the line before it: two lines
                 t1, t2 = t[:m.start()].rstrip(), t[m.start(1):]
                 if len(plain_line(t1)) >= 8 and len(plain_line(t2)) >= 12:
