@@ -1085,6 +1085,9 @@ def mend_doc(model, st, clean):
                 t = t[:m.start(2)] + re.sub(r"[@OoQ]", "0", m.group(2)) + t[m.end(2):]
             t = re.sub(r"\s+[*•\-]\s*$", "", t)
             t = re.sub(r"\s*[|}{\]‘’]+\s*$", "", t)
+            t = re.sub(r"\s\|(?=\s)", "", t)
+            t = re.sub(r"(?<=[.!?])\s+[a-z]{1,3}(\s+[a-z]{1,3})?\s*$", "", t)
+            t = re.sub(r"\s*<\s*[a-z]{0,4}\s*$", "", t)
             if "…</div>" in h:
                 while True:
                     t2 = re.sub(r"\s*[:;'\"‘’|_.\]})]+$", "", t)
@@ -1099,7 +1102,7 @@ def mend_doc(model, st, clean):
                     t = old_t
                 else:
                     h = h2
-            m = re.search(r"\s(\*)\s+[A-Z0-9]", t)
+            m = re.search(r"\s(\*)\s+[A-Z0-9@]", t)
             if m and not re.match(r"^\s*[*•\-]\s", t) and rebuild_line(h, t) is not None:
                 # a new bullet read into the line before it: two lines
                 t1, t2 = t[:m.start()].rstrip(), t[m.start(1):]
