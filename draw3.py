@@ -243,10 +243,14 @@ class Table:
             # the path is the leading run of crumbs on a row; words after
             # it are the window behind showing through
             run = []
+            prev = None
             for it in row:
                 c = it["text"].rstrip(">").strip()
-                if draw2.crumb_like(it["text"]) and not (run and norm(c) == norm(run[0])):
+                h = max(1, it["box"][3] - it["box"][1])
+                far = prev is not None and it["box"][0] - prev > 5 * h     # a gap: another window's crumbs
+                if draw2.crumb_like(it["text"]) and not (run and norm(c) == norm(run[0])) and not far:
                     run.append(c)
+                    prev = it["box"][2]
                 else:
                     break
             if len(run) >= 2 and len(run) > len(best):
