@@ -77,8 +77,7 @@ def stitch(old_items, new_items, key):
     # predecessor's twin
     last_old = -1
     insert_at = {}
-    matched = dict(pairs)           # new index -> old index
-    pos = {}
+    matched = {j: i for i, j in pairs}      # new index -> old index
     for j, n in enumerate(new_items):
         if j in matched:
             last_old = matched[j]
