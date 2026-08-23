@@ -220,10 +220,9 @@ def obsidian(st):
         title = doc.title()
     strip = browser_behind(st)
     toolbar = ('<div class="sn-toolbar sn-obsidian-bar"><span class="sn-lights"></span>'
-               '<span class="sn-btn">▭</span><span class="sn-btn">⌕</span><span class="sn-btn">☆</span>'
-               '<span class="sn-gap"></span>'
+               '<span class="sn-btn">▱</span><span class="sn-btn">⌕</span><span class="sn-btn">☆</span>'
                + (f'<span class="sn-tab active">{esc(title)} &nbsp;×</span>' if title else "")
-               + '<span class="sn-plus">+</span></div>')
+               + '<span class="sn-plus">+</span><span class="sn-grow"></span></div>')
     ribbon = '<div class="sn-ribbon">' + "".join('<span class="sn-g">' + g + "</span>" for g in "▯⌬⊞▦⊡›≣") + "</div>"
     cols = [ribbon]
     if tree:
