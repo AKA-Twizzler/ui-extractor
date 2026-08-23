@@ -342,15 +342,19 @@ class Table:
             # it are the window behind showing through. A crumb that is the
             # list's own folder or a row's name continues the run whatever
             # its shape (the path bar names what the window shows).
-            run = []
+            run, sure = [], 0
             for it in row:
                 c = it["text"].rstrip(">").strip()
-                trusted = (it["ok"] or it["text"].rstrip().endswith(">")
-                           or norm(c) in known or norm(c) + "md" in known)
-                if trusted and (draw2.crumb_like(it["text"]) or norm(c) in known) and not (run and norm(c) == norm(run[0])):
-                    run.append(c)
-                else:
+                if not (draw2.crumb_like(it["text"]) or norm(c) in known):
                     break
+                if run and norm(c) == norm(run[0]):
+                    break             # back at the root: a second bar
+                run.append(c)
+                if (it["ok"] or it["text"].rstrip().endswith(">")
+                        or norm(c) in known or norm(c) + "md" in known):
+                    sure += 1
+            if sure * 2 < len(run):
+                run = []              # a row of guesses is not a path bar
             if len(run) >= 2 and len(run) > len(best):
                 best = run
             for it in row[len(run):]:
