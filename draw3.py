@@ -788,6 +788,8 @@ class State:
         seen, kept = set(), []
         for f in self.fine:
             f = re.sub(r"\s+", " ", f).strip()
+            if not re.search(r" / | read as |only one engine|underlin|wobbl|off the|not read", f):
+                continue          # a bare word says nothing
             if f and f not in seen:
                 seen.add(f)
                 kept.append(f)
@@ -1029,6 +1031,9 @@ def note(records_path, diary_text=None):
                 parts.append("")
                 for ln in e.said_html():
                     parts.append(ln)
+                    parts.append("")
+                if e.fine_html():
+                    parts.append(e.fine_html())
                     parts.append("")
         parts.append("---")
         parts.append("")
