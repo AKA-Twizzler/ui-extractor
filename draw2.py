@@ -560,17 +560,28 @@ def alike(a, b):
     """1.0 when every line of one drawing has a near twin in the other (a
     letter wobble is a twin; a new line or a vanished one is not)."""
     def norm(lines):
-        return [flat([ln]) for ln in lines if flat([ln])]
+        out = []
+        for ln in lines:
+            if "unchanged since" in ln or "the same as at" in ln or ln.startswith("> [!"):
+                continue          # the drawing's own markers, not the screen
+            f = flat([ln])
+            if f:
+                out.append(f)
+        return out
     A, B = norm(a), norm(b)
     if not A or not B:
         return 0.0
     def covered(xs, ys):
         scraps = 0
         whole = "".join(ys)
+        # a line, or a join of up to three neighbouring lines: the same
+        # text split differently between two readings
+        joins = list(ys) + ["".join(ys[i:i + 2]) for i in range(len(ys) - 1)] \
+            + ["".join(ys[i:i + 3]) for i in range(len(ys) - 2)]
         for x in xs:
             if len(x) >= 6 and x in whole:
-                continue          # the same text, split into lines differently
-            best = max((difflib.SequenceMatcher(None, x, y, autojunk=False).ratio() for y in ys
+                continue
+            best = max((difflib.SequenceMatcher(None, x, y, autojunk=False).ratio() for y in joins
                         if abs(len(x) - len(y)) <= max(4, 0.3 * len(x))), default=0.0)
             if best < 0.8:
                 # a short scrap with no twin is the engines' noise; a real
@@ -612,9 +623,12 @@ def draw_moment(m, prev_clock, prev_groups=None):
         g["ts"] = m["ts"]
         key = group_key(g, W)
         drawn[key] = (lines, g)
-        # the same window drawn the same way a moment ago: one line back
+        # the same window drawn the same way a moment ago: one line back.
+        # The reader's own word (every pane unchanged or read the same)
+        # settles it; otherwise the drawings are compared line by line
         before = (prev_groups or {}).get(key)
-        if before and lines and before[0] and alike(lines, before[0]) >= SAME:
+        reader_says = all(p.get("since") or p.get("same_as") for p in g["panes"])
+        if before and lines and before[0] and (reader_says or alike(lines, before[0]) >= SAME):
             drawn[key] = before      # the earlier drawing stands as the reference
             out.append("")
             out.append(f"> [!window] {g['name']} - the same as at {before[1].get('ts', '?')}")
