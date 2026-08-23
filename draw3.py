@@ -1411,6 +1411,7 @@ def harmonise(states):
     # alike, the one with the most of its letters intact (capitals, dots,
     # spaces survive OCR worst, so the fullest form is the truest)
     strong_flats = {flat(s) for s in strong}
+    strong_names = sorted(strong | {w for w in draw2.SIDEBAR_WORDS if len(w) >= 5}, key=len)
     canon, canon_fold = {}, {}
     def rank_of(c):
         return (sum(1 for ch in c if ch.isupper()), sum(1 for ch in c if not ch.isalnum()), len(c))
@@ -1547,10 +1548,9 @@ def harmonise(states):
                     st.fine.append("read with the leading dot lost: " + ", ".join(lost_dots))
                 # the path bar's crumbs completed from the same pool (Finder
                 # cuts long crumbs short; the folder's real name stands)
-                sibling_names = [p for p in canon.values()]
                 for path in [table.path] + table.paths:
                     for i, c in enumerate(path):
-                        c = mend_numbered(c, sibling_names)   # o3 is a nought
+                        c = mend_numbered(c, strong_names)    # o3 is a nought
                         path[i] = c
                         f = flat(c)
                         b = exact_fix(c)
@@ -1563,14 +1563,15 @@ def harmonise(states):
                                 if len(fp) <= len(f) or len(fp) - len(f) > 16:
                                     return False
                                 head = fp[:len(f)]
-                                return sum(1 for x, y in zip(head, f) if x != y) <= (0 if len(f) < 5 else 1)
-                            starts = [p for p in canon.values() if opens(p)]
+                                return sum(1 for x, y in zip(head, f) if x != y) <= (0 if len(f) < 6 else 1)
+                            # only a name read whole somewhere can finish a
+                            # crumb, and the shortest such name is the folder
+                            # Finder cut short -- a longer one is a different file
+                            starts = [p for p in strong_names if opens(p)]
                             exact = [p for p in starts if flat(p).startswith(f)]
                             starts = exact or starts      # a clean opening beats a slipped one
                             if starts:
-                                longest = max(starts, key=lambda p: len(flat(p)))
-                                if all(crumb_same(p, longest) for p in starts):
-                                    b = longest
+                                b = min(starts, key=lambda p: len(flat(p)))
                         if b:
                             path[i] = b
                 # the crumbs read at different moments chain into the one
