@@ -303,7 +303,9 @@ def _build_table(items):
     # a column headed by a sidebar word (Recents, Favorites) is the
     # sidebar, read into the list because its heading sat level with "Name"
     side_x = None
-    if head_cells and head_cells[0] in SIDEBAR_HEADS:
+    first_col = [cells_[0] for cells_, _, _ in body_rows if cells_[0]]
+    sidebarish = sum(1 for c in first_col if any(sw == c.strip("*") or sw.startswith(c.strip("*")) for sw in SIDEBAR_WORDS))
+    if head_cells and (head_cells[0] in SIDEBAR_HEADS or (head_cells[0] in SIDEBAR_WORDS and first_col and sidebarish * 2 >= len(first_col))):
         side_x = cols[0]
         side_words = [head_cells[0]] + [cells_[0] for cells_, _, _ in body_rows if cells_[0]]
         side = [{"text": w, "box": [side_x[0], y_lo + k * rh, side_x[1], y_lo + (k + 1) * rh], "ok": True, "role": "left"}
@@ -354,6 +356,8 @@ def _build_table(items):
 
 
 SIDEBAR_HEADS = {"Recents", "Shared", "Favorites", "Locations", "Tags", "iCloud", "AirDrop"}
+SIDEBAR_WORDS = SIDEBAR_HEADS | {"iCloud Drive", "Applications", "Desktop", "Documents", "Downloads", "Pictures",
+                                 "Movies", "Music", "Home", "Network", "Macintosh HD", "Recents"}
 
 
 def table_from_loose(pane):
@@ -368,18 +372,39 @@ def table_from_loose(pane):
     rows = reading_order(items, lambda it: it["box"])
     head_row = None
     for r in rows:
-        heads = [it for it in r if it["text"] in FINDER_HEADS]
-        if len(heads) >= 2 or (len(heads) == 1 and heads[0]["text"] == "Name"):
+        heads = [h for it in r for h in split_heads(it["text"])]
+        if len(heads) >= 2 or (len(heads) == 1 and heads[0] == "Name"):
             head_row = r
             break
     if head_row is None:
         return None
-    lone = len([it for it in head_row if it["text"] in FINDER_HEADS]) == 1
-    heads = [it for it in head_row if it["text"] in FINDER_HEADS]
-    cols = [[it["box"][0], it["box"][2]] for it in sorted(heads, key=lambda it: it["box"][0])]
-    hy = (head_row[0]["box"][1] + head_row[0]["box"][3]) / 2
-    x_lo = cols[0][0]
+    lone = len([h for it in head_row for h in split_heads(it["text"])]) == 1
     rh = sorted(it["box"][3] - it["box"][1] for it in items)[len(items) // 2] or 20
+    hy = (head_row[0]["box"][1] + head_row[0]["box"][3]) / 2
+    # the headings, in order; a reading that ran two headings together
+    # ("Name Date Modified") is split, each part's column starting where
+    # the next cluster of words below begins
+    heads = []
+    for it in sorted(head_row, key=lambda it: it["box"][0]):
+        names = split_heads(it["text"])
+        if not names:
+            continue
+        if len(names) == 1:
+            heads.append((names[0], it["box"][0], it["box"][2]))
+            continue
+        nxt = next((j["box"][0] for j in sorted(head_row, key=lambda j: j["box"][0]) if j["box"][0] > it["box"][2]), float("inf"))
+        below = sorted({round(j["box"][0] / (2 * rh)) * 2 * rh for j in items
+                        if j not in head_row and it["box"][0] - rh <= j["box"][0] < nxt - rh and j["box"][1] > hy})
+        for k, name in enumerate(names):
+            if k < len(below):
+                x0 = below[k] if k else it["box"][0]
+                x1 = (below[k + 1] - rh) if k + 1 < len(below) else it["box"][2]
+                heads.append((name, x0, max(x1, x0 + rh)))
+    if not heads:
+        return None
+    cols = [[x0, x1] for _, x0, x1 in heads]
+    x_lo = cols[0][0]
+    x_end = cols[-1][1] + 3 * rh         # beyond the last heading's reach: another window
     top, side, body, bottom = [], [], [], []
     for r in rows:
         if r is head_row:
@@ -390,7 +415,7 @@ def table_from_loose(pane):
                 it["above"] = (hy - cy) / rh
             top.extend(r)
             continue
-        in_list = [it for it in r if it["box"][2] > x_lo - rh]
+        in_list = [it for it in r if it["box"][2] > x_lo - rh and it["box"][0] <= x_end]
         left = [it for it in r if it["box"][2] <= x_lo - rh]
         side.extend(it for it in left if len(it["text"]) <= 18 and it["text"].count(" ") <= 1
                     and not it["text"].endswith((".", ",")) and ".md" not in it["text"])
@@ -409,8 +434,28 @@ def table_from_loose(pane):
             body.append((cells, None, None))
     if len(body) < (4 if lone else 2):
         return None
-    head = [it["text"] for it in sorted(heads, key=lambda it: it["box"][0])]
+    head = [name for name, _, _ in heads]
     return top, side, head, body, bottom, []
+
+
+def split_heads(text):
+    """The Finder headings a reading holds, in order: "Name" -> ["Name"],
+    "Name Date Modified" -> ["Name", "Date Modified"], anything else -> []."""
+    words = text.split()
+    out = []
+    i = 0
+    while i < len(words):
+        hit = None
+        for n in (2, 1):
+            cand = " ".join(words[i:i + n])
+            if cand in FINDER_HEADS:
+                hit = (cand, n)
+                break
+        if not hit:
+            return []
+        out.append(hit[0])
+        i += hit[1]
+    return out
 
 
 FINDER_HEADS = {"Name", "Date Modified", "Size", "Kind", "Date Created", "Date Added"}

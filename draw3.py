@@ -387,7 +387,7 @@ class State:
             if k == "a list of columns":
                 tables = draw2.build_tables(p)
                 built = max(tables, key=lambda t: len(t[3])) if tables else None
-                if built and len(built[3]) < 3:
+                if built and len(built[3]) < 6:
                     # the reader's block was a sliver; the words' positions
                     # may hold the whole list
                     loose = draw2.table_from_loose(p)
