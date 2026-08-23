@@ -329,41 +329,6 @@ def tree_depth(text):
     return len(text) - len(text.lstrip("│ "))
 
 
-class Lines:
-    """A tree or a document, as lines that grow when the pane scrolls."""
-    def __init__(self, kind):
-        self.kind = kind
-        self.lines = []         # (text, html)
-
-    def add(self, pairs):
-        pairs = list(pairs)
-        if self.kind == "an open document":
-            # a note grows by its text: a line already there (the window
-            # wider or narrower, the lines re-wrapped) is the same line, and
-            # the longer reading of it stands
-            self.lines = stitch(self.lines, pairs, key=lambda p: p[0], same=same_doc_line,
-                                merge=lambda o, n: n if len(norm(n[0])) > len(norm(o[0])) else o)
-            kept = []
-            for i, (t, h) in enumerate(self.lines):
-                n = plain_line(t)
-                if len(n) >= 12 and any(j != i and len(plain_line(u)) > len(n) and n in plain_line(u) for j, (u, _) in enumerate(self.lines)):
-                    continue          # held whole by a longer line
-                kept.append((t, h))
-            self.lines = kept
-        else:
-            self.lines = stitch(self.lines, pairs, key=lambda p: p[0], same=same_text)
-        if self.kind == "a file tree":
-            # a folder with rows under it deeper than itself is open
-            fixed = []
-            for i, (t, h) in enumerate(self.lines):
-                after = [x for x, _ in self.lines[i + 1:i + 3]]
-                if "˃" in t and len(after) == 2 and all(tree_depth(x) > tree_depth(t) for x in after):
-                    t2 = t.replace("˃", "˅", 1)
-                    h = h.replace(esc(t), esc(t2)) if esc(t) in h else esc(t2)
-                    t = t2
-                fixed.append((t, h))
-            self.lines = fixed
-
     def identity(self):
         """What folder the list shows: its rows' names."""
         return " ".join(self.names())
@@ -406,6 +371,36 @@ class Lines:
     def __init__(self, kind):
         self.kind = kind
         self.lines = []         # (text, html)
+
+    def add(self, pairs):
+        pairs = list(pairs)
+        if self.kind == "an open document":
+            # a note grows by its text: a line already there (the window
+            # wider or narrower, the lines re-wrapped) is the same line, and
+            # the longer reading of it stands
+            self.lines = stitch(self.lines, pairs, key=lambda p: p[0], same=same_doc_line,
+                                merge=lambda o, n: n if len(norm(n[0])) > len(norm(o[0])) else o)
+            kept = []
+            for i, (t, h) in enumerate(self.lines):
+                n = plain_line(t)
+                if len(n) >= 12 and any(j != i and len(plain_line(u)) > len(n) and n in plain_line(u) for j, (u, _) in enumerate(self.lines)):
+                    continue          # held whole by a longer line
+                kept.append((t, h))
+            self.lines = kept
+        else:
+            self.lines = stitch(self.lines, pairs, key=lambda p: p[0], same=same_text)
+        if self.kind == "a file tree":
+            # a folder with rows under it deeper than itself is open
+            fixed = []
+            for i, (t, h) in enumerate(self.lines):
+                after = [x for x, _ in self.lines[i + 1:i + 3]]
+                if "˃" in t and len(after) == 2 and all(tree_depth(x) > tree_depth(t) for x in after):
+                    t2 = t.replace("˃", "˅", 1)
+                    h = h.replace(esc(t), esc(t2)) if esc(t) in h else esc(t2)
+                    t = t2
+                fixed.append((t, h))
+            self.lines = fixed
+
 
     def identity(self):
         """The first stretch of the text, marks stripped: a note is the same
