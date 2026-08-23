@@ -498,8 +498,12 @@ def table_from_items(items):
     def listy(r):
         return sum(1 for it in r if it["box"][2] > x_lo - rh and it["box"][0] <= x_end) >= 2
     last_listy = max((i for i, r in enumerate(rows) if listy(r)), default=-1)
+    def sidebar_word(it):
+        t = it["text"]
+        return len(t) <= 18 and t.count(" ") <= 1 and not t.endswith((".", ",")) and ".md" not in t
     for ri, r in enumerate(rows):
         if r is head_row:
+            side.extend(it for it in r if it["box"][2] <= x_lo - rh and sidebar_word(it))   # "Recents", level with "Name"
             continue
         cy = (r[0]["box"][1] + r[0]["box"][3]) / 2
         if cy < hy - rh:
@@ -511,14 +515,14 @@ def table_from_items(items):
         if (len(r) >= 2 and all(crumb_like(it["text"]) or it["text"].endswith(">") for it in r) and cy > hy + 3 * rh
                 and ri >= last_listy):
             bottom.extend(it for it in r if it["box"][2] > x_lo - rh)
+            side.extend(it for it in r if it["box"][2] <= x_lo - rh and sidebar_word(it))   # the sidebar's last entry, level with the path bar
             continue
         in_list = [it for it in r if it["box"][2] > x_lo - rh and it["box"][0] <= x_end
                    and not (len(it["text"]) > 40 and it["text"].count(" ") >= 5)]
         if len(in_list) == 1 and not in_list[0]["ok"]:
             continue              # a lone doubtful word is not a row
         left = [it for it in r if it["box"][2] <= x_lo - rh]
-        side.extend(it for it in left if len(it["text"]) <= 18 and it["text"].count(" ") <= 1
-                    and not it["text"].endswith((".", ",")) and ".md" not in it["text"])
+        side.extend(it for it in left if sidebar_word(it))
         if not in_list:
             continue
         if all(crumb_like(it["text"]) for it in in_list) and len(in_list) >= 2 and cy > hy + 3 * rh and ri >= last_listy:
