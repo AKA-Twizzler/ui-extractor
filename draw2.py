@@ -254,7 +254,7 @@ def _build_table(items):
     # a leftover inside the table's band joins a column by its x, or opens one
     for it in inside:
         cx = (it["box"][0] + it["box"][2]) / 2
-        if it["box"][0] > x_hi + rh:
+        if it["box"][0] > min(x_hi + rh, x_lo + 12 * rh if len(cols) == 1 else cols[-1][0] + 12 * rh):
             continue              # right of the last column: not this list's
         hit = next((c for c in cols if c[0] - rh <= cx <= c[1] + rh), None)
         if hit is None:
@@ -286,6 +286,43 @@ def _build_table(items):
         return out, icon, band
     head_cells = by_column(header)[0] if header else [""] * len(cols)
     body_rows = [by_column(r) for r in body]
+    # the list goes on above the reader's block: leftover rows whose words
+    # sit in the columns are rows; the row of headings is the header and
+    # ends the climb; what is left above stays above
+    rest_top = []
+    first_y = y_lo
+    climbing = True
+    for r in reversed(table_rows(sorted(top, key=lambda it: it["box"][1]), rh)):
+        r = sorted(r, key=lambda it: it["box"][0])
+        ry1 = max(it["box"][3] for it in r)
+        if climbing and first_y - ry1 <= 3 * rh and any(split_heads(it["text"]) for it in r) and not any(head_cells):
+            placed = [it for it in r if split_heads(it["text"]) and it["box"][0] >= x_lo - rh]
+            if placed:
+                head_cells = by_column(placed)[0]
+                first_y = min(it["box"][1] for it in placed)
+                rest_top.extend(it for it in r if it not in placed)
+            climbing = False
+            continue
+        if climbing and first_y - ry1 <= 3 * rh and not any(head_cells):
+            cells_ = [""] * len(cols)
+            ok = True
+            for it in r:
+                cx = (it["box"][0] + it["box"][2]) / 2
+                hit = next((i for i in range(len(cols)) if cols[i][0] - rh <= cx <= cols[i][1] + rh), None)
+                if hit is None or it["box"][0] < x_lo - rh or (len(it["text"]) > 40 and it["text"].count(" ") >= 5):
+                    ok = False
+                    break
+                text = it["text"] if it["ok"] else f"*{it['text']}*"
+                cells_[hit] = (cells_[hit] + " " + text).strip()
+            if ok and any(cells_):
+                body_rows.insert(0, (cells_, None, None))
+                first_y = min(it["box"][1] for it in r)
+                continue
+        climbing = False
+        rest_top.extend(r)
+    for it in rest_top:
+        it["above"] = (first_y - it["box"][3]) / rh
+    top = rest_top
     # a column with no heading and under two cells is a stray reading's
     # doing; its cells fold into the neighbour on the left (or right)
     keep = []
