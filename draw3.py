@@ -106,9 +106,19 @@ class Table:
         self.bottom = []
         self.banded_names = set()
 
+    STANDARD = {4: ["Name", "Date Modified", "Size", "Kind"], 3: ["Name", "Date Modified", "Kind"],
+                2: ["Name", "Date Modified"], 5: ["Name", "Date Modified", "Size", "Kind", ""]}
+
     def add(self, built):
         top, side, head, rows, bottom, _ = built
         head = list(head or [])
+        # the reader takes the first file for the header when the real
+        # headings scrolled off; a header with none of Finder's words and a
+        # file-like first cell is a row, and the standard headings stand in
+        if head and not any(h in FINDER_WORDS for h in head) and head[0] and (
+                "." in head[0] or re.search(r"\d{4}", " ".join(head))):
+            rows = [(head, None, None)] + list(rows)
+            head = self.STANDARD.get(len(head), [""] * len(head))
         # a later reading's columns map onto the first by heading name; a
         # column with no heading keeps its position; one the table lacks
         # is added at the end
@@ -271,6 +281,7 @@ def doc_pairs(pane):
 # ------------------------------------------------------------- states
 
 GENERIC = {"macintoshhd", "users", "documents", "jaredr", "jaredrhodenizer", "jaredrhodenize"}
+FINDER_WORDS = {"Name", "Date Modified", "Size", "Kind", "Date Created", "Date Added", "Date Modified Size", "Size Kind"}
 
 NAMED = {"Finder": "The Finder window", "Obsidian": "The Obsidian window", "The browser": "The browser window",
          "The terminal": "The terminal window", "The chat": "The chat window"}
@@ -367,6 +378,9 @@ class State:
                             words.append(w)
         th = old.theme_of(group["panes"])
         self.theme = self.theme or th
+        t = self.main_table()
+        if t and not is_real_window(self.name) and sum(1 for h in t.header if h in FINDER_WORDS) >= 2:
+            self.name = "The Finder window"
         if m["ts"] not in self.times:
             self.times.append(m["ts"])
         table = self.main_table()
@@ -567,7 +581,7 @@ def build_states(moments):
             # it), then every earlier state of the same window, latest
             # first: a window can scroll back to what it showed before
             here = open_by_slot.get(slot)
-            cands = ([here] if here else []) + [st for st in reversed(states) if st.name == window_name(g["name"]) and st is not here]
+            cands = ([here] if here else []) + [st for st in reversed(states) if st.name == probe.name and st is not here]
             cur = None
             if here and all_repeat:
                 cur = here
