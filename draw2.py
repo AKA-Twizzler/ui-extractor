@@ -662,6 +662,8 @@ def draw_moment(m, prev_clock, prev_groups=None):
     if small:
         out.append("")
         out.append("<small>" + "; ".join(small) + "</small>")
+    names = " · ".join(g["name"] + (f" ({g['title']})" if g.get("title") else "") for g in groups)
+    out[0] = f"## {m['ts']} - {names or 'nothing readable'}"
     return out, clock, drawn
 
 
