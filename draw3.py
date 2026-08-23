@@ -144,7 +144,7 @@ def stitch(old_items, new_items, key, same=same_text, merge=None):
 MONTHS3 = {m.lower(): m for m in ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]}
 DATE_RX = re.compile(r"^\s*(?:(Today|Yesterday|today|yesterday)|([A-Za-z]{3})\s*(\d{1,2})\s*[,.]?\s*(\d{4}))"
                      r"\s*at\s*(\d{1,2})\s*[:.°º*/]?\s*(\d{2})\s*([AaPp])\s*[Mm]\s*$")
-SIZE_RX = re.compile(r"^\s*(\d+(?:[.,]\d+)?)\s*(bytes?|[KMGT]B)\b\s*N?\s*(.*)$", re.I)
+SIZE_RX = re.compile(r"^\s*(\d+(?:[.,]\d+)?)\s*(bytes?|[KMGT]B)(?:N(?=\s|$))?\s*(.*)$", re.I)
 
 
 def tidy_date(s):
