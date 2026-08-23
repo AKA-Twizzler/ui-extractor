@@ -1225,7 +1225,8 @@ def harmonise(states):
                     if b:
                         b = re.sub(r"\.md$", "", b)      # the tree shows names without .md
                     if b and b != name:
-                        st.fine.append(f"{name} read as {b} in the list")
+                        if flat(b) != flat(name):
+                            st.fine.append(f"{name} read as {b} in the list")
                         t2 = lead + b
                         fixed.append((t2, h.replace(esc(name), esc(b)) if esc(name) in h else esc(t2)))
                     else:
