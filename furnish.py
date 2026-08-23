@@ -238,9 +238,11 @@ def obsidian(st):
             else:
                 rest = rest.lstrip()
             lines.append(guides + chev + esc(rest))
+        count = getattr(st, "explorer_count", "")
         explorer = ('<div class="sn-explorer"><div class="sn-explorer-head"><span class="sn-g">✎</span><span class="sn-g">▱+</span>'
                     '<span class="sn-g">⇅</span><span class="sn-g">⊟</span><span class="sn-g">⌃</span></div>'
-                    '<div class="sn-tree">' + "\n".join(lines) + "</div></div>")
+                    + (f'<div class="sn-count">{esc(count)}</div>' if count else "")
+                    + '<div class="sn-tree">' + "\n".join(lines) + "</div></div>")
         cols.append(explorer)
     if doc:
         cols.append('<div class="sn-doc">' + note_html(st, doc, title) + "</div>")
