@@ -311,6 +311,17 @@ class Lines:
             pairs = self.rewrapped(pairs)
         same = same_line if self.kind == "an open document" else same_text
         self.lines = stitch(self.lines, pairs, key=lambda p: p[0], same=same)
+        if self.kind == "a file tree":
+            # a folder with rows under it deeper than itself is open
+            fixed = []
+            for i, (t, h) in enumerate(self.lines):
+                after = [x for x, _ in self.lines[i + 1:i + 3]]
+                if "˃" in t and len(after) == 2 and all(tree_depth(x) > tree_depth(t) for x in after):
+                    t2 = t.replace("˃", "˅", 1)
+                    h = h.replace(esc(t), esc(t2)) if esc(t) in h else esc(t2)
+                    t = t2
+                fixed.append((t, h))
+            self.lines = fixed
 
     def rewrapped(self, pairs):
         """The new lines against the note's text so far: one whose words are
@@ -338,17 +349,6 @@ class Lines:
                 continue
             out.append((t, h))
         return out
-        if self.kind == "a file tree":
-            # a folder with rows under it deeper than itself is open
-            fixed = []
-            for i, (t, h) in enumerate(self.lines):
-                after = [x for x, _ in self.lines[i + 1:i + 3]]
-                if "˃" in t and len(after) == 2 and all(tree_depth(x) > tree_depth(t) for x in after):
-                    t2 = t.replace("˃", "˅", 1)
-                    h = h.replace(esc(t), esc(t2)) if esc(t) in h else esc(t2)
-                    t = t2
-                fixed.append((t, h))
-            self.lines = fixed
 
     def identity(self):
         """The first stretch of the text, marks stripped: a note is the same
