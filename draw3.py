@@ -108,14 +108,52 @@ class Table:
 
     def add(self, built):
         top, side, head, rows, bottom, _ = built
-        if head and (not self.header or len(head) > len(self.header)):
-            self.header = list(head)
+        head = list(head or [])
+        # a later reading's columns map onto the first by heading name; a
+        # column with no heading keeps its position; one the table lacks
+        # is added at the end
+        if not self.header or not any(self.header):
+            self.header = head
+        mapping = list(range(len(head)))
+        if head and any(head) and self.header is not head:
+            mapping = []
+            for i, h in enumerate(head):
+                j = next((k for k, g in enumerate(self.header) if h and g and same_text(h, g)), None)
+                if j is None and not h and i < len(self.header) and not self.header[i]:
+                    j = i
+                if j is None and h:
+                    self.header.append(h)
+                    j = len(self.header) - 1
+                mapping.append(j if j is not None else i)
         new_rows = []
         for cells, icon, band in rows:
-            plain = [c.replace("*", "") for c in cells]
-            italics = [c.startswith("*") and c.endswith("*") and len(c) > 2 for c in cells]
+            width = max(len(self.header), max(mapping, default=-1) + 1, len(cells))
+            plain = [""] * width
+            italics = [False] * width
+            for i, c in enumerate(cells):
+                if not c:
+                    continue
+                j = mapping[i] if i < len(mapping) else i
+                if j >= width:
+                    continue
+                it = c.startswith("*") and c.endswith("*") and len(c) > 2
+                plain[j] = (plain[j] + " " + c.replace("*", "")).strip()
+                italics[j] = italics[j] or it
             new_rows.append({"cells": plain, "italic": italics, "band": band})
         self.rows = stitch(self.rows, new_rows, key=lambda r: r["cells"][0] if r["cells"] else "")
+        # a row whose name was missed folds into the row with the same
+        # other cells; a nameless row alone is the window behind
+        named = [r for r in self.rows if r["cells"] and r["cells"][0]]
+        kept = []
+        for r in self.rows:
+            if r["cells"] and r["cells"][0]:
+                kept.append(r)
+                continue
+            rest = " ".join(r["cells"][1:]).strip()
+            twin = next((n for n in named if rest and same_text(" ".join(n["cells"][1:]), rest)), None)
+            if twin is None and rest and len(named) < 2:
+                kept.append(r)
+        self.rows = kept
         for it in sorted(side, key=lambda it: it["box"][1]):
             t = it["text"]
             if not any(same_text(t, s) for s in self.side):
@@ -310,7 +348,7 @@ class State:
                 pairs = [(ln, esc(ln)) for ln in old.content_lines(p) if ln.strip()]
                 part["model"].add(pairs)
             else:
-                built = draw2.table_from_loose(p)
+                built = None if any(q["fam"] == "table" for q in self.parts) else draw2.table_from_loose(p)
                 if built:
                     # a list the reader left loose: its table, rebuilt
                     self.parts.remove(part)
@@ -536,7 +574,9 @@ def build_states(moments):
             else:
                 cur = next((c for c in cands if c.same_thing(probe)), None)
             if cur is not None:
-                if not all_repeat:
+                t = probe.main_table()
+                sliver = bool(t) and len(t.rows) < 3
+                if not all_repeat and not sliver:
                     cur.absorb(g, m)
                 elif m["ts"] not in cur.times:
                     cur.times.append(m["ts"])

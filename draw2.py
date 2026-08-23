@@ -301,7 +301,8 @@ def table_from_loose(pane):
             continue
         in_list = [it for it in r if it["box"][2] > x_lo - rh]
         left = [it for it in r if it["box"][2] <= x_lo - rh]
-        side.extend(left)
+        side.extend(it for it in left if len(it["text"]) <= 18 and it["text"].count(" ") <= 1
+                    and not it["text"].endswith((".", ",")) and ".md" not in it["text"])
         if not in_list:
             continue
         if all(crumb_like(it["text"]) for it in in_list) and len(in_list) >= 2 and cy > hy + 3 * rh:
