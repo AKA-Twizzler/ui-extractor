@@ -1266,7 +1266,7 @@ def complete_docs(states):
                 hit = None
                 for k in range(14, 7, -1):
                     if len(fi) >= k and len(fj) >= k:
-                        p = fj.find(fi[-k:], 0, 40)
+                        p = fj.find(fi[-k:], 0, 90)
                         if p != -1:
                             hit = (k, p)
                             break
@@ -1281,7 +1281,20 @@ def complete_docs(states):
                         mended += 1
                         continue
             joined.append(row3 if len(row3) == 3 else (t, h, False))
-        model.lines = [(t, h) for t, h, _ in joined]
+        # a continuation line the completed bullet above already carries
+        kept2 = []
+        for t, h, done in joined:
+            if kept2 and not t.startswith("---"):
+                fprev = _flatmap(kept2[-1][0])[0]
+                fcur = _flatmap(t)[0]
+                first_alpha = next((ch for ch in t if ch.isalpha()), "")
+                if len(fcur) >= 12 and first_alpha.islower():
+                    m = difflib.SequenceMatcher(None, fcur, fprev, autojunk=False)
+                    cover = sum(b.size for b in m.get_matching_blocks())
+                    if cover >= 0.8 * len(fcur):
+                        continue
+            kept2.append((t, h, done))
+        model.lines = [(t, h) for t, h, _ in kept2]
         if mended:
             st.fine.append(f"{mended} cut lines completed from another reading of the same text")
 
