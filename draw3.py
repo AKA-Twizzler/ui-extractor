@@ -768,29 +768,49 @@ def build_states(moments):
 
 
 def desktop(moments):
-    """The menu bar's words, read along the top strip of the frame, and the
-    clock from the first reading to the last."""
-    menubar, clocks = [], []
+    """The menu bar's words, read along the top strip of the frame (each
+    program's bar with the moments it stood), and the clock from the first
+    reading to the last."""
+    bars, clocks = [], []          # bars: [words, first ts, last ts]
     for m in moments:
         H = (m.get("size") or [0, 0])[1]
+        words = []
         for p in m.get("panes") or []:
             c = old.clock_in(p)
             if c and (not clocks or clocks[-1][1] != c):
                 clocks.append((m["ts"], c))
-            if p["kind"] != "text, not a tree" or p["box"][1] > 0.02 * H:
+            if p["box"][1] > 0.02 * H:
                 continue
-            strip = [it for it in draw2.items_of(p) if it["ok"] and it["box"][3] <= 0.016 * H]
-            for it in sorted(strip, key=lambda it: it["box"][0]):
-                w = it["text"]
-                if not old.CLOCK.match(w) and not any(same_text(w, x) for x in menubar) and len(w) <= 24:
-                    menubar.append(w)
-    if not (menubar or clocks):
+            strip = [it for it in draw2.items_of(p) if it["ok"] and it["box"][1] <= 0.015 * H and it["box"][3] <= 0.035 * H]
+            words.extend(strip)
+        menubar = []
+        for it in sorted(words, key=lambda it: it["box"][0]):
+            w = it["text"]
+            if not old.CLOCK.match(w) and not any(same_text(w, x) for x in menubar) and len(w) <= 24 and " " not in w.strip():
+                menubar.append(w)
+        if len(menubar) < 3:
+            continue
+        # the same bar as before when the first word and most words agree
+        if bars and bars[-1][0][0] == menubar[0] and len(set(bars[-1][0]) & set(menubar)) >= 0.6 * min(len(menubar), len(bars[-1][0])):
+            for w in menubar:
+                if w not in bars[-1][0]:
+                    bars[-1][0].append(w)
+            bars[-1][2] = m["ts"]
+        else:
+            bars.append([menubar, m["ts"], m["ts"]])
+    if not (bars or clocks):
         return []
     right = ""
     if clocks:
         right = clocks[0][1] + (f" → {clocks[-1][1]}" if clocks[-1][1] != clocks[0][1] else "")
-    return ["## The desktop", "",
-            '<div class="sn-menubar"><span>' + " &nbsp; ".join(esc(w) for w in menubar[:12]) + f"</span><span>{esc(right)}</span></div>", ""]
+    out = ["## The desktop", ""]
+    for k, (words, t0, t1) in enumerate(bars):
+        when = t0 if t0 == t1 else f"{t0} to {t1}"
+        clock = right if k == 0 else ""
+        out.append('<div class="sn-menubar"><span>' + " &nbsp; ".join(esc(w) for w in words[:12])
+                   + f"</span><span>{esc(when)}" + (f" &nbsp;·&nbsp; {esc(clock)}" if clock else "") + "</span></div>")
+    out.append("")
+    return out
 
 
 def state_label(st):
