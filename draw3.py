@@ -848,7 +848,67 @@ def build_states(moments):
             if touched:
                 home = max(touched, key=lambda s: (s.rect[2] - s.rect[0]) * (s.rect[3] - s.rect[1]))
                 home.said.append((m["ts"], said))
+    harmonise(states)
     return states
+
+
+def harmonise(states):
+    """One name, read clean somewhere, stands everywhere it was read badly:
+    a tree row or a doubtful list cell that reads alike a confirmed name
+    from a list takes that name. The golden drawing did this by hand
+    ("03 Company B (Landscape Company)" from the tree where it read clean)."""
+    clean = []
+    for st in states:
+        for q in st.parts:
+            if q["fam"] != "table":
+                continue
+            for r in q["model"].rows:
+                if r["cells"] and r["cells"][0] and not (r["italic"] and r["italic"][0]):
+                    n = r["cells"][0]
+                    if len(n) >= 3 and "..." not in n and n not in clean:
+                        clean.append(n)
+    def better(name):
+        if name in clean:
+            return None
+        flat = re.sub(r"[^a-z0-9]", "", name.lower())
+        if len(flat) < 4:
+            return None
+        for c in clean:
+            cf = re.sub(r"[^a-z0-9]", "", c.lower())
+            if cf == flat or (len(cf) >= 6 and difflib.SequenceMatcher(None, cf, flat, autojunk=False).ratio() >= 0.85):
+                return c
+            if "..." in name:
+                a, _, b = name.partition("...")
+                af, bf = re.sub(r"[^a-z0-9]", "", a.lower()), re.sub(r"[^a-z0-9]", "", b.lower())
+                if af and bf and cf.startswith(af) and cf.endswith(bf) and len(af) + len(bf) >= 8:
+                    return c
+        return None
+    for st in states:
+        for q in st.parts:
+            if q["fam"] == "tree":
+                fixed = []
+                for t, h in q["model"].lines:
+                    lead = t[:len(t) - len(t.lstrip("│ ˃˅"))]
+                    name = t[len(lead):]
+                    b = better(name)
+                    if b and b != name:
+                        st.fine.append(f"{name} read as {b} in the list")
+                        t2 = lead + b
+                        fixed.append((t2, h.replace(esc(name), esc(b)) if esc(name) in h else esc(t2)))
+                    else:
+                        fixed.append((t, h))
+                q["model"].lines = fixed
+            elif q["fam"] == "table":
+                for r in q["model"].rows:
+                    if not r["cells"] or not r["cells"][0]:
+                        continue
+                    n = r["cells"][0]
+                    if (r["italic"] and r["italic"][0]) or "..." in n:
+                        b = better(n)
+                        if b and b != n:
+                            st.fine.append(f"{n} read as {b} elsewhere")
+                            r["cells"][0] = b
+                            r["italic"][0] = False
 
 
 def desktop(moments):
@@ -856,6 +916,7 @@ def desktop(moments):
     program's bar with the moments it stood), and the clock from the first
     reading to the last."""
     bars, clocks = [], []          # bars: [words, first ts, last ts]
+    day = ""
     for m in moments:
         H = (m.get("size") or [0, 0])[1]
         words = []
@@ -863,6 +924,10 @@ def desktop(moments):
             c = old.clock_in(p)
             if c and (not clocks or clocks[-1][1] != c):
                 clocks.append((m["ts"], c))
+                for r in (p.get("data") or {}).get("readings") or []:
+                    dm = re.match(r"^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s?([A-Z][a-z]{2})\s?(\d{1,2})\s*\d{1,2}:\d{2}", (r.get("text") or "").strip())
+                    if dm and not day:
+                        day = f"{dm.group(1)} {dm.group(2)} {dm.group(3)}"
             if p["box"][1] > 0.02 * H:
                 continue
             strip = [it for it in draw2.items_of(p) if it["ok"] and it["box"][1] <= 0.015 * H and it["box"][3] <= 0.035 * H]
@@ -891,13 +956,14 @@ def desktop(moments):
         return []
     right = ""
     if clocks:
-        right = clocks[0][1] + (f" → {clocks[-1][1]}" if clocks[-1][1] != clocks[0][1] else "")
+        right = (day + " &nbsp; " if day else "") + clocks[0][1] + (f" → {clocks[-1][1]}" if clocks[-1][1] != clocks[0][1] else "")
     out = ["## The desktop", ""]
     for k, (words, t0, t1) in enumerate(bars):
-        when = t0 if t0 == t1 else f"{t0} to {t1}"
+        when = "" if len(bars) == 1 else (t0 if t0 == t1 else f"{t0} to {t1}")
         clock = right if k == 0 else ""
+        label = " &nbsp;·&nbsp; ".join(x for x in (esc(when), clock) if x)
         out.append('<div class="sn-menubar"><span>' + " &nbsp; ".join(esc(w) for w in words[:12])
-                   + f"</span><span>{esc(when)}" + (f" &nbsp;·&nbsp; {esc(clock)}" if clock else "") + "</span></div>")
+                   + f"</span><span>{label}</span></div>")
     out.append("")
     return out
 
