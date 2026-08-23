@@ -1267,13 +1267,13 @@ def harmonise(states):
                     st.fine.append("read with the leading dot lost: " + ", ".join(lost_dots))
                 # the path bar's crumbs completed from the same pool (Finder
                 # cuts long crumbs short; the folder's real name stands)
-                pool = clean + [w for w in draw2.SIDEBAR_WORDS if len(w) >= 5]
                 for path in [table.path] + table.paths:
                     for i, c in enumerate(path):
                         f = flat(c)
-                        b = next((p for p in pool if flat(p) == f and p != c), None)
-                        if not b and len(f) >= 4:
-                            starts = [p for p in pool if flat(p).startswith(f) and flat(p) != f]
+                        b = exact_fix(c)
+                        if not b and len(f) >= 4 and f not in canon:
+                            starts = [p for p in canon.values()
+                                      if flat(p).startswith(f) and flat(p) != f and flat(p) != f + "md"]
                             if len({flat(p) for p in starts}) == 1:
                                 b = starts[0]
                         if b:
