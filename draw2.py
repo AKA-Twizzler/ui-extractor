@@ -145,6 +145,19 @@ def items_of(pane):
             b = r.get("box")
             if b:
                 put(r["text"], [b[0] + ox, b[1] + oy, b[2] + ox, b[3] + oy], ok=r.get("confirmed", False), role="left")
+    # a selection band the reader measured but no row carried: an item whose
+    # middle sits inside a row-height band on this pane is on that band
+    bands = [b for b in ((d.get("style") or {}).get("bands") or [])
+             if b.get("hue") and b["hue"] not in ("black", "white")]
+    for it in out:
+        if it.get("band") or it["role"] == "head":
+            continue
+        h = it["box"][3] - it["box"][1]
+        cy = (it["box"][1] + it["box"][3]) / 2
+        hit = next((b for b in bands if b["y0"] + oy <= cy <= b["y1"] + oy
+                    and 0.8 * h <= b["height"] <= 3.2 * h), None)
+        if hit:
+            it["band"] = hit["hue"]
     return out
 
 
