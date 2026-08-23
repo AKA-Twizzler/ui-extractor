@@ -179,18 +179,24 @@ class Lines:
 # ------------------------------------------------------------- pane -> content
 
 def tree_pairs(pane):
+    """The tree as the reader drew it, guides and chevrons included; a row
+    on a coloured band keeps its colour."""
     d = pane.get("data") or {}
+    rows = d.get("rows") or []
+    banded = {r["name"]: r["band"] for r in rows if r.get("band") and r.get("name")}
     out, fine = [], []
-    for r in d.get("rows") or []:
-        ch = {"right": "˃ ", "down": "˅ "}.get(r.get("chevron"), "  ")
-        name = r.get("name") or r.get("raw") or ""
-        text = "  " * int(r.get("depth", 0)) + ch + name
+    for ln in old.content_lines(pane):
+        text = ln.rstrip()
+        if not text.strip():
+            continue
         h = esc(text)
-        if r.get("band"):
-            h = f'<span class="sn-{r["band"]}" style="font-weight:600">{h}</span>'
+        hue = next((hue for name, hue in banded.items() if text.strip().endswith(name)), None)
+        if hue:
+            h = f'<span class="sn-{hue}" style="font-weight:600">{h}</span>'
         out.append((text, h))
+    for r in rows:
         if r.get("name_status") == "uncertain" and r.get("name_second"):
-            fine.append(f"{name} / {r['name_second']}")
+            fine.append(f"{r.get('name')} / {r['name_second']}")
     return out, fine
 
 
@@ -223,6 +229,17 @@ def doc_pairs(pane):
 
 GENERIC = {"macintoshhd", "users", "documents", "jaredr", "jaredrhodenizer", "jaredrhodenize"}
 
+NAMED = {"Finder": "The Finder window", "Obsidian": "The Obsidian window", "The browser": "The browser window",
+         "The terminal": "The terminal window", "The chat": "The chat window"}
+
+
+def window_name(group_name):
+    return NAMED.get(group_name, group_name)
+
+
+def is_real_window(name):
+    return name in NAMED.values()
+
 
 def folder_marks(table):
     """The crumbs that name the folder, the generic ones left out."""
@@ -237,7 +254,7 @@ class State:
     eighth of the screen it starts in; a later moment's pane joins the
     part in its place, so a scrolled note grows and a list gains rows."""
     def __init__(self, group, ts):
-        self.name = group["name"]
+        self.name = window_name(group["name"])
         self.title = group.get("title")
         self.rect = group["rect"]
         self.where = group.get("where")
@@ -408,12 +425,16 @@ class State:
             else:
                 if not model:
                     continue
-                # a strip of words stands as a side panel where it stood; a
-                # lone strip is the window's whole content
-                if len(self.parts) == 1:
+                # a strip of words is drawn only as the sidebar of a list
+                # that has none of its own and stands to its right; other
+                # strips (tabs, clocks, the window behind) stay in the record
+                table_part = next((t for t in self.parts if t["fam"] == "table"), None)
+                if (table_part and not side_words and q["x1"] is not None and table_part["x0"] is not None
+                        and q["x1"] <= table_part["x0"] + 0.02 * (table_part["x1"] - table_part["x0"])
+                        and len(model) >= 3 and all(len(w) <= 24 for w in model)):
+                    side_words = list(model)
+                elif len(self.parts) == 1:
                     cols.append(('<div class="sn-body">' + " &nbsp;·&nbsp; ".join(esc(w) for w in model) + "</div>", width))
-                else:
-                    cols.append(('<div class="sn-side">' + "<br>".join(esc(w) for w in model) + "</div>", width))
         if not (cols or side_words):
             return ""
         title_bar = ""
@@ -448,10 +469,7 @@ class State:
             text = text.strip()
             if not text:
                 continue
-            if len(text) > LONG_SAID:
-                out.append(f"> [!quote]- Jared, {ts} ({len(text.split())} words)\n> {text}")
-            else:
-                out.append(f'Jared, {ts}: "{text}"')
+            out.append(f"> [!quote]- Jared, {ts} ({len(text.split())} words)\n> {text}")
         return out
 
     def fine_html(self):
@@ -487,7 +505,7 @@ def build_states(moments):
             # it), then every earlier state of the same window, latest
             # first: a window can scroll back to what it showed before
             here = open_by_slot.get(slot)
-            cands = ([here] if here else []) + [st for st in reversed(states) if st.name == g["name"] and st is not here]
+            cands = ([here] if here else []) + [st for st in reversed(states) if st.name == window_name(g["name"]) and st is not here]
             cur = None
             if here and all_repeat:
                 cur = here
@@ -516,6 +534,8 @@ def build_states(moments):
 
 
 def desktop(moments):
+    """The menu bar's words, read along the top strip of the frame, and the
+    clock from the first reading to the last."""
     menubar, clocks = [], []
     for m in moments:
         H = (m.get("size") or [0, 0])[1]
@@ -523,23 +543,32 @@ def desktop(moments):
             c = old.clock_in(p)
             if c and (not clocks or clocks[-1][1] != c):
                 clocks.append((m["ts"], c))
-            if p.get("wi") is None and old.is_menubar(p, H) and p["kind"] == "text, not a tree":
-                sure, _, _ = old.split_loose(p)
-                for _, t in sure:
-                    for w in t.split(" | "):
-                        w = w.strip()
-                        if w and not old.CLOCK.match(w) and w not in menubar:
-                            menubar.append(w)
+            if p["kind"] != "text, not a tree" or p["box"][1] > 0.02 * H:
+                continue
+            strip = [it for it in draw2.items_of(p) if it["ok"] and it["box"][3] <= 0.025 * H]
+            for it in sorted(strip, key=lambda it: it["box"][0]):
+                w = it["text"]
+                if not old.CLOCK.match(w) and not any(same_text(w, x) for x in menubar) and len(w) <= 24:
+                    menubar.append(w)
     if not (menubar or clocks):
         return []
     right = ""
     if clocks:
         right = clocks[0][1] + (f" → {clocks[-1][1]}" if clocks[-1][1] != clocks[0][1] else "")
-    parts = ["## The desktop", "",
-             '<div class="sn-menubar"><span>' + " &nbsp; ".join(esc(w) for w in menubar) + f"</span><span>{esc(right)}</span></div>"]
-    if len(clocks) > 1:
-        parts += ["", '<span class="sn-fine">the desktop clock: ' + "; ".join(f"{c} at {ts}" for ts, c in clocks) + "</span>"]
-    return parts
+    return ["## The desktop", "",
+            '<div class="sn-menubar"><span>' + " &nbsp; ".join(esc(w) for w in menubar[:12]) + f"</span><span>{esc(right)}</span></div>", ""]
+
+
+def state_label(st):
+    return st.title or ("as drawn there")
+
+
+def span_of(st):
+    if len(st.times) == 1:
+        return st.times[0]
+    if len(st.times) == 2:
+        return f"{st.times[0]} and {st.times[1]}"
+    return f"{st.times[0]} to {st.times[-1]}"
 
 
 def note(records_path, diary_text=None):
@@ -547,46 +576,52 @@ def note(records_path, diary_text=None):
     title = header.get("title") or os.path.basename(os.path.dirname(records_path))
     diary_text = diary_text if diary_text is not None else old.diary(records_path)
     secs = (moments[-1]["secs"] - moments[0]["secs"]) if len(moments) > 1 else 0
-    states = build_states(moments)
-    apps = []
-    for s in states:
-        if s.name not in apps and not s.name.startswith(("The screen", "The rest of the screen", "A window", "Loose words")):
-            apps.append(s.name)
+    states = [st for st in build_states(moments) if st.window_html()]
+    real = [st for st in states if is_real_window(st.name)]
+    shown = real if real else states          # a video with no named window shows its screens
+    windows = []                               # names in order of first appearance
+    for st in shown:
+        if st.name not in windows:
+            windows.append(st.name)
     clocks = [c for m in moments for p in m.get("panes") or [] for c in [old.clock_in(p)] if c]
     parts = [f"# {title}", ""]
-    head = f"A screen recording, {old.minutes(secs)} read, {len(moments)} screen moments, {len(states)} window states."
-    if apps:
-        head += " On screen: " + "; ".join(apps) + "."
+    head = f"A screen recording, {old.minutes(secs)} read, {len(moments)} screen moments."
+    if windows:
+        counts = []
+        for w in windows:
+            n = sum(1 for st in shown if st.name == w)
+            counts.append(f"{w[0].lower() + w[1:]}" + (f" ({n} states)" if n > 1 else ""))
+        head += " On screen: " + "; ".join(counts) + "."
     if clocks:
         head += f" The desktop clock read {clocks[0]}" + (f" at the start and {clocks[-1]} at the end." if clocks[-1] != clocks[0] else ".")
+    head += " A word in italics was read by one engine only."
     parts += [head, "", "**The order of events**", ""]
-    for s in states:
-        what = f", {s.title}" if s.title else ""
-        span = s.times[0] if len(s.times) == 1 else f"{s.times[0]} to {s.times[-1]}"
-        parts.append(f"- {span} - {s.name}{what}")
+    for st in shown:
+        parts.append(f"- {span_of(st)} - {st.name[0].lower() + st.name[1:]}" + (f": {st.title}" if st.title else ""))
     parts += ["", "---", ""]
-    by_name = {}
-    for s in states:
-        by_name.setdefault(s.name, []).append(s)
-    for s in states:
-        parts.append(s.heading())
+    for w in windows:
+        sts = [st for st in shown if st.name == w]
+        latest = sts[-1]
+        earlier = sts[:-1]
+        parts.append(f"## {w} - as at {span_of(latest)}" + (f", {latest.title}" if latest.title else ""))
         parts.append("")
-        w = s.window_html()
-        if w:
-            parts.append(w)
-            parts.append("")
-        for ln in s.said_html():
+        parts.append(latest.window_html())
+        parts.append("")
+        for ln in latest.said_html():
             parts.append(ln)
             parts.append("")
-        f = s.fine_html()
-        if f:
-            parts.append(f)
-            parts.append("")
-        earlier = [o for o in by_name[s.name] if o is not s and o.times[0] < s.times[0]]
         if earlier:
             parts.append("Earlier states of this same window: " + " · ".join(
-                f"{o.times[0]} {o.title or 'as drawn there'}" for o in earlier))
+                f"{e.times[0]} {state_label(e)}" for e in earlier) + " (each drawn the same way below)")
             parts.append("")
+            for e in earlier:
+                parts.append(f"### as at {span_of(e)}" + (f", {e.title}" if e.title else ""))
+                parts.append("")
+                parts.append(e.window_html())
+                parts.append("")
+                for ln in e.said_html():
+                    parts.append(ln)
+                    parts.append("")
         parts.append("---")
         parts.append("")
     parts += desktop(moments)
