@@ -19,6 +19,8 @@ import os
 import re
 import sys
 
+import difflib
+
 import draw as old   # the helpers that do not change: app names, clocks, the loose split
 
 SCALE = 3                # the enlargement the structural readers measured in
@@ -411,6 +413,31 @@ def block_of(pane, window_rect):
 
 # ------------------------------------------------------------- windows and moments
 
+FINDER_HEADS = {"Name", "Date Modified", "Size", "Kind", "Date Created", "Date Added"}
+
+
+def name_of(entry, panes):
+    """The program, from its furniture; a list under Finder's own column
+    headings is Finder even with its sidebar out of view."""
+    app = old.app_name(entry, panes)
+    if not app:
+        for p in panes:
+            if p["kind"] == "a list of columns":
+                heads = {h for b in (p.get("data") or {}).get("blocks") or [] for h in (b.get("header") or [])}
+                if len(heads & FINDER_HEADS) >= 2:
+                    app = "Finder"
+    return (app[0].upper() + app[1:]) if app else None
+
+
+def touching(a, b, W):
+    """Two pane boxes that share an edge, left-right or top-bottom."""
+    ax0, ay0, ax1, ay1 = a; bx0, by0, bx1, by1 = b
+    gap = 0.02 * W
+    side = (abs(ax1 - bx0) < gap or abs(bx1 - ax0) < gap) and min(ay1, by1) - max(ay0, by0) > 0
+    stack = (abs(ay1 - by0) < gap or abs(by1 - ay0) < gap) and min(ax1, bx1) - max(ax0, bx0) > 0
+    return side or stack
+
+
 def window_groups(m):
     """The windows of a moment: (name, rect, panes). Panes on no found
     window form one group of their own."""
@@ -420,8 +447,7 @@ def window_groups(m):
         panes = [p for p in m["panes"] if p.get("wi") == wi]
         if not panes:
             continue
-        app = old.app_name(e, panes)
-        name = app[0].upper() + app[1:] if app else "A window"
+        name = name_of(e, panes) or "A window"
         title = e.get("top")
         groups.append({"name": name, "title": title, "rect": e["rect"], "panes": panes, "where": e.get("where")})
     rest = [p for p in m["panes"] if p.get("wi") is None or p.get("wi") >= len(wins)]
@@ -437,19 +463,25 @@ def window_groups(m):
         structural = [p for p in rest if p["kind"] in old.STRUCTURAL]
         loose = [p for p in rest if p["kind"] not in old.STRUCTURAL]
         taken = set()
+        # structural panes that touch are one window (a tree beside its note)
+        clusters = []
         for sp in sorted(structural, key=lambda p: p["box"][0]):
-            members = [sp]
+            home = next((c for c in clusters if any(touching(sp["box"], q["box"], W) for q in c)), None)
+            if home is None:
+                clusters.append([sp])
+            else:
+                home.append(sp)
+        for members in clusters:
+            sp = members[0]
             for lp in loose:
                 if id(lp) in taken:
                     continue
                 narrow = (lp["box"][2] - lp["box"][0]) < 0.3 * W
-                touches = abs(lp["box"][2] - sp["box"][0]) < 0.02 * W or abs(lp["box"][0] - sp["box"][2]) < 0.02 * W
-                if narrow and touches:
+                if narrow and any(touching(lp["box"], q["box"], W) for q in members if q["kind"] in old.STRUCTURAL):
                     members.append(lp)
                     taken.add(id(lp))
             e = {"rect": [0, 0] + size, "top": None}
-            app = old.app_name(e, members)
-            name = (app[0].upper() + app[1:]) if app else f"A window, {sp.get('where') or 'on the screen'}"
+            name = name_of(e, members) or f"A window, {sp.get('where') or 'on the screen'}"
             x0 = min(p["box"][0] for p in members); x1 = max(p["box"][2] for p in members)
             y0 = min(p["box"][1] for p in members); y1 = max(p["box"][3] for p in members)
             groups.append({"name": name, "title": None, "rect": [x0, y0, x1, y1], "panes": members, "where": sp.get("where")})
@@ -457,8 +489,7 @@ def window_groups(m):
             if id(lp) in taken:
                 continue
             e = {"rect": [0, 0] + size, "top": None}
-            app = old.app_name(e, [lp])
-            name = (app[0].upper() + app[1:]) if app else f"Loose words, {lp.get('where') or 'on the screen'}"
+            name = name_of(e, [lp]) or f"Loose words, {lp.get('where') or 'on the screen'}"
             groups.append({"name": name, "title": None, "rect": lp["box"], "panes": [lp], "where": lp.get("where")})
     groups.sort(key=lambda g: g["rect"][0])
     return groups
@@ -503,7 +534,14 @@ def said_lines(m):
     return [f'Jared, {m["ts"]}: "{said}"']
 
 
-def draw_moment(m, prev_clock):
+SAME = 0.9
+
+
+def flat(lines):
+    return re.sub(r"[^a-z0-9]+", "", " ".join(lines).lower())
+
+
+def draw_moment(m, prev_clock, prev_groups=None):
     groups = window_groups(m)
     names = " · ".join(g["name"] + (f" ({g['title']})" if g.get("title") else "") for g in groups)
     all_repeat = all(p.get("since") or p.get("same_as") for p in m["panes"]) and m["panes"]
@@ -517,11 +555,23 @@ def draw_moment(m, prev_clock):
         since = sorted({p.get("since") or p.get("same_as") for p in m["panes"]})
         out = [head + f" - the same screen as at {', '.join(since)}"]
         out.extend(said_lines(m))
-        return out, clock
+        return out, clock, prev_groups
     out = [head]
     doubts = []
+    drawn = {}
     for g in groups:
         lines, d = draw_group(g)
+        g["ts"] = m["ts"]
+        drawn[g["name"]] = (lines, g)
+        # the same window drawn the same way a moment ago: one line back
+        before = (prev_groups or {}).get(g["name"])
+        if before and lines and before[0]:
+            if difflib.SequenceMatcher(None, flat(lines), flat(before[0])).ratio() >= SAME:
+                drawn[g["name"]] = before      # the earlier drawing stands as the reference
+                out.append("")
+                out.append(f"> [!window] {g['name']} - the same as at {before[1].get('ts', '?')}")
+                continue
+        g["ts"] = m["ts"]
         doubts.extend(d)
         if lines:
             out.append("")
@@ -543,7 +593,7 @@ def draw_moment(m, prev_clock):
     if small:
         out.append("")
         out.append("<small>" + "; ".join(small) + "</small>")
-    return out, clock
+    return out, clock, drawn
 
 
 def note(records_path, diary_text=None):
@@ -567,8 +617,9 @@ def note(records_path, diary_text=None):
     parts.append(head)
     parts.append("")
     prev_clock = None
+    prev_groups = {}
     for m in moments:
-        lines, clock = draw_moment(m, prev_clock)
+        lines, clock, prev_groups = draw_moment(m, prev_clock, prev_groups)
         prev_clock = clock or prev_clock
         parts.extend(lines)
         parts.append("")
