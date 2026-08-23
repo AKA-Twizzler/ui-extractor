@@ -300,6 +300,14 @@ def doc_pairs(pane):
         if in_props:
             props.append(s)
             continue
+        # a heading whose text begins lowercase is a cut line ranked by its
+        # letter height, not a heading; an unpaired bold mark is a scrap
+        body, _, tail = raw.partition(" <- ")
+        m = re.match(r"^(\s*)(#{1,6}) ([a-z].*)$", body)
+        if m:
+            raw = m.group(1) + m.group(3) + ((" <- " + tail) if tail else "")
+        if body.count("**") % 2 == 1:
+            raw = raw.replace("**", "", 1) if raw.count("**") % 2 == 1 else raw
         h = old.doc_line(raw, fine)
         if h is None or not s:
             continue
@@ -498,11 +506,21 @@ class State:
             return False
         da, db = self.main_doc(), other.main_doc()
         if da and db:
-            ta_, tb_ = norm(da.title()), norm(db.title())
-            if ta_ and tb_ and len(min(ta_, tb_, key=len)) >= 6 and (ta_.startswith(tb_) or tb_.startswith(ta_)):
-                return True
-            x, y = da.identity(), db.identity()
-            return x == y or difflib.SequenceMatcher(None, x, y, autojunk=False).ratio() >= 0.75
+            # notes compared by position: any note in the same place that
+            # is the same note (by title, else by its first stretch)
+            def same_doc(x_, y_):
+                tx, ty = norm(x_.title()), norm(y_.title())
+                if tx and ty and len(min(tx, ty, key=len)) >= 6 and (tx.startswith(ty) or ty.startswith(tx)):
+                    return True
+                x, y = x_.identity(), y_.identity()
+                return bool(x and y) and (x == y or difflib.SequenceMatcher(None, x, y, autojunk=False).ratio() >= 0.75)
+            mine = [q for q in self.parts if q["fam"] == "doc"]
+            theirs = [q for q in other.parts if q["fam"] == "doc"]
+            for q in mine:
+                for r in theirs:
+                    if abs(q["slot"] - r["slot"]) <= 1 and same_doc(q["model"], r["model"]):
+                        return True
+            return False
         if da or db:
             return False
         ra, rb = self.tree(), other.tree()
@@ -675,7 +693,7 @@ def desktop(moments):
                 clocks.append((m["ts"], c))
             if p["kind"] != "text, not a tree" or p["box"][1] > 0.02 * H:
                 continue
-            strip = [it for it in draw2.items_of(p) if it["ok"] and it["box"][3] <= 0.025 * H]
+            strip = [it for it in draw2.items_of(p) if it["ok"] and it["box"][3] <= 0.016 * H]
             for it in sorted(strip, key=lambda it: it["box"][0]):
                 w = it["text"]
                 if not old.CLOCK.match(w) and not any(same_text(w, x) for x in menubar) and len(w) <= 24:
