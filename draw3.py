@@ -528,16 +528,6 @@ def tree_pairs(pane):
 def doc_pairs(pane):
     out, fine, props, in_props = [], [], [], False
     doubt = set()
-    # the reader measured each row's letter height; a row written large is
-    # a heading, whatever marks the markdown pass gave it
-    d = pane.get("data") or {}
-    rows_m = d.get("body_rows") or d.get("rows") or []
-    heights = sorted(r["xh"] for r in rows_m if r.get("xh"))
-    med_xh = heights[len(heights) // 2] if heights else 0
-    big = {}
-    for r in rows_m:
-        if med_xh and r.get("xh") and r.get("text") and r["xh"] >= 1.15 * med_xh:
-            big[norm(r["text"])[:36]] = r["xh"] / med_xh
     for raw in pane.get("lines") or []:
         s = raw.strip()
         if s.startswith(("[also on this pane", "unsettled:", "[dark look", "[light look")):
