@@ -170,6 +170,15 @@ def merge_columns(ranges, tol):
     return cols
 
 
+def alike_readings(a, b):
+    """Two readings of the same cell: alike once spaces and marks are gone."""
+    x = re.sub(r"[^a-z0-9]", "", a.lower())
+    y = re.sub(r"[^a-z0-9]", "", b.lower())
+    if not x or not y:
+        return False
+    return x == y or difflib.SequenceMatcher(None, x, y, autojunk=False).ratio() >= 0.7
+
+
 def table_rows(cells, rh):
     """Cells grouped into rows by the table's own row height: a cell joins
     the row whose centre sits within half a row of its own."""
@@ -288,7 +297,11 @@ def _build_table(items, spill=None):
             cx = (it["box"][0] + it["box"][2]) / 2
             ci = min(range(len(cols)), key=lambda i: 0 if cols[i][0] - rh <= cx <= cols[i][1] + rh else abs(cx - (cols[i][0] + cols[i][1]) / 2))
             text = it["text"] if it["ok"] else f"*{it['text']}*"
-            out[ci] = (out[ci] + " " + text).strip()
+            if out[ci] and alike_readings(out[ci], it["text"]):
+                if it["ok"] or (out[ci].startswith("*") and len(it["text"]) > len(out[ci]) - 2):
+                    out[ci] = text if it["ok"] or out[ci].startswith("*") else out[ci]
+            else:
+                out[ci] = (out[ci] + " " + text).strip()
             icon = icon or it.get("icon")
             band = band or it.get("band")
         return out, icon, band
@@ -383,6 +396,9 @@ def _build_table(items, spill=None):
             continue
         if side_x and all(it["box"][2] <= side_x[1] + rh for it in r):
             side.extend(r)
+            continue
+        if all(it["text"] in SIDEBAR_WORDS or it["text"].endswith(">") for it in r):
+            rest.extend(r)        # a crumb or a sidebar word alone: not a row
             continue
         if ry0 - last_y > 3 * rh or rest:
             rest.extend(r)

@@ -136,6 +136,11 @@ class Table:
                 "." in head[0] or re.search(r"\d{4}", " ".join(head))):
             rows = [(head, None, None)] + list(rows)
             head = self.STANDARD.get(len(head), [""] * len(head))
+        if head and not head[0] and sum(1 for h in head if h in FINDER_WORDS) >= 2 and "Name" not in head:
+            head[0] = "Name"
+        for i, h in enumerate(head):
+            if h and i < len(self.header) and not self.header[i] and not any(same_text(h, g) for g in self.header if g):
+                self.header[i] = h
         # a later reading's columns map onto the first by heading name; a
         # column with no heading keeps its position; one the table lacks
         # is added at the end
@@ -175,7 +180,7 @@ class Table:
         for r in self.rows:
             if r["cells"] and r["cells"][0]:
                 name = r["cells"][0]
-                if not any(r["cells"][1:]) and len(name) > 40 and name.count(" ") >= 5:
+                if not any(r["cells"][1:]) and ((len(name) > 40 and name.count(" ") >= 5) or (len(name) > 45 and "." not in name)):
                     continue      # a sentence with no other cells: the window behind
                 kept.append(r)
                 continue
@@ -185,7 +190,12 @@ class Table:
                 kept.append(r)
         self.rows = kept
         for it in sorted(side, key=lambda it: it["box"][1]):
-            t = it["text"]
+            t = it["text"].strip("*")
+            full = next((w for w in draw2.SIDEBAR_WORDS if w != t and len(t) >= 4 and w.endswith(t)), None)
+            if full:
+                t = full
+            elif t.endswith((".", ",")) or t.count(" ") >= 2 or len(t) < 3:
+                continue
             if not any(same_text(t, s) for s in self.side):
                 self.side.append(t)
         for it in sorted(top, key=lambda it: it["box"][0]):
@@ -424,7 +434,8 @@ class State:
                     names = [t for t, _ in doc_pairs(p)[0]]
                     names = [re.sub(r"(\.{2,}|…)$", "...", n.strip().strip("#*> ").strip()) for n in names if not n.startswith("---")]
                     namelike = [n for n in names if n.rstrip(".").count(" ") <= 2 and "..." not in n.rstrip(".")
-                                and re.search(r"[a-z]{4}", n) and not old.CLOCK.match(n)]
+                                and re.search(r"[a-z]{4}", n) and not old.CLOCK.match(n)
+                                and all(w[:1].isupper() or w[:1].isdigit() for w in n.split()[1:])]
                     if names and len(namelike) >= 0.6 * len(names):
                         tree = tree_part["model"]
                         twin = next((t for t, _ in tree.lines if any(same_text(t.strip("│ ˃˅"), n) for n in namelike)), None)
