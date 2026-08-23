@@ -447,6 +447,9 @@ class Lines:
                 wo, wn = wordy(o[0]), wordy(n[0])
                 if abs(wo - wn) > 0.25:
                     return o if wo > wn else n     # the reading made of words stands over the squashed one
+                ho, hn = "sn-h" in o[1], "sn-h" in n[1]
+                if ho != hn and abs(lo - ln) <= 15:
+                    return n if ho else o          # a heading one moment, plain the others: plain
                 return n if (ln, n[0].count("*")) > (lo, o[0].count("*")) else o
             self.lines = stitch(self.lines, pairs, key=lambda p: p[0], same=same_doc_line, merge=merge)
             plains = [plain_line(t) for t, _ in self.lines]
