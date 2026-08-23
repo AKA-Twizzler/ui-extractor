@@ -1078,8 +1078,6 @@ def mend_doc(model, st, clean):
             if h2 is None:
                 t = old_t
             else:
-                if old_t.strip() != t.strip():
-                    st.fine.append(f"{old_t.strip()} read as {t.strip()}")
                 h = h2
         fixed.append((t, h))
     model.lines = fixed
