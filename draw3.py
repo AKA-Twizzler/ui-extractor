@@ -322,7 +322,8 @@ class Table:
             run = []
             for it in row:
                 c = it["text"].rstrip(">").strip()
-                trusted = it["ok"] or it["text"].rstrip().endswith(">") or norm(c) in known
+                trusted = (it["ok"] or it["text"].rstrip().endswith(">")
+                           or norm(c) in known or norm(c) + "md" in known)
                 if trusted and (draw2.crumb_like(it["text"]) or norm(c) in known) and not (run and norm(c) == norm(run[0])):
                     run.append(c)
                 else:
@@ -1357,14 +1358,13 @@ def harmonise(states):
         c = canon.get(f)
         if c and c != name:
             return c
-        if c is None:
-            c = canon_fold.get(fold(f))
-            if c and c != name and flat(c) != f:
-                return c
-            if f.endswith("md") and len(f) >= 10:
-                base = canon.get(f[:-2])
-                if base and len(flat(base)) >= 8 and not base.lower().endswith(".md"):
-                    return base + ".md"
+        g = canon_fold.get(fold(f))
+        if g and g != name and rank_of(g) > rank_of(name):
+            return g
+        if c is None and f.endswith("md") and len(f) >= 10:
+            base = canon.get(f[:-2])
+            if base and len(flat(base)) >= 8 and not base.lower().endswith(".md"):
+                return base + ".md"
         return None
 
     def better(name, fuzzy=False):
