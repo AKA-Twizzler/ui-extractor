@@ -407,7 +407,10 @@ def _build_table(items, spill=None):
         else:
             rest.extend(r)
     bottom = rest
-    return top, side, head_cells, body_rows, bottom, doubts
+    span = [min(c[0] for c in cols), max(c[1] for c in cols)] if cols else None
+    if side:
+        span[0] = min(span[0], min(it["box"][0] for it in side))
+    return top, side, head_cells, body_rows, bottom, doubts, span
 
 
 SIDEBAR_HEADS = {"Recents", "Shared", "Favorites", "Locations", "Tags", "iCloud", "AirDrop"}
@@ -505,7 +508,8 @@ def table_from_items(items):
     if len(body) < (4 if lone else 2):
         return None
     head = [name for name, _, _ in heads]
-    return top, side, head, body, bottom, []
+    span = [min([x_lo] + [it["box"][0] for it in side]), cols[-1][1]]
+    return top, side, head, body, bottom, [], span
 
 
 def split_heads(text):
@@ -565,7 +569,7 @@ def block_list(pane):
     lines, doubts = [], []
     if not built:
         return lines, doubts
-    top, side, head, rows, bottom, doubts = built
+    top, side, head, rows, bottom, doubts = built[:6]
     def say(it):
         return it["text"] if it["ok"] else f"*{it['text']}*"
     if top:

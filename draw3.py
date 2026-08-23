@@ -112,7 +112,7 @@ class Table:
                 2: ["Name", "Date Modified"], 5: ["Name", "Date Modified", "Size", "Kind", ""]}
 
     def add(self, built):
-        top, side, head, rows, bottom, _ = built
+        top, side, head, rows, bottom = built[:5]
         head = list(head or [])
         # the reader takes the first file for the header when the real
         # headings scrolled off; a header with none of Finder's words and a
@@ -395,12 +395,9 @@ class State:
                         built = loose
                 if built:
                     part["model"].add(built)
-                    xs = [it["box"][0] for it in built[1]] + [it["box"][0] for it in built[0]]
-                    if len(tables) > 1:
+                    if len(tables) > 1 and built[6]:
                         # this list's own span, not the pane's two windows
-                        ext = [x for t in [built] for it in t[0] + t[1] + t[4] for x in (it["box"][0], it["box"][2])]
-                        if ext:
-                            part["x0"], part["x1"] = min(ext), max(ext)
+                        part["x0"], part["x1"] = built[6]
             elif k == "a file tree":
                 pairs, fine = tree_pairs(p)
                 part["model"].add(pairs)
