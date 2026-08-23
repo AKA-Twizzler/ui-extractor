@@ -102,6 +102,8 @@ class Table:
         self.rows = []          # each: {"cells": [...], "band": hue, "italic": [bool]}
         self.side = []
         self.top = []
+        self.top_items = []     # (text, centre x) for the title rule
+        self.span = None        # the list's x-span
         self.path = []
         self.bottom = []
         self.banded_names = set()
@@ -172,6 +174,7 @@ class Table:
             t = it["text"]
             if not any(same_text(t, s) for s in self.top):
                 self.top.append(t)
+                self.top_items.append((t, (it["box"][0] + it["box"][2]) / 2, it["ok"]))
         rows_below = draw2.reading_order([it for it in bottom if it["ok"]], lambda it: it["box"])
         best = []
         for row in rows_below:
@@ -385,15 +388,25 @@ class State:
             self.times.append(m["ts"])
         table = self.main_table()
         if not self.title and table:
-            # the folder's name: the title-bar word that is also a crumb of
-            # the path (Finder's title is the folder shown; the path's last
-            # crumb may be the selection), else the path's last crumb
-            tops = [t for t in table.top if not re.fullmatch(r"[0O]+", t) and len(t) >= 3]
+            # the folder's name. Finder centres it in the title bar, so the
+            # confirmed top word nearest the list's centre is the title;
+            # failing that, the top word that is also a crumb of the path;
+            # failing that, the path's last crumb
+            tpart = next((q for q in self.parts if q["fam"] == "table" and q["model"] is table), None)
+            tops = [(t, cx) for t, cx, ok in table.top_items
+                    if ok and not re.fullmatch(r"[0O]+", t) and len(t) >= 3 and t not in FINDER_WORDS]
             hit = None
-            for c in reversed(table.path):
-                hit = next((t for t in tops if same_text(t, c) or norm(t).startswith(norm(c))), None)
-                if hit:
-                    break
+            if tpart and tpart["x0"] is not None and tops:
+                mid = (tpart["x0"] + tpart["x1"]) / 2
+                width = max(1, tpart["x1"] - tpart["x0"])
+                near = min(tops, key=lambda tc: abs(tc[1] - mid))
+                if abs(near[1] - mid) <= 0.25 * width:
+                    hit = near[0]
+            if not hit:
+                for c in reversed(table.path):
+                    hit = next((t for t, _ in tops if same_text(t, c) or norm(t).startswith(norm(c))), None)
+                    if hit:
+                        break
             end = table.path[-1] if table.path else ""
             if hit:
                 self.title = hit
