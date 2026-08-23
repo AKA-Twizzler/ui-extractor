@@ -1194,8 +1194,6 @@ def harmonise(states):
                 di = next((i for i, h in enumerate(table.header) if h == "Date Modified"), None)
                 ki = next((i for i, h in enumerate(table.header) if h == "Kind"), None)
                 if di is not None:
-                    pool_dates = {re.sub(r"\D", "", c): c for r in table.rows
-                                  for c in [r["cells"][di] if di < len(r["cells"]) else ""] if c and tidy_date(c) is None or c and DATE_RX.match(c)}
                     pool_dates = {}
                     for r in table.rows:
                         if di < len(r["cells"]) and r["cells"][di] and not (r["italic"][di] if di < len(r["italic"]) else False):
