@@ -322,7 +322,7 @@ class Table:
             run = []
             for it in row:
                 c = it["text"].rstrip(">").strip()
-                trusted = it["ok"] or it["text"].rstrip().endswith(">")
+                trusted = it["ok"] or it["text"].rstrip().endswith(">") or norm(c) in known
                 if trusted and (draw2.crumb_like(it["text"]) or norm(c) in known) and not (run and norm(c) == norm(run[0])):
                     run.append(c)
                 else:
@@ -1165,8 +1165,11 @@ def crumb_same(a, b):
         return True
     if min(len(fa), len(fb)) >= 4 and abs(len(fa) - len(fb)) <= 10 and (fa.startswith(fb) or fb.startswith(fa)):
         return True
-    return (min(len(fa), len(fb)) >= 4 and abs(len(fa) - len(fb)) <= 6 and fa[:3] == fb[:3]
-            and difflib.SequenceMatcher(None, fa, fb, autojunk=False).ratio() >= 0.7)
+    if (min(len(fa), len(fb)) >= 4 and abs(len(fa) - len(fb)) <= 6 and fa[:3] == fb[:3]
+            and difflib.SequenceMatcher(None, fa, fb, autojunk=False).ratio() >= 0.7):
+        return True
+    k = min(len(fa), len(fb))
+    return k >= 5 and abs(len(fa) - len(fb)) <= 12 and sum(1 for x, y in zip(fa[:k], fb[:k]) if x != y) <= 1
 
 
 def chain_paths(paths):
@@ -1447,12 +1450,15 @@ def harmonise(states):
                             starts = [p for p in canon.values()
                                       if flat(p).startswith(f) and flat(p) != f and flat(p) != f + "md"
                                       and len(flat(p)) - len(f) <= 12]
+                            starts = [p for p in starts
+                                      if not any(p2 is not p and flat(p2).startswith(flat(p)) for p2 in starts)]
                             if len({flat(p) for p in starts}) == 1:
                                 b = starts[0]
                             elif not starts and len(f) >= 8:
-                                close = [p for p in canon.values() if abs(len(flat(p)) - len(f)) <= 3
+                                close = [p for p in canon.values() if flat(p) != f
+                                         and abs(len(flat(p)) - len(f)) <= 3
                                          and difflib.SequenceMatcher(None, flat(p), f, autojunk=False).ratio() >= 0.85]
-                                if len({flat(p) for p in close}) == 1 and flat(close[0]) != f:
+                                if len({flat(p) for p in close}) == 1:
                                     b = close[0]
                         if b:
                             path[i] = b
