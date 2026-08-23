@@ -518,7 +518,7 @@ def table_from_items(items):
         # the path bar: a row of crumbs with no list row under it
         if (len(r) >= 2 and all(crumb_like(it["text"]) or it["text"].endswith(">") for it in r) and cy > hy + 3 * rh
                 and ri >= last_listy):
-            bottom.extend(it for it in r if it["box"][2] > x_lo - rh)
+            bottom.extend(it for it in r if it["box"][2] > x_lo - rh and it["box"][0] <= x_end)
             side.extend(it for it in r if it["box"][2] <= x_lo - rh and sidebar_word(it))   # the sidebar's last entry, level with the path bar
             continue
         in_list = [it for it in r if it["box"][2] > x_lo - rh and it["box"][0] <= x_end
