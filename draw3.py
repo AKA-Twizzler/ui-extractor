@@ -450,6 +450,16 @@ class Lines:
                 ho, hn = "sn-h" in o[1], "sn-h" in n[1]
                 if ho != hn and abs(lo - ln) <= 15:
                     return n if ho else o          # a heading one moment, plain the others: plain
+                # a longer variant whose extra tail is another line's text
+                # swallowed two lines in one reading: the shorter stands
+                po2, pn2 = plain_line(o[0]), plain_line(n[0])
+                co = os.path.commonprefix([po2, pn2])
+                if len(co) >= 20:
+                    longer, shorter = (o, n) if len(po2) >= len(pn2) else (n, o)
+                    tail = max(po2, pn2, key=len)[len(co):]
+                    if len(tail) >= 15 and any(tail in plain_line(u) for u, _ in self.lines
+                                               if u not in (o[0], n[0])):
+                        return shorter
                 return n if (ln, n[0].count("*")) > (lo, o[0].count("*")) else o
             self.lines = stitch(self.lines, pairs, key=lambda p: p[0], same=same_doc_line, merge=merge)
             plains = [plain_line(t) for t, _ in self.lines]
