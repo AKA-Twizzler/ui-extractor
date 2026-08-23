@@ -231,6 +231,18 @@ class Lines:
         body = [t.strip("#*> ") for t, _ in self.lines if t.strip() and not t.startswith("---")]
         return norm(" ".join(body))[:240]
 
+    def title(self):
+        """The note's title: its first line that is not a property, a bar
+        or a scrap."""
+        for t, _ in self.lines:
+            t = t.strip().strip("#*> ").strip()
+            if not t or t.startswith("---") or re.match(r"^[A-Za-z_ ]{1,16}: ", t) or old.is_bar(t):
+                continue
+            if len(norm(t)) < 4:
+                continue
+            return t
+        return ""
+
 
 # ------------------------------------------------------------- pane -> content
 
@@ -471,6 +483,9 @@ class State:
             return False
         da, db = self.main_doc(), other.main_doc()
         if da and db:
+            ta_, tb_ = norm(da.title()), norm(db.title())
+            if ta_ and tb_ and len(min(ta_, tb_, key=len)) >= 6 and (ta_.startswith(tb_) or tb_.startswith(ta_)):
+                return True
             x, y = da.identity(), db.identity()
             return x == y or difflib.SequenceMatcher(None, x, y, autojunk=False).ratio() >= 0.75
         if da or db:
