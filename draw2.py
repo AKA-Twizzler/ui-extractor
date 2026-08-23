@@ -392,7 +392,8 @@ def block_loose(pane, window_rect):
     w, h = x1 - x0, y1 - y0
     texts_in_order = [it["text"] for r in reading_order(items, lambda it: it["box"]) for it in r]
     if w < 0.3 * W and h > w:
-        return ["**Sidebar:** " + " · ".join(texts_in_order)], doubts
+        label = "Sidebar" if (x0 - window_rect[0]) < 0.5 * W else "Right panel"
+        return [f"**{label}:** " + " · ".join(texts_in_order)], doubts
     if h < 0.12 * H and y0 < window_rect[1] + 0.1 * H:
         return ["**Toolbar:** " + " · ".join(texts_in_order)], doubts
     return words_line(items), doubts
