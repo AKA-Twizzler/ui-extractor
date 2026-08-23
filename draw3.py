@@ -232,8 +232,8 @@ class Lines:
             # a folder with rows under it deeper than itself is open
             fixed = []
             for i, (t, h) in enumerate(self.lines):
-                nxt = self.lines[i + 1][0] if i + 1 < len(self.lines) else ""
-                if "˃" in t and nxt and tree_depth(nxt) > tree_depth(t):
+                after = [x for x, _ in self.lines[i + 1:i + 3]]
+                if "˃" in t and len(after) == 2 and all(tree_depth(x) > tree_depth(t) for x in after):
                     t2 = t.replace("˃", "˅", 1)
                     h = h.replace(esc(t), esc(t2)) if esc(t) in h else esc(t2)
                     t = t2
