@@ -183,7 +183,11 @@ def browser_behind(st):
             nw = re.sub(r"[^a-z0-9]", "", w.lower())
             if nw and not any(nw in re.sub(r"[^a-z0-9]", "", k.lower()) for k in keep):
                 keep.append(w)
-        return [w for w in words if w in keep]
+        out = []
+        for w in words:
+            if w in keep and w not in out:
+                out.append(w)
+        return out
     tabs, right = fold(tabs), fold(right)
     out = ['<div class="sn-browser">']
     if tabs:
