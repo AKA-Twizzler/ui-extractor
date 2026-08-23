@@ -124,13 +124,19 @@ class Table:
             t = it["text"]
             if not any(same_text(t, s) for s in self.top):
                 self.top.append(t)
-        items = sorted(bottom, key=lambda it: (round(it["box"][1] / 10), it["box"][0]))
-        crumbs = [it["text"].rstrip(">").strip() for it in items if draw2.crumb_like(it["text"]) and it["ok"]]
-        if len(crumbs) >= 2 and len(crumbs) >= len(self.path):
-            self.path = crumbs
-        for it in items:
-            if not draw2.crumb_like(it["text"]) and it["ok"] and it["text"] not in self.bottom:
-                self.bottom.append(it["text"])
+        rows_below = draw2.reading_order([it for it in bottom if it["ok"]], lambda it: it["box"])
+        best = []
+        for row in rows_below:
+            if len(row) >= 2 and all(draw2.crumb_like(it["text"]) for it in row):
+                crumbs = [it["text"].rstrip(">").strip() for it in row]
+                if len(crumbs) > len(best):
+                    best = crumbs
+            else:
+                for it in row:
+                    if it["text"] not in self.bottom:
+                        self.bottom.append(it["text"])
+        if len(best) >= len(self.path):
+            self.path = best
 
     def names(self):
         return [norm(r["cells"][0]) for r in self.rows if r["cells"] and r["cells"][0]]
@@ -226,180 +232,205 @@ def folder_marks(table):
 
 
 class State:
+    """One window showing one thing, across the moments it was on screen.
+
+    Its content is a list of parts in left-to-right order, each a table,
+    a tree, a note, a terminal or a strip of words, keyed by kind and the
+    eighth of the screen it starts in; a later moment's pane joins the
+    part in its place, so a scrolled note grows and a list gains rows."""
     def __init__(self, group, ts):
         self.name = group["name"]
         self.title = group.get("title")
         self.rect = group["rect"]
         self.where = group.get("where")
         self.times = [ts]
-        self.table = None
-        self.tree = None
-        self.doc = None
-        self.words = []         # (label, [words]) loose strips
-        self.term = None
+        self.parts = []         # {"kind", "slot", "model"}
         self.fine = []
-        self.said = []          # (ts, text)
+        self.said = []
         self.theme = None
-        self.key = None
+
+    # --------------------------------------------------------- content in
+
+    def part_for(self, kind, slot):
+        fam = {"a list of columns": "table", "a file tree": "tree", "an open document": "doc",
+               "a terminal": "term", "a chat log": "term"}.get(kind, "words")
+        for part in self.parts:
+            if part["fam"] == fam and abs(part["slot"] - slot) <= 1:
+                return part
+        model = Table() if fam == "table" else (Lines(kind) if fam in ("tree", "doc", "term") else [])
+        part = {"fam": fam, "slot": slot, "model": model}
+        self.parts.append(part)
+        self.parts.sort(key=lambda q: q["slot"])
+        return part
 
     def absorb(self, group, m):
-        """Take the group's panes into this state's content."""
         W = (m.get("size") or [1920])[0]
         rect = group["rect"]
         for p in sorted(group["panes"], key=lambda p: (p["box"][0], p["box"][1])):
             if p.get("since") or p.get("same_as"):
                 continue
             k = p["kind"]
+            slot = int(8 * p["box"][0] / max(1, W))
             if k == "a list of columns":
                 built = draw2.build_table(p)
                 if built:
-                    self.table = self.table or Table()
-                    self.table.add(built)
+                    self.part_for(k, slot)["model"].add(built)
             elif k == "a file tree":
                 pairs, fine = tree_pairs(p)
-                self.tree = self.tree or Lines(k)
-                self.tree.add(pairs)
+                self.part_for(k, slot)["model"].add(pairs)
                 self.fine.extend(fine)
             elif k == "an open document":
                 pairs, fine = doc_pairs(p)
-                self.doc = self.doc or Lines(k)
-                self.doc.add(pairs)
+                self.part_for(k, slot)["model"].add(pairs)
                 self.fine.extend(fine)
             elif k in ("a terminal", "a chat log"):
                 pairs = [(ln, esc(ln)) for ln in old.content_lines(p) if ln.strip()]
-                self.term = self.term or Lines(k)
-                self.term.add(pairs)
+                self.part_for(k, slot)["model"].add(pairs)
             else:
                 lines, fine = draw2.block_loose(p, rect)
                 self.fine.extend(fine)
+                words = self.part_for(k, slot)["model"]
                 for ln in lines:
                     label, _, rest = ln.partition(":** ")
-                    label = label.strip("* ") if rest else "words"
-                    words = [w.strip() for w in (rest or ln).replace(" &nbsp; ", " · ").split(" · ") if w.strip()]
-                    home = next((w for w in self.words if w[0] == label), None)
-                    if home is None:
-                        self.words.append((label, words))
-                    else:
-                        for w in words:
-                            if not any(same_text(w, x) for x in home[1]):
-                                home[1].append(w)
+                    for w in (rest or ln).replace(" &nbsp; ", " · ").split(" · "):
+                        w = w.strip()
+                        if w and not any(same_text(w, x) for x in words):
+                            words.append(w)
         th = old.theme_of(group["panes"])
         self.theme = self.theme or th
         if m["ts"] not in self.times:
             self.times.append(m["ts"])
-        if not self.title and self.table:
+        table = self.main_table()
+        if not self.title and table:
             # the folder's name: the path's last crumb, completed by the
             # title-bar word it begins (a crumb is often cut: "jaredr")
-            end = self.table.path[-1] if self.table.path else ""
+            end = table.path[-1] if table.path else ""
             if end and norm(end) not in GENERIC:
-                tops = [t for t in self.table.top if not re.fullmatch(r"[0O]+", t)]
+                tops = [t for t in table.top if not re.fullmatch(r"[0O]+", t)]
                 hit = next((t for t in tops if norm(t).startswith(norm(end)) and len(t) > len(end)), None)
                 self.title = hit or end
-        self.key = self.identity()
 
-    def identity(self):
-        parts = [norm(self.name)]
-        if self.table:
-            parts.append("list:" + self.table.identity())
-        if self.doc:
-            parts.append("doc:" + self.doc.identity())
-        elif self.tree:
-            parts.append("tree:" + self.tree.identity()[:30])
-        return "|".join(parts)
+    # --------------------------------------------------------- identity
+
+    def main_table(self):
+        tables = [q["model"] for q in self.parts if q["fam"] == "table"]
+        return max(tables, key=lambda t: len(t.rows)) if tables else None
+
+    def main_doc(self):
+        docs = [q["model"] for q in self.parts if q["fam"] == "doc"]
+        return max(docs, key=lambda d: len(d.lines)) if docs else None
+
+    def tree(self):
+        trees = [q["model"] for q in self.parts if q["fam"] == "tree"]
+        return max(trees, key=lambda d: len(d.lines)) if trees else None
+
+    def words(self):
+        return [w for q in self.parts if q["fam"] == "words" for w in q["model"]]
+
+    def has_content(self):
+        return any((q["model"].rows if q["fam"] == "table" else q["model"].lines if q["fam"] in ("tree", "doc", "term") else q["model"]) for q in self.parts)
 
     def same_thing(self, other):
         """The same window showing the same thing. A list shows the same
-        folder when half its row names are shared (a scrolled list shares
-        fewer but overlaps at an edge, which stitch() then extends); a note
-        is the same note by its title; a tree alone by its first rows."""
+        folder when half its row names are shared, or the lists overlap at
+        an edge (scrolled), or two long lists with no row in common have
+        paths naming the same folder; a note is the same note by its
+        title; a tree alone by its first rows; words by their likeness."""
         if self.name != other.name:
             return False
-        if self.table and other.table:
-            a, b = set(self.table.names()), set(other.table.names())
+        ta, tb = self.main_table(), other.main_table()
+        if ta and tb:
+            a, b = set(ta.names()), set(tb.names())
             if not a or not b:
                 return False
-            shared = len(a & b) / min(len(a), len(b))
-            if shared >= 0.5:
+            if len(a & b) / min(len(a), len(b)) >= 0.5:
                 return True
-            # scrolled: the new list's first rows are the old list's last rows
-            an, bn = self.table.names(), other.table.names()
+            an, bn = ta.names(), tb.names()
             if any(x == bn[0] for x in an[-3:]) or any(x == an[0] for x in bn[-3:]):
                 return True
-            # scrolled past any overlap: two long lists with no row in
-            # common, whose paths name the same folder
             if len(an) >= 10 and len(bn) >= 10 and not (a & b):
-                fa, fb = folder_marks(self.table), folder_marks(other.table)
+                fa, fb = folder_marks(ta), folder_marks(tb)
                 return bool(fa and fb and fa & fb)
             return False
-        if self.doc and other.doc:
-            return self.doc.identity() == other.doc.identity() or difflib.SequenceMatcher(
-                None, self.doc.identity(), other.doc.identity(), autojunk=False).ratio() >= 0.8
-        if self.tree and other.tree and not (self.doc or other.doc):
-            a, b = self.tree.identity(), other.tree.identity()
-            return difflib.SequenceMatcher(None, a, b, autojunk=False).ratio() >= 0.8
-        if self.words and other.words and not (self.table or self.doc or self.tree or other.table or other.doc or other.tree):
-            a = " ".join(w for _, ws in self.words for w in ws)
-            b = " ".join(w for _, ws in other.words for w in ws)
-            return difflib.SequenceMatcher(None, norm(a), norm(b), autojunk=False).ratio() >= 0.8
-        return bool(self.table) == bool(other.table) and bool(self.doc) == bool(other.doc) and bool(self.tree) == bool(other.tree) and False
+        if ta or tb:
+            return False
+        da, db = self.main_doc(), other.main_doc()
+        if da and db:
+            x, y = da.identity(), db.identity()
+            return x == y or difflib.SequenceMatcher(None, x, y, autojunk=False).ratio() >= 0.8
+        if da or db:
+            return False
+        ra, rb = self.tree(), other.tree()
+        if ra and rb:
+            return difflib.SequenceMatcher(None, ra.identity(), rb.identity(), autojunk=False).ratio() >= 0.8
+        if ra or rb:
+            return False
+        wa, wb = norm(" ".join(self.words())), norm(" ".join(other.words()))
+        return bool(wa and wb) and difflib.SequenceMatcher(None, wa, wb, autojunk=False).ratio() >= 0.8
 
     # --------------------------------------------------------- the drawing
 
     def heading(self):
-        span = self.times[0] if len(self.times) == 1 else f"{self.times[0]} to {self.times[-1]}"
+        if len(self.times) == 1:
+            span = self.times[0]
+        elif len(self.times) == 2:
+            span = f"{self.times[0]} and {self.times[1]}"
+        else:
+            span = f"{self.times[0]} to {self.times[-1]}"
         what = f", {self.title}" if self.title else ""
         return f"## {self.name}{what} - as at {span}"
 
     def window_html(self):
-        side_html = ""
-        side_words = []
-        if self.table and self.table.side:
-            side_words = self.table.side
-        for label, words in self.words:
-            if label in ("Sidebar",) and not side_words:
-                side_words = words
-        if side_words:
-            side_html = '<div class="sn-side">' + "<br>".join(esc(w) for w in side_words) + "</div>"
-        main = []
-        top_words = (self.table.top if self.table else [])
-        for label, words in self.words:
-            if label == "Toolbar":
-                top_words = top_words + [w for w in words if w not in top_words]
-        title_bar = ""
-        if self.title or top_words:
-            t = f"<b>{esc(self.title)}</b> " if self.title else ""
-            title_bar = '<div class="sn-titlebar">' + t + " &nbsp; ".join(esc(w) for w in top_words if w != self.title) + "</div>"
-        if self.tree:
-            main.append('<div class="sn-tree">' + "\n".join(h for _, h in self.tree.lines) + "</div>")
-        if self.table:
-            main.append('<div class="sn-body">' + self.table.html() + "</div>")
-        if self.doc:
-            main.append('<div class="sn-doc">' + "".join(h for _, h in self.doc.lines) + "</div>")
-        if self.term:
-            main.append('<div class="sn-tree">' + "\n".join(h for _, h in self.term.lines) + "</div>")
+        table = self.main_table()
+        side_words, top_words, path, bottom = [], [], [], []
+        if table:
+            side_words, top_words, path, bottom = list(table.side), list(table.top), list(table.path), list(table.bottom)
+        cols = []
         extra = []
-        for label, words in self.words:
-            if label in ("Sidebar", "Toolbar") and (side_words is words or label == "Toolbar"):
-                continue
-            if label == "Sidebar":
-                continue
-            extra.append(f"<div class=\"sn-body\"><b>{esc(label)}:</b> " + " &nbsp;·&nbsp; ".join(esc(w) for w in words) + "</div>")
-        foot = ""
-        if self.table and self.table.path:
-            foot = '<div class="sn-pathbar">' + "›".join(f"<span>{esc(c)}</span>" for c in self.table.path) + "</div>"
-        elif self.table and self.table.bottom:
-            foot = '<div class="sn-pathbar">' + " &nbsp;·&nbsp; ".join(esc(w) for w in self.table.bottom) + "</div>"
-        if self.tree and (self.doc or self.table):
-            cols = '<div class="sn-cols sn-wide-left">' + main[0] + "".join(main[1:]) + "</div>"
-            body = cols
-        elif side_html:
-            body = '<div class="sn-cols">' + side_html + "".join(main) + "</div>"
-        else:
-            body = "".join(main)
-        if not (main or side_html):
+        first_slot = self.parts[0]["slot"] if self.parts else 0
+        for q in self.parts:
+            fam, model = q["fam"], q["model"]
+            if fam == "table":
+                cols.append('<div class="sn-body">' + model.html() + "</div>")
+            elif fam == "tree":
+                cols.append('<div class="sn-tree">' + "\n".join(h for _, h in model.lines) + "</div>")
+            elif fam == "doc":
+                cols.append('<div class="sn-doc">' + "".join(h for _, h in model.lines) + "</div>")
+            elif fam == "term":
+                cols.append('<div class="sn-tree">' + "\n".join(h for _, h in model.lines) + "</div>")
+            else:
+                if not model:
+                    continue
+                # a strip of words: the left-most one is the sidebar when no
+                # table brought its own; a top strip is the title bar's
+                # words; the rest sit beside the content
+                if q is self.parts[0] and not side_words and len(self.parts) > 1:
+                    side_words = list(model)
+                elif not cols and not side_words and len(self.parts) == 1:
+                    cols.append('<div class="sn-body">' + " &nbsp;·&nbsp; ".join(esc(w) for w in model) + "</div>")
+                else:
+                    extra.append('<div class="sn-side">' + "<br>".join(esc(w) for w in model) + "</div>")
+        if not (cols or side_words or extra):
             return ""
+        title_bar = ""
+        tops = [w for w in top_words if w != self.title and not re.fullmatch(r"[0O]+", w)]
+        if self.title or tops:
+            t = f"<b>{esc(self.title)}</b> " if self.title else ""
+            title_bar = '<div class="sn-titlebar">' + t + " &nbsp; ".join(esc(w) for w in tops) + "</div>"
+        side_html = ('<div class="sn-side">' + "<br>".join(esc(w) for w in side_words) + "</div>") if side_words else ""
+        n = len(cols) + (1 if side_html else 0) + len(extra)
+        if n >= 2:
+            cls = "sn-cols sn-wide-left" if (self.tree() and not side_html) else ("sn-cols sn-three" if n >= 3 else "sn-cols")
+            body = f'<div class="{cls}">' + side_html + "".join(cols) + "".join(extra) + "</div>"
+        else:
+            body = side_html + "".join(cols) + "".join(extra)
+        foot = ""
+        if path:
+            foot = '<div class="sn-pathbar">' + "›".join(f"<span>{esc(c)}</span>" for c in path) + "</div>"
+        elif bottom:
+            foot = '<div class="sn-pathbar">' + " &nbsp;·&nbsp; ".join(esc(w) for w in bottom) + "</div>"
         cls = "sn-window sn-dark" if self.theme == "dark" else "sn-window"
-        return f'<div class="{cls}">{title_bar}{body}{"".join(extra)}{foot}</div>'
+        return f'<div class="{cls}">{title_bar}{body}{foot}</div>'
 
     def said_html(self):
         out = []
@@ -438,7 +469,7 @@ def build_states(moments):
         for g in groups:
             probe = State(g, m["ts"])
             probe.absorb(g, m)
-            if not (probe.table or probe.tree or probe.doc or probe.term or probe.words):
+            if not probe.has_content():
                 continue
             slot = draw2.group_key(g, W)
             all_repeat = all(p.get("since") or p.get("same_as") for p in g["panes"])
