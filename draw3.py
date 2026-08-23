@@ -1039,6 +1039,13 @@ def flat(s):
     return re.sub(r"[^a-z0-9]", "", s.lower())
 
 
+FOLD = str.maketrans({"0": "o", "1": "l", "i": "l"})
+
+
+def fold(s):
+    return s.translate(FOLD)
+
+
 def rebuild_line(h, t):
     """A plain doc line's HTML rebuilt around mended text, its class,
     indent and cut mark kept; None when the line is not a plain div."""
@@ -1314,23 +1321,30 @@ def harmonise(states):
     # one canonical spelling per name: among every reading that flattens
     # alike, the one with the most of its letters intact (capitals, dots,
     # spaces survive OCR worst, so the fullest form is the truest)
-    canon = {}
+    canon, canon_fold = {}, {}
+    def rank_of(c):
+        return (sum(1 for ch in c if ch.isupper()), sum(1 for ch in c if not ch.isalnum()), len(c))
     for c in clean + [w for w in draw2.SIDEBAR_WORDS if len(w) >= 5]:
         f = flat(c)
-        cur = canon.get(f)
-        rank = (sum(1 for ch in c if ch.isupper()), len(c))
-        if cur is None or rank > (sum(1 for ch in cur if ch.isupper()), len(cur)):
+        if canon.get(f) is None or rank_of(c) > rank_of(canon[f]):
             canon[f] = c
+        g = fold(f)
+        if canon_fold.get(g) is None or rank_of(c) > rank_of(canon_fold[g]):
+            canon_fold[g] = c
 
     def exact_fix(name):
         f = flat(name)
         c = canon.get(f)
         if c and c != name:
             return c
-        if c is None and f.endswith("md") and len(f) >= 10:
-            base = canon.get(f[:-2])
-            if base and len(flat(base)) >= 8 and not base.lower().endswith(".md"):
-                return base + ".md"
+        if c is None:
+            c = canon_fold.get(fold(f))
+            if c and c != name and flat(c) != f:
+                return c
+            if f.endswith("md") and len(f) >= 10:
+                base = canon.get(f[:-2])
+                if base and len(flat(base)) >= 8 and not base.lower().endswith(".md"):
+                    return base + ".md"
         return None
 
     def better(name, fuzzy=False):
