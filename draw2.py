@@ -387,11 +387,12 @@ def _build_table(items, spill=None):
     # the sidebar's strip is the sidebar's; a sentence is the window behind
     rest = []
     last_y = y_hi
-    for r in table_rows(sorted(bottom, key=lambda it: it["box"][1]), rh):
-        r = sorted(r, key=lambda it: it["box"][0])
+    below_rows = [sorted(r, key=lambda it: it["box"][0]) for r in table_rows(sorted(bottom, key=lambda it: it["box"][1]), rh)]
+    last_wide = max((i for i, r in enumerate(below_rows) if len(r) >= 2), default=-1)
+    for bi, r in enumerate(below_rows):
         ry0 = min(it["box"][1] for it in r)
         crumbs = sum(1 for it in r if crumb_like(it["text"]) or it["text"].endswith(">"))
-        if crumbs >= 2 and crumbs >= len(r) - 1 and not rest:
+        if crumbs >= 2 and crumbs >= len(r) - 1 and not rest and bi >= last_wide:
             rest.extend(r)        # the path bar: the list ends above it
             continue
         if side_x and all(it["box"][2] <= side_x[1] + rh for it in r):
@@ -494,7 +495,10 @@ def table_from_items(items):
     x_lo = cols[0][0]
     x_end = cols[-1][1] + 3 * rh         # beyond the last heading's reach: another window
     top, side, body, bottom = [], [], [], []
-    for r in rows:
+    def listy(r):
+        return sum(1 for it in r if it["box"][2] > x_lo - rh and it["box"][0] <= x_end) >= 2
+    last_listy = max((i for i, r in enumerate(rows) if listy(r)), default=-1)
+    for ri, r in enumerate(rows):
         if r is head_row:
             continue
         cy = (r[0]["box"][1] + r[0]["box"][3]) / 2
@@ -503,7 +507,9 @@ def table_from_items(items):
                 it["above"] = (hy - cy) / rh
             top.extend(r)
             continue
-        if len(r) >= 2 and all(crumb_like(it["text"]) or it["text"].endswith(">") for it in r) and cy > hy + 3 * rh:
+        # the path bar: a row of crumbs with no list row under it
+        if (len(r) >= 2 and all(crumb_like(it["text"]) or it["text"].endswith(">") for it in r) and cy > hy + 3 * rh
+                and ri >= last_listy):
             bottom.extend(it for it in r if it["box"][2] > x_lo - rh)
             continue
         in_list = [it for it in r if it["box"][2] > x_lo - rh and it["box"][0] <= x_end

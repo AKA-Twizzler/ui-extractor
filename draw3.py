@@ -566,12 +566,28 @@ class State:
                 pairs = [(ln, esc(ln)) for ln in old.content_lines(p) if ln.strip()]
                 part["model"].add(pairs)
             else:
-                built = None if any(q["fam"] == "table" for q in self.parts) else draw2.table_from_loose(p)
+                built = draw2.table_from_loose(p)
+                have = next((q for q in self.parts if q["fam"] == "table"), None)
+                if built and have:
+                    # the list read loose again: the same folder's rows and
+                    # sidebar join the table already here; another folder
+                    # behind stays words
+                    names_new = {norm(c[0]) for c, _, _ in built[3] if c and c[0]}
+                    names_old = set(have["model"].names())
+                    shared = len(names_new & names_old) / max(1, min(len(names_new), len(names_old)))
+                    if shared >= 0.5 or not names_old:
+                        self.parts.remove(part)
+                        have["model"].add(built)
+                        if built[6]:
+                            have["x0"] = min(have["x0"], built[6][0]) if have["x0"] is not None else built[6][0]
+                            have["x1"] = max(have["x1"], built[6][1]) if have["x1"] is not None else built[6][1]
+                        continue
+                    built = None
                 if built:
                     # a list the reader left loose: its table, rebuilt
                     self.parts.remove(part)
                     tpart = self.part_for("a list of columns", slot)
-                    tpart["x0"], tpart["x1"] = p["box"][0], p["box"][2]
+                    tpart["x0"], tpart["x1"] = (built[6] if built[6] else (p["box"][0], p["box"][2]))
                     tpart["model"].add(built)
                     continue
                 lines, fine = draw2.block_loose(p, rect)
