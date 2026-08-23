@@ -236,7 +236,7 @@ class Lines:
         or a scrap."""
         for t, _ in self.lines:
             t = t.strip().strip("#*> ").strip()
-            if not t or t.startswith("---") or re.match(r"^[A-Za-z_ ]{1,16}: ", t) or old.is_bar(t):
+            if not t or t.startswith("---") or old.is_bar(t):
                 continue
             if len(norm(t)) < 4:
                 continue
