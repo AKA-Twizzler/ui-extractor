@@ -566,7 +566,10 @@ def alike(a, b):
         return 0.0
     def covered(xs, ys):
         scraps = 0
+        whole = "".join(ys)
         for x in xs:
+            if len(x) >= 6 and x in whole:
+                continue          # the same text, split into lines differently
             best = max((difflib.SequenceMatcher(None, x, y, autojunk=False).ratio() for y in ys
                         if abs(len(x) - len(y)) <= max(4, 0.3 * len(x))), default=0.0)
             if best < 0.8:
