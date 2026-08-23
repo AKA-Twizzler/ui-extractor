@@ -463,30 +463,44 @@ def window_groups(m):
         structural = [p for p in rest if p["kind"] in old.STRUCTURAL]
         loose = [p for p in rest if p["kind"] not in old.STRUCTURAL]
         taken = set()
-        # structural panes that touch are one window (a tree beside its note)
+        # panes that touch, directly or through a narrow strip between them,
+        # are one window (a tree, the panel beside it, and the note)
+        def narrow(p):
+            return (p["box"][2] - p["box"][0]) < 0.3 * W
         clusters = []
         for sp in sorted(structural, key=lambda p: p["box"][0]):
-            home = next((c for c in clusters if any(touching(sp["box"], q["box"], W) for q in c)), None)
-            if home is None:
-                clusters.append([sp])
-            else:
-                home.append(sp)
+            members = [sp]
+            grew = True
+            while grew:
+                grew = False
+                for q in rest:
+                    if q is sp or id(q) in taken or q in members:
+                        continue
+                    if q["kind"] not in old.STRUCTURAL and not narrow(q):
+                        continue
+                    if any(touching(q["box"], r["box"], W) for r in members):
+                        members.append(q)
+                        grew = True
+            # a structural pane already claimed by an earlier cluster means
+            # this one joined it through the chain; fold them together
+            home = next((c for c in clusters if any(r in c for r in members)), None)
+            if home is not None:
+                for r in members:
+                    if r not in home:
+                        home.append(r)
+                continue
+            clusters.append(members)
         for members in clusters:
             sp = members[0]
-            for lp in loose:
-                if id(lp) in taken:
-                    continue
-                narrow = (lp["box"][2] - lp["box"][0]) < 0.3 * W
-                if narrow and any(touching(lp["box"], q["box"], W) for q in members if q["kind"] in old.STRUCTURAL):
-                    members.append(lp)
-                    taken.add(id(lp))
+            for q in members:
+                taken.add(id(q))
             e = {"rect": [0, 0] + size, "top": None}
             name = name_of(e, members) or f"A window, {sp.get('where') or 'on the screen'}"
             x0 = min(p["box"][0] for p in members); x1 = max(p["box"][2] for p in members)
             y0 = min(p["box"][1] for p in members); y1 = max(p["box"][3] for p in members)
             groups.append({"name": name, "title": None, "rect": [x0, y0, x1, y1], "panes": members, "where": sp.get("where")})
         for lp in loose:
-            if id(lp) in taken:
+            if id(lp) in taken or any(lp in c for c in clusters):
                 continue
             e = {"rect": [0, 0] + size, "top": None}
             name = name_of(e, [lp]) or f"Loose words, {lp.get('where') or 'on the screen'}"
@@ -538,7 +552,17 @@ SAME = 0.9
 
 
 def flat(lines):
-    return re.sub(r"[^a-z0-9]+", "", " ".join(lines).lower())
+    text = re.sub(r"&[a-z]+;|<[^>]+>", " ", " ".join(lines))
+    return re.sub(r"[^a-z0-9]+", "", text.lower())
+
+
+def alike(a, b):
+    return difflib.SequenceMatcher(None, flat(a), flat(b), autojunk=False).ratio()
+
+
+def group_key(g, W):
+    """A window's identity across moments: its name and where it stands."""
+    return f"{g['name']}@{int(8 * g['rect'][0] / max(1, W))}"
 
 
 def draw_moment(m, prev_clock, prev_groups=None):
@@ -559,19 +583,19 @@ def draw_moment(m, prev_clock, prev_groups=None):
     out = [head]
     doubts = []
     drawn = {}
+    W = (m.get("size") or [1920])[0]
     for g in groups:
         lines, d = draw_group(g)
         g["ts"] = m["ts"]
-        drawn[g["name"]] = (lines, g)
+        key = group_key(g, W)
+        drawn[key] = (lines, g)
         # the same window drawn the same way a moment ago: one line back
-        before = (prev_groups or {}).get(g["name"])
-        if before and lines and before[0]:
-            if difflib.SequenceMatcher(None, flat(lines), flat(before[0])).ratio() >= SAME:
-                drawn[g["name"]] = before      # the earlier drawing stands as the reference
-                out.append("")
-                out.append(f"> [!window] {g['name']} - the same as at {before[1].get('ts', '?')}")
-                continue
-        g["ts"] = m["ts"]
+        before = (prev_groups or {}).get(key)
+        if before and lines and before[0] and alike(lines, before[0]) >= SAME:
+            drawn[key] = before      # the earlier drawing stands as the reference
+            out.append("")
+            out.append(f"> [!window] {g['name']} - the same as at {before[1].get('ts', '?')}")
+            continue
         doubts.extend(d)
         if lines:
             out.append("")
