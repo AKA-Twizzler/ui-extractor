@@ -174,7 +174,14 @@ def browser_behind(st):
                     right.append(it["text"])
                 elif not any(abs(it["box"][0] - x) < 40 for _, x in tabs) and not old_clock(it["text"]):
                     tabs.append((it["text"], it["box"][0]))
-    tabs = [t for t, _ in sorted(tabs, key=lambda tx: tx[1])]
+    joined_tabs = []
+    for t, x in sorted(tabs, key=lambda tx: tx[1]):
+        # a piece that starts mid-word is the tail of the tab before it
+        if joined_tabs and (t[:1].islower() or t[:1] in "-–—"):
+            joined_tabs[-1] = joined_tabs[-1] + t
+        else:
+            joined_tabs.append(t)
+    tabs = joined_tabs
     if not (tabs or address):
         return ""
     def fold(words):
