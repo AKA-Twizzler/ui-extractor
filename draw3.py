@@ -925,9 +925,14 @@ def harmonise(states):
     ("03 Company B (Landscape Company)" from the tree where it read clean)."""
     clean = []
     for st in states:
+        if st.title and len(st.title) >= 3 and st.title not in clean:
+            clean.append(st.title)
         for q in st.parts:
             if q["fam"] != "table":
                 continue
+            for c in q["model"].path:
+                if len(c) >= 5 and c not in clean and not c.endswith("…"):
+                    clean.append(c)
             for r in q["model"].rows:
                 if r["cells"] and r["cells"][0] and not (r["italic"] and r["italic"][0]):
                     n = r["cells"][0]

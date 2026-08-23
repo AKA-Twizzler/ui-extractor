@@ -94,6 +94,12 @@ def finder(st):
         cells = list(r["cells"]) + [""] * (n - len(r["cells"]))
         it = list(r["italic"]) + [False] * (n - len(r["italic"]))
         kind = cells[kind_i] if kind_i is not None else ""
+        if kind_i is not None:
+            m = re.match(r"^(\d+\s?(?:bytes|KB|MB|GB))\s+(.*)$", kind)
+            if m:
+                cells[kind_i] = kind = m.group(2)
+                if size_i is not None and not cells[size_i]:
+                    cells[size_i] = m.group(1)
         folder = bool(FOLDER_KIND.match(kind)) or (r.get("icon") == "green") or (
             kind_i is None and "." not in cells[name_i] and not re.search(r"\d", cells[name_i]))
         tds = []
@@ -267,6 +273,7 @@ def bulleted(h):
     if not m:
         return h
     tag, indent, _, rest = m.groups()
+    rest = re.sub(r"</div>\s*$", "", rest)
     depth = len(indent) // 12
     cls = ' class="sn-li"' if 'class="' not in tag else tag[4:-1].replace('class="', 'class="sn-li ')
     return f'<div{cls} style="margin-left:{depth * 14}px"><span class="sn-bullet">•</span>{rest}</div>'
