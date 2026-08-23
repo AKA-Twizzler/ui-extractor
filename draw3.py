@@ -412,6 +412,23 @@ class State:
                 continue
             k = p["kind"]
             slot = int(8 * p["box"][0] / max(1, W))
+            if k == "an open document":
+                # the tree, scrolled so far that the reader saw a plain list
+                # of names where the tree stood: those names are its rows
+                tree_part = next((q for q in self.parts if q["fam"] == "tree" and q["x0"] is not None
+                                  and min(q["x1"], p["box"][2]) - max(q["x0"], p["box"][0]) >= 0.5 * (p["box"][2] - p["box"][0])), None)
+                if tree_part:
+                    names = [t for t, _ in doc_pairs(p)[0]]
+                    names = [n.strip().strip("#*> ").strip() for n in names if not n.startswith("---")]
+                    namelike = [n for n in names if n.count(" ") <= 2 and "..." not in n and re.search(r"[a-z]{4}", n)]
+                    if names and len(namelike) >= 0.6 * len(names):
+                        tree = tree_part["model"]
+                        twin = next((t for t, _ in tree.lines if any(same_text(t.strip("│ ˃˅"), n) for n in namelike)), None)
+                        indent = twin[:len(twin) - len(twin.lstrip("│ "))] if twin else ""
+                        tree.add([(indent + n, esc(indent + n)) for n in namelike])
+                        tree_part["x0"] = min(tree_part["x0"], p["box"][0])
+                        tree_part["x1"] = max(tree_part["x1"], p["box"][2])
+                        continue
             part = self.part_for(k, slot)
             part["x0"] = p["box"][0] if part["x0"] is None else min(part["x0"], p["box"][0])
             part["x1"] = p["box"][2] if part["x1"] is None else max(part["x1"], p["box"][2])
