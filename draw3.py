@@ -1552,19 +1552,20 @@ def harmonise(states):
                         f = flat(c)
                         b = exact_fix(c)
                         if not b and len(f) >= 4 and f not in strong_flats and canon.get(f, c) == c:
-                            starts = [p for p in canon.values()
-                                      if flat(p).startswith(f) and flat(p) != f and flat(p) != f + "md"
-                                      and len(flat(p)) - len(f) <= 12]
-                            starts = [p for p in starts
-                                      if not any(p2 is not p and flat(p2).startswith(flat(p)) for p2 in starts)]
-                            if len({flat(p) for p in starts}) == 1:
-                                b = starts[0]
-                            elif not starts and len(f) >= 8:
-                                close = [p for p in canon.values() if flat(p) != f
-                                         and len(f) < len(flat(p)) <= len(f) + 3
-                                         and difflib.SequenceMatcher(None, flat(p), f, autojunk=False).ratio() >= 0.85]
-                                if len({flat(p) for p in close}) == 1:
-                                    b = close[0]
+                            # Finder cuts a long crumb short: the folder's
+                            # real name is the pool name this crumb opens,
+                            # allowing one slip in what was read
+                            def opens(p):
+                                fp = flat(p)
+                                if len(fp) <= len(f) or len(fp) - len(f) > 16:
+                                    return False
+                                head = fp[:len(f)]
+                                return sum(1 for x, y in zip(head, f) if x != y) <= (0 if len(f) < 6 else 1)
+                            starts = [p for p in canon.values() if opens(p)]
+                            if starts:
+                                longest = max(starts, key=lambda p: len(flat(p)))
+                                if all(crumb_same(p, longest) for p in starts):
+                                    b = longest
                         if b:
                             path[i] = b
                 # the crumbs read at different moments chain into the one
