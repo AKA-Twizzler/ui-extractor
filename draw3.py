@@ -310,8 +310,38 @@ class Lines:
         self.lines = []         # (text, html)
 
     def add(self, pairs):
+        pairs = list(pairs)
+        if self.kind == "an open document" and self.lines:
+            pairs = self.rewrapped(pairs)
         same = same_line if self.kind == "an open document" else same_text
-        self.lines = stitch(self.lines, list(pairs), key=lambda p: p[0], same=same)
+        self.lines = stitch(self.lines, pairs, key=lambda p: p[0], same=same)
+
+    def rewrapped(self, pairs):
+        """The new lines against the note's text so far: one whose words are
+        already there (the window wider or narrower, the lines re-wrapped)
+        is dropped; one holding an old line whole takes its place."""
+        def plain(t):
+            return norm(t.strip().strip("#*> ").strip())
+        blob = " ".join(plain(t) for t, _ in self.lines if not t.startswith("---"))
+        blob_flat = blob.replace(" ", "")
+        out = []
+        for t, h in pairs:
+            n = plain(t)
+            if t.startswith("---") or len(n) < 12:
+                out.append((t, h))
+                continue
+            if n in blob_flat:
+                continue
+            holds = [i for i, (o, _) in enumerate(self.lines) if not o.startswith("---") and len(plain(o)) >= 12 and plain(o) in n]
+            if holds:
+                first = holds[0]
+                self.lines[first] = (t, h)
+                for i in reversed(holds[1:]):
+                    del self.lines[i]
+                blob_flat = " ".join(plain(x) for x, _ in self.lines if not x.startswith("---")).replace(" ", "")
+                continue
+            out.append((t, h))
+        return out
         if self.kind == "a file tree":
             # a folder with rows under it deeper than itself is open
             fixed = []
@@ -392,6 +422,9 @@ def doc_pairs(pane):
         m = re.match(r"^(\s*)(#{1,6}) ([a-z].*)$", body)
         if m:
             raw = m.group(1) + m.group(3) + ((" <- " + tail) if tail else "")
+        m = re.match(r"^(\s*)(#{1,6}) (.{60,})$", body)
+        if m and m.group(3).rstrip().endswith((".", ":", ",")):
+            raw = m.group(1) + m.group(3) + ((" <- " + tail) if tail else "")
         if body.count("**") % 2 == 1:
             raw = raw.replace("**", "", 1) if raw.count("**") % 2 == 1 else raw
         h = old.doc_line(raw, fine)
@@ -439,6 +472,7 @@ class State:
         self.times = [ts]
         self.parts = []         # {"kind", "slot", "model"}
         self.fine = []
+        self.furniture = []      # words read above a tree: tab strips, menus
         self.said = []
         self.theme = None
 
@@ -475,6 +509,7 @@ class State:
                     namelike = [n for n in names if n.rstrip(".").count(" ") <= 2 and "..." not in n.rstrip(".")
                                 and re.search(r"[a-z]{4}", n) and not old.CLOCK.match(n)
                                 and all(w[:1].isupper() or w[:1].isdigit() for w in n.split()[1:])]
+                    namelike = [n for n in namelike if not any(same_text(n, f) for f in self.furniture)]
                     if names and len(namelike) >= 0.6 * len(names):
                         tree = tree_part["model"]
                         twin = next((t for t, _ in tree.lines if any(same_text(t.strip("│ ˃˅"), n) for n in namelike)), None)
@@ -504,6 +539,9 @@ class State:
                 pairs, fine = tree_pairs(p)
                 part["model"].add(pairs)
                 self.fine.extend(fine)
+                for r in (p.get("data") or {}).get("remainder") or []:
+                    if r.get("where") == "above" and r.get("text"):
+                        self.furniture.append(r["text"])
             elif k == "an open document":
                 pairs, fine = doc_pairs(p)
                 part["model"].add(pairs)
@@ -614,7 +652,14 @@ class State:
             if self.title and other.title and same_text(self.title, other.title) and min(len(a), len(b)) < 3:
                 return True
             if not a or not b:
-                return False
+                # a reading with the names out of view: the same list when
+                # its other cells repeat rows of the other
+                nameless, named = (ta, tb) if not a else (tb, ta)
+                rests = [" ".join(r["cells"][1:]).strip() for r in nameless.rows]
+                rests = [r for r in rests if r]
+                have = [" ".join(r["cells"][1:]).strip() for r in named.rows]
+                hits = sum(1 for r in rests if any(same_text(r, h) for h in have))
+                return bool(rests) and hits * 2 >= len(rests) and len(rests) >= 2
             if len(a & b) / min(len(a), len(b)) >= 0.5:
                 return True
             an, bn = ta.names(), tb.names()
