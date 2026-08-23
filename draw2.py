@@ -38,13 +38,15 @@ def cell(s):
 
 def crumb_like(c):
     """A path crumb is a name: no space (up to 48 letters, a project folder
-    can be long), or one space after a capital; never an apostrophe."""
+    can be long), or a Title Case run ("02 Company A (Info Product)");
+    never an apostrophe, never a sentence's small words."""
     c = c.rstrip(">").strip()
     if "'" in c or not c:
         return False
     if " " not in c:
         return len(c) <= 48
-    return len(c) <= 28 and c.count(" ") == 1 and c[:1].isupper()
+    return (len(c) <= 40 and c.count(" ") <= 4 and (c[:1].isupper() or c[:1].isdigit())
+            and all(w[:1].isupper() or w[:1].isdigit() or w[:1] in "(" for w in c.split()))
 
 
 def reading_order(items, box_of):
