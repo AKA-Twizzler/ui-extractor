@@ -1125,7 +1125,9 @@ def mend_doc(model, st, clean):
             t = re.sub(r"\s*[|}{\]‘’]+\s*$", "", t)
             t = re.sub(r"\s\|(?=\s)", "", t)
             # a scrap of stray marks the reader dropped between two words
-            t = re.sub(r"(?<=[a-z,;])\s+[|_@<>{}\[\]]+\s+(?=[a-z(])", " ", t)
+            t = re.sub(r"(?<=[a-z,;])\s+[|_@{}\[\]]+\s+(?=[a-z(])", " ", t)
+            # the arrow the note draws, which the engines read as a chevron
+            t = re.sub(r"(?<=[a-z\u2019])\s[>\u203a]\s(?=[a-z])", " \u2192 ", t)
             t = re.sub(r"(?<=[.!?])\s+[a-z]{1,3}(\s+[a-z]{1,3})?\s*$", "", t)
             t = re.sub(r"\s*<\s*[a-z]{0,4}\s*$", "", t)
             if "…</div>" in h:
