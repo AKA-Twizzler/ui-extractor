@@ -400,6 +400,7 @@ class State:
                 hit = next((t for t, _ in tops if same_text(t, c) or norm(t).startswith(norm(c))), None)
                 if hit:
                     break
+            self.title_sure = bool(hit)
             if not hit and tpart and tpart["x0"] is not None and tops:
                 mid = (tpart["x0"] + tpart["x1"]) / 2
                 width = max(1, tpart["x1"] - tpart["x0"])
@@ -411,6 +412,7 @@ class State:
                 self.title = hit
             elif end and norm(end) not in GENERIC:
                 self.title = end
+                self.title_sure = True
 
     # --------------------------------------------------------- identity
 
@@ -435,7 +437,7 @@ class State:
         others = [q for q in self.parts if q["fam"] in ("tree", "doc", "term")]
         if not self.title and not t and not others:
             return True           # words only: a window behind, showing through
-        return bool(t) and not self.title and len(t.rows) < 3 and not others
+        return bool(t) and not getattr(self, "title_sure", False) and len(t.rows) < 3 and not others
 
     def has_content(self):
         return any((q["model"].rows if q["fam"] == "table" else q["model"].lines if q["fam"] in ("tree", "doc", "term") else q["model"]) for q in self.parts)
