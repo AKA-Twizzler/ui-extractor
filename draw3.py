@@ -159,6 +159,9 @@ class Table:
         kept = []
         for r in self.rows:
             if r["cells"] and r["cells"][0]:
+                name = r["cells"][0]
+                if not any(r["cells"][1:]) and len(name) > 40 and name.count(" ") >= 5:
+                    continue      # a sentence with no other cells: the window behind
                 kept.append(r)
                 continue
             rest = " ".join(r["cells"][1:]).strip()
@@ -557,7 +560,12 @@ class State:
         if table:
             side_words, top_words, path, bottom = list(table.side), list(table.top), list(table.path), list(table.bottom)
         cols = []       # (html, width in frame pixels)
-        for q in self.parts:
+        parts = self.parts
+        if self.name == "The Finder window" and table:
+            # Finder shows a list; a note or a tree in its frame is the
+            # window behind, and a second list is another Finder window
+            parts = [q for q in self.parts if q["fam"] == "words" or (q["fam"] == "table" and q["model"] is table)]
+        for q in parts:
             fam, model = q["fam"], q["model"]
             width = max(1, (q["x1"] or 0) - (q["x0"] or 0))
             if fam == "table":
@@ -584,10 +592,8 @@ class State:
         if not (cols or side_words):
             return ""
         title_bar = ""
-        tops = [w for w in top_words if w != self.title and not re.fullmatch(r"[0O]+", w)]
-        if self.title or tops:
-            t = f"<b>{esc(self.title)}</b> " if self.title else ""
-            title_bar = '<div class="sn-titlebar">' + t + " &nbsp; ".join(esc(w) for w in tops) + "</div>"
+        if self.title:
+            title_bar = f'<div class="sn-titlebar"><b>{esc(self.title)}</b></div>'
         if side_words:
             # the list's own sidebar: a fifth of the table's width, at its left
             table_part = next((q for q in self.parts if q["fam"] == "table" and q["model"] is table), None)

@@ -221,6 +221,8 @@ def build_table(pane):
     # a leftover inside the table's band joins a column by its x, or opens one
     for it in inside:
         cx = (it["box"][0] + it["box"][2]) / 2
+        if it["box"][0] > x_hi + rh:
+            continue              # right of the last column: not this list's
         hit = next((c for c in cols if c[0] - rh <= cx <= c[1] + rh), None)
         if hit is None:
             hit = [it["box"][0], it["box"][2]]
@@ -537,6 +539,8 @@ def window_groups(m):
             return (p["box"][2] - p["box"][0]) < 0.3 * W
         clusters = []
         for sp in sorted(structural, key=lambda p: p["box"][0]):
+            if id(sp) in taken:
+                continue
             members = [sp]
             grew = True
             while grew:
@@ -551,19 +555,11 @@ def window_groups(m):
                     if any(touching(q["box"], r["box"], W) for r in members):
                         members.append(q)
                         grew = True
-            # a structural pane already claimed by an earlier cluster means
-            # this one joined it through the chain; fold them together
-            home = next((c for c in clusters if any(r in c for r in members)), None)
-            if home is not None:
-                for r in members:
-                    if r not in home:
-                        home.append(r)
-                continue
+            for q in members:
+                taken.add(id(q))      # claimed: not available to the next cluster
             clusters.append(members)
         for members in clusters:
             sp = members[0]
-            for q in members:
-                taken.add(id(q))
             e = {"rect": [0, 0] + size, "top": None}
             name = name_of(e, members) or f"A window, {sp.get('where') or 'on the screen'}"
             x0 = min(p["box"][0] for p in members); x1 = max(p["box"][2] for p in members)
