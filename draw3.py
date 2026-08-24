@@ -375,9 +375,16 @@ class Table:
         Kind cell split out into the Size column -- the column added when the
         reader missed its heading."""
         hdr = self.header
-        di = next((i for i, h in enumerate(hdr) if h == "Date Modified"), None)
-        si = next((i for i, h in enumerate(hdr) if h == "Size"), None)
-        ki = next((i for i, h in enumerate(hdr) if h == "Kind"), None)
+        for i, h in enumerate(hdr):
+            if any(w in h for w in ("Name", "Date Modified", "Size", "Kind")):
+                hdr[i] = re.sub(r"[*_]", "", h).strip()     # marks are never the header's own
+        def col(want):
+            exact = next((i for i, h in enumerate(hdr) if h == want), None)
+            return exact if exact is not None else next(
+                (i for i, h in enumerate(hdr) if want in h), None)
+        di, si, ki = col("Date Modified"), col("Size"), col("Kind")
+        if si == di:
+            si = next((i for i, h in enumerate(hdr) if h == "Size" and i != di), si)
         if si is None and ki is not None and any(
                 ki < len(r["cells"]) and (lambda m: m and m[1])(tidy_size(r["cells"][ki])) for r in self.rows):
             si = ki
@@ -2021,41 +2028,88 @@ def state_slice(st, t0, t1):
     return out
 
 
+def name_fits(short, full_name):
+    """The same file, one reading cut shorter: equal flat, or the cut's two
+    ends opening and closing the full name."""
+    a, b = flat(short), flat(full_name)
+    if a == b:
+        return True
+    if "..." in short:
+        head, _, tail = short.partition("...")
+        af, bf = flat(head), flat(tail)
+        return bool(af and bf) and len(af) + len(bf) >= 8 and b.startswith(af) and b.endswith(bf)
+    return False
+
+
 def mend_cells(sl, full):
-    """A row on screen through the whole stretch keeps its settled cells: a
-    date the stretch's own frames showed mangled or covered did not change,
-    so the window's own settled reading of that same row stands in for it.
-    Rows are never added this way -- only cells of rows the stretch showed."""
-    settled = {}
-    for q in full.parts:
-        if not isinstance(q["model"], Table):
+    """A stretch shows the same window the whole state shows, so what the
+    stretch's own frames had mangled or covered is taken from the window's
+    settled reading: single cells (a date does not change), the path bar,
+    and rows the stretch's list skips BETWEEN rows it holds -- those were
+    covered, since the list did not scroll within the stretch. Rows above or
+    below the stretch's own are never added: they may be past the fold."""
+    ft, st_ = full.main_table(), sl.main_table()
+    if not ft or not st_:
+        return
+    # the path bar: the stretch's crumbs are the settled path read short
+    if ft.path and len(ft.path) >= len(st_.path) and st_.path:
+        walk = 0
+        for c in st_.path:
+            while walk < len(ft.path) and not (name_fits(c, ft.path[walk])
+                    or (len(flat(c)) >= 4 and flat(ft.path[walk]).startswith(flat(c)[:4]))):
+                walk += 1
+            if walk >= len(ft.path):
+                break
+            walk += 1
+        else:
+            st_.path = list(ft.path)
+    # single cells, matched by name even when the stretch read it cut
+    fulls = [(r["cells"][0], r) for r in ft.rows if r["cells"] and r["cells"][0]]
+    def settled_for(name):
+        for n, r in fulls:
+            if name_fits(name, n):
+                return r
+        return None
+    for r in st_.rows:
+        if not r["cells"] or not r["cells"][0]:
             continue
-        t = q["model"]
-        for r in t.rows:
-            if r["cells"] and r["cells"][0]:
-                settled[flat(r["cells"][0])] = (list(t.header), r)
-    for q in sl.parts:
-        if not isinstance(q["model"], Table):
+        fr = settled_for(r["cells"][0])
+        if not fr:
             continue
-        t = q["model"]
-        for r in t.rows:
-            if not r["cells"] or not r["cells"][0]:
+        for i, h in enumerate(st_.header):
+            if i == 0 or i >= len(r["cells"]):
                 continue
-            got = settled.get(flat(r["cells"][0]))
-            if not got:
+            j = ft.header.index(h) if h in ft.header else None
+            if j is None or j >= len(fr["cells"]) or not fr["cells"][j]:
                 continue
-            fh, fr = got
-            for i, h in enumerate(t.header):
-                if i == 0 or i >= len(r["cells"]):
-                    continue
-                j = fh.index(h) if h in fh else None
-                if j is None or j >= len(fr["cells"]) or not fr["cells"][j]:
-                    continue
-                bad = not r["cells"][i] or (h == "Date Modified" and not tidy_date(r["cells"][i]))
-                if bad:
-                    r["cells"][i] = fr["cells"][j]
-                    if i < len(r["italic"]):
-                        r["italic"][i] = False
+            bad = not r["cells"][i] or (h == "Date Modified" and not tidy_date(r["cells"][i]))
+            if bad:
+                r["cells"][i] = fr["cells"][j]
+                if i < len(r["italic"]):
+                    r["italic"][i] = False
+    # rows the stretch skips between rows it holds
+    if len(st_.rows) >= 2 and st_.header == ft.header:
+        idxs, walk, ok = [], 0, True
+        for r in st_.rows:
+            name = r["cells"][0] if r["cells"] else ""
+            hit = next((k for k in range(walk, len(ft.rows))
+                        if ft.rows[k]["cells"] and name and name_fits(name, ft.rows[k]["cells"][0])), None)
+            if hit is None:
+                ok = False
+                break
+            idxs.append(hit)
+            walk = hit + 1
+        if ok:
+            merged, prev = [], None
+            for r, k in zip(st_.rows, idxs):
+                if prev is not None and k > prev + 1:
+                    for j in range(prev + 1, k):
+                        fr = ft.rows[j]
+                        merged.append({**fr, "cells": list(fr["cells"]),
+                                       "italic": list(fr.get("italic") or []), "band": None})
+                merged.append(r)
+                prev = k
+            st_.rows = merged
 
 
 def frag_owner(frag, shown):
@@ -2068,15 +2122,15 @@ def frag_owner(frag, shown):
             model = q["model"]
             texts = ([t for t, _ in model.lines] if hasattr(model, "lines")
                      else [t for t in model if isinstance(t, str)] if isinstance(model, list) else [])
-            got |= {flat(t)[:40] for t in texts if len(flat(t)) >= 10}
+            got |= {flat(t)[:40] for t in texts if len(flat(t)) >= 6}
         return got
     mine = lines_of(frag)
     if not mine:
         return None
     scored = sorted(((len(mine & lines_of(st)), st) for st in shown), key=lambda x: -x[0])
-    if not scored or scored[0][0] < 2:
+    if not scored or scored[0][0] < 3:
         return None
-    if len(scored) > 1 and scored[1][0] >= 2:
+    if len(scored) > 1 and scored[1][0] >= 3:
         return "several"          # pieces of more than one window at once
     return scored[0][1]
 
