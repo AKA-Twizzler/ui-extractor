@@ -1780,7 +1780,18 @@ def snap_rect(items, mine, frame, W, H):
             best, score_best = r, score
     if best is None or score_best < 0.12:
         return None
-    return [float(v) for v in best]
+    inside = [it for it in mine
+              if best[0] - 12 <= (it["box"][0] + it["box"][2]) / 2 <= best[2] + 12
+              and best[1] - 12 <= (it["box"][1] + it["box"][3]) / 2 <= best[3] + 12]
+    share = len(inside) / float(len(mine))
+    if share < 0.75:
+        # the words run past this rectangle: two windows read as one, or a
+        # window wider than its drawn frame. The honest box holds them all.
+        bb = [min(it["box"][0] for it in mine), min(it["box"][1] for it in mine),
+              max(it["box"][2] for it in mine), max(it["box"][3] for it in mine)]
+        return ([min(best[0], bb[0]), min(best[1], bb[1]),
+                 min(float(W), max(best[2], bb[2])), min(float(H), max(best[3], bb[3]))], False)
+    return ([float(v) for v in best], True)
 
 
 def settle_rects(state, W, H):
@@ -1874,10 +1885,12 @@ def content_rect(state, group, m):
         return list(was[1])
     own = state_texts(state)
     mine = [it for it in items if fold(it["text"]) in own] if own else []
-    drawn = snap_rect(items, mine or items, frame_of(m), W, H)
-    if drawn:
-        state.measured.add(m["ts"])
-        state._stood = (plain, drawn, True)
+    got = snap_rect(items, mine or items, frame_of(m), W, H)
+    if got:
+        drawn, sure = got
+        if sure:
+            state.measured.add(m["ts"])
+        state._stood = (plain, drawn, sure)
         return drawn
     spans = [(q["x0"], q["x1"]) for q in state.parts if q.get("x0") is not None and q.get("x1") is not None]
     if spans:
@@ -2253,6 +2266,7 @@ def note(records_path, diary_text=None):
                 sl = state_slice(st, s["t0"], s["t1"]) or st
                 if sl is not st:
                     polish(sl, states)
+                    drop_guessed([sl])
                 sl.rects, sl.measured = st.rects, st.measured
                 shape = s["rects"].get(id(st)) or span_rect(st, s["t0"]) or st.rect
                 sl.rect = shape
