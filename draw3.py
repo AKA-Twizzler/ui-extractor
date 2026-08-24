@@ -2611,6 +2611,27 @@ def note(records_path, diary_text=None):
                 st.title = None
     states = [st for st in all_states if st.window_html() and not st.fragment()]
     frags = [st for st in all_states if st not in states and st.has_content() and st.rects]
+    # a note's big heading is read as large loose words, never as a doc
+    # line; when such a reading opens the window's own title, it is the
+    # note's heading and stands above everything else
+    bigs = {}
+    for m in moments:
+        for p in m.get("panes") or []:
+            for it in draw2.items_of(p):
+                if it.get("large") and len(flat(it["text"])) >= 6:
+                    bigs.setdefault(fold(flat(it["text"])), it["text"].strip())
+    for st in states:
+        doc = st.main_doc()
+        if not doc or not st.title or not doc.lines:
+            continue
+        tf = fold(flat(st.title))
+        hit = next((raw for key, raw in bigs.items() if len(key) >= 6 and tf.startswith(key)), None)
+        if not hit:
+            continue
+        hf = fold(flat(hit))
+        if any(fold(flat(t)) == hf for t, _ in doc.lines[:4]):
+            continue
+        doc.lines.insert(0, (hit, f'<div class="sn-h1"><b>{esc(hit)}</b></div>'))
     real = [st for st in states if is_real_window(st.name)]
     shown = real if real else states          # a video with no named window shows its screens
     windows = []                               # names in order of first appearance
@@ -2836,6 +2857,11 @@ def note(records_path, diary_text=None):
                     if bar_title(sl, s["size"][1]):
                         sl.title = None
                     sl.title = sl.title or st.title
+                    fd, sd = st.main_doc(), sl.main_doc()
+                    if fd and sd and fd.lines and sd.lines is not fd.lines \
+                            and "sn-h1" in fd.lines[0][1] and not any(
+                                fold(flat(t)) == fold(flat(fd.lines[0][0])) for t, _ in sd.lines[:3]):
+                        sd.lines.insert(0, fd.lines[0])
                 sl.rects, sl.measured = st.rects, st.measured
                 shape = s["rects"].get(id(st)) or span_rect(st, s["t0"]) or st.rect
                 sl.rect = shape
