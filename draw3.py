@@ -1470,6 +1470,12 @@ def harmonise(states):
     # alike, the one with the most of its letters intact (capitals, dots,
     # spaces survive OCR worst, so the fullest form is the truest)
     strong_flats = {flat(s) for s in strong}
+    # every name any list actually carried: a crumb spelt like one of these
+    # is already the folder's own name and must not be grown into a longer
+    # one, or a second reading would stretch it again
+    row_flats = {flat(r["cells"][0]) for st in states for p in st.parts
+                 if isinstance(p["model"], Table) for r in p["model"].rows
+                 if r["cells"] and r["cells"][0]}
     strong_names = sorted(strong | {w for w in draw2.SIDEBAR_WORDS if len(w) >= 5}, key=len)
     canon, canon_fold = {}, {}
     def rank_of(c):
@@ -1613,7 +1619,8 @@ def harmonise(states):
                         path[i] = c
                         f = flat(c)
                         b = exact_fix(c)
-                        if not b and len(f) >= 4 and f not in strong_flats and canon.get(f, c) == c:
+                        if (not b and len(f) >= 4 and f not in strong_flats
+                                and f not in row_flats and canon.get(f, c) == c):
                             # Finder cuts a long crumb short: the folder's
                             # real name is the pool name this crumb opens,
                             # allowing one slip in what was read
