@@ -2708,9 +2708,10 @@ def note(records_path, diary_text=None):
 
     span_T = {s["t0"]: fit_map(s["ts"]) for s in spans}
 
-    home_box = {}                  # a window's box carried into the base moment:
-    for st in states:               # the union of every carried reading, since
-        got = None                  # each may have seen only part of the window
+    home_reads = {}                # state -> every reading's box, carried home
+    secs_of = {m["ts"]: m.get("secs", 0) for m in moments}
+    for st in states:
+        outs = []
         for t, r in st.rects.items():
             if not r or r[2] <= r[0]:
                 continue
@@ -2718,11 +2719,30 @@ def note(records_path, diary_text=None):
             T = (span_T.get(s_["t0"]) if s_ else None) or fit_map([t])
             if not T:
                 continue
-            hb = back(T, r)
-            got = hb if got is None else [min(got[0], hb[0]), min(got[1], hb[1]),
-                                          max(got[2], hb[2]), max(got[3], hb[3])]
-        if got:
-            home_box[id(st)] = got
+            outs.append((secs_of.get(t, 0), back(T, r)))
+        if outs:
+            home_reads[id(st)] = outs
+
+    def home_at(st, t0):
+        """Where this window stood around that time. Readings of a standing
+        window agree and their union completes it; a window that moved
+        forms another cluster, and the nearest in time is the one drawn."""
+        outs = home_reads.get(id(st))
+        if not outs:
+            return None
+        want = secs_of.get(t0, 0)
+        clusters = []
+        for sec, r in sorted(outs):
+            for c in clusters:
+                if overlap(r, c[1]) > 0.5:
+                    c[1] = [min(c[1][0], r[0]), min(c[1][1], r[1]),
+                            max(c[1][2], r[2]), max(c[1][3], r[3])]
+                    c[0] = min(c[0], abs(sec - want))
+                    break
+            else:
+                clusters.append([abs(sec - want), list(r)])
+        return min(clusters)[1]
+
     own_words = {id(st): {flat(w) for w in box_texts(st)[1] if len(flat(w)) >= 8}
                  for st in states}
     reach = {id(st): (min(st.times), max(st.times)) for st in states if st.times}
@@ -2817,10 +2837,12 @@ def note(records_path, diary_text=None):
             behinds, carded = [], set()
             lo, hi = s["t0"], s["t1"]
             for own in states:
-                if own in sub_states or id(own) in carded \
-                        or id(own) not in home_box or T is None:
+                if own in sub_states or id(own) in carded or T is None:
                     continue
-                box = onto(T, home_box[id(own)])
+                hb = home_at(own, s["t0"])
+                if hb is None:
+                    continue
+                box = onto(T, hb)
                 vw = min(box[2], Wf) - max(box[0], 0.0)
                 vh = min(box[3], Hf) - max(box[1], 0.0)
                 if vw < 0.04 * Wf or vh < 0.04 * Hf:
