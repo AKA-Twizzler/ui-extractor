@@ -2136,7 +2136,8 @@ def note(records_path, diary_text=None):
                     s["size"][0], s["size"][1], bar_at.get(s["t0"], []), clock_at.get(s["t0"], ""),
                     lambda other: label_for(other),
                     behind_states=behind_for(sl, dict(s, size=s["size"]), st),
-                    skip=st, rect=shape))
+                    skip=st, rect=shape,
+                    sure=any(t in st.measured for t in s["ts"])))
                 st.shape = None
                 parts.append("")
                 for ln in sl.said_html():

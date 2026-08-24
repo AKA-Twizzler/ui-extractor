@@ -370,7 +370,7 @@ def deskbar(bar_words, clock):
     return f'<div class="sn-deskbar">{left}{right}</div>'
 
 
-def screen_shot(span, subject, W, H, bar_words, clock, tag_of, behind_states=(), skip=None, rect=None):
+def screen_shot(span, subject, W, H, bar_words, clock, tag_of, behind_states=(), skip=None, rect=None, sure=True):
     """One picture of the whole screen: every window where it sat and at the
     size it was, the one being shown filled in, the others as outlines."""
     ch = CANVAS_W * H / max(1, W)
@@ -402,6 +402,8 @@ def screen_shot(span, subject, W, H, bar_words, clock, tag_of, behind_states=(),
         html = re.sub(r'^(<div class="sn-window[^"]*")', r'\1 style="min-height:%dpx"' % round(tall), html, count=1)
     out.append(scaled(html, rect, W, extra=slot_style(rect, W, H) + ";z-index:3"))
     stamp = span["t0"] if span["t0"] == span["t1"] else f"{span['t0']} to {span['t1']}"
+    if not sure:
+        stamp += " · edges taken from where its words sat
     out.append(f'<div class="sn-stamp">{esc(stamp)}</div>')
     out.append("</div>")
     return "".join(out)
