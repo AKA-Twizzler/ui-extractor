@@ -132,7 +132,7 @@ def find(path):
     found.sort(key=lambda r: -(r[2] - r[0]) * (r[3] - r[1]))
     kept = []
     for r in found:
-        if any(_shares(r, k) > 0.55 for k in kept):
+        if any(_shares(r, k) > 0.90 for k in kept):
             continue
         kept.append(r)
     k = W / float(w)
