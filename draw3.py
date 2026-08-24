@@ -1077,6 +1077,8 @@ def build_states(moments):
                     cur.absorb(g, m)
                 elif m["ts"] not in cur.times:
                     cur.times.append(m["ts"])
+                if g.get("rect"):
+                    cur.rects.setdefault(m["ts"], list(g["rect"]))
                 st = cur
             else:
                 st = probe
@@ -1633,6 +1635,96 @@ def harmonise(states):
             elif q["fam"] == "doc":
                 mend_doc(q["model"], st, clean)
     complete_docs(states)
+
+
+# ------------------------------------------------------------- the screen itself
+#
+# A moment picture is the whole screen at the size the video had it: every
+# window where it sat, the one being shown filled with what it held over
+# that stretch of time, the others as empty outlines. Its content comes
+# only from the moments inside the stretch, so it stays an honest still.
+
+def fingerprint(group):
+    """What the window showed at one moment, in a word: the first name in
+    its list, or the first line of its document. A change means the window
+    scrolled or opened something else, and a new picture begins."""
+    for p in sorted(group.get("panes") or [], key=lambda p: (p["box"][1], p["box"][0])):
+        d = p.get("data") or {}
+        for blk in d.get("blocks") or []:
+            for row in blk.get("rows") or []:
+                if row and row[0]:
+                    return norm(row[0])[:24]
+        for r in d.get("rows") or []:
+            n = r.get("name") or r.get("text")
+            if n:
+                return norm(n)[:24]
+        for ln in p.get("lines") or []:
+            s = ln.strip()
+            if s and not s.startswith(("---", "[also", "unsettled")):
+                return norm(s)[:24]
+    return ""
+
+
+def state_slice(st, t0, t1):
+    """The same window as it stood between two times, built only from the
+    moments in that stretch."""
+    picked = [(m, g) for m, g in st.pieces if t0 <= m["ts"] <= t1]
+    if not picked:
+        return None
+    m0, g0 = picked[0]
+    out = State(g0, m0["ts"])
+    for m, g in picked:
+        out.absorb(g, m)
+        if m["ts"] not in out.times:
+            out.times.append(m["ts"])
+    out.name, out.title = st.name, st.title
+    out.title_sure = getattr(st, "title_sure", False)
+    out.said = [(ts, s) for ts, s in st.said if t0 <= ts <= t1]
+    out.of = st
+    return out
+
+
+def screens(states, moments):
+    """The video cut into stretches where the screen stood still: the same
+    windows, in the same places, showing the same thing."""
+    order = [m["ts"] for m in moments]
+    by_ts = {m["ts"]: m for m in moments}
+    present = {ts: [] for ts in order}
+    for st in states:
+        for ts in st.times:
+            if ts in present:
+                present[ts].append(st)
+    marks = {}
+    for st in states:
+        for m, g in st.pieces:
+            marks[(id(st), m["ts"])] = fingerprint(g)
+    spans, cur = [], None
+
+    def place(st, ts):
+        r = st.rects.get(ts) or st.rect or [0, 0, 0, 0]
+        return tuple(int(v / 40) for v in r)          # a move of about 40 pixels counts
+
+    for ts in order:
+        here = present[ts]
+        if not here:
+            continue
+        key = tuple(sorted(id(s) for s in here))
+        rects = tuple(sorted((id(s), place(s, ts)) for s in here))
+        shows = tuple(sorted((id(s), marks.get((id(s), ts), "")) for s in here if marks.get((id(s), ts))))
+        same = (cur and cur["key"] == key and cur["rects"] == rects
+                and all(v == w for (a, v), (b, w) in zip(cur["shows"], shows) if a == b))
+        if same:
+            cur["t1"] = ts
+            cur["ts"].append(ts)
+            cur["shows"] = shows or cur["shows"]
+        else:
+            if cur:
+                spans.append(cur)
+            cur = {"t0": ts, "t1": ts, "ts": [ts], "key": key, "rects": rects,
+                   "shows": shows, "states": here, "size": by_ts[ts].get("size") or [1920, 1080]}
+    if cur:
+        spans.append(cur)
+    return spans
 
 
 def desktop(moments):
