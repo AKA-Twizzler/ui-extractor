@@ -1984,6 +1984,25 @@ def state_slice(st, t0, t1):
     return out
 
 
+def frag_owner(frag, shown):
+    """The window a behind-fragment is a piece of, told by shared lines: the
+    note or tree read around another window matches the window that later
+    shows it whole."""
+    def lines_of(st, fams):
+        return {flat(t)[:40] for q in st.parts if q["fam"] in fams
+                for t, _ in (q["model"].lines if hasattr(q["model"], "lines") else [])
+                if len(flat(t)) >= 10}
+    mine = lines_of(frag, ("doc", "tree", "term"))
+    if not mine:
+        return None
+    best, hits = None, 0
+    for st in shown:
+        n = len(mine & lines_of(st, ("doc", "tree", "term")))
+        if n > hits:
+            best, hits = st, n
+    return best if hits >= 2 else None
+
+
 def near_windows(states, spans, order):
     """For each stretch, the windows that stood on the screen just before or
     just after it: an outline of each, where it sat at its own nearest
@@ -2222,7 +2241,9 @@ def note(records_path, diary_text=None):
     title = header.get("title") or os.path.basename(os.path.dirname(records_path))
     diary_text = diary_text if diary_text is not None else old.diary(records_path)
     secs = (moments[-1]["secs"] - moments[0]["secs"]) if len(moments) > 1 else 0
-    states = [st for st in build_states(moments) if st.window_html() and not st.fragment()]
+    all_states = build_states(moments)
+    states = [st for st in all_states if st.window_html() and not st.fragment()]
+    frags = [st for st in all_states if st not in states and st.has_content() and st.rects]
     real = [st for st in states if is_real_window(st.name)]
     shown = real if real else states          # a video with no named window shows its screens
     windows = []                               # names in order of first appearance
@@ -2252,6 +2273,21 @@ def note(records_path, diary_text=None):
              if any(st in shown for st in s["states"])]
     bar_at, clock_at = desktop_bar(moments)
     around = near_windows(states, spans, [m["ts"] for m in moments]) if spans else {}
+    owner_of = {id(f): frag_owner(f, states) for f in frags}
+    def ghost_list(s, subject):
+        got = []
+        for f in frags:
+            ts = next((t for t in s["ts"] if t in f.rects), None)
+            if ts is None:
+                continue
+            own = owner_of.get(id(f))
+            tag = (label_for(own) + " (behind; drawn whole below)") if own else "a window behind"
+            got.append((list(f.rects[ts]), tag, "behind"))
+        for st2, box, when in around.get(s["t0"] + s["t1"], ()):
+            if st2 is subject:
+                continue
+            got.append((list(box), f"{label_for(st2)} ({when})", "away"))
+        return got
     if spans:
         parts += ["## The screen, moment by moment", "",
                   "Each picture is the whole screen at the size the video had it, with the desktop bar along the top. "
@@ -2281,7 +2317,7 @@ def note(records_path, diary_text=None):
                     behind_states=behind_for(sl, dict(s, size=s["size"]), st),
                     skip=st, rect=shape,
                     sure=any(t in st.measured for t in s["ts"]),
-                    ghosts=around.get(s["t0"] + s["t1"], ())))
+                    ghosts=ghost_list(s, st)))
                 st.shape = None
                 parts.append("")
                 for ln in sl.said_html():
