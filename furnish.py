@@ -377,20 +377,20 @@ def screen_shot(span, subject, W, H, bar_words, clock, tag_of, behind_states=(),
     out = [f'<div class="sn-screen" style="height:{ch:.0f}px">', deskbar(bar_words, clock)]
     # a window that never shows in full anywhere gets its content drawn
     # where it sat, because this is its only chance to be seen
-    for st, rect, html in behind_states:
-        rect = [rect[0], max(rect[1], BAR * H), rect[2], rect[3]]
-        out.append(scaled(html, rect, W, cls="sn-slot sn-partial", extra=slot_style(rect, W, H)))
+    for back, box, html in behind_states:
+        box = [box[0], max(box[1], BAR * H), box[2], box[3]]
+        out.append(scaled(html, box, W, cls="sn-slot sn-partial", extra=slot_style(box, W, H)))
     import draw3
     fixed = span.get("rects") or {}
     skip = skip if skip is not None else subject
-    for st in span["states"]:
-        if st is skip or st is subject:
+    for other in span["states"]:
+        if other is skip or other is subject:
             continue
-        rect = fixed.get(id(st)) or draw3.span_rect(st, span["t0"])
-        if not rect:
+        box = fixed.get(id(other)) or draw3.span_rect(other, span["t0"])
+        if not box:
             continue
-        tag = tag_of(st)
-        out.append(f'<div class="sn-ghost" style="{slot_style(rect, W, H)}">'
+        tag = tag_of(other)
+        out.append(f'<div class="sn-ghost" style="{slot_style(box, W, H)}">'
                    + (f'<span class="sn-ghost-tag">{esc(tag)}</span>' if tag else "") + "</div>")
     rect = rect or fixed.get(id(subject)) or draw3.span_rect(subject, span["t0"]) or subject.rect
     subject.shape = rect
