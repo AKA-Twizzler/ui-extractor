@@ -951,7 +951,10 @@ class State:
         if ta and tb:
             a, b = set(ta.names()), set(tb.names())
             # a fragment of a window already drawn: the same folder name
-            if self.title and other.title and same_text(self.title, other.title) and min(len(a), len(b)) < 3:
+            if self.title and other.title and same_text(self.title, other.title) and min(len(a), len(b)) < 3 \
+                    and not (getattr(self, "title_from_path", False) or getattr(other, "title_from_path", False)):
+                # a title taken off a cut path bar names a folder the path
+                # passes through, not the folder on show; it cannot merge
                 return True
             if not a or not b:
                 # a reading with the names out of view: the same list when
@@ -1223,6 +1226,7 @@ def build_states(moments):
                 home = max(touched, key=lambda s: (s.rect[2] - s.rect[0]) * (s.rect[3] - s.rect[1]))
                 home.said.append((m["ts"], said))
     harmonise(states)
+    retitle_by_rows(states)
     drop_guessed(states)
     if moments:
         W, H = (moments[0].get("size") or [1920, 1080])[:2]
@@ -1230,6 +1234,43 @@ def build_states(moments):
             settle_rects(st, W, H)
         settle_across(states, [m["ts"] for m in moments], W, H)
     return states
+
+
+def retitle_by_rows(states):
+    """A list window is named by what it lists. The settled path bars say
+    which folder holds which; when a window's rows are the children of a
+    known folder, its title is that folder, however the title bar read in
+    the blur of a moving frame."""
+    parent = {}
+    for st in states:
+        t = st.main_table()
+        if not t:
+            continue
+        for path in ([t.path] if t.path else []) + [p for p in t.paths if p]:
+            for a, b in zip(path, path[1:]):
+                if a and b:
+                    parent.setdefault(fold(b), a)
+    for st in states:
+        t = st.main_table()
+        if not t:
+            continue
+        votes = {}
+        for name in t.names():
+            p = parent.get(fold(name))
+            if p:
+                votes[p] = votes.get(p, 0) + 1
+        if not votes:
+            continue
+        best = max(votes, key=lambda v: votes[v])
+        if st.title and crumb_same(st.title, best):
+            continue
+        weak = not getattr(st, "title_sure", False) or getattr(st, "title_from_path", False)
+        # even a title read off the bar yields when it names another known
+        # folder and none of that folder's known children sit in these rows
+        named_elsewhere = st.title and any(crumb_same(st.title, v) for v in parent.values()) \
+            and not any(crumb_same(parent.get(fold(n), ""), st.title) for n in t.names() if fold(n) in parent)
+        if not st.title or weak or named_elsewhere:
+            st.title = best
 
 
 def rebuild_line(h, t):
