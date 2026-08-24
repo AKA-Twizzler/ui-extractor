@@ -339,8 +339,13 @@ CANVAS_W = 960          # the drawn screen's width on the page, in pixels
 CARD_W = 880            # the natural width a window is drawn at before scaling
 
 
+BAR = 0.026            # the desktop bar's share of the screen's height
+
+
 def slot_style(rect, W, H):
     x0, y0, x1, y1 = rect
+    y0 = max(y0, BAR * H)          # nothing sits on top of the desktop bar
+    y1 = max(y1, y0 + 8)
     return (f"left:{100.0 * x0 / W:.2f}%;top:{100.0 * y0 / H:.2f}%;"
             f"width:{100.0 * (x1 - x0) / W:.2f}%;height:{100.0 * (y1 - y0) / H:.2f}%")
 
@@ -368,6 +373,7 @@ def screen_shot(span, subject, W, H, bar_words, clock, tag_of, behind_states=())
     # a window that never shows in full anywhere gets its content drawn
     # where it sat, because this is its only chance to be seen
     for st, rect, html in behind_states:
+        rect = [rect[0], max(rect[1], BAR * H), rect[2], rect[3]]
         out.append(scaled(html, rect, W, cls="sn-slot sn-partial", extra=slot_style(rect, W, H)))
     for st in span["states"]:
         if st is subject:
