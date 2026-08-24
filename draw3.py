@@ -2455,9 +2455,11 @@ def note(records_path, diary_text=None):
     diary_text = diary_text if diary_text is not None else old.diary(records_path)
     secs = (moments[-1]["secs"] - moments[0]["secs"]) if len(moments) > 1 else 0
     all_states = build_states(moments)
+    bar_at, clock_at, strip_at = desktop_bar(moments)
     if moments:
         H0 = (moments[0].get("size") or [0, 2160])[1]
         for st in all_states:
+            strip_furniture(st, strip_at)
             if bar_title(st, H0):
                 st.title = None
     states = [st for st in all_states if st.window_html() and not st.fragment()]
@@ -2489,9 +2491,7 @@ def note(records_path, diary_text=None):
     import furnish
     spans = [s for s in screens(states, moments)
              if any(st in shown for st in s["states"])]
-    bar_at, clock_at, strip_at = desktop_bar(moments)
-    for st in all_states:
-        strip_furniture(st, strip_at)
+
     around = near_windows(states, spans, [m["ts"] for m in moments]) if spans else {}
     owner_of = {id(f): frag_owner(f, states) for f in frags}
     def ghost_list(s, subject):
