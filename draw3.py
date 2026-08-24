@@ -686,6 +686,7 @@ class State:
         self.pieces = []        # (moment, group) it was read from, in order
         self.rects = {}         # ts -> the window's rect at that moment
         self.measured = set()   # the moments the reader measured the window itself
+        self._stood = None      # where its words sat last, and the edges then
 
     # --------------------------------------------------------- content in
 
@@ -1800,13 +1801,25 @@ def content_rect(state, group, m):
         if inside >= 0.6 * len(items):
             state.measured.add(m["ts"])
             return [float(v) for v in r]
+    rh = max(12.0, (sum(it["box"][3] - it["box"][1] for it in items) / len(items)) * 1.6)
+    plain = [min(it["box"][0] for it in items), min(it["box"][1] for it in items),
+             max(it["box"][2] for it in items), max(it["box"][3] for it in items)]
+    # a window whose words sit where they sat a moment ago has not moved, so
+    # its edges are the edges already measured: the picture of the screen is
+    # only read again when something about the window actually changed
+    was = getattr(state, "_stood", None)
+    if was and all(abs(a - b) <= 0.015 * W for a, b in zip(plain[::2], was[0][::2])) \
+            and all(abs(a - b) <= 0.015 * H for a, b in zip(plain[1::2], was[0][1::2])):
+        if was[2]:
+            state.measured.add(m["ts"])
+        return list(was[1])
     own = state_texts(state)
     mine = [it for it in items if fold(it["text"]) in own] if own else []
     drawn = snap_rect(items, mine or items, frame_of(m), W, H)
     if drawn:
         state.measured.add(m["ts"])
+        state._stood = (plain, drawn, True)
         return drawn
-    rh = max(12.0, (sum(it["box"][3] - it["box"][1] for it in items) / len(items)) * 1.6)
     spans = [(q["x0"], q["x1"]) for q in state.parts if q.get("x0") is not None and q.get("x1") is not None]
     if spans:
         xlo = min(a for a, _ in spans) - 2 * rh
@@ -1820,8 +1833,10 @@ def content_rect(state, group, m):
     y1 = max(it["box"][3] for it in items)
     heads = [it for it in items if it["role"] == "head"]
     top_pad = 2.6 * rh if heads else 1.4 * rh
-    return [max(0.0, x0 - 0.7 * rh), max(0.0, y0 - top_pad),
-            min(float(W), x1 + 0.7 * rh), min(float(H), y1 + 0.9 * rh)]
+    box = [max(0.0, x0 - 0.7 * rh), max(0.0, y0 - top_pad),
+           min(float(W), x1 + 0.7 * rh), min(float(H), y1 + 0.9 * rh)]
+    state._stood = (plain, box, False)
+    return box
 
 
 def overlap(a, b):
