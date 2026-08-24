@@ -175,3 +175,42 @@ def frame_of(m):
     if p and "\\" in p:
         p = "/mnt/" + p[0].lower() + p[2:].replace("\\", "/")
     return p if p and os.path.exists(p) else None
+
+
+_CAM: dict[str, object] = {}
+
+
+def camera_box(path):
+    """The camera picture laid over the screen, found by its colour: a
+    screen's furniture is nearly grey, a camera's picture is not. The one
+    large, solid patch of colourful pixels is the camera; small colourful
+    marks (icons, a selection band) are far too little of the frame."""
+    if path in _CAM:
+        return _CAM[path]
+    if not path or not os.path.exists(path):
+        return None
+    from scipy import ndimage
+    im = Image.open(path).convert("RGB")
+    W, H = im.size
+    im = im.resize((320, max(1, int(320 * H / W))), Image.BILINEAR)
+    a = np.asarray(im, dtype=np.int16)
+    sat = a.max(axis=2) - a.min(axis=2)
+    mask = sat > 45
+    lab, n = ndimage.label(mask)
+    best = None
+    for i in range(1, n + 1):
+        ys, xs = np.where(lab == i)
+        if ys.size < 0.03 * mask.size:
+            continue
+        y0, y1, x0, x1 = ys.min(), ys.max(), xs.min(), xs.max()
+        fill = ys.size / max(1, (y1 - y0 + 1) * (x1 - x0 + 1))
+        if fill < 0.45:
+            continue
+        if best is None or ys.size > best[0]:
+            best = (ys.size, [x0, y0, x1 + 1, y1 + 1])
+    out = None
+    if best:
+        k = W / 320.0
+        out = [v * k for v in best[1]]
+    _CAM[path] = out
+    return out
