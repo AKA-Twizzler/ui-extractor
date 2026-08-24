@@ -120,7 +120,7 @@ def find(path):
             share = (bot - top) / max(yb - ya, yd - yc)
             if share < 0.55:
                 continue
-            slack = max(6, int(0.04 * (bot - top)))
+            slack = max(12, int(0.05 * (bot - top)))
             y_top = _across(hors, top, x0, x1, slack, ALONG, -1)
             y_bot = _across(hors, bot, x0, x1, slack, ALONG, +1)
             if y_top is None or y_bot is None or y_bot - y_top < min_h:
