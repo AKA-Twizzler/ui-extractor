@@ -22,7 +22,8 @@ import re
 import sys
 
 import draw as old          # HTML line helpers that do not change
-import draw2                # the geometry: items, tables rebuilt, window groups
+import draw2
+import shapes                # the geometry: items, tables rebuilt, window groups
 
 LONG_SAID = 700
 MAX_DOUBT = 12
@@ -1647,6 +1648,61 @@ def harmonise(states):
 # that stretch of time, the others as empty outlines. Its content comes
 # only from the moments inside the stretch, so it stays an honest still.
 
+def frame_of(m):
+    return shapes.frame_of(m)
+
+
+def state_texts(state):
+    """Every word this window itself drew, for telling its own content
+    apart from a window behind it read on the same slice of the screen."""
+    out = set()
+    for part in state.parts:
+        model = part["model"]
+        if isinstance(model, Table):
+            for cell in model.header:
+                out.add(fold(cell if isinstance(cell, str) else cell.get("text", "")))
+            for row in model.rows:
+                for cell in row["cells"]:
+                    out.add(fold(cell))
+            for s in list(model.side) + list(model.path) + list(model.top):
+                out.add(fold(s if isinstance(s, str) else str(s)))
+        elif isinstance(model, Lines):
+            for text, _ in model.lines:
+                out.add(fold(text.strip("│ ˃˅")))
+        elif isinstance(model, list):
+            for s in model:
+                out.add(fold(s if isinstance(s, str) else str(s)))
+    out.discard("")
+    return out
+
+
+def snap_rect(items, mine, frame, W, H):
+    """The real window these words sat in, off the picture of the screen.
+    Of every rectangle drawn on the frame, the one this window's own words
+    both fill and stay inside; nothing here knows one program from another."""
+    boxes = shapes.find(frame) if frame else []
+    if not boxes or not mine:
+        return None
+    best, score_best = None, 0.0
+    for r in boxes:
+        inside = [it for it in mine
+                  if r[0] - 12 <= (it["box"][0] + it["box"][2]) / 2 <= r[2] + 12
+                  and r[1] - 12 <= (it["box"][1] + it["box"][3]) / 2 <= r[3] + 12]
+        if len(inside) < max(3, 0.25 * len(mine)):
+            continue
+        share = len(inside) / float(len(mine))
+        bb = [min(it["box"][0] for it in inside), min(it["box"][1] for it in inside),
+              max(it["box"][2] for it in inside), max(it["box"][3] for it in inside)]
+        area = max(1.0, (r[2] - r[0]) * (r[3] - r[1]))
+        fill = max(0.0, (bb[2] - bb[0]) * (bb[3] - bb[1])) / area
+        score = share * share * (fill ** 0.5)
+        if score > score_best:
+            best, score_best = r, score
+    if best is None or score_best < 0.12:
+        return None
+    return [float(v) for v in best]
+
+
 def content_rect(state, group, m):
     """Where the window sat, in frame pixels: the reader's measurement when
     it made one, else the box around the content this window actually drew
@@ -1666,6 +1722,12 @@ def content_rect(state, group, m):
         if inside >= 0.6 * len(items):
             state.measured.add(m["ts"])
             return [float(v) for v in r]
+    own = state_texts(state)
+    mine = [it for it in items if fold(it["text"]) in own] if own else []
+    drawn = snap_rect(items, mine or items, frame_of(m), W, H)
+    if drawn:
+        state.measured.add(m["ts"])
+        return drawn
     rh = max(12.0, (sum(it["box"][3] - it["box"][1] for it in items) / len(items)) * 1.6)
     spans = [(q["x0"], q["x1"]) for q in state.parts if q.get("x0") is not None and q.get("x1") is not None]
     if spans:
