@@ -130,10 +130,15 @@ def find(path):
                 continue                       # the sides must run its height
             found.append([x0, y_top, x1, y_bot])
     found.sort(key=lambda r: -(r[2] - r[0]) * (r[3] - r[1]))
-    kept = []
+    # near-identical rectangles are the same window found twice: one edge
+    # is a shadow two pixels wide. Rectangles that merely overlap are kept,
+    # because two windows may sit one inside the other's reach.
+    kept, seen = [], set()
     for r in found:
-        if any(_shares(r, k) > 0.90 for k in kept):
+        key = tuple(int(round(v / 3.0)) for v in r)
+        if key in seen:
             continue
+        seen.add(key)
         kept.append(r)
     k = W / float(w)
     out = [[r[0] * k, r[1] * k, r[2] * k, r[3] * k] for r in kept]
