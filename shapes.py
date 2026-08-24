@@ -81,19 +81,31 @@ def _thin(lines):
     return out
 
 
-def _across(lines, pos, a, b, slack, part, outward):
+def _index(lines, step=8):
+    """The lines filed by where they sit, so looking near a place does not
+    walk the whole screen's worth of them."""
+    shelf = {}
+    for line in lines:
+        shelf.setdefault(int(line[0]) // step, []).append(line)
+    return shelf, step
+
+
+def _across(shelf, pos, a, b, slack, part, outward):
     """The line running along most of a to b nearest `pos`, or None. A
     window's corners are rounded, so its top and bottom sit a little past
     where its sides begin; `outward` says which way to look first."""
     want = part * (b - a)
     best = None
-    for p, la, lb in lines:
-        if abs(p - pos) > slack:
-            continue
-        if min(b, lb) - max(a, la) < want:
-            continue
-        if best is None or (p - pos) * outward > (best - pos) * outward:
-            best = p
+    lines, step = shelf
+    lo, hi = int(pos - slack) // step, int(pos + slack) // step
+    for shelf_no in range(lo, hi + 1):
+        for p, la, lb in lines.get(shelf_no, ()):
+            if abs(p - pos) > slack:
+                continue
+            if min(b, lb) - max(a, la) < want:
+                continue
+            if best is None or (p - pos) * outward > (best - pos) * outward:
+                best = p
     return best
 
 
@@ -108,6 +120,7 @@ def find(path):
     least_v, least_h = int(RUN * h), int(RUN * w)
     verts, hors = _sides(g, least_v, least_h)
     verts, hors = _thin(verts), _thin(hors)
+    shelf = _index(hors)
     min_w, min_h = MIN_W * w, MIN_H * h
     found = []
     for i, (x0, ya, yb) in enumerate(verts):
@@ -121,8 +134,8 @@ def find(path):
             if share < 0.55:
                 continue
             slack = max(12, int(0.05 * (bot - top)))
-            y_top = _across(hors, top, x0, x1, slack, ALONG, -1)
-            y_bot = _across(hors, bot, x0, x1, slack, ALONG, +1)
+            y_top = _across(shelf, top, x0, x1, slack, ALONG, -1)
+            y_bot = _across(shelf, bot, x0, x1, slack, ALONG, +1)
             if y_top is None or y_bot is None or y_bot - y_top < min_h:
                 continue
             tall = y_bot - y_top
