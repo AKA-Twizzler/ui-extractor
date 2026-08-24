@@ -51,15 +51,16 @@ def _runs(mask, least):
 
 
 def _sides(g, least_v, least_h):
-    """The long straight edges on the screen, down and across."""
-    dv = np.abs(g[:, 2:] - g[:, :-2])
-    dh = np.abs(g[2:, :] - g[:-2, :])
+    """The long straight edges on the screen, down and across. An edge is
+    often a soft shadow spread over two or three pixels, so each line is
+    looked at together with its neighbours."""
+    from scipy.ndimage import maximum_filter1d
+    dv = maximum_filter1d(np.abs(g[:, 2:] - g[:, :-2]), 3, axis=1)
+    dh = maximum_filter1d(np.abs(g[2:, :] - g[:-2, :]), 3, axis=0)
     verts, hors = [], []
     for x in range(dv.shape[1]):
         for y0, y1 in _runs(dv[:, x] > EDGE, least_v):
             verts.append((x + 1, y0, y1))
-        # a window's side is often a soft shadow rather than one hard line;
-        # a column that is quiet but sits beside a busy one is not a side
     for y in range(dh.shape[0]):
         for x0, x1 in _runs(dh[y, :] > EDGE, least_h):
             hors.append((y + 1, x0, x1))
@@ -79,15 +80,20 @@ def _thin(lines):
     return out
 
 
-def _covers(lines, pos, a, b, slack, part):
-    """Is there a line at about `pos` running along most of a to b?"""
+def _across(lines, pos, a, b, slack, part, outward):
+    """The line running along most of a to b nearest `pos`, or None. A
+    window's corners are rounded, so its top and bottom sit a little past
+    where its sides begin; `outward` says which way to look first."""
     want = part * (b - a)
-    best = 0.0
+    best = None
     for p, la, lb in lines:
         if abs(p - pos) > slack:
             continue
-        best = max(best, min(b, lb) - max(a, la))
-    return best >= want
+        if min(b, lb) - max(a, la) < want:
+            continue
+        if best is None or (p - pos) * outward > (best - pos) * outward:
+            best = p
+    return best
 
 
 def find(path):
@@ -113,11 +119,12 @@ def find(path):
             share = (bot - top) / max(yb - ya, yd - yc)
             if share < 0.55:
                 continue
-            if not _covers(hors, top, x0, x1, 3, 0.55):
+            slack = max(6, int(0.03 * (bot - top)))
+            y_top = _across(hors, top, x0, x1, slack, 0.55, -1)
+            y_bot = _across(hors, bot, x0, x1, slack, 0.55, +1)
+            if y_top is None or y_bot is None or y_bot - y_top < min_h:
                 continue
-            if not _covers(hors, bot, x0, x1, 3, 0.55):
-                continue
-            found.append([x0, top, x1, bot])
+            found.append([x0, y_top, x1, y_bot])
     found.sort(key=lambda r: -(r[2] - r[0]) * (r[3] - r[1]))
     kept = []
     for r in found:
