@@ -218,7 +218,7 @@ def browser_behind(st):
     return "".join(out)
 
 
-def obsidian(st):
+def obsidian(st, behind=True):
     tree = st.tree()
     doc = st.main_doc()
     if not (tree or doc):
@@ -226,7 +226,7 @@ def obsidian(st):
     title = ""
     if doc:
         title = doc.title()
-    strip = browser_behind(st)
+    strip = browser_behind(st) if behind else ""
     toolbar = ('<div class="sn-toolbar sn-obsidian-bar"><span class="sn-lights"></span>'
                '<span class="sn-btn">▱</span><span class="sn-btn">⌕</span><span class="sn-btn">☆</span>'
                + (f'<span class="sn-tab active">{esc(title)} &nbsp;×</span>' if title else "")
@@ -317,15 +317,71 @@ def bulleted(h):
 
 # ------------------------------------------------------------------ entry
 
-def window(st):
+def window(st, behind=True):
     """The window drawn in its program's look, or None when no look is
-    known for it (the plain drawing then stands)."""
+    known for it (the plain drawing then stands). With behind off, nothing
+    that sat behind the window is drawn inside it -- the screen picture
+    draws those where they really were."""
     try:
         if st.name == "The Finder window":
             return finder(st)
         if st.name == "The Obsidian window":
-            return obsidian(st)
+            return obsidian(st, behind=behind)
     except Exception as e:      # a drawing must never take the note down
         import sys
         print(f"furnish: {st.name} {st.times[:1]}: {e!r}", file=sys.stderr)
     return None
+
+
+# ---------------------------------------------------------------- the screen
+
+CANVAS_W = 960          # the drawn screen's width on the page, in pixels
+CARD_W = 880            # the natural width a window is drawn at before scaling
+
+
+def slot_style(rect, W, H):
+    x0, y0, x1, y1 = rect
+    return (f"left:{100.0 * x0 / W:.2f}%;top:{100.0 * y0 / H:.2f}%;"
+            f"width:{100.0 * (x1 - x0) / W:.2f}%;height:{100.0 * (y1 - y0) / H:.2f}%")
+
+
+def scaled(html, rect, W, cls="sn-slot", extra=""):
+    """A window drawn at its natural size, then shrunk to the share of the
+    screen it really took."""
+    wide = max(1.0, rect[2] - rect[0])
+    k = (CANVAS_W * wide / W) / CARD_W
+    return (f'<div class="{cls}" style="{extra}">'
+            f'<div class="sn-shot" style="transform:scale({k:.4f})">{html}</div></div>')
+
+
+def deskbar(bar_words, clock):
+    left = "".join(f"<span>{esc(w)}</span>" for w in bar_words[:8])
+    right = f"<span class=\"sn-right\">{esc(clock)}</span>" if clock else ""
+    return f'<div class="sn-deskbar">{left}{right}</div>'
+
+
+def screen_shot(span, subject, W, H, bar_words, clock, tag_of, behind_states=()):
+    """One picture of the whole screen: every window where it sat and at the
+    size it was, the one being shown filled in, the others as outlines."""
+    ch = CANVAS_W * H / max(1, W)
+    out = [f'<div class="sn-screen" style="height:{ch:.0f}px">', deskbar(bar_words, clock)]
+    # a window that never shows in full anywhere gets its content drawn
+    # where it sat, because this is its only chance to be seen
+    for st, rect, html in behind_states:
+        out.append(scaled(html, rect, W, cls="sn-slot sn-partial", extra=slot_style(rect, W, H)))
+    for st in span["states"]:
+        if st is subject:
+            continue
+        rect = st.rects.get(span["t0"]) or st.rect
+        if not rect:
+            continue
+        tag = tag_of(st)
+        out.append(f'<div class="sn-ghost" style="{slot_style(rect, W, H)}">'
+                   + (f'<span class="sn-ghost-tag">{esc(tag)}</span>' if tag else "") + "</div>")
+    rect = subject.rects.get(span["t0"]) or subject.rect
+    html = window(subject, behind=False) or subject.plain_window_html()
+    out.append(scaled(html, rect, W, extra=slot_style(rect, W, H) + ";z-index:3"))
+    stamp = span["t0"] if span["t0"] == span["t1"] else f"{span['t0']} to {span['t1']}"
+    out.append(f'<div class="sn-stamp">{esc(stamp)}</div>')
+    out.append("</div>")
+    return "".join(out)
