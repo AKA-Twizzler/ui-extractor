@@ -651,6 +651,8 @@ class State:
         self.covered = False     # the camera picture covered part of the window
         self.said = []
         self.theme = None
+        self.pieces = []        # (moment, group) it was read from, in order
+        self.rects = {}         # ts -> the window's rect at that moment
 
     # --------------------------------------------------------- content in
 
@@ -669,6 +671,10 @@ class State:
     def absorb(self, group, m):
         W = (m.get("size") or [1920])[0]
         rect = group["rect"]
+        if not any(mm is m for mm, _ in self.pieces):
+            self.pieces.append((m, group))
+        if rect:
+            self.rects[m["ts"]] = list(rect)
         for p in sorted(group["panes"], key=lambda p: (p["box"][0], p["box"][1])):
             if p.get("since") or p.get("same_as"):
                 continue
