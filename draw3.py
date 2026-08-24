@@ -2731,10 +2731,19 @@ def note(records_path, diary_text=None):
         if not outs:
             return None
         want = secs_of.get(t0, 0)
+        def iou(a, b):
+            w = min(a[2], b[2]) - max(a[0], b[0])
+            h = min(a[3], b[3]) - max(a[1], b[1])
+            if w <= 0 or h <= 0:
+                return 0.0
+            inter = w * h
+            au = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - inter
+            return inter / max(1.0, au)
+
         clusters = []
         for sec, r in sorted(outs):
             for c in clusters:
-                if overlap(r, c[1]) > 0.5:
+                if iou(r, c[1]) > 0.5:
                     c[1] = [min(c[1][0], r[0]), min(c[1][1], r[1]),
                             max(c[1][2], r[2]), max(c[1][3], r[3])]
                     c[0] = min(c[0], abs(sec - want))
