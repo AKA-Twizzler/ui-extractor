@@ -403,7 +403,7 @@ def screen_shot(span, subject, W, H, bar_words, clock, tag_of, behind_states=(),
     out.append(scaled(html, rect, W, extra=slot_style(rect, W, H) + ";z-index:3"))
     stamp = span["t0"] if span["t0"] == span["t1"] else f"{span['t0']} to {span['t1']}"
     if not sure:
-        stamp += " · edges taken from where its words sat
+        stamp += " · edges taken from where its words sat"
     out.append(f'<div class="sn-stamp">{esc(stamp)}</div>')
     out.append("</div>")
     return "".join(out)
