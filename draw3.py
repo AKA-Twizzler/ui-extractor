@@ -2636,7 +2636,7 @@ def note(records_path, diary_text=None):
         seen = {}
         for p in m.get("panes") or []:
             for it in draw2.items_of(p):
-                key = fold(it["text"])
+                key = fold(flat(it["text"]))
                 if len(key) >= 5:
                     seen.setdefault(key, []).append(it["box"])
         return {k: v[0] for k, v in seen.items() if len(v) == 1}
@@ -2708,9 +2708,9 @@ def note(records_path, diary_text=None):
 
     span_T = {s["t0"]: fit_map(s["ts"]) for s in spans}
 
-    home_box = {}                  # a window's box carried into the base moment
-    for st in states:
-        best = None
+    home_box = {}                  # a window's box carried into the base moment:
+    for st in states:               # the union of every carried reading, since
+        got = None                  # each may have seen only part of the window
         for t, r in st.rects.items():
             if not r or r[2] <= r[0]:
                 continue
@@ -2719,12 +2719,12 @@ def note(records_path, diary_text=None):
             if not T:
                 continue
             hb = back(T, r)
-            worth = (hb[2] - hb[0]) * (hb[3] - hb[1]) * (2.0 if t in st.measured else 1.0)
-            if best is None or worth > best[0]:
-                best = (worth, hb)
-        if best:
-            home_box[id(st)] = best[1]
-    own_words = {id(st): {w for w in box_texts(st)[1] if len(w) >= 8} for st in states}
+            got = hb if got is None else [min(got[0], hb[0]), min(got[1], hb[1]),
+                                          max(got[2], hb[2]), max(got[3], hb[3])]
+        if got:
+            home_box[id(st)] = got
+    own_words = {id(st): {flat(w) for w in box_texts(st)[1] if len(flat(w)) >= 8}
+                 for st in states}
     reach = {id(st): (min(st.times), max(st.times)) for st in states if st.times}
     for f in frags:
         own = owner_of.get(id(f))
@@ -2834,10 +2834,6 @@ def note(records_path, diary_text=None):
                     continue
                 lo1, hi1 = reach.get(id(own), ("", ""))
                 alive = id(own) in seen_here or (lo1 and lo1 <= lo and hi <= hi1)
-                import os as _os
-                if _os.environ.get("SN_DBG"):
-                    print("DBG", s["t0"], state_label(own), "alive:", alive,
-                          "reach:", (lo1, hi1), "box:", [round(v) for v in box])
                 if not alive:
                     # its own words read inside its place this stretch
                     keys = own_words.get(id(own)) or set()
