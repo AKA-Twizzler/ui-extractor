@@ -388,67 +388,61 @@ def deskbar(bar_words, clock):
     return f'<div class="sn-deskbar">{left}{right}</div>'
 
 
-def screen_shot(span, subject, W, H, bar_words, clock, tag_of, behind_states=(), skip=None, rect=None, sure=True, ghosts=()):
-    """One picture of the whole screen: every window where it sat and at the
-    size it was, the one being shown filled in, the others as outlines."""
+def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(), ghosts=(), camera=None, sure=True):
+    """One picture of the whole screen for one stretch of time: every window
+    that stood there, filled with what it held over that stretch, deepest
+    first; the windows behind showing their own content dimmed; the camera
+    picture where it lay; outlines only for what stood just before or after."""
     ch = CANVAS_W * H / max(1, W)
     out = [f'<div class="sn-screen" style="height:{ch:.0f}px">', deskbar(bar_words, clock)]
-    # a window that never shows in full anywhere gets its content drawn
-    # where it sat, because this is its only chance to be seen
-    for back, box, html in behind_states:
-        box = [box[0], max(box[1], BAR * H), box[2], box[3]]
-        out.append(scaled(html, box, W, cls="sn-slot sn-partial", extra=slot_style(box, W, H)))
-    import draw3
-    fixed = span.get("rects") or {}
-    skip = skip if skip is not None else subject
     drawn = []
-    rect = rect or fixed.get(id(subject)) or draw3.span_rect(subject, span["t0"]) or subject.rect
 
     def tag_html(tag, box):
-        """The outline's name, put where the window in front is not
-        covering it, so every outline can still be read."""
         if not tag:
             return ""
         style = ""
-        if rect and box[1] < rect[3] and rect[1] < box[1] + 0.2 * (box[3] - box[1]) \
-                and rect[0] <= box[0] < rect[2] < box[2]:
-            style = f' style="left:{100.0 * (rect[2] - box[0]) / (box[2] - box[0]) + 1:.1f}%"'
+        for _, r in subjects:
+            if r and box[1] < r[3] and r[1] < box[1] + 0.2 * (box[3] - box[1]) \
+                    and r[0] <= box[0] < r[2] < box[2]:
+                style = f' style="left:{100.0 * (r[2] - box[0]) / (box[2] - box[0]) + 1:.1f}%"'
+                break
         return f'<span class="sn-ghost-tag"{style}>{esc(tag)}</span>'
-    for other in span["states"]:
-        if other is skip or other is subject:
-            continue
-        box = fixed.get(id(other)) or draw3.span_rect(other, span["t0"])
-        if not box:
-            continue
+
+    # the windows behind, their own content dimmed under what stands in front
+    for html, box in behind_cards:
+        box = [box[0], max(box[1], BAR * H), box[2], box[3]]
         drawn.append(box)
-        out.append(f'<div class="sn-ghost" style="{slot_style(box, W, H)}">'
-                   + tag_html(tag_of(other), box) + "</div>")
-    # the other windows of the desk: ones truly standing behind right now
-    # (kind "behind"), and ones that stood here just before or after (kind
-    # "away"). An away-window whose place this window itself fills is the
-    # same window a moment on, not another one, so it is not drawn.
+        out.append(scaled(html, box, W, cls="sn-slot sn-partial", extra=slot_style(box, W, H)))
+    # outlines for what stood here at another moment, or was read too little
     for box, tag, kind in ghosts:
         if not box:
             continue
-        if kind == "away" and any(_shares(box, d) > 0.5 for d in drawn):
-            continue              # that place is already outlined
+        if kind == "away" and any(_shares(box, d) > 0.5 for d in drawn + [r for _, r in subjects if r]):
+            continue
         if any(_close(box, d) for d in drawn):
             continue
         drawn.append(box)
         cls = "sn-ghost sn-away" if kind == "away" else "sn-ghost"
         out.append(f'<div class="{cls}" style="{slot_style(box, W, H)}">'
                    + tag_html(tag, box) + "</div>")
-    subject.shape = rect
-    html = window(subject, behind=False) or subject.plain_window_html()
-    # the card is given the window's own shape, so it fills its place the
-    # way the window filled the screen
-    if rect and rect[2] > rect[0]:
-        tall = CARD_W * (rect[3] - rect[1]) / (rect[2] - rect[0])
-        html = re.sub(r'^(<div class="sn-window[^"]*")', r'\1 style="min-height:%dpx"' % round(tall), html, count=1)
-    out.append(scaled(html, rect, W, extra=slot_style(rect, W, H) + ";z-index:3"))
+    # the windows of the stretch, biggest (deepest) first so the small ones
+    # land on top the way they really lay
+    for z, (st, rect) in enumerate(subjects):
+        st.shape = rect
+        html = window(st, behind=False) or st.plain_window_html()
+        st.shape = None
+        if rect and rect[2] > rect[0]:
+            tall = CARD_W * (rect[3] - rect[1]) / (rect[2] - rect[0])
+            html = re.sub(r'^(<div class="sn-window[^"]*")',
+                          r'\1 style="min-height:%dpx"' % round(tall), html, count=1)
+        out.append(scaled(html, rect, W, extra=slot_style(rect, W, H) + f";z-index:{2 + z}"))
+    if camera:
+        out.append(f'<div class="sn-camera" style="{slot_style(camera, W, H)}">'
+                   f'<span class="sn-camera-tag">the camera picture</span></div>')
     stamp = span["t0"] if span["t0"] == span["t1"] else f"{span['t0']} to {span['t1']}"
     if not sure:
-        stamp += " · edges taken from where its words sat"
+        stamp += " \u00b7 edges taken from where its words sat"
     out.append(f'<div class="sn-stamp">{esc(stamp)}</div>')
     out.append("</div>")
     return "".join(out)
+
