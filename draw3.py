@@ -1985,17 +1985,20 @@ def note(records_path, diary_text=None):
             subjects = [st for st in s["states"] if st in shown]
             for st in subjects:
                 sl = state_slice(st, s["t0"], s["t1"]) or st
-                sl.rects = st.rects
-                sl.rect = st.rects.get(s["t0"]) or st.rect
+                sl.rects, sl.measured = st.rects, st.measured
+                shape = s["rects"].get(id(st)) or span_rect(st, s["t0"]) or st.rect
+                sl.rect = shape
                 if not sl.has_content():
                     continue
                 head = f"### {s['t0']}" + ("" if s["t0"] == s["t1"] else f" to {s['t1']}") + f" - {label_for(st)}"
                 parts += [head, ""]
                 parts.append(furnish.screen_shot(
-                    {"states": s["states"], "t0": s["t0"], "t1": s["t1"], "rects": s["rects"]}, st,
+                    {"states": s["states"], "t0": s["t0"], "t1": s["t1"], "rects": s["rects"]}, sl,
                     s["size"][0], s["size"][1], bar_at.get(s["t0"], []), clock_at.get(s["t0"], ""),
                     lambda other: label_for(other),
-                    behind_states=behind_for(sl, dict(s, size=s["size"]), st)))
+                    behind_states=behind_for(sl, dict(s, size=s["size"]), st),
+                    skip=st, rect=shape))
+                st.shape = None
                 parts.append("")
                 for ln in sl.said_html():
                     parts += [ln, ""]

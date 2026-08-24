@@ -135,7 +135,7 @@ def finder(st):
     rect = getattr(st, "shape", None) or st.rect
     if rect and rect[2] > rect[0]:
         tall = CARD_W * (rect[3] - rect[1]) / (rect[2] - rect[0])
-        room = tall - 34 - 24 - (24 if table.path else 0) - len(table.rows) * ROW_H
+        room = tall - 40 - 26 - (30 if table.path else 0) - len(table.rows) * ROW_H
         empty = int(max(2, min(60, room / EMPTY_H)))
     for _ in range(empty):
         out.append(f'<tr class="sn-empty"><td colspan="{n}">&nbsp;</td></tr>')
@@ -370,7 +370,7 @@ def deskbar(bar_words, clock):
     return f'<div class="sn-deskbar">{left}{right}</div>'
 
 
-def screen_shot(span, subject, W, H, bar_words, clock, tag_of, behind_states=()):
+def screen_shot(span, subject, W, H, bar_words, clock, tag_of, behind_states=(), skip=None, rect=None):
     """One picture of the whole screen: every window where it sat and at the
     size it was, the one being shown filled in, the others as outlines."""
     ch = CANVAS_W * H / max(1, W)
@@ -382,8 +382,9 @@ def screen_shot(span, subject, W, H, bar_words, clock, tag_of, behind_states=())
         out.append(scaled(html, rect, W, cls="sn-slot sn-partial", extra=slot_style(rect, W, H)))
     import draw3
     fixed = span.get("rects") or {}
+    skip = skip if skip is not None else subject
     for st in span["states"]:
-        if st is subject:
+        if st is skip or st is subject:
             continue
         rect = fixed.get(id(st)) or draw3.span_rect(st, span["t0"])
         if not rect:
@@ -391,7 +392,7 @@ def screen_shot(span, subject, W, H, bar_words, clock, tag_of, behind_states=())
         tag = tag_of(st)
         out.append(f'<div class="sn-ghost" style="{slot_style(rect, W, H)}">'
                    + (f'<span class="sn-ghost-tag">{esc(tag)}</span>' if tag else "") + "</div>")
-    rect = fixed.get(id(subject)) or draw3.span_rect(subject, span["t0"]) or subject.rect
+    rect = rect or fixed.get(id(subject)) or draw3.span_rect(subject, span["t0"]) or subject.rect
     subject.shape = rect
     html = window(subject, behind=False) or subject.plain_window_html()
     # the card is given the window's own shape, so it fills its place the
