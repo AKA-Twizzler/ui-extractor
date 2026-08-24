@@ -894,11 +894,36 @@ class State:
 
     def main_doc(self):
         docs = [q["model"] for q in self.parts if q["fam"] == "doc"]
-        return max(docs, key=lambda d: len(d.lines)) if docs else None
+        docs = [d for d in docs if d is not self.tree()]
+        if not docs:
+            return None
+        def prose(d):
+            return sum(1 for t, _ in d.lines if t.count(" ") >= 3 and "_" not in t)
+        return max(docs, key=lambda d: (prose(d), len(d.lines)))
+
+    @staticmethod
+    def _namey(model):
+        """How much of a lines model reads as a column of file names rather
+        than prose: names carry underscores and few spaces."""
+        lines = [t.strip().strip("#*>\u2502 \u02c3\u02c5").strip() for t, _ in model.lines]
+        lines = [t for t in lines if t and not t.startswith("---")]
+        if not lines:
+            return 0.0
+        namish = sum(1 for t in lines if "_" in t or t.count(" ") <= 1)
+        return namish / len(lines)
 
     def tree(self):
         trees = [q["model"] for q in self.parts if q["fam"] == "tree"]
-        return max(trees, key=lambda d: len(d.lines)) if trees else None
+        if trees:
+            return max(trees, key=lambda d: len(d.lines))
+        # the tree read as a plain column of names on a document pane: the
+        # leftmost doc whose lines are names is the tree standing there
+        docs = [q["model"] for q in sorted(self.parts, key=lambda q: q["slot"])
+                if q["fam"] == "doc"]
+        for d in docs[:1]:
+            if len(docs) > 1 and self._namey(d) >= 0.6:
+                return d
+        return None
 
     def words(self):
         return [w for q in self.parts if q["fam"] == "words" for w in q["model"]]
