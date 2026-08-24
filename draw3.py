@@ -2719,18 +2719,21 @@ def note(records_path, diary_text=None):
             T = (span_T.get(s_["t0"]) if s_ else None) or fit_map([t])
             if not T:
                 continue
-            outs.append((secs_of.get(t, 0), back(T, r)))
+            outs.append((secs_of.get(t, 0), back(T, r), T[0]))
         if outs:
             home_reads[id(st)] = outs
 
     def home_at(st, t0):
         """Where this window stood around that time. Readings of a standing
-        window agree and their union completes it; a window that moved
-        forms another cluster, and the nearest in time is the one drawn."""
+        window agree and complete each other; a window that moved forms
+        another cluster, and the nearest in time is the one drawn. A box
+        carried over from a zoomed view is only trusted to widen the story
+        when no straight-on reading exists."""
         outs = home_reads.get(id(st))
         if not outs:
             return None
         want = secs_of.get(t0, 0)
+
         def iou(a, b):
             w = min(a[2], b[2]) - max(a[0], b[0])
             h = min(a[3], b[3]) - max(a[1], b[1])
@@ -2740,17 +2743,25 @@ def note(records_path, diary_text=None):
             au = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - inter
             return inter / max(1.0, au)
 
-        clusters = []
-        for sec, r in sorted(outs):
+        clusters = []              # [members], each member (sec, rect, k)
+        for mem in sorted(outs):
+            r = mem[1]
             for c in clusters:
-                if iou(r, c[1]) > 0.5:
-                    c[1] = [min(c[1][0], r[0]), min(c[1][1], r[1]),
-                            max(c[1][2], r[2]), max(c[1][3], r[3])]
-                    c[0] = min(c[0], abs(sec - want))
+                u = c[0]
+                near = sum(1 for i in range(4)
+                           if abs(r[i] - u[i]) < 0.03 * (Wf if i % 2 == 0 else Hf))
+                if iou(r, u) > 0.5 or (near >= 2 and overlap(r, u) > 0.6):
+                    c[0] = [min(u[0], r[0]), min(u[1], r[1]),
+                            max(u[2], r[2]), max(u[3], r[3])]
+                    c[1].append(mem)
                     break
             else:
-                clusters.append([abs(sec - want), list(r)])
-        return min(clusters)[1]
+                clusters.append([list(r), [mem]])
+        best = min(clusters, key=lambda c: min(abs(m[0] - want) for m in c[1]))
+        flatly = [m for m in best[1] if abs(m[2] - 1.0) <= 0.15]
+        take = flatly or best[1]
+        return [min(m[1][0] for m in take), min(m[1][1] for m in take),
+                max(m[1][2] for m in take), max(m[1][3] for m in take)]
 
     own_words = {id(st): {flat(w) for w in box_texts(st)[1] if len(flat(w)) >= 8}
                  for st in states}
@@ -2852,6 +2863,18 @@ def note(records_path, diary_text=None):
                 if hb is None:
                     continue
                 box = onto(T, hb)
+                # a long line of its own text read this stretch places the
+                # window more surely than any carried box
+                keys = own_words.get(id(own)) or set()
+                long_hits = []
+                for t in s["ts"]:
+                    for key, b in (words_of.get(t) or {}).items():
+                        if len(key) >= 12 and (key in keys or any(
+                                key in sk or sk in key for sk in keys)):
+                            long_hits.append(b)
+                for b in long_hits:
+                    box = [min(box[0], b[0]), min(box[1], b[1]),
+                           max(box[2], b[2]), max(box[3], b[3])]
                 vw = min(box[2], Wf) - max(box[0], 0.0)
                 vh = min(box[3], Hf) - max(box[1], 0.0)
                 if vw < 0.04 * Wf or vh < 0.04 * Hf:
@@ -2864,10 +2887,10 @@ def note(records_path, diary_text=None):
                        for _, _, r in subjects):
                     continue
                 lo1, hi1 = reach.get(id(own), ("", ""))
-                alive = id(own) in seen_here or (lo1 and lo1 <= lo and hi <= hi1)
+                alive = (id(own) in seen_here or len(long_hits) >= 2
+                         or (lo1 and lo1 <= lo and hi <= hi1))
                 if not alive:
                     # its own words read inside its place this stretch
-                    keys = own_words.get(id(own)) or set()
                     px, py = 0.02 * Wf, 0.02 * Hf
                     hits = 0
                     for t in s["ts"]:
