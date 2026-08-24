@@ -2394,7 +2394,7 @@ def bar_title(st, H):
         return False
     for w in getattr(st, "topwords", ()):
         if w[2] <= 0.035 * H and (same_text(t, w[0])
-                or (len(t) >= 8 and (t in w[0] or w[0] in t))):
+                or (len(t) >= 8 and len(w[0]) >= 8 and (t in w[0] or w[0] in t))):
             return True
     return False
 
