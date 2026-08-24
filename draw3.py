@@ -2208,12 +2208,21 @@ def frag_owner(frag, shown):
             model = q["model"]
             texts = ([t for t, _ in model.lines] if hasattr(model, "lines")
                      else [t for t in model if isinstance(t, str)] if isinstance(model, list) else [])
-            got |= {flat(t)[:40] for t in texts if len(flat(t)) >= 6}
+            got |= {flat(t)[:80] for t in texts if len(flat(t)) >= 6}
         return got
     mine = lines_of(frag)
     if not mine:
         return None
-    scored = sorted(((len(mine & lines_of(st)), st) for st in shown), key=lambda x: -x[0])
+    def hits(st):
+        theirs = lines_of(st)
+        n = 0
+        for a in mine:
+            if a in theirs:
+                n += 1
+            elif len(a) >= 10 and any(a in b or b in a for b in theirs):
+                n += 1            # a line cut at either end still names its note
+        return n
+    scored = sorted(((hits(st), st) for st in shown), key=lambda x: -x[0])
     if not scored or scored[0][0] < 3:
         return None
     if len(scored) > 1 and scored[1][0] >= 3:
