@@ -2714,12 +2714,11 @@ def note(records_path, diary_text=None):
         return got
     if spans:
         parts += ["## The screen, moment by moment", "",
-                  "Each picture is the whole screen at the size the video had it, with the desktop bar along the top. "
-                  "The window being shown is filled in with what it held over that stretch of time and nothing from "
-                  "outside it; the other windows are outlines where they sat, and each says where its own picture is. "
-                  "A stretch covers several timestamps whenever the screen stood still, so a part something covered at "
-                  "one moment is filled from a moment when it was clear. Where the reader measured a window's edges, "
-                  "those are the edges drawn; otherwise they are taken from where that window's own content sat.", ""]
+                  "Each picture is the whole screen as the video showed it over that stretch of time: the same zoom, "
+                  "every window in view filled in with its real content -- a window behind included, from the moments "
+                  "it stood clear -- and the camera picture where it lay. A stretch covers several timestamps whenever "
+                  "the screen stood still. Where the reader measured a window's edges, those are the edges drawn; "
+                  "otherwise they are taken from where that window's own content sat.", ""]
         for s in spans:
             subjects = []
             for st in s["states"]:
@@ -2751,47 +2750,93 @@ def note(records_path, diary_text=None):
             # by a fragment read around the front windows, or by another
             # window's note or tree filed onto a front window's own panes
             sub_states = [stx for stx, _, _ in subjects]
-            owners = []
+            T = span_T.get(s["t0"])
+            bar_words = next((bar_at[t] for t in s["ts"] if bar_at.get(t)), [])
+            clock = next((clock_at[t] for t in s["ts"] if clock_at.get(t)), "")
+            barred = bool(bar_words) or flatT(T)
+            if T is None and barred:
+                T = (1.0, 0.0, 0.0)
+
+            # which windows behind were read through or around the front ones
+            seen_here = set()
             for f in frags:
                 if any(t in f.rects for t in s["ts"]):
-                    owners.append(owner_of.get(id(f)))
+                    own = owner_of.get(id(f))
+                    if own is not None and own != "several":
+                        seen_here.add(id(own))
             import types
             for stx, sl, _ in subjects:
-                # a list window owns no note and no tree: any it carries was
-                # read through it from the window behind
                 keep = set() if stx.main_table() else {id(stx.tree()), id(stx.main_doc())}
                 for q in stx.parts:
                     if q["fam"] in ("doc", "tree") and id(q["model"]) not in keep:
-                        owners.append(frag_owner(types.SimpleNamespace(parts=[q]),
-                                                 [o for o in states if o is not stx]))
-            behinds, covered = [], set()
-            for own in owners:
-                if own is None or own == "several" or own in sub_states or id(own) in covered:
+                        own = frag_owner(types.SimpleNamespace(parts=[q]),
+                                         [o for o in states if o is not stx])
+                        if own is not None and own != "several":
+                            seen_here.add(id(own))
+
+            # every other window this stretch's frame still shows, drawn
+            # whole where its zoom put it; the screen's edge cuts the rest
+            behinds, carded = [], set()
+            lo, hi = s["t0"], s["t1"]
+            for own in states:
+                if own in sub_states or id(own) in carded \
+                        or id(own) not in home_box or T is None:
                     continue
-                covered.add(id(own))
+                box = onto(T, home_box[id(own)])
+                vw = min(box[2], Wf) - max(box[0], 0.0)
+                vh = min(box[3], Hf) - max(box[1], 0.0)
+                if vw < 0.04 * Wf or vh < 0.04 * Hf:
+                    continue
+                # the same physical window navigated on: its old view sits
+                # exactly under a front window and is not on the screen
+                if any(r and overlap(box, r) * min((r[2] - r[0]) * (r[3] - r[1]),
+                                                   (box[2] - box[0]) * (box[3] - box[1]))
+                       > 0.6 * (box[2] - box[0]) * (box[3] - box[1])
+                       for _, _, r in subjects):
+                    continue
+                alive = (id(own) in seen_here
+                         or (own.times and min(own.times) <= lo and hi <= max(own.times)))
+                if not alive:
+                    # its own words read inside its place this stretch
+                    keys = own_words.get(id(own)) or set()
+                    px, py = 0.02 * Wf, 0.02 * Hf
+                    hits = 0
+                    for t in s["ts"]:
+                        for key, b in (words_of.get(t) or {}).items():
+                            if key in keys and box[0] - px <= b[0] and b[2] <= box[2] + px \
+                                    and box[1] - py <= b[1] and b[3] <= box[3] + py:
+                                hits += 1
+                    if hits < 2:
+                        continue
                 html = furnish.window(own, behind=False) or own.plain_window_html()
-                box = own.best_shape()
-                if html and box:
-                    tall = furnish.CARD_W * (box[3] - box[1]) / max(1.0, box[2] - box[0])
-                    html = re.sub(r'^(<div class="sn-window[^"]*")',
-                                  r'\1 style="min-height:%dpx"' % round(tall), html, count=1)
-                    behinds.append((html, list(box)))
-            for stx, sl, _ in subjects:
-                strip = behind_for(sl, dict(s, size=s["size"]), stx)
-                if strip:
-                    behinds.insert(0, (strip[0][2], strip[0][1]))
-                    break
+                if not html:
+                    continue
+                tall = furnish.CARD_W * (box[3] - box[1]) / max(1.0, box[2] - box[0])
+                html = re.sub(r'^(<div class="sn-window[^"]*")',
+                              r'\1 style="min-height:%dpx"' % round(tall), html, count=1)
+                carded.add(id(own))
+                behinds.append((html, list(box)))
+            behinds.sort(key=lambda hb: -(hb[1][2] - hb[1][0]) * (hb[1][3] - hb[1][1]))
+            if barred:
+                for stx, sl, _ in subjects:
+                    strip = behind_for(sl, dict(s, size=s["size"]), stx)
+                    if strip:
+                        behinds.insert(0, (strip[0][2], strip[0][1]))
+                        break
             m_t0 = next((mm for mm in moments if mm["ts"] == s["t0"]), None)
             cam = shapes.camera_box(frame_of(m_t0)) if m_t0 else None
-            head = f"### {s['t0']}" + ("" if s["t0"] == s["t1"] else f" to {s['t1']}") +                    " - " + " \u00b7 ".join(label_for(st) for st, _, _ in subjects)
+            cam_pic = camera_pic(frame_of(m_t0), cam) if cam else None
+            head = f"### {s['t0']}" + ("" if s["t0"] == s["t1"] else f" to {s['t1']}") + \
+                   " - " + " \u00b7 ".join(label_for(st) for st, _, _ in subjects)
             parts += [head, ""]
             parts.append(furnish.screen_shot(
                 {"t0": s["t0"], "t1": s["t1"]},
                 [(sl, shape) for _, sl, shape in subjects],
-                s["size"][0], s["size"][1], bar_at.get(s["t0"], []), clock_at.get(s["t0"], ""),
+                s["size"][0], s["size"][1],
+                bar_words if barred else None, clock if barred else "",
                 behind_cards=behinds,
-                ghosts=ghost_list(s, subjects[0][0]),
-                camera=cam,
+                ghosts=ghost_list(s, sub_states, carded),
+                camera=(cam, cam_pic) if cam else None,
                 sure=all(any(t in st.measured for t in s["ts"]) for st, _, _ in subjects)))
             parts.append("")
             seen_said = set()
