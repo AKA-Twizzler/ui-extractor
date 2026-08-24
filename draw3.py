@@ -1116,6 +1116,16 @@ class State:
         return '<span class="sn-fine">fine print: ' + "; ".join(bits) + "</span>"
 
 
+def _alike(a, b):
+    fa, fb = fold(flat(a)), fold(flat(b))
+    if not fa or not fb:
+        return False
+    if fa == fb:
+        return True
+    small, big = sorted((fa, fb), key=len)
+    return small in big and len(small) >= 0.85 * len(big)
+
+
 def drop_guessed(states):
     """A line with no word in it is letters the engines guessed at, not a
     thing the screen said; it leaves the trees and notes, and the fine print
@@ -1130,7 +1140,7 @@ def drop_guessed(states):
                 bare = t.strip("\u2502 \u02c3\u02c5\u2022\u00b7*#>").strip()
                 if bare.startswith("---") or not bare:
                     kept.append((t, h))
-                elif junky(bare) or any(same_text(bare.lstrip("G ").strip(), w[0]) for w in st.topwords if len(w[0]) > 8):
+                elif junky(bare) or any(_alike(bare.lstrip("G ").strip(), w[0]) for w in st.topwords if len(w[0]) > 8):
                     gone += 1
                 else:
                     kept.append((t, h))
@@ -2331,7 +2341,11 @@ def strip_furniture(st, strip_at):
         return
     def furniture(text):
         f = fold(flat(text))
-        return len(f) >= 8 and any(w in f or f in w for w in tops)
+        if len(f) < 8:
+            return False
+        # a partial strip reading loses its left end, so it survives as the
+        # line's tail; a mere substring inside a longer sentence does not count
+        return any(f in w or f == w or f.endswith(w) for w in tops)
     if st.title and furniture(st.title):
         st.title = None
     for q in st.parts:
