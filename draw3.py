@@ -15,6 +15,7 @@ outside its window except Jared's words and the fine print. The desktop
 (menu bar, clock) once at the end; the moment-by-moment record folded as
 the appendix.
 """
+import collections
 import difflib
 import html
 import os
@@ -209,6 +210,7 @@ class Table:
         self.path = []
         self.paths = []         # every path bar read, latest last
         self.rh = 0.0           # a row's height in frame pixels
+        self.spoiled = 0        # lines dropped: two columns misread at once
         self.bottom = []
         self.banded_names = set()
 
@@ -405,6 +407,35 @@ class Table:
                     its[si] = False
                     if rest and ki is not None and ki < len(cs) and not cs[ki]:
                         cs[ki] = rest
+        self.drop_spoiled(di, ki)
+
+    def drop_spoiled(self, di, ki):
+        """A line the reader got wrong in two columns at once is a spoiled
+        reading, not a file: where nearly every line's date reads as a date
+        and its kind is one the list uses, a line that fails both is out."""
+        if di is None or ki is None or len(self.rows) < 5:
+            return
+        dated = [r for r in self.rows if di < len(r["cells"]) and r["cells"][di]]
+        if len(dated) < 5:
+            return
+        good = [r for r in dated if tidy_date(r["cells"][di])]
+        if len(good) < 0.8 * len(dated):
+            return
+        kinds = collections.Counter(norm(r["cells"][ki]) for r in self.rows
+                                    if ki < len(r["cells"]) and r["cells"][ki])
+        usual = {k for k, n in kinds.items() if n >= 2}
+        out = []
+        for r in self.rows:
+            cs = r["cells"]
+            bad_date = di < len(cs) and cs[di] and not tidy_date(cs[di])
+            kind = norm(cs[ki]) if ki < len(cs) else ""
+            bad_kind = bool(kind) and kind not in usual and not any(
+                same_text(kind, k) for k in usual)
+            if bad_date and bad_kind:
+                self.spoiled += 1
+                continue
+            out.append(r)
+        self.rows = out
 
     def names(self):
         return [norm(r["cells"][0]) for r in self.rows if r["cells"] and r["cells"][0]]
