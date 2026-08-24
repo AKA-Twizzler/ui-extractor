@@ -364,6 +364,16 @@ def scaled(html, rect, W, cls="sn-slot", extra=""):
             f'<div class="sn-shot" style="transform:scale({k:.4f})">{html}</div></div>')
 
 
+def _shares(a, b):
+    """How much of the smaller box the two have in common, nought to one."""
+    w = min(a[2], b[2]) - max(a[0], b[0])
+    h = min(a[3], b[3]) - max(a[1], b[1])
+    if w <= 0 or h <= 0:
+        return 0.0
+    small = min((a[2] - a[0]) * (a[3] - a[1]), (b[2] - b[0]) * (b[3] - b[1]))
+    return (w * h) / max(1.0, small)
+
+
 def _close(a, b):
     """Two outlines in the same place, near enough to be the one window."""
     wide = max(1.0, min(a[2] - a[0], b[2] - b[0]))
@@ -413,17 +423,20 @@ def screen_shot(span, subject, W, H, bar_words, clock, tag_of, behind_states=(),
         drawn.append(box)
         out.append(f'<div class="sn-ghost" style="{slot_style(box, W, H)}">'
                    + tag_html(tag_of(other), box) + "</div>")
-    # the windows this one stood beside just before or just after: outlines
-    # where they sat, so a picture shows the whole desk and not one window
-    for other, box, when in ghosts:
-        if other is skip or other is subject or not box:
+    # the other windows of the desk: ones truly standing behind right now
+    # (kind "behind"), and ones that stood here just before or after (kind
+    # "away"). An away-window whose place this window itself fills is the
+    # same window a moment on, not another one, so it is not drawn.
+    for box, tag, kind in ghosts:
+        if not box:
+            continue
+        if kind == "away" and rect and _shares(box, rect) > 0.5:
             continue
         if any(_close(box, d) for d in drawn):
             continue
         drawn.append(box)
-        tag = tag_of(other)
-        tag = f"{tag} ({when})" if tag and when else tag
-        out.append(f'<div class="sn-ghost sn-away" style="{slot_style(box, W, H)}">'
+        cls = "sn-ghost sn-away" if kind == "away" else "sn-ghost"
+        out.append(f'<div class="{cls}" style="{slot_style(box, W, H)}">'
                    + tag_html(tag, box) + "</div>")
     subject.shape = rect
     html = window(subject, behind=False) or subject.plain_window_html()
