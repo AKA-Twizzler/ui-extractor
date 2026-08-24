@@ -1988,16 +1988,20 @@ def frag_owner(frag, shown):
     """The window a behind-fragment is a piece of, told by shared lines: the
     note or tree read around another window matches the window that later
     shows it whole."""
-    def lines_of(st, fams):
-        return {flat(t)[:40] for q in st.parts if q["fam"] in fams
-                for t, _ in (q["model"].lines if hasattr(q["model"], "lines") else [])
-                if len(flat(t)) >= 10}
-    mine = lines_of(frag, ("doc", "tree", "term"))
+    def lines_of(st):
+        got = set()
+        for q in st.parts:
+            model = q["model"]
+            texts = ([t for t, _ in model.lines] if hasattr(model, "lines")
+                     else [t for t in model if isinstance(t, str)] if isinstance(model, list) else [])
+            got |= {flat(t)[:40] for t in texts if len(flat(t)) >= 10}
+        return got
+    mine = lines_of(frag)
     if not mine:
         return None
     best, hits = None, 0
     for st in shown:
-        n = len(mine & lines_of(st, ("doc", "tree", "term")))
+        n = len(mine & lines_of(st))
         if n > hits:
             best, hits = st, n
     return best if hits >= 2 else None
