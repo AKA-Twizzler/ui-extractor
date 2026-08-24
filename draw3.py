@@ -2628,32 +2628,89 @@ def note(records_path, diary_text=None):
     spans = [s for s in screens(states, moments)
              if any(st in shown for st in s["states"])]
 
-    around = near_windows(states, spans, [m["ts"] for m in moments]) if spans else {}
     owner_of = {id(f): frag_owner(f, states) for f in frags}
-    def ghost_list(s, subject):
+
+    # ------- one map of place: every moment's words matched to the richest
+    # moment's, so a box measured under one zoom lands rightly under another
+    def word_boxes(m):
+        seen = {}
+        for p in m.get("panes") or []:
+            for it in draw2.items_of(p):
+                key = fold(it["text"])
+                if len(key) >= 5:
+                    seen.setdefault(key, []).append(it["box"])
+        return {k: v[0] for k, v in seen.items() if len(v) == 1}
+
+    words_of = {m["ts"]: word_boxes(m) for m in moments}
+    base_words = max(words_of.values(), key=len) if words_of else {}
+    Wf, Hf = (moments[0].get("size") or [1920, 1080])[:2] if moments else (1920, 1080)
+
+    def med(vals):
+        vals = sorted(vals)
+        return vals[len(vals) // 2]
+
+    def fit_map(ts_list):
+        """Scale and shift carrying the base moment's places onto these
+        moments, fitted on words read in both; None when too few match."""
+        mine = {}
+        for t in ts_list:
+            for key, b in (words_of.get(t) or {}).items():
+                mine.setdefault(key, b)
+        pairs = [(base_words[key], b) for key, b in mine.items() if key in base_words]
+        pairs = [(p, q) for p, q in pairs if p[2] - p[0] >= 8]
+        if len(pairs) < 3:
+            return None
+        for _ in range(2):
+            k = med([(q[2] - q[0]) / max(1.0, p[2] - p[0]) for p, q in pairs])
+            if not 0.4 <= k <= 4.0:
+                return None
+            dx = med([q[0] - k * p[0] for p, q in pairs])
+            dy = med([q[1] - k * p[1] for p, q in pairs])
+            keep = [(p, q) for p, q in pairs
+                    if abs(k * p[0] + dx - q[0]) < 0.02 * Wf
+                    and abs(k * p[1] + dy - q[1]) < 0.02 * Hf]
+            if len(keep) < 3:
+                return None
+            if len(keep) == len(pairs):
+                break
+            pairs = keep
+        return (k, dx, dy)
+
+    def onto(T, box):
+        k, dx, dy = T
+        return [k * box[0] + dx, k * box[1] + dy, k * box[2] + dx, k * box[3] + dy]
+
+    def back(T, box):
+        k, dx, dy = T
+        return [(box[0] - dx) / k, (box[1] - dy) / k,
+                (box[2] - dx) / k, (box[3] - dy) / k]
+
+    def flatT(T):
+        return bool(T) and abs(T[0] - 1) < 0.08 and abs(T[1]) < 0.01 * Wf and abs(T[2]) < 0.01 * Hf
+
+    span_T = {s["t0"]: fit_map(s["ts"]) for s in spans}
+
+    home_box = {}                  # a window's box carried into the base moment
+    for st in states:
+        for t in sorted(st.rects, key=lambda t: t not in st.measured):
+            r = st.rects.get(t)
+            s_ = next((x for x in spans if t in x["ts"]), None)
+            T = span_T.get(s_["t0"]) if s_ else fit_map([t])
+            if T and r and r[2] > r[0]:
+                home_box[id(st)] = back(T, r)
+                break
+    own_words = {id(st): box_texts(st)[0] for st in states}
+
+    def ghost_list(s, sub_states, carded):
         got = []
-        roots = set()
         for f in frags:
             ts = next((t for t in s["ts"] if t in f.rects), None)
             if ts is None:
                 continue
             own = owner_of.get(id(f))
-            if own == "several":
-                tag = "windows behind, each drawn whole below"
-            elif own is not None:
-                tag = label_for(own) + " (behind; drawn whole below)"
-                roots.add(label_for(own))
-            else:
-                tag = "a window behind"
-            got.append((list(f.rects[ts]), tag, "behind"))
-        shape = s["rects"].get(id(subject)) or span_rect(subject, s["t0"]) or subject.rect
-        for st2, box, when in around.get(s["t0"] + s["t1"], ()):
-            if st2 is subject or label_for(st2) in roots:
+            if own is not None and own != "several" and (own in sub_states or id(own) in carded):
                 continue
-            if (shape and not (set(st2.times) & set(subject.times))
-                    and overlap(box, shape) > 0.5):
-                continue          # the same window a moment on, not another one
-            got.append((list(box), f"{label_for(st2)} ({when})", "away"))
+            got.append((list(f.rects[ts]), "a window behind", "behind"))
         return got
     if spans:
         parts += ["## The screen, moment by moment", "",
