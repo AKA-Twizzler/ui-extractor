@@ -1,0 +1,143 @@
+"""Where each window sat on the screen, measured off the frame itself.
+
+The reader measures a window's edges only when it happens to look; the
+records mostly hold panes, which are slices of the screen rather than
+windows. For a picture of the whole screen to be honest, every window has
+to be drawn at the size and shape it really had, so the edges are taken
+from the picture of the screen: a window is a rectangle whose four sides
+are drawn on the screen as long straight edges.
+
+Nothing here knows the name of any program. A window is found by its
+shape alone, so the same rules hold for anything that opens on a screen.
+"""
+
+from __future__ import annotations
+
+import os
+
+import numpy as np
+from PIL import Image
+
+SMALL = 960          # the width the frame is looked at, for speed
+EDGE = 7.0           # how much light must change across a line to count
+RUN = 0.05           # the shortest run of a side, as a share of the frame
+MIN_W = 0.10         # a window is at least this wide
+MIN_H = 0.06         # and this tall
+_CACHE: dict[str, list] = {}
+
+
+def _grey(path):
+    im = Image.open(path).convert("L")
+    w, h = im.size
+    k = SMALL / float(w)
+    im = im.resize((SMALL, max(1, int(round(h * k)))), Image.BILINEAR)
+    return np.asarray(im, dtype=np.float32), w, h
+
+
+def _runs(mask, least):
+    """Every run of trues down one line: (start, end), end included."""
+    out = []
+    idx = np.flatnonzero(mask)
+    if idx.size == 0:
+        return out
+    breaks = np.flatnonzero(np.diff(idx) > 2)
+    starts = np.r_[0, breaks + 1]
+    ends = np.r_[breaks, idx.size - 1]
+    for a, b in zip(starts, ends):
+        y0, y1 = int(idx[a]), int(idx[b])
+        if y1 - y0 + 1 >= least:
+            out.append((y0, y1))
+    return out
+
+
+def _sides(g, least_v, least_h):
+    """The long straight edges on the screen, down and across."""
+    dv = np.abs(g[:, 2:] - g[:, :-2])
+    dh = np.abs(g[2:, :] - g[:-2, :])
+    verts, hors = [], []
+    for x in range(dv.shape[1]):
+        for y0, y1 in _runs(dv[:, x] > EDGE, least_v):
+            verts.append((x + 1, y0, y1))
+        # a window's side is often a soft shadow rather than one hard line;
+        # a column that is quiet but sits beside a busy one is not a side
+    for y in range(dh.shape[0]):
+        for x0, x1 in _runs(dh[y, :] > EDGE, least_h):
+            hors.append((y + 1, x0, x1))
+    return verts, hors
+
+
+def _thin(lines):
+    """One line where several sit within a pixel or two of each other."""
+    lines.sort()
+    out = []
+    for pos, a, b in lines:
+        if out and pos - out[-1][0] <= 2 and min(b, out[-1][2]) - max(a, out[-1][1]) > 0:
+            p, aa, bb = out[-1]
+            out[-1] = (p, min(aa, a), max(bb, b))
+        else:
+            out.append((pos, a, b))
+    return out
+
+
+def _covers(lines, pos, a, b, slack, part):
+    """Is there a line at about `pos` running along most of a to b?"""
+    want = part * (b - a)
+    best = 0.0
+    for p, la, lb in lines:
+        if abs(p - pos) > slack:
+            continue
+        best = max(best, min(b, lb) - max(a, la))
+    return best >= want
+
+
+def find(path):
+    """Every window on the frame, biggest first, in the frame's own pixels."""
+    if path in _CACHE:
+        return _CACHE[path]
+    if not path or not os.path.exists(path):
+        return []
+    g, W, H = _grey(path)
+    h, w = g.shape
+    least_v, least_h = int(RUN * h), int(RUN * w)
+    verts, hors = _sides(g, least_v, least_h)
+    verts, hors = _thin(verts), _thin(hors)
+    min_w, min_h = MIN_W * w, MIN_H * h
+    found = []
+    for i, (x0, ya, yb) in enumerate(verts):
+        for x1, yc, yd in verts[i + 1:]:
+            if x1 - x0 < min_w:
+                continue
+            top, bot = max(ya, yc), min(yb, yd)
+            if bot - top < min_h:
+                continue
+            share = (bot - top) / max(yb - ya, yd - yc)
+            if share < 0.55:
+                continue
+            if not _covers(hors, top, x0, x1, 3, 0.55):
+                continue
+            if not _covers(hors, bot, x0, x1, 3, 0.55):
+                continue
+            found.append([x0, top, x1, bot])
+    found.sort(key=lambda r: -(r[2] - r[0]) * (r[3] - r[1]))
+    kept = []
+    for r in found:
+        if any(_same(r, k) for k in kept):
+            continue
+        kept.append(r)
+    k = W / float(w)
+    out = [[r[0] * k, r[1] * k, r[2] * k, r[3] * k] for r in kept]
+    _CACHE[path] = out
+    return out
+
+
+def _same(a, b):
+    return (abs(a[0] - b[0]) <= 6 and abs(a[1] - b[1]) <= 6
+            and abs(a[2] - b[2]) <= 6 and abs(a[3] - b[3]) <= 6)
+
+
+def frame_of(m):
+    """The picture of the screen for this moment, if it is still on disk."""
+    p = m.get("frame")
+    if p and "\\" in p:
+        p = "/mnt/" + p[0].lower() + p[2:].replace("\\", "/")
+    return p if p and os.path.exists(p) else None
