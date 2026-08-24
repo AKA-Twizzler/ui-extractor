@@ -669,6 +669,11 @@ class State:
         return part
 
     def absorb(self, group, m):
+        self._absorb(group, m)
+        # where the window stood at this moment, measured from what it drew
+        self.rects[m["ts"]] = content_rect(self, group, m)
+
+    def _absorb(self, group, m):
         W = (m.get("size") or [1920])[0]
         rect = group["rect"]
         if not any(mm is m for mm, _ in self.pieces):
@@ -1075,7 +1080,7 @@ def build_states(moments):
                     cur.absorb(g, m)
                 elif m["ts"] not in cur.times:
                     cur.times.append(m["ts"])
-                cur.rects.setdefault(m["ts"], measured_rect(g, m))
+                cur.rects.setdefault(m["ts"], content_rect(cur, g, m))
                 st = cur
             else:
                 st = probe
@@ -1671,35 +1676,6 @@ def content_rect(state, group, m):
     y0 = min(it["box"][1] for it in items)
     x1 = max(it["box"][2] for it in items)
     y1 = max(it["box"][3] for it in items)
-    heads = [it for it in items if it["role"] == "head"]
-    top_pad = 2.6 * rh if heads else 1.4 * rh
-    return [max(0.0, x0 - 0.7 * rh), max(0.0, y0 - top_pad),
-            min(float(W), x1 + 0.7 * rh), min(float(H), y1 + 0.9 * rh)]
-
-
-def measured_rect(group, m):
-    """Where the window sat, in frame pixels. The reader's own measurement
-    when it made one; otherwise the box its words fill, opened out by a row
-    for the frame and by the toolbar above the column headings."""
-    items = [it for p in group.get("panes") or [] for it in draw2.items_of(p)]
-    items = [it for it in items if it["text"].strip()]
-    if not items:
-        return list(group.get("rect") or [0, 0, 0, 0])
-    x0 = min(it["box"][0] for it in items)
-    y0 = min(it["box"][1] for it in items)
-    x1 = max(it["box"][2] for it in items)
-    y1 = max(it["box"][3] for it in items)
-    W, H = (m.get("size") or [1920, 1080])[:2]
-    for w in m.get("windows") or []:
-        r = w.get("rect")
-        if not r:
-            continue
-        inside = sum(1 for it in items
-                     if r[0] - 20 <= it["box"][0] and it["box"][2] <= r[2] + 20
-                     and r[1] - 20 <= it["box"][1] and it["box"][3] <= r[3] + 20)
-        if inside >= 0.7 * len(items):
-            return [float(v) for v in r]
-    rh = max(12.0, (sum(it["box"][3] - it["box"][1] for it in items) / len(items)) * 1.6)
     heads = [it for it in items if it["role"] == "head"]
     top_pad = 2.6 * rh if heads else 1.4 * rh
     return [max(0.0, x0 - 0.7 * rh), max(0.0, y0 - top_pad),
