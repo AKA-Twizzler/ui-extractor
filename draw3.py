@@ -1784,8 +1784,12 @@ def screens(states, moments):
         key = tuple(sorted(id(s) for s in here))
         rects = tuple(sorted((id(s), place(s, ts)) for s in here))
         shows = tuple(sorted((id(s), marks.get((id(s), ts), "")) for s in here if marks.get((id(s), ts))))
+        def alike(v, w):
+            if not v or not w or v == w:
+                return True
+            return difflib.SequenceMatcher(None, v, w, autojunk=False).ratio() >= 0.6
         same = (cur and cur["key"] == key and cur["rects"] == rects
-                and all(v == w for (a, v), (b, w) in zip(cur["shows"], shows) if a == b))
+                and all(alike(v, w) for (a, v), (b, w) in zip(cur["shows"], shows) if a == b))
         if same:
             cur["t1"] = ts
             cur["ts"].append(ts)
