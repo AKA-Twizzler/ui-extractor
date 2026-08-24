@@ -132,7 +132,7 @@ def finder(st):
     # had room for: its shape, drawn at the card's width, less what the
     # toolbar, the headings and the path bar take
     empty = 2
-    rect = getattr(st, "shape", None) or st.rect
+    rect = getattr(st, "shape", None) or (st.best_shape() if hasattr(st, "best_shape") else st.rect)
     if rect and rect[2] > rect[0]:
         tall = CARD_W * (rect[3] - rect[1]) / (rect[2] - rect[0])
         room = tall - 40 - 26 - (30 if table.path else 0) - len(table.rows) * ROW_H

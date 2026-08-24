@@ -689,6 +689,15 @@ class State:
 
     # --------------------------------------------------------- content in
 
+    def best_shape(self):
+        """The shape to draw this window at on its own: the largest of the
+        edges actually measured off the screen, and only where none were
+        measured, the box its own words sat in."""
+        sure = [self.rects[t] for t in self.rects if t in self.measured]
+        if sure:
+            return max(sure, key=lambda r: (r[2] - r[0]) * (r[3] - r[1]))
+        return self.rect
+
     def part_for(self, kind, slot):
         fam = {"a list of columns": "table", "a file tree": "tree", "an open document": "doc",
                "a terminal": "term", "a chat log": "term"}.get(kind, "words")
