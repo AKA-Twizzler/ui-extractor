@@ -378,6 +378,9 @@ class Table:
         for i, h in enumerate(hdr):
             if any(w in h for w in ("Name", "Date Modified", "Size", "Kind")):
                 hdr[i] = re.sub(r"[*_]", "", h).strip()     # marks are never the header's own
+        for i, h in enumerate(hdr):
+            if "Date Modified" in h and h != "Date Modified":
+                hdr[i] = "Date Modified"     # what followed belongs to the next column
         def col(want):
             exact = next((i for i, h in enumerate(hdr) if h == want), None)
             return exact if exact is not None else next(
@@ -414,6 +417,17 @@ class Table:
                     its[si] = False
                     if rest and ki is not None and ki < len(cs) and not cs[ki]:
                         cs[ki] = rest
+        if ki is not None:
+            usual = collections.Counter(r["cells"][ki] for r in self.rows
+                                        if ki < len(r["cells"]) and r["cells"][ki])
+            usual = {k for k, n in usual.items() if n >= 2}
+            for r in self.rows:
+                cs = r["cells"]
+                if ki < len(cs) and cs[ki] and cs[ki] not in usual:
+                    bare = cs[ki][1:].lstrip()      # one stray letter off a misread
+                    hit = next((u for u in usual if same_text(bare, u)), None)
+                    if hit:
+                        cs[ki] = hit
         self.drop_spoiled(di, ki)
 
     def drop_spoiled(self, di, ki):
@@ -2031,12 +2045,12 @@ def state_slice(st, t0, t1):
 def name_fits(short, full_name):
     """The same file, one reading cut shorter: equal flat, or the cut's two
     ends opening and closing the full name."""
-    a, b = flat(short), flat(full_name)
+    a, b = fold(flat(short)), fold(flat(full_name))
     if a == b:
         return True
     if "..." in short:
         head, _, tail = short.partition("...")
-        af, bf = flat(head), flat(tail)
+        af, bf = fold(flat(head)), fold(flat(tail))
         return bool(af and bf) and len(af) + len(bf) >= 8 and b.startswith(af) and b.endswith(bf)
     return False
 
@@ -2076,6 +2090,14 @@ def mend_cells(sl, full):
         fr = settled_for(r["cells"][0])
         if not fr:
             continue
+        name = r["cells"][0]
+        if "..." in name and fr["cells"] and fr["cells"][0]:
+            fn = fr["cells"][0]
+            head, _, tail = name.partition("...")
+            if fold(flat(name)) != fold(flat(fn)) and len(head) + len(tail) < len(fn):
+                r["cells"][0] = fn[:len(head)] + "..." + (fn[len(fn) - len(tail):] if tail else "")
+                if r["italic"]:
+                    r["italic"][0] = False
         for i, h in enumerate(st_.header):
             if i == 0 or i >= len(r["cells"]):
                 continue
