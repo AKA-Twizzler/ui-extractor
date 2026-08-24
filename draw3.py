@@ -2627,9 +2627,10 @@ def note(records_path, diary_text=None):
                     bigs.setdefault(fold(flat(it["text"])), it["text"].strip())
     for st in states:
         doc = st.main_doc()
-        if not doc or not st.title or not doc.lines:
+        name = st.title or (doc.title() if doc else "")
+        if not doc or not name or not doc.lines:
             continue
-        tf = fold(flat(st.title))
+        tf = fold(flat(name))
         hit = next((raw for key, raw in bigs.items() if len(key) >= 6 and tf.startswith(key)), None)
         if not hit:
             continue
