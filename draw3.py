@@ -1847,6 +1847,19 @@ def state_slice(st, t0, t1):
     return out
 
 
+def polish(slice_st, states):
+    """A window rebuilt from one stretch of time gets the same reading of
+    its words as the window's own full picture: the names settled across
+    every moment, so the two never spell the same file two ways."""
+    kept = [(st, list(st.fine)) for st in states]
+    try:
+        harmonise([slice_st] + list(states))
+    finally:
+        for st, fine in kept:
+            st.fine[:] = fine
+    return slice_st
+
+
 def screens(states, moments):
     """The video cut into stretches where the screen stood still: the same
     windows, in the same places, showing the same thing."""
@@ -2075,6 +2088,8 @@ def note(records_path, diary_text=None):
             subjects = [st for st in s["states"] if st in shown]
             for st in subjects:
                 sl = state_slice(st, s["t0"], s["t1"]) or st
+                if sl is not st:
+                    polish(sl, states)
                 sl.rects, sl.measured = st.rects, st.measured
                 shape = s["rects"].get(id(st)) or span_rect(st, s["t0"]) or st.rect
                 sl.rect = shape
