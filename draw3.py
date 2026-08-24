@@ -673,7 +673,6 @@ class State:
         rect = group["rect"]
         if not any(mm is m for mm, _ in self.pieces):
             self.pieces.append((m, group))
-        self.rects[m["ts"]] = measured_rect(group, m)
         for p in sorted(group["panes"], key=lambda p: (p["box"][0], p["box"][1])):
             if p.get("since") or p.get("same_as"):
                 continue
@@ -1641,6 +1640,42 @@ def harmonise(states):
 # window where it sat, the one being shown filled with what it held over
 # that stretch of time, the others as empty outlines. Its content comes
 # only from the moments inside the stretch, so it stays an honest still.
+
+def content_rect(state, group, m):
+    """Where the window sat, in frame pixels: the reader's measurement when
+    it made one, else the box around the content this window actually drew
+    -- words from a window behind, which the reader read on the same pane,
+    stay out of it."""
+    items = [it for p in group.get("panes") or [] for it in draw2.items_of(p) if it["text"].strip()]
+    if not items:
+        return list(group.get("rect") or [0, 0, 0, 0])
+    W, H = (m.get("size") or [1920, 1080])[:2]
+    for w in m.get("windows") or []:
+        r = w.get("rect")
+        if not r:
+            continue
+        inside = sum(1 for it in items
+                     if r[0] - 20 <= it["box"][0] and it["box"][2] <= r[2] + 20
+                     and r[1] - 20 <= it["box"][1] and it["box"][3] <= r[3] + 20)
+        if inside >= 0.6 * len(items):
+            return [float(v) for v in r]
+    rh = max(12.0, (sum(it["box"][3] - it["box"][1] for it in items) / len(items)) * 1.6)
+    spans = [(q["x0"], q["x1"]) for q in state.parts if q.get("x0") is not None and q.get("x1") is not None]
+    if spans:
+        xlo = min(a for a, _ in spans) - 2 * rh
+        xhi = max(b for _, b in spans) + 2 * rh
+        keep = [it for it in items if it["box"][2] > xlo and it["box"][0] < xhi]
+        if len(keep) >= 3:
+            items = keep
+    x0 = min(it["box"][0] for it in items)
+    y0 = min(it["box"][1] for it in items)
+    x1 = max(it["box"][2] for it in items)
+    y1 = max(it["box"][3] for it in items)
+    heads = [it for it in items if it["role"] == "head"]
+    top_pad = 2.6 * rh if heads else 1.4 * rh
+    return [max(0.0, x0 - 0.7 * rh), max(0.0, y0 - top_pad),
+            min(float(W), x1 + 0.7 * rh), min(float(H), y1 + 0.9 * rh)]
+
 
 def measured_rect(group, m):
     """Where the window sat, in frame pixels. The reader's own measurement
