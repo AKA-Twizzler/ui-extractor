@@ -23,8 +23,8 @@ import re
 import sys
 
 import draw as old          # HTML line helpers that do not change
-import draw2
-import shapes                # the geometry: items, tables rebuilt, window groups
+import draw2                 # the geometry: items, tables rebuilt, window groups
+import shapes                # where each window sat, measured off the frame
 
 LONG_SAID = 700
 MAX_DOUBT = 12
