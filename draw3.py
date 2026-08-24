@@ -1146,6 +1146,7 @@ def build_states(moments):
         W, H = (moments[0].get("size") or [1920, 1080])[:2]
         for st in states:
             settle_rects(st, W, H)
+        settle_across(states, [m["ts"] for m in moments], W, H)
     return states
 
 
@@ -1780,6 +1781,40 @@ def settle_rects(state, W, H):
             if near >= 3:
                 state.rects[t] = list(big)
                 break
+
+
+def settle_across(states, order, W, H):
+    """The same window carries the same edges from one thing it shows to the
+    next. Where a window's rectangle at one moment sits inside the rectangle
+    another state of that same window had a moment either side, and three of
+    the four sides agree, it is that window seen short and the fuller shape
+    stands. Two windows of one program standing side by side never agree on
+    three sides, so they stay apart."""
+    at = {ts: i for i, ts in enumerate(order)}
+    for st in states:
+        for ts in list(st.rects):
+            r = st.rects[ts]
+            i = at.get(ts)
+            if i is None:
+                continue
+            for other in states:
+                if other is st or other.name != st.name:
+                    continue
+                for us, big in other.rects.items():
+                    j = at.get(us)
+                    if j is None or abs(j - i) > 3 or us not in other.measured:
+                        continue
+                    if (big[2] - big[0]) * (big[3] - big[1]) <= (r[2] - r[0]) * (r[3] - r[1]):
+                        continue
+                    if not (big[0] - 8 <= r[0] and big[1] - 8 <= r[1]
+                            and r[2] <= big[2] + 8 and r[3] <= big[3] + 8):
+                        continue
+                    near = sum((abs(r[0] - big[0]) <= 0.02 * W, abs(r[2] - big[2]) <= 0.02 * W,
+                                abs(r[1] - big[1]) <= 0.02 * H, abs(r[3] - big[3]) <= 0.02 * H))
+                    if near >= 3:
+                        st.rects[ts] = list(big)
+                        st.measured.add(ts)
+                        r = st.rects[ts]
 
 
 def content_rect(state, group, m):
