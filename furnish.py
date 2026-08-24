@@ -425,8 +425,14 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(), ghosts=
                 break
         return f'<span class="sn-ghost-tag"{style}>{esc(tag)}</span>'
 
+    def bare(html):
+        # a span picture shows the camera itself, so the little note about
+        # the covered corner belongs only to the zoomed cards
+        return re.sub(r'<span class="sn-covered">[^<]*</span>', "", html)
+
     # the windows behind, whole, under what stands in front
     for html, box in behind_cards:
+        html = bare(html)
         drawn.append(box)
         out.append(scaled(html, box, W, kz, cls="sn-slot sn-partial", extra=sty(box)))
     # outlines where words were read that no drawn window owns
@@ -447,7 +453,7 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(), ghosts=
         st.shape = rect
         html = window(st, behind=False) or st.plain_window_html()
         st.shape = None
-        out.append(scaled(html, rect, W, kz, extra=sty(rect) + f";z-index:{2 + z}"))
+        out.append(scaled(bare(html), rect, W, kz, extra=sty(rect) + f";z-index:{2 + z}"))
     if camera:
         cbox, cpic = camera
         if cpic:

@@ -2188,7 +2188,9 @@ def mend_cells(sl, full):
     # the path bar: a crumb the stretch read short or wrong takes its spelling
     # from the settled path -- but the stretch keeps its own depth, because a
     # selection deepens the real bar and this stretch may not have had one
-    if ft.path and st_.path:
+    if ft.path and not st_.path:
+        st_.path = list(ft.path)
+    elif ft.path and st_.path:
         walk, hits = 0, []
         for c in st_.path:
             hit = next((k for k in range(walk, len(ft.path))
@@ -2235,6 +2237,11 @@ def mend_cells(sl, full):
                 r["cells"][0] = fn[:len(head)] + "..." + (fn[len(fn) - len(tail):] if tail else "")
                 if r["italic"]:
                     r["italic"][0] = False
+        elif fr["cells"] and fr["cells"][0] and name != fr["cells"][0] \
+                and fold(flat(name)) == fold(flat(fr["cells"][0])):
+            r["cells"][0] = fr["cells"][0]
+            if r["italic"]:
+                r["italic"][0] = False
         for i, h in enumerate(st_.header):
             if i == 0 or i >= len(r["cells"]):
                 continue
@@ -2268,6 +2275,10 @@ def mend_cells(sl, full):
                                        "italic": list(fr.get("italic") or []), "band": None})
                 merged.append(r)
                 prev = k
+            for j in range(prev + 1, len(ft.rows)):
+                fr = ft.rows[j]
+                merged.append({**fr, "cells": list(fr["cells"]),
+                               "italic": list(fr.get("italic") or []), "band": None})
             st_.rows = merged
 
 
@@ -2765,6 +2776,17 @@ def note(records_path, diary_text=None):
 
     own_words = {id(st): {flat(w) for w in box_texts(st)[1] if len(flat(w)) >= 8}
                  for st in states}
+    bar_seen = set()               # moments whose own top strip held readings
+    for m in moments:
+        n = 0
+        for p in m.get("panes") or []:
+            if p["box"][1] > 0.02 * Hf:
+                continue
+            for it in draw2.items_of(p):
+                if it["box"][1] <= 0.01 * Hf and it["box"][3] <= 0.03 * Hf and len(it["text"]) >= 3:
+                    n += 1
+        if n >= 2:
+            bar_seen.add(m["ts"])
     reach = {id(st): (min(st.times), max(st.times)) for st in states if st.times}
     for f in frags:
         own = owner_of.get(id(f))
@@ -2833,7 +2855,7 @@ def note(records_path, diary_text=None):
             last_T = T
             bar_words = next((bar_at[t] for t in s["ts"] if bar_at.get(t)), [])
             clock = next((clock_at[t] for t in s["ts"] if clock_at.get(t)), "")
-            barred = flatT(T) and bool(bar_at.get(base_ts))
+            barred = any(t in bar_seen for t in s["ts"])
 
             # which windows behind were read through or around the front ones
             seen_here = set()
