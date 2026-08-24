@@ -1799,17 +1799,23 @@ def box_texts(state):
     have filed on the same slice of the screen."""
     t = state.main_table()
     if not t:
-        return state_texts(state)
+        every = state_texts(state)
+        return every, every
     out = set()
-    for r in t.rows:
+    strong = set()                # words no other window would share: the
+    for r in t.rows:              # rows' names, and the window's own name
+        if r["cells"] and r["cells"][0]:
+            strong.add(fold(r["cells"][0]))
         for c in r["cells"]:
             out.add(fold(c))
     for c in list(t.header) + list(t.side) + list(t.path) + list(t.bottom):
         out.add(fold(c if isinstance(c, str) else str(c)))
     if state.title:
         out.add(fold(state.title))
+        strong.add(fold(state.title))
     out.discard("")
-    return out
+    strong.discard("")
+    return out, strong
 
 
 def state_texts(state):
@@ -1836,7 +1842,7 @@ def state_texts(state):
     return out
 
 
-def snap_rect(items, mine, frame, W, H):
+def snap_rect(items, mine, frame, W, H, strong=None):
     """The real window these words sat in, off the picture of the screen.
     Of every rectangle drawn on the frame, the one this window's own words
     both fill and stay inside; nothing here knows one program from another."""
@@ -1860,15 +1866,18 @@ def snap_rect(items, mine, frame, W, H):
             best, score_best = r, score
     if best is None or score_best < 0.12:
         return None
-    inside = [it for it in mine
+    # only words no other window would share may pull the box wider: a
+    # header or a path crumb sits identically in two windows of one program
+    tell = strong if strong else mine
+    inside = [it for it in tell
               if best[0] - 12 <= (it["box"][0] + it["box"][2]) / 2 <= best[2] + 12
               and best[1] - 12 <= (it["box"][1] + it["box"][3]) / 2 <= best[3] + 12]
-    share = len(inside) / float(len(mine))
+    share = len(inside) / float(len(tell))
     if share < 0.75:
         # the words run past this rectangle: two windows read as one, or a
         # window wider than its drawn frame. The honest box holds them all.
-        bb = [min(it["box"][0] for it in mine), min(it["box"][1] for it in mine),
-              max(it["box"][2] for it in mine), max(it["box"][3] for it in mine)]
+        bb = [min(it["box"][0] for it in tell), min(it["box"][1] for it in tell),
+              max(it["box"][2] for it in tell), max(it["box"][3] for it in tell)]
         return ([min(best[0], bb[0]), min(best[1], bb[1]),
                  min(float(W), max(best[2], bb[2])), min(float(H), max(best[3], bb[3]))], False)
     return ([float(v) for v in best], True)
@@ -1963,7 +1972,7 @@ def content_rect(state, group, m):
         if was[2]:
             state.measured.add(m["ts"])
         return list(was[1])
-    own = box_texts(state)
+    own, own_strong = box_texts(state)
     mine = [it for it in items if fold(it["text"]) in own] if own else []
     tops = getattr(state, "topwords", None) or []
     if tops:
@@ -1971,7 +1980,8 @@ def content_rect(state, group, m):
         # showing over this one; they say nothing about this window's edges
         strip_y = max(t[4] for t in tops) + 0.005 * H
         mine = [it for it in mine if (it["box"][1] + it["box"][3]) / 2 > strip_y] or mine
-    got = snap_rect(items, mine or items, frame_of(m), W, H)
+    strong = [it for it in mine if fold(it["text"]) in own_strong]
+    got = snap_rect(items, mine or items, frame_of(m), W, H, strong=strong or None)
     if got:
         drawn, sure = got
         if state.title:
