@@ -2608,25 +2608,38 @@ def note(records_path, diary_text=None):
                 continue
             # deepest first: the bigger window lies under the smaller one
             subjects.sort(key=lambda x: -(x[2][2] - x[2][0]) * (x[2][3] - x[2][1]))
-            # the windows truly behind, their own content where it sat
-            behinds, covered = [], set()
+            # the windows truly behind, their own content where it sat: told
+            # by a fragment read around the front windows, or by another
+            # window's note or tree filed onto a front window's own panes
+            sub_states = [stx for stx, _, _ in subjects]
+            owners = []
             for f in frags:
-                ts = next((t for t in s["ts"] if t in f.rects), None)
-                if ts is None:
+                if any(t in f.rects for t in s["ts"]):
+                    owners.append(owner_of.get(id(f)))
+            import types
+            for stx, sl, _ in subjects:
+                keep = {id(stx.tree()), id(stx.main_doc())}
+                for q in stx.parts:
+                    if q["fam"] in ("doc", "tree") and id(q["model"]) not in keep:
+                        owners.append(frag_owner(types.SimpleNamespace(parts=[q]),
+                                                 [o for o in states if o is not stx]))
+            behinds, covered = [], set()
+            for own in owners:
+                if own is None or own == "several" or own in sub_states or id(own) in covered:
                     continue
-                own = owner_of.get(id(f))
-                if own is not None and own != "several" and own not in [st for st, _, _ in subjects]                         and id(own) not in covered:
-                    covered.add(id(own))
-                    html = furnish.window(own, behind=False) or own.plain_window_html()
-                    box = own.best_shape() or f.rects[ts]
-                    if html and box:
-                        tall = furnish.CARD_W * (box[3] - box[1]) / max(1.0, box[2] - box[0])
-                        html = re.sub(r'^(<div class="sn-window[^"]*")',
-                                      r'\1 style="min-height:%dpx"' % round(tall), html, count=1)
-                        behinds.append((html, list(box)))
-            first_sl = subjects[0][1]
-            for _, box, html in behind_for(first_sl, dict(s, size=s["size"]), subjects[0][0]):
-                behinds.insert(0, (html, box))
+                covered.add(id(own))
+                html = furnish.window(own, behind=False) or own.plain_window_html()
+                box = own.best_shape()
+                if html and box:
+                    tall = furnish.CARD_W * (box[3] - box[1]) / max(1.0, box[2] - box[0])
+                    html = re.sub(r'^(<div class="sn-window[^"]*")',
+                                  r'\1 style="min-height:%dpx"' % round(tall), html, count=1)
+                    behinds.append((html, list(box)))
+            for stx, sl, _ in subjects:
+                strip = behind_for(sl, dict(s, size=s["size"]), stx)
+                if strip:
+                    behinds.insert(0, (strip[0][2], strip[0][1]))
+                    break
             m_t0 = next((mm for mm in moments if mm["ts"] == s["t0"]), None)
             cam = shapes.camera_box(frame_of(m_t0)) if m_t0 else None
             head = f"### {s['t0']}" + ("" if s["t0"] == s["t1"] else f" to {s['t1']}") +                    " - " + " \u00b7 ".join(label_for(st) for st, _, _ in subjects)
