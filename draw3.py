@@ -2834,6 +2834,10 @@ def note(records_path, diary_text=None):
                     continue
                 lo1, hi1 = reach.get(id(own), ("", ""))
                 alive = id(own) in seen_here or (lo1 and lo1 <= lo and hi <= hi1)
+                import os as _os
+                if _os.environ.get("SN_DBG"):
+                    print("DBG", s["t0"], state_label(own), "alive:", alive,
+                          "reach:", (lo1, hi1), "box:", [round(v) for v in box])
                 if not alive:
                     # its own words read inside its place this stretch
                     keys = own_words.get(id(own)) or set()
