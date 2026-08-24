@@ -23,6 +23,7 @@ EDGE = 7.0           # how much light must change across a line to count
 RUN = 0.05           # the shortest run of a side, as a share of the frame
 MIN_W = 0.10         # a window is at least this wide
 MIN_H = 0.06         # and this tall
+ALONG = 0.85         # a side must run this much of the window it closes
 _CACHE: dict[str, list] = {}
 
 
@@ -119,16 +120,19 @@ def find(path):
             share = (bot - top) / max(yb - ya, yd - yc)
             if share < 0.55:
                 continue
-            slack = max(6, int(0.03 * (bot - top)))
-            y_top = _across(hors, top, x0, x1, slack, 0.55, -1)
-            y_bot = _across(hors, bot, x0, x1, slack, 0.55, +1)
+            slack = max(6, int(0.04 * (bot - top)))
+            y_top = _across(hors, top, x0, x1, slack, ALONG, -1)
+            y_bot = _across(hors, bot, x0, x1, slack, ALONG, +1)
             if y_top is None or y_bot is None or y_bot - y_top < min_h:
                 continue
+            tall = y_bot - y_top
+            if bot - top < ALONG * tall:
+                continue                       # the sides must run its height
             found.append([x0, y_top, x1, y_bot])
     found.sort(key=lambda r: -(r[2] - r[0]) * (r[3] - r[1]))
     kept = []
     for r in found:
-        if any(_same(r, k) for k in kept):
+        if any(_shares(r, k) > 0.55 for k in kept):
             continue
         kept.append(r)
     k = W / float(w)
@@ -137,9 +141,14 @@ def find(path):
     return out
 
 
-def _same(a, b):
-    return (abs(a[0] - b[0]) <= 6 and abs(a[1] - b[1]) <= 6
-            and abs(a[2] - b[2]) <= 6 and abs(a[3] - b[3]) <= 6)
+def _shares(a, b):
+    """How much of the smaller rectangle the two have in common."""
+    w = min(a[2], b[2]) - max(a[0], b[0])
+    h = min(a[3], b[3]) - max(a[1], b[1])
+    if w <= 0 or h <= 0:
+        return 0.0
+    small = min((a[2] - a[0]) * (a[3] - a[1]), (b[2] - b[0]) * (b[3] - b[1]))
+    return (w * h) / max(1.0, small)
 
 
 def frame_of(m):
