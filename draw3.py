@@ -1862,6 +1862,42 @@ def note(records_path, diary_text=None):
     for st in shown:
         parts.append(f"- {span_of(st)} - {st.name[0].lower() + st.name[1:]}" + (f": {st.title}" if st.title else ""))
     parts += ["", "---", ""]
+
+    # ------------------------------------------------ the screens, in order
+    spans = [s for s in screens(states, moments)
+             if any(st in shown for st in s["states"])]
+    bar_words, clock_at = desktop_bar(moments)
+    if spans:
+        parts += ["## The screen, moment by moment", "",
+                  "Each picture is the whole screen at the size the video had it, with the desktop bar along the top. "
+                  "The window being shown is filled in with what it held over that stretch of time and nothing from "
+                  "outside it; the other windows are outlines where they sat, and each says where its own picture is. "
+                  "A stretch covers several timestamps whenever the screen stood still, so a part something covered at "
+                  "one moment is filled from a moment when it was clear.", ""]
+        for s in spans:
+            subjects = [st for st in s["states"] if st in shown]
+            for st in subjects:
+                sl = state_slice(st, s["t0"], s["t1"]) or st
+                sl.rects = st.rects
+                sl.rect = st.rects.get(s["t0"]) or st.rect
+                if not sl.has_content():
+                    continue
+                head = f"### {s['t0']}" + ("" if s["t0"] == s["t1"] else f" to {s['t1']}") + f" - {label_for(st)}"
+                parts += [head, ""]
+                parts.append(furnish.screen_shot(
+                    {"states": s["states"], "t0": s["t0"], "t1": s["t1"]}, st,
+                    s["size"][0], s["size"][1], bar_words, clock_at.get(s["t0"], ""),
+                    lambda other: label_for(other),
+                    behind_states=behind_for(sl, s, st)))
+                parts.append("")
+                for ln in sl.said_html():
+                    parts += [ln, ""]
+        parts += ["---", ""]
+
+    parts += ["## Every window, filled in", "",
+              "The same windows again, each on its own and large enough to read, holding everything read from it "
+              "across every moment it showed that same thing. This is where content that never fit on the screen at "
+              "once can be seen whole.", ""]
     for w in windows:
         sts = [st for st in shown if st.name == w]
         latest = max(sts, key=lambda st: st.times[-1])     # the last one on screen
