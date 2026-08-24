@@ -1682,6 +1682,31 @@ def content_rect(state, group, m):
             min(float(W), x1 + 0.7 * rh), min(float(H), y1 + 0.9 * rh)]
 
 
+def overlap(a, b):
+    """How much of the smaller box the two share, nought to one."""
+    w = min(a[2], b[2]) - max(a[0], b[0])
+    h = min(a[3], b[3]) - max(a[1], b[1])
+    if w <= 0 or h <= 0:
+        return 0.0
+    small = min((a[2] - a[0]) * (a[3] - a[1]), (b[2] - b[0]) * (b[3] - b[1]))
+    return (w * h) / max(1.0, small)
+
+
+def span_rect(st, ts):
+    """A window's shape at one stretch of time. A window does not shrink
+    because less of its text was read at one moment, so every reading that
+    sits in the same place is joined into one shape."""
+    here = st.rects.get(ts) or st.rect
+    if not here:
+        return None
+    box = list(here)
+    for other in st.rects.values():
+        if overlap(here, other) >= 0.5:
+            box = [min(box[0], other[0]), min(box[1], other[1]),
+                   max(box[2], other[2]), max(box[3], other[3])]
+    return box
+
+
 def fingerprint(group):
     """What the window showed at one moment, in a word: the first name in
     its list, or the first line of its document. A change means the window
