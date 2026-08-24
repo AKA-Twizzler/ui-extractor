@@ -2725,6 +2725,13 @@ def note(records_path, diary_text=None):
         if best:
             home_box[id(st)] = best[1]
     own_words = {id(st): {w for w in box_texts(st)[1] if len(w) >= 8} for st in states}
+    reach = {id(st): (min(st.times), max(st.times)) for st in states if st.times}
+    for f in frags:
+        own = owner_of.get(id(f))
+        if own is None or own == "several" or not f.times:
+            continue
+        lo1, hi1 = reach.get(id(own), (min(f.times), max(f.times)))
+        reach[id(own)] = (min(lo1, min(f.times)), max(hi1, max(f.times)))
     heights = sorted(b[3] - b[1] for b in base_words.values())
     if heights:
         ui = heights[len(heights) // 4] * furnish.CANVAS_W / max(1, Wf)
@@ -2825,8 +2832,8 @@ def note(records_path, diary_text=None):
                        > 0.6 * (box[2] - box[0]) * (box[3] - box[1])
                        for _, _, r in subjects):
                     continue
-                alive = (id(own) in seen_here
-                         or (own.times and min(own.times) <= lo and hi <= max(own.times)))
+                lo1, hi1 = reach.get(id(own), ("", ""))
+                alive = id(own) in seen_here or (lo1 and lo1 <= lo and hi <= hi1)
                 if not alive:
                     # its own words read inside its place this stretch
                     keys = own_words.get(id(own)) or set()
@@ -2834,14 +2841,20 @@ def note(records_path, diary_text=None):
                     hits = 0
                     for t in s["ts"]:
                         for key, b in (words_of.get(t) or {}).items():
-                            if key in keys and box[0] - px <= b[0] and b[2] <= box[2] + px \
-                                    and box[1] - py <= b[1] and b[3] <= box[3] + py:
+                            if not (box[0] - px <= b[0] and b[2] <= box[2] + px
+                                    and box[1] - py <= b[1] and b[3] <= box[3] + py):
+                                continue
+                            if key in keys or (len(key) >= 12 and any(
+                                    key in sk or sk in key for sk in keys)):
                                 hits += 1
                     if hits < 2:
                         continue
                 html = furnish.window(own, behind=False) or own.plain_window_html()
                 if not html:
                     continue
+                # a selection band belongs to the moment it was seen, and
+                # this is another moment
+                html = re.sub(r" ?\bsn-selected\b| ?\bsn-band-\w+\b", "", html)
                 carded.add(id(own))
                 behinds.append((html, list(box)))
             behinds.sort(key=lambda hb: -(hb[1][2] - hb[1][0]) * (hb[1][3] - hb[1][1]))

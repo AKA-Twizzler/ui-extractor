@@ -433,7 +433,7 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(), ghosts=
     for box, tag, kind in ghosts:
         if not box:
             continue
-        if kind == "away" and any(_shares(box, d) > 0.5 for d in drawn + [r for _, r in subjects if r]):
+        if any(_shares(box, d) > 0.5 for d in drawn + [r for _, r in subjects if r]):
             continue
         if any(_close(box, d) for d in drawn):
             continue
