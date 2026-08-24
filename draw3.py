@@ -2322,14 +2322,17 @@ def desktop_bar(moments):
 
 def strip_furniture(st, strip_at):
     """What the frame's own top strip said -- the menu bar, a tab row -- is
-    the desk's furniture, not a window's title or a note's first line."""
-    tops = set()
-    for t in st.times:
-        tops |= strip_at.get(t, set())
+    the desk's furniture, not a window's title or a note's first line. The
+    bar stands all video, so every moment's strip counts, and a partial strip
+    reading still names the line it is part of."""
+    tops = {fold(flat(w)) for texts in strip_at.values() for w in texts
+            if len(flat(w)) >= 8 and not old.CLOCK.match(w.split()[-1] if w.split() else w)}
     if not tops:
         return
-    if st.title and any(same_text(st.title, w) or (len(st.title) >= 8 and (st.title in w or w in st.title))
-                        for w in tops):
+    def furniture(text):
+        f = fold(flat(text))
+        return len(f) >= 8 and any(w in f or f in w for w in tops)
+    if st.title and furniture(st.title):
         st.title = None
     for q in st.parts:
         model = q["model"]
@@ -2338,7 +2341,7 @@ def strip_furniture(st, strip_at):
         kept = []
         for t, h in model.lines:
             bare = t.strip().strip("#*>\u2502 \u02c3\u02c5").strip()
-            if len(bare) >= 8 and any(same_text(bare, w) for w in tops):
+            if bare and furniture(bare):
                 continue
             kept.append((t, h))
         model.lines = kept
