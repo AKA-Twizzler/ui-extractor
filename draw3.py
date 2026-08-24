@@ -592,6 +592,8 @@ class Lines:
                 continue
             if len(norm(t)) < 4:
                 continue
+            if len(t) > 60 or t.count(" ") > 7:
+                continue          # a paragraph, not a title
             return t
         return ""
 
@@ -2315,6 +2317,19 @@ def desktop_bar(moments):
     return words_at, clock_at
 
 
+def bar_title(st, H):
+    """A window title that is really the menu bar read as one string: the
+    same words sit in the frame's own top strip."""
+    t = st.title
+    if not t:
+        return False
+    for w in getattr(st, "topwords", ()):
+        if w[2] <= 0.035 * H and (same_text(t, w[0])
+                or (len(t) >= 8 and (t in w[0] or w[0] in t))):
+            return True
+    return False
+
+
 def label_for(st):
     """What to call a window in a picture: its program and what it showed."""
     name = st.name.replace("The ", "").replace(" window", "")
@@ -2413,6 +2428,11 @@ def note(records_path, diary_text=None):
     diary_text = diary_text if diary_text is not None else old.diary(records_path)
     secs = (moments[-1]["secs"] - moments[0]["secs"]) if len(moments) > 1 else 0
     all_states = build_states(moments)
+    if moments:
+        H0 = (moments[0].get("size") or [0, 2160])[1]
+        for st in all_states:
+            if bar_title(st, H0):
+                st.title = None
     states = [st for st in all_states if st.window_html() and not st.fragment()]
     frags = [st for st in all_states if st not in states and st.has_content() and st.rects]
     real = [st for st in states if is_real_window(st.name)]
@@ -2486,6 +2506,9 @@ def note(records_path, diary_text=None):
                     polish(sl, states)
                     drop_guessed([sl])
                     mend_cells(sl, st)
+                    if bar_title(sl, s["size"][1]):
+                        sl.title = None
+                    sl.title = sl.title or st.title
                 sl.rects, sl.measured = st.rects, st.measured
                 shape = s["rects"].get(id(st)) or span_rect(st, s["t0"]) or st.rect
                 sl.rect = shape
