@@ -1074,6 +1074,9 @@ class State:
             bits.append(f"{cut} line{'s' if cut != 1 else ''} ran past the pane's edge and could not be read whole")
         if engine:
             bits.append(f"{len(engine)} reading{'s' if len(engine) != 1 else ''} only one engine backed")
+        spoiled = sum(p["model"].spoiled for p in self.parts if isinstance(p["model"], Table))
+        if spoiled:
+            bits.append(f"{spoiled} line{'s' if spoiled != 1 else ''} left out, misread in two columns at once")
         bits.extend(esc(o) for o in other)
         if not bits:
             return ""
