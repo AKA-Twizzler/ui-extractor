@@ -2582,8 +2582,10 @@ def note(records_path, diary_text=None):
                   "one moment is filled from a moment when it was clear. Where the reader measured a window's edges, "
                   "those are the edges drawn; otherwise they are taken from where that window's own content sat.", ""]
         for s in spans:
-            subjects = [st for st in s["states"] if st in shown]
-            for st in subjects:
+            subjects = []
+            for st in s["states"]:
+                if st not in shown:
+                    continue
                 sl = state_slice(st, s["t0"], s["t1"]) or st
                 if sl is not st:
                     # the desk's chrome stands all video; a stretch that did
@@ -2600,22 +2602,50 @@ def note(records_path, diary_text=None):
                 sl.rects, sl.measured = st.rects, st.measured
                 shape = s["rects"].get(id(st)) or span_rect(st, s["t0"]) or st.rect
                 sl.rect = shape
-                if not sl.has_content():
+                if sl.has_content() and shape:
+                    subjects.append((st, sl, shape))
+            if not subjects:
+                continue
+            # deepest first: the bigger window lies under the smaller one
+            subjects.sort(key=lambda x: -(x[2][2] - x[2][0]) * (x[2][3] - x[2][1]))
+            # the windows truly behind, their own content where it sat
+            behinds, covered = [], set()
+            for f in frags:
+                ts = next((t for t in s["ts"] if t in f.rects), None)
+                if ts is None:
                     continue
-                head = f"### {s['t0']}" + ("" if s["t0"] == s["t1"] else f" to {s['t1']}") + f" - {label_for(st)}"
-                parts += [head, ""]
-                parts.append(furnish.screen_shot(
-                    {"states": s["states"], "t0": s["t0"], "t1": s["t1"], "rects": s["rects"]}, sl,
-                    s["size"][0], s["size"][1], bar_at.get(s["t0"], []), clock_at.get(s["t0"], ""),
-                    lambda other: label_for(other),
-                    behind_states=behind_for(sl, dict(s, size=s["size"]), st),
-                    skip=st, rect=shape,
-                    sure=any(t in st.measured for t in s["ts"]),
-                    ghosts=ghost_list(s, st)))
-                st.shape = None
-                parts.append("")
+                own = owner_of.get(id(f))
+                if own is not None and own != "several" and own not in [st for st, _, _ in subjects]                         and id(own) not in covered:
+                    covered.add(id(own))
+                    html = furnish.window(own, behind=False) or own.plain_window_html()
+                    box = own.best_shape() or f.rects[ts]
+                    if html and box:
+                        tall = furnish.CARD_W * (box[3] - box[1]) / max(1.0, box[2] - box[0])
+                        html = re.sub(r'^(<div class="sn-window[^"]*")',
+                                      r'\1 style="min-height:%dpx"' % round(tall), html, count=1)
+                        behinds.append((html, list(box)))
+            first_sl = subjects[0][1]
+            for _, box, html in behind_for(first_sl, dict(s, size=s["size"]), subjects[0][0]):
+                behinds.insert(0, (html, box))
+            m_t0 = next((mm for mm in moments if mm["ts"] == s["t0"]), None)
+            cam = shapes.camera_box(frame_of(m_t0)) if m_t0 else None
+            head = f"### {s['t0']}" + ("" if s["t0"] == s["t1"] else f" to {s['t1']}") +                    " - " + " \u00b7 ".join(label_for(st) for st, _, _ in subjects)
+            parts += [head, ""]
+            parts.append(furnish.screen_shot(
+                {"t0": s["t0"], "t1": s["t1"]},
+                [(sl, shape) for _, sl, shape in subjects],
+                s["size"][0], s["size"][1], bar_at.get(s["t0"], []), clock_at.get(s["t0"], ""),
+                behind_cards=behinds,
+                ghosts=ghost_list(s, subjects[0][0]),
+                camera=cam,
+                sure=all(any(t in st.measured for t in s["ts"]) for st, _, _ in subjects)))
+            parts.append("")
+            seen_said = set()
+            for _, sl, _ in subjects:
                 for ln in sl.said_html():
-                    parts += [ln, ""]
+                    if ln not in seen_said:
+                        seen_said.add(ln)
+                        parts += [ln, ""]
         parts += ["---", ""]
 
     parts += ["## Every window, filled in", "",
