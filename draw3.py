@@ -2549,6 +2549,10 @@ def note(records_path, diary_text=None):
             for st in subjects:
                 sl = state_slice(st, s["t0"], s["t1"]) or st
                 if sl is not st:
+                    # the desk's chrome stands all video; a stretch that did
+                    # not re-read it still lives under it
+                    sl.topwords = sl.topwords + [t for t in st.topwords
+                                                 if not any(same_text(t[0], u[0]) for u in sl.topwords)]
                     polish(sl, states)
                     drop_guessed([sl])
                     mend_cells(sl, st)
