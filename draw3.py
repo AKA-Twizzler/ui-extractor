@@ -2642,7 +2642,8 @@ def note(records_path, diary_text=None):
         return {k: v[0] for k, v in seen.items() if len(v) == 1}
 
     words_of = {m["ts"]: word_boxes(m) for m in moments}
-    base_words = max(words_of.values(), key=len) if words_of else {}
+    base_ts = max(words_of, key=lambda t: len(words_of[t])) if words_of else None
+    base_words = words_of.get(base_ts) or {}
     Wf, Hf = (moments[0].get("size") or [1920, 1080])[:2] if moments else (1920, 1080)
 
     def med(vals):
@@ -2651,29 +2652,46 @@ def note(records_path, diary_text=None):
 
     def fit_map(ts_list):
         """Scale and shift carrying the base moment's places onto these
-        moments, fitted on words read in both; None when too few match."""
+        moments, fitted on words read in both. A line read cut still
+        anchors the side it kept and votes for the scale by its height."""
         mine = {}
         for t in ts_list:
             for key, b in (words_of.get(t) or {}).items():
                 mine.setdefault(key, b)
-        pairs = [(base_words[key], b) for key, b in mine.items() if key in base_words]
-        pairs = [(p, q) for p, q in pairs if p[2] - p[0] >= 8]
-        if len(pairs) < 3:
+        exact = [(base_words[key], q) for key, q in mine.items() if key in base_words]
+        cuts = []
+        for key, q in mine.items():
+            if key in base_words or len(key) < 10:
+                continue
+            cands = [bk for bk in base_words if len(bk) >= 10 and (bk.endswith(key) or key.endswith(bk))]
+            if len(cands) == 1:
+                cuts.append((base_words[cands[0]], q, "tail"))
+                continue
+            cands = [bk for bk in base_words if len(bk) >= 10 and (bk.startswith(key) or key.startswith(bk))]
+            if len(cands) == 1:
+                cuts.append((base_words[cands[0]], q, "head"))
+        kv = [(q[2] - q[0]) / max(1.0, p[2] - p[0]) for p, q in exact if p[2] - p[0] >= 8]
+        kv += [(q[3] - q[1]) / max(1.0, p[3] - p[1]) for p, q in exact if p[3] - p[1] >= 10]
+        kv += [(q[3] - q[1]) / max(1.0, p[3] - p[1]) for p, q, _ in cuts if p[3] - p[1] >= 10]
+        if len(kv) < 3:
             return None
+        k = med(kv)
+        if not 0.4 <= k <= 4.0:
+            return None
+        xs = [(p[0], q[0]) for p, q in exact] + [(p[2], q[2]) for p, q in exact]
+        xs += [(p[2], q[2]) if side == "tail" else (p[0], q[0]) for p, q, side in cuts]
+        ys = [(p[1], q[1]) for p, q in exact] + [(p[1], q[1]) for p, q, _ in cuts]
         for _ in range(2):
-            k = med([(q[2] - q[0]) / max(1.0, p[2] - p[0]) for p, q in pairs])
-            if not 0.4 <= k <= 4.0:
+            dx = med([qx - k * px for px, qx in xs])
+            dy = med([qy - k * py for py, qy in ys])
+            keep_x = [(px, qx) for px, qx in xs if abs(k * px + dx - qx) < 0.02 * Wf]
+            keep_y = [(py, qy) for py, qy in ys if abs(k * py + dy - qy) < 0.02 * Hf]
+            if len(keep_x) < 2 or len(keep_y) < 2:
                 return None
-            dx = med([q[0] - k * p[0] for p, q in pairs])
-            dy = med([q[1] - k * p[1] for p, q in pairs])
-            keep = [(p, q) for p, q in pairs
-                    if abs(k * p[0] + dx - q[0]) < 0.02 * Wf
-                    and abs(k * p[1] + dy - q[1]) < 0.02 * Hf]
-            if len(keep) < 3:
-                return None
-            if len(keep) == len(pairs):
+            done = len(keep_x) == len(xs) and len(keep_y) == len(ys)
+            xs, ys = keep_x, keep_y
+            if done:
                 break
-            pairs = keep
         return (k, dx, dy)
 
     def onto(T, box):
@@ -2692,13 +2710,20 @@ def note(records_path, diary_text=None):
 
     home_box = {}                  # a window's box carried into the base moment
     for st in states:
-        for t in sorted(st.rects, key=lambda t: t not in st.measured):
-            r = st.rects.get(t)
+        best = None
+        for t, r in st.rects.items():
+            if not r or r[2] <= r[0]:
+                continue
             s_ = next((x for x in spans if t in x["ts"]), None)
-            T = span_T.get(s_["t0"]) if s_ else fit_map([t])
-            if T and r and r[2] > r[0]:
-                home_box[id(st)] = back(T, r)
-                break
+            T = (span_T.get(s_["t0"]) if s_ else None) or fit_map([t])
+            if not T:
+                continue
+            hb = back(T, r)
+            worth = (hb[2] - hb[0]) * (hb[3] - hb[1]) * (2.0 if t in st.measured else 1.0)
+            if best is None or worth > best[0]:
+                best = (worth, hb)
+        if best:
+            home_box[id(st)] = best[1]
     own_words = {id(st): box_texts(st)[0] for st in states}
 
     def ghost_list(s, sub_states, carded):
@@ -2719,6 +2744,7 @@ def note(records_path, diary_text=None):
                   "it stood clear -- and the camera picture where it lay. A stretch covers several timestamps whenever "
                   "the screen stood still. Where the reader measured a window's edges, those are the edges drawn; "
                   "otherwise they are taken from where that window's own content sat.", ""]
+        last_T = None
         for s in spans:
             subjects = []
             for st in s["states"]:
@@ -2751,11 +2777,12 @@ def note(records_path, diary_text=None):
             # window's note or tree filed onto a front window's own panes
             sub_states = [stx for stx, _, _ in subjects]
             T = span_T.get(s["t0"])
+            if T is None:
+                T = last_T          # nothing readable moved between the two
+            last_T = T
             bar_words = next((bar_at[t] for t in s["ts"] if bar_at.get(t)), [])
             clock = next((clock_at[t] for t in s["ts"] if clock_at.get(t)), "")
-            barred = bool(bar_words) or flatT(T)
-            if T is None and barred:
-                T = (1.0, 0.0, 0.0)
+            barred = flatT(T) and bool(bar_at.get(base_ts))
 
             # which windows behind were read through or around the front ones
             seen_here = set()
@@ -2821,7 +2848,7 @@ def note(records_path, diary_text=None):
                 for stx, sl, _ in subjects:
                     strip = behind_for(sl, dict(s, size=s["size"]), stx)
                     if strip:
-                        behinds.insert(0, (strip[0][2], strip[0][1]))
+                        behinds.append((strip[0][2], strip[0][1]))
                         break
             m_t0 = next((mm for mm in moments if mm["ts"] == s["t0"]), None)
             cam = shapes.camera_box(frame_of(m_t0)) if m_t0 else None
