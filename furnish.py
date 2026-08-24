@@ -430,8 +430,6 @@ def screen_shot(span, subject, W, H, bar_words, clock, tag_of, behind_states=(),
     for box, tag, kind in ghosts:
         if not box:
             continue
-        if kind == "away" and rect and _shares(box, rect) > 0.5:
-            continue
         if kind == "away" and any(_shares(box, d) > 0.5 for d in drawn):
             continue              # that place is already outlined
         if any(_close(box, d) for d in drawn):

@@ -2065,18 +2065,33 @@ def mend_cells(sl, full):
     ft, st_ = full.main_table(), sl.main_table()
     if not ft or not st_:
         return
-    # the path bar: the stretch's crumbs are the settled path read short
-    if ft.path and len(ft.path) >= len(st_.path) and st_.path:
+    # the path bar: a crumb the stretch read short or wrong takes its spelling
+    # from the settled path -- but the stretch keeps its own depth, because a
+    # selection deepens the real bar and this stretch may not have had one
+    if ft.path and st_.path:
         walk = 0
+        fixed = []
         for c in st_.path:
-            while walk < len(ft.path) and not (name_fits(c, ft.path[walk])
-                    or (len(flat(c)) >= 4 and flat(ft.path[walk]).startswith(flat(c)[:4]))):
-                walk += 1
-            if walk >= len(ft.path):
+            hit = next((k for k in range(walk, len(ft.path))
+                        if name_fits(c, ft.path[k])
+                        or (len(flat(c)) >= 4 and fold(flat(ft.path[k])).startswith(fold(flat(c))[:4]))), None)
+            if hit is None:
+                fixed = None
                 break
-            walk += 1
+            fixed.append(ft.path[hit])
+            walk = hit + 1
+        if fixed:
+            st_.path = fixed
+    # the sidebar: fixed furniture, filled in when the stretch saw only part
+    if ft.side and st_.side and len(ft.side) > len(st_.side):
+        walk = 0
+        for w in st_.side:
+            hit = next((k for k in range(walk, len(ft.side)) if name_fits(w, ft.side[k])), None)
+            if hit is None:
+                break
+            walk = hit + 1
         else:
-            st_.path = list(ft.path)
+            st_.side = list(ft.side)
     # single cells, matched by name even when the stretch read it cut
     fulls = [(r["cells"][0], r) for r in ft.rows if r["cells"] and r["cells"][0]]
     def settled_for(name):
@@ -2444,9 +2459,13 @@ def note(records_path, diary_text=None):
             else:
                 tag = "a window behind"
             got.append((list(f.rects[ts]), tag, "behind"))
+        shape = s["rects"].get(id(subject)) or span_rect(subject, s["t0"]) or subject.rect
         for st2, box, when in around.get(s["t0"] + s["t1"], ()):
             if st2 is subject or label_for(st2) in roots:
                 continue
+            if (shape and not (set(st2.times) & set(subject.times))
+                    and overlap(box, shape) > 0.5):
+                continue          # the same window a moment on, not another one
             got.append((list(box), f"{label_for(st2)} ({when})", "away"))
         return got
     if spans:
