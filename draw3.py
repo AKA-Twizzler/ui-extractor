@@ -2618,7 +2618,9 @@ def note(records_path, diary_text=None):
                     owners.append(owner_of.get(id(f)))
             import types
             for stx, sl, _ in subjects:
-                keep = {id(stx.tree()), id(stx.main_doc())}
+                # a list window owns no note and no tree: any it carries was
+                # read through it from the window behind
+                keep = set() if stx.main_table() else {id(stx.tree()), id(stx.main_doc())}
                 for q in stx.parts:
                     if q["fam"] in ("doc", "tree") and id(q["model"]) not in keep:
                         owners.append(frag_owner(types.SimpleNamespace(parts=[q]),
