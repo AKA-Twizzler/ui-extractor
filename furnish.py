@@ -28,6 +28,10 @@ SIDE_GLYPH = {
 }
 FOLDER_KIND = re.compile(r"^\s*Folder\b", re.I)
 
+CANVAS_W = 960          # the drawn screen's width on the page, in pixels
+CARD_W = 880            # the natural width a window is drawn at before scaling
+ROW_H = 17.5            # a list row's height at that width, from the style sheet
+
 
 def esc(s):
     return H.escape(str(s), quote=False)
@@ -123,13 +127,15 @@ def finder(st):
             tds.append(f"<td>{t}</td>")
         cls = f' class="sn-selected sn-band-{r["band"]}"' if r.get("band") else ""
         out.append(f"<tr{cls}>" + "".join(tds) + "</tr>")
-    # the empty striped rows below the last file, as many as the window held
+    # the empty striped rows below the last file, as many as the real window
+    # had room for: its shape, drawn at the card's width, less what the
+    # toolbar, the headings and the path bar take
     empty = 2
-    measured = st.rect and not (st.rect[0] == 0 and st.rect[1] == 0 and st.rect[2] >= 3000 and st.rect[3] >= 1500)
-    if measured and table.rh:
-        hgt = st.rect[3] - st.rect[1]
-        used = (len(table.rows) + 1) * table.rh
-        empty = int(max(2, min(14, (0.78 * hgt - used) / table.rh)))
+    rect = getattr(st, "shape", None) or st.rect
+    if rect and rect[2] > rect[0]:
+        tall = CARD_W * (rect[3] - rect[1]) / (rect[2] - rect[0])
+        room = tall - 34 - 24 - (24 if table.path else 0) - len(table.rows) * ROW_H
+        empty = int(max(2, min(60, room / ROW_H)))
     for _ in range(empty):
         out.append(f'<tr class="sn-empty"><td colspan="{n}">&nbsp;</td></tr>')
     out.append("</table>")
@@ -335,8 +341,6 @@ def window(st, behind=True):
 
 # ---------------------------------------------------------------- the screen
 
-CANVAS_W = 960          # the drawn screen's width on the page, in pixels
-CARD_W = 880            # the natural width a window is drawn at before scaling
 
 
 BAR = 0.026            # the desktop bar's share of the screen's height
@@ -387,7 +391,13 @@ def screen_shot(span, subject, W, H, bar_words, clock, tag_of, behind_states=())
         out.append(f'<div class="sn-ghost" style="{slot_style(rect, W, H)}">'
                    + (f'<span class="sn-ghost-tag">{esc(tag)}</span>' if tag else "") + "</div>")
     rect = fixed.get(id(subject)) or draw3.span_rect(subject, span["t0"]) or subject.rect
+    subject.shape = rect
     html = window(subject, behind=False) or subject.plain_window_html()
+    # the card is given the window's own shape, so it fills its place the
+    # way the window filled the screen
+    if rect and rect[2] > rect[0]:
+        tall = CARD_W * (rect[3] - rect[1]) / (rect[2] - rect[0])
+        html = re.sub(r'^(<div class="sn-window[^"]*")', r'\1 style="min-height:%dpx"' % round(tall), html, count=1)
     out.append(scaled(html, rect, W, extra=slot_style(rect, W, H) + ";z-index:3"))
     stamp = span["t0"] if span["t0"] == span["t1"] else f"{span['t0']} to {span['t1']}"
     out.append(f'<div class="sn-stamp">{esc(stamp)}</div>')
