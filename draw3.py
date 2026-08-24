@@ -1073,7 +1073,7 @@ class State:
             if "only one engine" in f or " / " in f:
                 engine.append(f)
                 continue
-            if "cut lines completed" in f or "leading dot" in f:
+            if "cut lines completed" in f or "leading dot" in f or "guessed at" in f or "left out" in f:
                 other.append(f)
         bits = []
         if names:
@@ -1091,6 +1091,29 @@ class State:
         if not bits:
             return ""
         return '<span class="sn-fine">fine print: ' + "; ".join(bits) + "</span>"
+
+
+def drop_guessed(states):
+    """A line with no word in it is letters the engines guessed at, not a
+    thing the screen said; it leaves the trees and notes, and the fine print
+    counts it. A ruled line (---) stays: the screen really draws those."""
+    for st in states:
+        for q in st.parts:
+            if q["fam"] not in ("tree", "doc"):
+                continue
+            model = q["model"]
+            kept, gone = [], 0
+            for t, h in model.lines:
+                bare = t.strip("\u2502 \u02c3\u02c5\u2022\u00b7*#>").strip()
+                if bare.startswith("---") or not bare:
+                    kept.append((t, h))
+                elif junky(bare) or any(same_text(bare.lstrip("G ").strip(), w[0]) for w in st.topwords if len(w[0]) > 8):
+                    gone += 1
+                else:
+                    kept.append((t, h))
+            if gone:
+                model.lines = kept
+                st.fine.append(f"{gone} line{'s' if gone != 1 else ''} of letters the engines guessed at, left out")
 
 
 def build_states(moments):
@@ -1142,6 +1165,7 @@ def build_states(moments):
                 home = max(touched, key=lambda s: (s.rect[2] - s.rect[0]) * (s.rect[3] - s.rect[1]))
                 home.said.append((m["ts"], said))
     harmonise(states)
+    drop_guessed(states)
     if moments:
         W, H = (moments[0].get("size") or [1920, 1080])[:2]
         for st in states:
@@ -2049,12 +2073,17 @@ def desktop_bar(moments):
     changes it -- and the clock reading, which stands until it is read
     again."""
     words_at, clock_at = {}, {}
+    day = ""
     for m in moments:
         H = (m.get("size") or [0, 2160])[1]
         for p in m.get("panes") or []:
             c = old.clock_in(p)
             if c:
-                clock_at[m["ts"]] = c
+                for r in (p.get("data") or {}).get("readings") or []:
+                    dm = re.match(r"^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s?([A-Z][a-z]{2})\s?(\d{1,2})\s*\d{1,2}:\d{2}", (r.get("text") or "").strip())
+                    if dm and not day:
+                        day = f"{dm.group(1)} {dm.group(2)} {dm.group(3)}"
+                clock_at[m["ts"]] = f"{day} {c}".strip() if day else c
             if p["box"][1] > 0.02 * H:
                 continue
             strip = [it for it in draw2.items_of(p)
