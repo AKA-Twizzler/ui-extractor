@@ -2480,7 +2480,7 @@ def desktop(moments):
 
 
 def state_label(st):
-    return st.title or ("as drawn there")
+    return st.title or "its name unread"
 
 
 def span_of(st):
