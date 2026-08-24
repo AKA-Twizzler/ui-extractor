@@ -1887,6 +1887,12 @@ def content_rect(state, group, m):
         return list(was[1])
     own = state_texts(state)
     mine = [it for it in items if fold(it["text"]) in own] if own else []
+    tops = getattr(state, "topwords", None) or []
+    if tops:
+        # words along the very top of the frame are another window's strip
+        # showing over this one; they say nothing about this window's edges
+        strip_y = max(t[4] for t in tops) + 0.005 * H
+        mine = [it for it in mine if (it["box"][1] + it["box"][3]) / 2 > strip_y] or mine
     got = snap_rect(items, mine or items, frame_of(m), W, H)
     if got:
         drawn, sure = got
@@ -2001,12 +2007,12 @@ def frag_owner(frag, shown):
     mine = lines_of(frag)
     if not mine:
         return None
-    best, hits = None, 0
-    for st in shown:
-        n = len(mine & lines_of(st))
-        if n > hits:
-            best, hits = st, n
-    return best if hits >= 2 else None
+    scored = sorted(((len(mine & lines_of(st)), st) for st in shown), key=lambda x: -x[0])
+    if not scored or scored[0][0] < 2:
+        return None
+    if len(scored) > 1 and scored[1][0] >= 2:
+        return "several"          # pieces of more than one window at once
+    return scored[0][1]
 
 
 def near_windows(states, spans, order):
@@ -2282,15 +2288,22 @@ def note(records_path, diary_text=None):
     owner_of = {id(f): frag_owner(f, states) for f in frags}
     def ghost_list(s, subject):
         got = []
+        roots = set()
         for f in frags:
             ts = next((t for t in s["ts"] if t in f.rects), None)
             if ts is None:
                 continue
             own = owner_of.get(id(f))
-            tag = (label_for(own) + " (behind; drawn whole below)") if own else "a window behind"
+            if own == "several":
+                tag = "windows behind, each drawn whole below"
+            elif own is not None:
+                tag = label_for(own) + " (behind; drawn whole below)"
+                roots.add(label_for(own))
+            else:
+                tag = "a window behind"
             got.append((list(f.rects[ts]), tag, "behind"))
         for st2, box, when in around.get(s["t0"] + s["t1"], ()):
-            if st2 is subject:
+            if st2 is subject or label_for(st2) in roots:
                 continue
             got.append((list(box), f"{label_for(st2)} ({when})", "away"))
         return got
