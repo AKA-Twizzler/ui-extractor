@@ -2069,19 +2069,21 @@ def mend_cells(sl, full):
     # from the settled path -- but the stretch keeps its own depth, because a
     # selection deepens the real bar and this stretch may not have had one
     if ft.path and st_.path:
-        walk = 0
-        fixed = []
+        walk, hits = 0, []
         for c in st_.path:
             hit = next((k for k in range(walk, len(ft.path))
                         if name_fits(c, ft.path[k])
                         or (len(flat(c)) >= 4 and fold(flat(ft.path[k])).startswith(fold(flat(c))[:4]))), None)
             if hit is None:
-                fixed = None
+                hits = None
                 break
-            fixed.append(ft.path[hit])
+            hits.append(hit)
             walk = hit + 1
-        if fixed:
-            st_.path = fixed
+        if hits:
+            # every settled crumb between the first and last the stretch read:
+            # a path bar has no gaps, so the middle fills in; the tail stays
+            # the stretch's own, because a selection deepens the real bar
+            st_.path = list(ft.path[hits[0]:hits[-1] + 1])
     # the sidebar: fixed furniture, filled in when the stretch saw only part
     if ft.side and st_.side and len(ft.side) > len(st_.side):
         walk = 0
