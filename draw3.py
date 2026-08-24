@@ -2021,6 +2021,43 @@ def state_slice(st, t0, t1):
     return out
 
 
+def mend_cells(sl, full):
+    """A row on screen through the whole stretch keeps its settled cells: a
+    date the stretch's own frames showed mangled or covered did not change,
+    so the window's own settled reading of that same row stands in for it.
+    Rows are never added this way -- only cells of rows the stretch showed."""
+    settled = {}
+    for q in full.parts:
+        if not isinstance(q["model"], Table):
+            continue
+        t = q["model"]
+        for r in t.rows:
+            if r["cells"] and r["cells"][0]:
+                settled[flat(r["cells"][0])] = (list(t.header), r)
+    for q in sl.parts:
+        if not isinstance(q["model"], Table):
+            continue
+        t = q["model"]
+        for r in t.rows:
+            if not r["cells"] or not r["cells"][0]:
+                continue
+            got = settled.get(flat(r["cells"][0]))
+            if not got:
+                continue
+            fh, fr = got
+            for i, h in enumerate(t.header):
+                if i == 0 or i >= len(r["cells"]):
+                    continue
+                j = fh.index(h) if h in fh else None
+                if j is None or j >= len(fr["cells"]) or not fr["cells"][j]:
+                    continue
+                bad = not r["cells"][i] or (h == "Date Modified" and not tidy_date(r["cells"][i]))
+                if bad:
+                    r["cells"][i] = fr["cells"][j]
+                    if i < len(r["italic"]):
+                        r["italic"][i] = False
+
+
 def frag_owner(frag, shown):
     """The window a behind-fragment is a piece of, told by shared lines: the
     note or tree read around another window matches the window that later
@@ -2351,6 +2388,7 @@ def note(records_path, diary_text=None):
                 if sl is not st:
                     polish(sl, states)
                     drop_guessed([sl])
+                    mend_cells(sl, st)
                 sl.rects, sl.measured = st.rects, st.measured
                 shape = s["rects"].get(id(st)) or span_rect(st, s["t0"]) or st.rect
                 sl.rect = shape
