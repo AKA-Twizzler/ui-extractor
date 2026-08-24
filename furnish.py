@@ -376,16 +376,17 @@ def screen_shot(span, subject, W, H, bar_words, clock, tag_of, behind_states=())
         rect = [rect[0], max(rect[1], BAR * H), rect[2], rect[3]]
         out.append(scaled(html, rect, W, cls="sn-slot sn-partial", extra=slot_style(rect, W, H)))
     import draw3
+    fixed = span.get("rects") or {}
     for st in span["states"]:
         if st is subject:
             continue
-        rect = draw3.span_rect(st, span["t0"])
+        rect = fixed.get(id(st)) or draw3.span_rect(st, span["t0"])
         if not rect:
             continue
         tag = tag_of(st)
         out.append(f'<div class="sn-ghost" style="{slot_style(rect, W, H)}">'
                    + (f'<span class="sn-ghost-tag">{esc(tag)}</span>' if tag else "") + "</div>")
-    rect = draw3.span_rect(subject, span["t0"]) or subject.rect
+    rect = fixed.get(id(subject)) or draw3.span_rect(subject, span["t0"]) or subject.rect
     html = window(subject, behind=False) or subject.plain_window_html()
     out.append(scaled(html, rect, W, extra=slot_style(rect, W, H) + ";z-index:3"))
     stamp = span["t0"] if span["t0"] == span["t1"] else f"{span['t0']} to {span['t1']}"

@@ -1979,7 +1979,8 @@ def note(records_path, diary_text=None):
                   "The window being shown is filled in with what it held over that stretch of time and nothing from "
                   "outside it; the other windows are outlines where they sat, and each says where its own picture is. "
                   "A stretch covers several timestamps whenever the screen stood still, so a part something covered at "
-                  "one moment is filled from a moment when it was clear.", ""]
+                  "one moment is filled from a moment when it was clear. Where the reader measured a window's edges, "
+                  "those are the edges drawn; otherwise they are taken from where that window's own content sat.", ""]
         for s in spans:
             subjects = [st for st in s["states"] if st in shown]
             for st in subjects:
@@ -1991,7 +1992,7 @@ def note(records_path, diary_text=None):
                 head = f"### {s['t0']}" + ("" if s["t0"] == s["t1"] else f" to {s['t1']}") + f" - {label_for(st)}"
                 parts += [head, ""]
                 parts.append(furnish.screen_shot(
-                    {"states": s["states"], "t0": s["t0"], "t1": s["t1"]}, st,
+                    {"states": s["states"], "t0": s["t0"], "t1": s["t1"], "rects": s["rects"]}, st,
                     s["size"][0], s["size"][1], bar_at.get(s["t0"], []), clock_at.get(s["t0"], ""),
                     lambda other: label_for(other),
                     behind_states=behind_for(sl, dict(s, size=s["size"]), st)))
