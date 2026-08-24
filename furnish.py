@@ -221,7 +221,7 @@ def browser_behind(st):
         out.append('<div class="sn-toolbar sn-address"><span class="sn-btn">‹</span><span class="sn-btn">›</span><span class="sn-btn">↻</span>'
                    + f'<span class="sn-urlbar">G &nbsp;{esc(address)}</span>'
                    + "".join(f'<span class="sn-btn sn-right">{esc(t)}</span>' for t in right if "Gemini" not in t) + "</div>")
-    out.append('<div class="sn-behind">the browser window, behind; Obsidian sits in front of it from here down</div></div>')
+    out.append("</div>")
     return "".join(out)
 
 
@@ -356,13 +356,22 @@ def slot_style(rect, W, H, bar=True):
             f"width:{100.0 * (x1 - x0) / W:.2f}%;height:{100.0 * (y1 - y0) / H:.2f}%")
 
 
-def scaled(html, rect, W, cls="sn-slot", extra=""):
-    """A window drawn at its natural size, then shrunk to the share of the
-    screen it really took."""
+UI_TXT = 7.0        # a line of screen text, in canvas pixels, at the base zoom
+CSS_TXT = 11.5      # the same line as the style sheet draws it
+
+
+def scaled(html, rect, W, kz=1.0, cls="sn-slot", extra=""):
+    """A window drawn so its text stands the height the frame gave it: the
+    sheet's writing shrunk to the screen's, and the window's own layout
+    spread over the width its rectangle really had."""
     wide = max(1.0, rect[2] - rect[0])
-    k = (CANVAS_W * wide / W) / CARD_W
+    k = max(0.05, kz * UI_TXT / CSS_TXT)
+    w_css = (CANVAS_W * wide / W) / k
+    tall = w_css * (rect[3] - rect[1]) / wide
+    html = re.sub(r'^(<div class="sn-window[^"]*")',
+                  r'\1 style="min-height:%dpx"' % max(0, round(tall)), html, count=1)
     return (f'<div class="{cls}" style="{extra}">'
-            f'<div class="sn-shot" style="transform:scale({k:.4f})">{html}</div></div>')
+            f'<div class="sn-shot" style="width:{w_css:.0f}px;transform:scale({k:.4f})">{html}</div></div>')
 
 
 def _shares(a, b):
@@ -389,7 +398,7 @@ def deskbar(bar_words, clock):
     return f'<div class="sn-deskbar">{left}{right}</div>'
 
 
-def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(), ghosts=(), camera=None, sure=True):
+def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(), ghosts=(), camera=None, sure=True, kz=1.0):
     """One picture of the whole screen for one stretch of time, at the zoom
     the video had: every window in view filled with its real content, the
     ones behind drawn whole and cut by the screen's edge, the camera's own
@@ -419,7 +428,7 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(), ghosts=
     # the windows behind, whole, under what stands in front
     for html, box in behind_cards:
         drawn.append(box)
-        out.append(scaled(html, box, W, cls="sn-slot sn-partial", extra=sty(box)))
+        out.append(scaled(html, box, W, kz, cls="sn-slot sn-partial", extra=sty(box)))
     # outlines where words were read that no drawn window owns
     for box, tag, kind in ghosts:
         if not box:
@@ -438,11 +447,7 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(), ghosts=
         st.shape = rect
         html = window(st, behind=False) or st.plain_window_html()
         st.shape = None
-        if rect and rect[2] > rect[0]:
-            tall = CARD_W * (rect[3] - rect[1]) / (rect[2] - rect[0])
-            html = re.sub(r'^(<div class="sn-window[^"]*")',
-                          r'\1 style="min-height:%dpx"' % round(tall), html, count=1)
-        out.append(scaled(html, rect, W, extra=sty(rect) + f";z-index:{2 + z}"))
+        out.append(scaled(html, rect, W, kz, extra=sty(rect) + f";z-index:{2 + z}"))
     if camera:
         cbox, cpic = camera
         if cpic:
