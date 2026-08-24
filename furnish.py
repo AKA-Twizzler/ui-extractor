@@ -364,13 +364,21 @@ def scaled(html, rect, W, cls="sn-slot", extra=""):
             f'<div class="sn-shot" style="transform:scale({k:.4f})">{html}</div></div>')
 
 
+def _close(a, b):
+    """Two outlines in the same place, near enough to be the one window."""
+    wide = max(1.0, min(a[2] - a[0], b[2] - b[0]))
+    tall = max(1.0, min(a[3] - a[1], b[3] - b[1]))
+    return (abs(a[0] - b[0]) < 0.15 * wide and abs(a[2] - b[2]) < 0.15 * wide
+            and abs(a[1] - b[1]) < 0.15 * tall and abs(a[3] - b[3]) < 0.15 * tall)
+
+
 def deskbar(bar_words, clock):
     left = "".join(f"<span>{esc(w)}</span>" for w in bar_words[:8])
     right = f"<span class=\"sn-right\">{esc(clock)}</span>" if clock else ""
     return f'<div class="sn-deskbar">{left}{right}</div>'
 
 
-def screen_shot(span, subject, W, H, bar_words, clock, tag_of, behind_states=(), skip=None, rect=None, sure=True):
+def screen_shot(span, subject, W, H, bar_words, clock, tag_of, behind_states=(), skip=None, rect=None, sure=True, ghosts=()):
     """One picture of the whole screen: every window where it sat and at the
     size it was, the one being shown filled in, the others as outlines."""
     ch = CANVAS_W * H / max(1, W)
@@ -383,6 +391,7 @@ def screen_shot(span, subject, W, H, bar_words, clock, tag_of, behind_states=(),
     import draw3
     fixed = span.get("rects") or {}
     skip = skip if skip is not None else subject
+    drawn = []
     for other in span["states"]:
         if other is skip or other is subject:
             continue
@@ -390,7 +399,20 @@ def screen_shot(span, subject, W, H, bar_words, clock, tag_of, behind_states=(),
         if not box:
             continue
         tag = tag_of(other)
+        drawn.append(box)
         out.append(f'<div class="sn-ghost" style="{slot_style(box, W, H)}">'
+                   + (f'<span class="sn-ghost-tag">{esc(tag)}</span>' if tag else "") + "</div>")
+    # the windows this one stood beside just before or just after: outlines
+    # where they sat, so a picture shows the whole desk and not one window
+    for other, box, when in ghosts:
+        if other is skip or other is subject or not box:
+            continue
+        if any(_close(box, d) for d in drawn):
+            continue
+        drawn.append(box)
+        tag = tag_of(other)
+        tag = f"{tag} ({when})" if tag and when else tag
+        out.append(f'<div class="sn-ghost sn-away" style="{slot_style(box, W, H)}">'
                    + (f'<span class="sn-ghost-tag">{esc(tag)}</span>' if tag else "") + "</div>")
     rect = rect or fixed.get(id(subject)) or draw3.span_rect(subject, span["t0"]) or subject.rect
     subject.shape = rect
