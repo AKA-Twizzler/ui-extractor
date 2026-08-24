@@ -1568,6 +1568,8 @@ def harmonise(states):
         looks like a file name at all is up for rescue."""
         if "_" in name or "..." in name or " " not in name:
             return None
+        if flat(name) in {flat(c) for c in clean}:
+            return None           # a name the pool already holds needs no rescue
         f = re.sub(r"(md|m d)$", "", flat(name))
         if len(f) < 8:
             return None
@@ -1617,15 +1619,8 @@ def harmonise(states):
                     doubtful = (r["italic"] and r["italic"][0]) or "..." in n
                     garbage = " " in n and "_" not in n and "..." not in n
                     b = better(n, fuzzy=doubtful)
-                    import os as _os
-                    if _os.environ.get("DBG_NAME") and _os.environ["DBG_NAME"] in n:
-                        import sys as _sys
-                        print(f"DBG n={n!r} doubtful={doubtful} garbage={garbage} better={b!r} inpool={flat(n) in {flat(c) for c in clean}}", file=_sys.stderr)
                     if not b and (doubtful or garbage) and not any(c for c in r["cells"][1:] if tidy_date(c) or tidy_size(c)):
                         b = rescue(n)
-                        if _os.environ.get("DBG_NAME") and _os.environ["DBG_NAME"] in n:
-                            import sys as _sys
-                            print(f"DBG rescue({n!r}) -> {b!r}", file=_sys.stderr)
                     if b and b != n:
                         r["cells"][0] = b
                         r["italic"][0] = False
