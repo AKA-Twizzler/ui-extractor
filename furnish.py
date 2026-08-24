@@ -392,16 +392,27 @@ def screen_shot(span, subject, W, H, bar_words, clock, tag_of, behind_states=(),
     fixed = span.get("rects") or {}
     skip = skip if skip is not None else subject
     drawn = []
+    rect = rect or fixed.get(id(subject)) or draw3.span_rect(subject, span["t0"]) or subject.rect
+
+    def tag_html(tag, box):
+        """The outline's name, put where the window in front is not
+        covering it, so every outline can still be read."""
+        if not tag:
+            return ""
+        style = ""
+        if rect and box[1] < rect[3] and rect[1] < box[1] + 0.2 * (box[3] - box[1]) \
+                and rect[0] <= box[0] < rect[2] < box[2]:
+            style = f' style="left:{100.0 * (rect[2] - box[0]) / (box[2] - box[0]) + 1:.1f}%"'
+        return f'<span class="sn-ghost-tag"{style}>{esc(tag)}</span>'
     for other in span["states"]:
         if other is skip or other is subject:
             continue
         box = fixed.get(id(other)) or draw3.span_rect(other, span["t0"])
         if not box:
             continue
-        tag = tag_of(other)
         drawn.append(box)
         out.append(f'<div class="sn-ghost" style="{slot_style(box, W, H)}">'
-                   + (f'<span class="sn-ghost-tag">{esc(tag)}</span>' if tag else "") + "</div>")
+                   + tag_html(tag_of(other), box) + "</div>")
     # the windows this one stood beside just before or just after: outlines
     # where they sat, so a picture shows the whole desk and not one window
     for other, box, when in ghosts:
@@ -413,8 +424,7 @@ def screen_shot(span, subject, W, H, bar_words, clock, tag_of, behind_states=(),
         tag = tag_of(other)
         tag = f"{tag} ({when})" if tag and when else tag
         out.append(f'<div class="sn-ghost sn-away" style="{slot_style(box, W, H)}">'
-                   + (f'<span class="sn-ghost-tag">{esc(tag)}</span>' if tag else "") + "</div>")
-    rect = rect or fixed.get(id(subject)) or draw3.span_rect(subject, span["t0"]) or subject.rect
+                   + tag_html(tag, box) + "</div>")
     subject.shape = rect
     html = window(subject, behind=False) or subject.plain_window_html()
     # the card is given the window's own shape, so it fills its place the
