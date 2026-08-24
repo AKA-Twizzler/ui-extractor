@@ -2631,7 +2631,8 @@ def note(records_path, diary_text=None):
         if not doc or not name or not doc.lines:
             continue
         tf = fold(flat(name))
-        hit = next((raw for key, raw in bigs.items() if len(key) >= 6 and tf.startswith(key)), None)
+        hit = max((raw for key, raw in bigs.items() if len(key) >= 6 and tf.startswith(key)),
+                  key=len, default=None)
         if not hit:
             continue
         hf = fold(flat(hit))
