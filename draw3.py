@@ -1765,6 +1765,62 @@ def screens(states, moments):
     return spans
 
 
+def desktop_bar(moments):
+    """The menu bar's words as they stood over the whole video, and the
+    clock reading at each moment it was read."""
+    words, clock_at = [], {}
+    for m in moments:
+        H = (m.get("size") or [0, 2160])[1]
+        for p in m.get("panes") or []:
+            c = old.clock_in(p)
+            if c:
+                clock_at[m["ts"]] = c
+            if p["box"][1] > 0.02 * H:
+                continue
+            strip = [it for it in draw2.items_of(p)
+                     if it["ok"] and it["box"][1] <= 0.015 * H and it["box"][3] <= 0.035 * H]
+            if strip:
+                top_it = min(strip, key=lambda it: it["box"][1])
+                cy0 = (top_it["box"][1] + top_it["box"][3]) / 2
+                h0 = max(1, top_it["box"][3] - top_it["box"][1])
+                strip = [it for it in strip if abs((it["box"][1] + it["box"][3]) / 2 - cy0) <= 0.6 * h0]
+            for it in sorted(strip, key=lambda it: it["box"][0]):
+                w = it["text"]
+                if (not old.CLOCK.match(w) and len(w) <= 24 and " " not in w.strip()
+                        and not any(same_text(w, x) for x in words)):
+                    words.append(w)
+    # the clock stands until it is read again
+    last = ""
+    for m in moments:
+        last = clock_at.get(m["ts"], last)
+        if last:
+            clock_at[m["ts"]] = last
+    return words, clock_at
+
+
+def label_for(st):
+    """What to call a window in a picture: its program and what it showed."""
+    name = st.name.replace("The ", "").replace(" window", "")
+    return f"{name}: {st.title}" if st.title else name
+
+
+def behind_for(slice_st, span, subject):
+    """Windows that never show in full anywhere, drawn where they sat: the
+    strip of a window peeking out above another is the usual case."""
+    import furnish
+    out = []
+    strip = furnish.browser_behind(slice_st)
+    if strip:
+        rect = subject.rects.get(span["t0"]) or subject.rect or [0, 0, 0, 0]
+        tops = [t for t in slice_st.topwords]
+        if tops:
+            W = span["size"][0] if "size" in span else 3840
+            H = span["size"][1] if "size" in span else 2160
+            y1 = max(rect[1], max(t[4] for t in tops) + 0.02 * H)
+            out.append((None, [0, 0, W, y1], strip))
+    return out
+
+
 def desktop(moments):
     """The menu bar's words, read along the top strip of the frame (each
     program's bar with the moments it stood), and the clock from the first
@@ -1864,6 +1920,7 @@ def note(records_path, diary_text=None):
     parts += ["", "---", ""]
 
     # ------------------------------------------------ the screens, in order
+    import furnish
     spans = [s for s in screens(states, moments)
              if any(st in shown for st in s["states"])]
     bar_words, clock_at = desktop_bar(moments)
@@ -1888,7 +1945,7 @@ def note(records_path, diary_text=None):
                     {"states": s["states"], "t0": s["t0"], "t1": s["t1"]}, st,
                     s["size"][0], s["size"][1], bar_words, clock_at.get(s["t0"], ""),
                     lambda other: label_for(other),
-                    behind_states=behind_for(sl, s, st)))
+                    behind_states=behind_for(sl, dict(s, size=s["size"]), st)))
                 parts.append("")
                 for ln in sl.said_html():
                     parts += [ln, ""]
