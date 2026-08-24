@@ -653,6 +653,7 @@ class State:
         self.theme = None
         self.pieces = []        # (moment, group) it was read from, in order
         self.rects = {}         # ts -> the window's rect at that moment
+        self.measured = set()   # the moments the reader measured the window itself
 
     # --------------------------------------------------------- content in
 
@@ -1663,6 +1664,7 @@ def content_rect(state, group, m):
                      if r[0] - 20 <= it["box"][0] and it["box"][2] <= r[2] + 20
                      and r[1] - 20 <= it["box"][1] and it["box"][3] <= r[3] + 20)
         if inside >= 0.6 * len(items):
+            state.measured.add(m["ts"])
             return [float(v) for v in r]
     rh = max(12.0, (sum(it["box"][3] - it["box"][1] for it in items) / len(items)) * 1.6)
     spans = [(q["x0"], q["x1"]) for q in state.parts if q.get("x0") is not None and q.get("x1") is not None]
@@ -1693,15 +1695,23 @@ def overlap(a, b):
 
 
 def span_rect(st, ts):
-    """A window's shape at one stretch of time. A window does not shrink
-    because less of its text was read at one moment, so every reading that
-    sits in the same place is joined into one shape."""
+    """A window's shape at one stretch of time. The reader's own
+    measurement stands as it is. Otherwise a window does not shrink because
+    less of its text was read at one moment, so readings that start and end
+    at the same edges are joined into one shape."""
     here = st.rects.get(ts) or st.rect
     if not here:
         return None
+    if ts in getattr(st, "measured", set()):
+        return list(here)
+    W = max(1.0, max((r[2] for r in st.rects.values()), default=1.0))
+    H = max(1.0, max((r[3] for r in st.rects.values()), default=1.0))
     box = list(here)
-    for other in st.rects.values():
-        if overlap(here, other) >= 0.5:
+    for t, other in st.rects.items():
+        if t in getattr(st, "measured", set()):
+            continue
+        if abs(other[0] - here[0]) <= 0.04 * W and abs(other[1] - here[1]) <= 0.04 * H \
+                and abs(other[2] - here[2]) <= 0.06 * W:
             box = [min(box[0], other[0]), min(box[1], other[1]),
                    max(box[2], other[2]), max(box[3], other[3])]
     return box
