@@ -2277,7 +2277,7 @@ def desktop_bar(moments):
     """The menu bar as it stood at each moment -- the program at the front
     changes it -- and the clock reading, which stands until it is read
     again."""
-    words_at, clock_at = {}, {}
+    words_at, clock_at, strip_at = {}, {}, {}
     day = ""
     for m in moments:
         H = (m.get("size") or [0, 2160])[1]
@@ -2293,6 +2293,9 @@ def desktop_bar(moments):
                 continue
             strip = [it for it in draw2.items_of(p)
                      if it["ok"] and it["box"][1] <= 0.015 * H and it["box"][3] <= 0.035 * H]
+            for it in strip:
+                if len(it["text"]) >= 8:
+                    strip_at.setdefault(m["ts"], set()).add(it["text"])
             if strip:
                 top_it = min(strip, key=lambda it: it["box"][1])
                 cy0 = (top_it["box"][1] + top_it["box"][3]) / 2
@@ -2314,7 +2317,31 @@ def desktop_bar(moments):
         last_c = clock_at.get(m["ts"], last_c)
         if last_c:
             clock_at[m["ts"]] = last_c
-    return words_at, clock_at
+    return words_at, clock_at, strip_at
+
+
+def strip_furniture(st, strip_at):
+    """What the frame's own top strip said -- the menu bar, a tab row -- is
+    the desk's furniture, not a window's title or a note's first line."""
+    tops = set()
+    for t in st.times:
+        tops |= strip_at.get(t, set())
+    if not tops:
+        return
+    if st.title and any(same_text(st.title, w) or (len(st.title) >= 8 and (st.title in w or w in st.title))
+                        for w in tops):
+        st.title = None
+    for q in st.parts:
+        model = q["model"]
+        if q["fam"] not in ("doc", "tree") or not hasattr(model, "lines"):
+            continue
+        kept = []
+        for t, h in model.lines:
+            bare = t.strip().strip("#*>\u2502 \u02c3\u02c5").strip()
+            if len(bare) >= 8 and any(same_text(bare, w) for w in tops):
+                continue
+            kept.append((t, h))
+        model.lines = kept
 
 
 def bar_title(st, H):
@@ -2462,7 +2489,9 @@ def note(records_path, diary_text=None):
     import furnish
     spans = [s for s in screens(states, moments)
              if any(st in shown for st in s["states"])]
-    bar_at, clock_at = desktop_bar(moments)
+    bar_at, clock_at, strip_at = desktop_bar(moments)
+    for st in all_states:
+        strip_furniture(st, strip_at)
     around = near_windows(states, spans, [m["ts"] for m in moments]) if spans else {}
     owner_of = {id(f): frag_owner(f, states) for f in frags}
     def ghost_list(s, subject):
@@ -2506,6 +2535,7 @@ def note(records_path, diary_text=None):
                     polish(sl, states)
                     drop_guessed([sl])
                     mend_cells(sl, st)
+                    strip_furniture(sl, strip_at)
                     if bar_title(sl, s["size"][1]):
                         sl.title = None
                     sl.title = sl.title or st.title
