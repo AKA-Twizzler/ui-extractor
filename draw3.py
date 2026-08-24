@@ -1912,6 +1912,39 @@ def state_slice(st, t0, t1):
     return out
 
 
+def near_windows(states, spans, order):
+    """For each stretch, the windows that stood on the screen just before or
+    just after it: an outline of each, where it sat at its own nearest
+    moment, so a picture shows the desk and not one window alone."""
+    at = {ts: i for i, ts in enumerate(order)}
+    reach = 3
+    out = {}
+    for s in spans:
+        lo, hi = at.get(s["t0"], 0), at.get(s["t1"], 0)
+        near = []
+        for st in states:
+            if st in s["states"]:
+                continue
+            mine = [at[t] for t in st.times if t in at]
+            if not mine:
+                continue
+            before = [i for i in mine if i < lo]
+            after = [i for i in mine if i > hi]
+            pick = None
+            if before and lo - max(before) <= reach:
+                pick = max(before)
+            elif after and min(after) - hi <= reach:
+                pick = min(after)
+            if pick is None:
+                continue
+            ts = order[pick]
+            box = st.rects.get(ts) or st.rect
+            if box:
+                near.append((st, list(box), "before" if pick < lo else "after"))
+        out[s["t0"] + s["t1"]] = near
+    return out
+
+
 def polish(slice_st, states):
     """A window rebuilt from one stretch of time gets the same reading of
     its words as the window's own full picture: the names settled across
@@ -2141,6 +2174,7 @@ def note(records_path, diary_text=None):
     spans = [s for s in screens(states, moments)
              if any(st in shown for st in s["states"])]
     bar_at, clock_at = desktop_bar(moments)
+    around = near_windows(states, spans, [m["ts"] for m in moments]) if spans else {}
     if spans:
         parts += ["## The screen, moment by moment", "",
                   "Each picture is the whole screen at the size the video had it, with the desktop bar along the top. "
@@ -2168,7 +2202,8 @@ def note(records_path, diary_text=None):
                     lambda other: label_for(other),
                     behind_states=behind_for(sl, dict(s, size=s["size"]), st),
                     skip=st, rect=shape,
-                    sure=any(t in st.measured for t in s["ts"])))
+                    sure=any(t in st.measured for t in s["ts"]),
+                    ghosts=around.get(s["t0"] + s["t1"], ())))
                 st.shape = None
                 parts.append("")
                 for ln in sl.said_html():
