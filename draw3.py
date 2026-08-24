@@ -2614,11 +2614,16 @@ def note(records_path, diary_text=None):
     # a note's big heading is read as large loose words, never as a doc
     # line; when such a reading opens the window's own title, it is the
     # note's heading and stands above everything else
+    all_h = sorted(it["box"][3] - it["box"][1]
+                   for m in moments for p in m.get("panes") or []
+                   for it in draw2.items_of(p) if it["box"][3] > it["box"][1])
+    usual_h = all_h[len(all_h) // 2] if all_h else 30.0
     bigs = {}
     for m in moments:
         for p in m.get("panes") or []:
             for it in draw2.items_of(p):
-                if it.get("large") and len(flat(it["text"])) >= 6:
+                tall = it["box"][3] - it["box"][1]
+                if (it.get("large") or tall >= 1.6 * usual_h) and len(flat(it["text"])) >= 6:
                     bigs.setdefault(fold(flat(it["text"])), it["text"].strip())
     for st in states:
         doc = st.main_doc()
