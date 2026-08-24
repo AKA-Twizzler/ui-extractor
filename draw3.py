@@ -2724,7 +2724,11 @@ def note(records_path, diary_text=None):
                 best = (worth, hb)
         if best:
             home_box[id(st)] = best[1]
-    own_words = {id(st): box_texts(st)[0] for st in states}
+    own_words = {id(st): {w for w in box_texts(st)[1] if len(w) >= 8} for st in states}
+    heights = sorted(b[3] - b[1] for b in base_words.values())
+    if heights:
+        ui = heights[len(heights) // 4] * furnish.CANVAS_W / max(1, Wf)
+        furnish.UI_TXT = min(16.0, max(5.0, ui))
 
     def ghost_list(s, sub_states, carded):
         got = []
@@ -2838,9 +2842,6 @@ def note(records_path, diary_text=None):
                 html = furnish.window(own, behind=False) or own.plain_window_html()
                 if not html:
                     continue
-                tall = furnish.CARD_W * (box[3] - box[1]) / max(1.0, box[2] - box[0])
-                html = re.sub(r'^(<div class="sn-window[^"]*")',
-                              r'\1 style="min-height:%dpx"' % round(tall), html, count=1)
                 carded.add(id(own))
                 behinds.append((html, list(box)))
             behinds.sort(key=lambda hb: -(hb[1][2] - hb[1][0]) * (hb[1][3] - hb[1][1]))
@@ -2864,7 +2865,8 @@ def note(records_path, diary_text=None):
                 behind_cards=behinds,
                 ghosts=ghost_list(s, sub_states, carded),
                 camera=(cam, cam_pic) if cam else None,
-                sure=all(any(t in st.measured for t in s["ts"]) for st, _, _ in subjects)))
+                sure=all(any(t in st.measured for t in s["ts"]) for st, _, _ in subjects),
+                kz=(T[0] if T else 1.0)))
             parts.append("")
             seen_said = set()
             for _, sl, _ in subjects:
