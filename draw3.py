@@ -1774,26 +1774,30 @@ def screens(states, moments):
     spans, cur = [], None
 
     def place(st, ts):
-        r = st.rects.get(ts) or st.rect or [0, 0, 0, 0]
-        return tuple(int(v / 40) for v in r)          # a move of about 40 pixels counts
+        return st.rects.get(ts) or st.rect or [0, 0, 0, 0]
 
     for ts in order:
         here = present[ts]
         if not here:
             continue
         key = tuple(sorted(id(s) for s in here))
-        rects = tuple(sorted((id(s), place(s, ts)) for s in here))
+        rects = {id(s): place(s, ts) for s in here}
         shows = tuple(sorted((id(s), marks.get((id(s), ts), "")) for s in here if marks.get((id(s), ts))))
         def alike(v, w):
             if not v or not w or v == w:
                 return True
             return difflib.SequenceMatcher(None, v, w, autojunk=False).ratio() >= 0.6
-        same = (cur and cur["key"] == key and cur["rects"] == rects
-                and all(alike(v, w) for (a, v), (b, w) in zip(cur["shows"], shows) if a == b))
+        # the same window in the same place: the boxes largely agree, so a
+        # moment that read less of a window does not count as a new screen
+        put = cur and cur["key"] == key and all(overlap(cur["rects"][k], rects[k]) >= 0.7 for k in rects)
+        same = (put and all(alike(v, w) for (a, v), (b, w) in zip(cur["shows"], shows) if a == b))
         if same:
             cur["t1"] = ts
             cur["ts"].append(ts)
             cur["shows"] = shows or cur["shows"]
+            for k, r in rects.items():                # the window's fullest shape over the stretch
+                o = cur["rects"][k]
+                cur["rects"][k] = [min(o[0], r[0]), min(o[1], r[1]), max(o[2], r[2]), max(o[3], r[3])]
         else:
             if cur:
                 spans.append(cur)
