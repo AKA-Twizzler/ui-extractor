@@ -1836,6 +1836,35 @@ def frame_of(m):
     return shapes.frame_of(m)
 
 
+_CAMPIX = {}
+
+
+def camera_pic(path, box):
+    """The camera's own picture, cut from the frame: the one part of a
+    screen no drawing can honestly rebuild."""
+    if not path or not box:
+        return None
+    key = (path, tuple(int(v) for v in box))
+    if key in _CAMPIX:
+        return _CAMPIX[key]
+    uri = None
+    try:
+        import base64
+        import io
+        from PIL import Image
+        im = Image.open(path).convert("RGB").crop([int(v) for v in box])
+        w = min(720, im.width)
+        if im.width > w:
+            im = im.resize((w, max(1, round(im.height * w / im.width))), Image.BILINEAR)
+        buf = io.BytesIO()
+        im.save(buf, "JPEG", quality=70)
+        uri = "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+    except Exception:
+        uri = None
+    _CAMPIX[key] = uri
+    return uri
+
+
 def box_texts(state):
     """The words that place a window on the screen: the ones of its own
     structure. A list window is placed by its list -- rows, headings, sidebar,
