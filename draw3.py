@@ -1734,6 +1734,26 @@ def frame_of(m):
     return shapes.frame_of(m)
 
 
+def box_texts(state):
+    """The words that place a window on the screen: the ones of its own
+    structure. A list window is placed by its list -- rows, headings, sidebar,
+    path -- never by the note showing through behind it, which the reader may
+    have filed on the same slice of the screen."""
+    t = state.main_table()
+    if not t:
+        return state_texts(state)
+    out = set()
+    for r in t.rows:
+        for c in r["cells"]:
+            out.add(fold(c))
+    for c in list(t.header) + list(t.side) + list(t.path) + list(t.bottom):
+        out.add(fold(c if isinstance(c, str) else str(c)))
+    if state.title:
+        out.add(fold(state.title))
+    out.discard("")
+    return out
+
+
 def state_texts(state):
     """Every word this window itself drew, for telling its own content
     apart from a window behind it read on the same slice of the screen."""
@@ -1885,7 +1905,7 @@ def content_rect(state, group, m):
         if was[2]:
             state.measured.add(m["ts"])
         return list(was[1])
-    own = state_texts(state)
+    own = box_texts(state)
     mine = [it for it in items if fold(it["text"]) in own] if own else []
     tops = getattr(state, "topwords", None) or []
     if tops:
@@ -1896,6 +1916,15 @@ def content_rect(state, group, m):
     got = snap_rect(items, mine or items, frame_of(m), W, H)
     if got:
         drawn, sure = got
+        if state.title:
+            # the window's name sitting just above the box is its title bar
+            tf = fold(state.title)
+            caps = [it for it in items if fold(it["text"]) == tf
+                    and drawn[0] - 12 <= (it["box"][0] + it["box"][2]) / 2 <= drawn[2] + 12
+                    and drawn[1] - 0.08 * H <= it["box"][1] < drawn[1]]
+            if caps:
+                drawn = [drawn[0], min(it["box"][1] for it in caps) - 0.01 * H,
+                         drawn[2], drawn[3]]
         if sure:
             state.measured.add(m["ts"])
         state._stood = (plain, drawn, sure)
