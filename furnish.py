@@ -30,7 +30,8 @@ FOLDER_KIND = re.compile(r"^\s*Folder\b", re.I)
 
 CANVAS_W = 960          # the drawn screen's width on the page, in pixels
 CARD_W = 880            # the natural width a window is drawn at before scaling
-ROW_H = 17.5            # a list row's height at that width, from the style sheet
+ROW_H = 23.0            # a filled list row's height at that width
+EMPTY_H = 17.0          # an empty striped row's height
 
 
 def esc(s):
@@ -135,7 +136,7 @@ def finder(st):
     if rect and rect[2] > rect[0]:
         tall = CARD_W * (rect[3] - rect[1]) / (rect[2] - rect[0])
         room = tall - 34 - 24 - (24 if table.path else 0) - len(table.rows) * ROW_H
-        empty = int(max(2, min(60, room / ROW_H)))
+        empty = int(max(2, min(60, room / EMPTY_H)))
     for _ in range(empty):
         out.append(f'<tr class="sn-empty"><td colspan="{n}">&nbsp;</td></tr>')
     out.append("</table>")
