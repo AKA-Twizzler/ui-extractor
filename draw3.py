@@ -1703,6 +1703,30 @@ def snap_rect(items, mine, frame, W, H):
     return [float(v) for v in best]
 
 
+def settle_rects(state, W, H):
+    """A window is sometimes only part-visible -- something is drawn over
+    it, or the picture fades. Where one moment's rectangle sits inside
+    another's and three of its four sides agree, it is the same window seen
+    short, so the fuller shape stands for both."""
+    tsx = [t for t in state.rects if t in state.measured]
+    for t in tsx:
+        r = state.rects[t]
+        for u in tsx:
+            if u == t:
+                continue
+            big = state.rects[u]
+            if (big[2] - big[0]) * (big[3] - big[1]) <= (r[2] - r[0]) * (r[3] - r[1]):
+                continue
+            if not (big[0] - 8 <= r[0] and big[1] - 8 <= r[1]
+                    and r[2] <= big[2] + 8 and r[3] <= big[3] + 8):
+                continue
+            near = sum((abs(r[0] - big[0]) <= 0.02 * W, abs(r[2] - big[2]) <= 0.02 * W,
+                        abs(r[1] - big[1]) <= 0.02 * H, abs(r[3] - big[3]) <= 0.02 * H))
+            if near >= 3:
+                state.rects[t] = list(big)
+                break
+
+
 def content_rect(state, group, m):
     """Where the window sat, in frame pixels: the reader's measurement when
     it made one, else the box around the content this window actually drew
