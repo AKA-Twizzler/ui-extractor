@@ -1249,16 +1249,19 @@ def retitle_by_rows(states):
         for path in ([t.path] if t.path else []) + [p for p in t.paths if p]:
             for a, b in zip(path, path[1:]):
                 if a and b:
-                    parent.setdefault(fold(b), a)
+                    parent.setdefault(fold(b), (b, a))
     for st in states:
         t = st.main_table()
         if not t:
             continue
         votes = {}
         for name in t.names():
-            p = parent.get(fold(name))
-            if p:
-                votes[p] = votes.get(p, 0) + 1
+            hit = parent.get(fold(name))
+            if hit is None:
+                # a name the list drew cut short still names its folder
+                hit = next((v for k, v in parent.items() if name_fits(name, v[0])), None)
+            if hit:
+                votes[hit[1]] = votes.get(hit[1], 0) + 1
         if not votes:
             continue
         best = max(votes, key=lambda v: votes[v])
@@ -1267,8 +1270,8 @@ def retitle_by_rows(states):
         weak = not getattr(st, "title_sure", False) or getattr(st, "title_from_path", False)
         # even a title read off the bar yields when it names another known
         # folder and none of that folder's known children sit in these rows
-        named_elsewhere = st.title and any(crumb_same(st.title, v) for v in parent.values()) \
-            and not any(crumb_same(parent.get(fold(n), ""), st.title) for n in t.names() if fold(n) in parent)
+        named_elsewhere = st.title and any(crumb_same(st.title, v[1]) for v in parent.values()) \
+            and not any(crumb_same(parent[fold(n)][1], st.title) for n in t.names() if fold(n) in parent)
         if not st.title or weak or named_elsewhere:
             st.title = best
 
