@@ -1098,6 +1098,10 @@ def build_states(moments):
                 home = max(touched, key=lambda s: (s.rect[2] - s.rect[0]) * (s.rect[3] - s.rect[1]))
                 home.said.append((m["ts"], said))
     harmonise(states)
+    if moments:
+        W, H = (moments[0].get("size") or [1920, 1080])[:2]
+        for st in states:
+            settle_rects(st, W, H)
     return states
 
 
