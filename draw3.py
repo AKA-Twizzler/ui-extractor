@@ -4314,6 +4314,32 @@ def note(records_path, diary_text=None):
                     if (wide and tall) or strip:
                         fresh.append((tag_, box_))
                 behinds = fresh
+            # A WINDOW DRAWN IN FULL MUST ITSELF BE A WINDOW. Its box has
+            # to be one the frame drew, or - where the frame drew none,
+            # because the window fills the screen - a box that fills the
+            # screen or a strip across it. A box that is neither is a
+            # patch of the screen, and filling it in says a window stood
+            # there at a size it never had. Where that program is already
+            # outlined in this picture, the outline is the honest drawing
+            # and the patch goes.
+            def is_window(b):
+                if any(furnish._within(b, r) > 0.7 and furnish._within(r, b) > 0.7
+                       for r in real_w):
+                    return True
+                wide = (b[2] - b[0]) >= 0.60 * Wf
+                tall = (b[3] - b[1]) >= 0.60 * Hf
+                strip = (b[2] - b[0]) >= 0.88 * Wf and (b[3] - b[1]) <= 0.20 * Hf
+                return (wide and tall) or strip
+            fine = []
+            for stx, sl, shape in subjects:
+                if shape and not is_window(shape):
+                    app = label_for(stx, s["t0"]).split(":")[0].strip()
+                    if any(t.split(":")[0].strip() == app
+                           or app in t for t, _b in behinds):
+                        continue          # already outlined, and honestly
+                fine.append((stx, sl, shape))
+            if fine:
+                subjects = fine
             behinds.sort(key=lambda hb: -(hb[1][2] - hb[1][0]) * (hb[1][3] - hb[1][1]))
             if barred:
                 for stx, sl, _ in subjects:
