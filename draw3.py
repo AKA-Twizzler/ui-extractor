@@ -3391,28 +3391,28 @@ def note(records_path, diary_text=None):
             up = max(1.0, round(max(tops) / high))
         return (len(tops), (sum(like) / len(like)) / max(1.0, up))
 
+    # How tall one row stands, held as a FRACTION of the window's own
+    # width. Both are measured on the same frame, so the zoom cancels: a
+    # window filmed close up has taller rows AND a wider box, in step. A
+    # window running off the side of the frame has no true width, so it
+    # never votes - its box is cut by the frame, not by the window.
     pitch_home, every = {}, []
     for st_ in states:
         seen_ = []
         for m_, g_ in getattr(st_, "pieces", ()):
-            # how far this window was zoomed at that moment: its own box
-            # then, against its box at home. That is measured from the
-            # window itself, where a zoom fitted on words can be missing
-            hb_ = home_at(st_, m_["ts"])
             rc_ = st_.rects.get(m_["ts"])
-            kz_ = 1.0
-            if hb_ and rc_ and hb_[2] > hb_[0] and rc_[2] > rc_[0]:
-                kz_ = (rc_[2] - rc_[0]) / (hb_[2] - hb_[0])
-            if not 0.2 <= kz_ <= 6.0:
-                kz_ = 1.0
+            if not rc_ or rc_[2] - rc_[0] <= 0:
+                continue
+            Wm_ = (m_.get("size") or [3840, 2160])[0]
+            if rc_[0] < 1 or rc_[2] > Wm_ - 1:
+                continue                      # cut off by the frame's edge
             best_ = None
             for p_ in g_.get("panes") or []:
                 got_ = pitch_of_pane(p_)
                 if got_ and (best_ is None or got_[0] > best_[0]):
                     best_ = got_
             if best_:
-                seen_.append(best_[1] * furnish.CANVAS_W
-                             / max(1, (m_.get("size") or [3840])[0]) / kz_)
+                seen_.append(best_[1] / (rc_[2] - rc_[0]))
         if seen_:
             pitch_home.setdefault(st_.name, []).extend(seen_)
             every.extend(seen_)
@@ -3626,22 +3626,22 @@ def note(records_path, diary_text=None):
 
             for stx, sl, shape in subjects:
                 sl._doc_pad = span_pad(stx, shape[1])
-                # A window keeps one pitch: what changes between moments is
-                # how far the video was zoomed in. So every moment of this
-                # WINDOW votes - each one's measured pitch taken back out of
-                # its own zoom - and the vote is brought into this stretch's
-                # zoom, which is read off the window's OWN settled box
-                # against its box at home. One moment on its own is far too
-                # noisy to size a window by: a pane can be a sliver, or
-                # missed altogether.
-                hb_now = home_at(stx, s["t0"])
-                kz_here = 1.0
-                if hb_now and hb_now[2] > hb_now[0] and shape[2] > shape[0]:
-                    kz_here = (shape[2] - shape[0]) / (hb_now[2] - hb_now[0])
-                if not 0.2 <= kz_here <= 6.0:
-                    kz_here = (span_T.get(s["t0"]) or [1.0])[0]
-                home = pitch_home.get(stx.name) or pitch_home.get("*")
-                sl._row_step = home * kz_here if home else 0.0
+                # How tall a row stands here: this window's own share of
+                # its width, voted across every moment of it in the whole
+                # run, taken against the width it is drawn at NOW. One
+                # moment on its own is far too noisy to size a window by -
+                # a pane can be a sliver, or missed altogether.
+                share = pitch_home.get(stx.name) or pitch_home.get("*") or 0.0
+                wide_now = shape[2] - shape[0]
+                if shape[0] < 1 or shape[2] > Wf - 1:
+                    # cut by the frame's edge: its drawn width is not the
+                    # window's width, so the window's width at home is
+                    # brought forward on the zoom the frame itself carries
+                    hb_now = home_at(stx, s["t0"])
+                    kzf = (span_T.get(s["t0"]) or [1.0])[0] or 1.0
+                    if hb_now and hb_now[2] > hb_now[0]:
+                        wide_now = (hb_now[2] - hb_now[0]) * kzf
+                sl._row_step = share * wide_now * furnish.CANVAS_W / Wf
 
             # which windows behind were read through or around the front ones
             seen_here = set()
