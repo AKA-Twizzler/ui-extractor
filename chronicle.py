@@ -70,7 +70,12 @@ def main():
     # was a fault first, and a note that fails one of them is not a note that
     # should quietly go into the vault
     import selfcheck
+    import furnish
     faults = selfcheck.check(note, imgs)
+    # a window whose drawing fell over still wrote a note - a poorer one,
+    # and nothing in the finished file says so. Those falls count as faults
+    faults += [("a window drawn in its own look", f"{name} {when}", why)
+               for name, when, why in furnish.FELL]
     print(note)
     if faults:
         sys.stderr.write(f"{len(faults)} faults in {os.path.basename(note)}\n")
