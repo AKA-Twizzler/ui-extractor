@@ -2447,10 +2447,16 @@ def desktop_bar(moments):
                 strip = [it for it in strip if abs((it["box"][1] + it["box"][3]) / 2 - cy0) <= 0.6 * h0]
             here = words_at.setdefault(m["ts"], [])
             for it in sorted(strip, key=lambda it: it["box"][0]):
-                w = it["text"]
-                if (not old.CLOCK.match(w) and len(w) <= 24 and " " not in w.strip()
-                        and not any(same_text(w, x) for x in here)):
-                    here.append(w)
+                if old.CLOCK.match(it["text"]) or len(it["text"]) > 30:
+                    continue
+                # two menu names read as one run of letters are two menus
+                for w in re.split(r"\s+", it["text"].strip()):
+                    w = w.strip(" .,:;·|")
+                    if not w or not re.match(r"^[A-Za-z][A-Za-z&'-]*$", w):
+                        continue
+                    if any(same_text(w, x) for x in here):
+                        continue
+                    here.append(w if it["ok"] else "<i>" + w + "</i>")
     # The bar and the clock stand until they are read again. A bar is read
     # short as often as it is read whole - a word sits under the cursor, or
     # the strip is cut - so a shorter reading of the SAME bar does not
