@@ -114,13 +114,21 @@ def check(path, frames=None):
             if "sn-ghost-tag" not in m.group(1):
                 bad("outlines are labelled", where, "an outline has no name on it")
 
-        # 8. no window stands outside the screen it was on
+        # 8. no window stands outside the screen it was on. Only a picture
+        #    with the desktop bar in it holds the whole screen; without the
+        #    bar the video was zoomed into a part of it, and a window
+        #    running past the edge of the picture is what was really there.
+        whole = "sn-deskbar" in ln
         for (p, cls) in slots + ghosts + _boxes(ln, "sn-camera"):
             l, t, w, h = p
-            if l < -0.5 or t < -0.5 or l + w > 100.5 or t + h > 100.5 or w <= 0 or h <= 0:
-                bad("inside the screen", where,
-                    f"a box runs off the screen: left {l:.0f}% top {t:.0f}% "
+            if w <= 0 or h <= 0 or l >= 100 or t >= 100 or l + w <= 0 or t + h <= 0:
+                bad("a box you can see", where,
+                    f"a box with nothing on the picture: left {l:.0f}% top {t:.0f}% "
                     f"width {w:.0f}% height {h:.0f}%")
+            elif whole and (l < -0.5 or t < -0.5 or l + w > 100.5 or t + h > 100.5):
+                bad("inside the screen", where,
+                    f"the whole desktop is in view, yet a box runs off it: "
+                    f"left {l:.0f}% top {t:.0f}% width {w:.0f}% height {h:.0f}%")
 
         # 9. a window that was in view is not covered by the window in front
         for (gp, _) in ghosts:
