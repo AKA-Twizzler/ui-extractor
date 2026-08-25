@@ -2734,6 +2734,40 @@ def note(records_path, diary_text=None):
         for t in pool:
             t.path = mend_path(t.path, [o.path for o in pool if o is not t])
 
+    # Folder or file, settled once for the whole video. A name whose Kind was
+    # read at any moment is that kind at every moment, so a row read without
+    # its Kind column borrows the answer rather than guessing at the shape of
+    # its name. Nothing is settled that the video never said.
+    KIND = re.compile(r"^\s*(Folder|Document|Markdo|JSON|Log File|Alias|App)", re.I)
+
+    def tables_of(st):
+        return [q["model"] for q in st.parts if q["fam"] == "table"]
+
+    def row_name_kind(tb, row):
+        head = list(tb.header)
+        ni = next((i for i, h in enumerate(head) if h == "Name"), 0)
+        ki = next((i for i, h in enumerate(head) if h.startswith("Kind")), None)
+        cells = list(row.get("cells") or [])
+        nm = flat(cells[ni]) if ni < len(cells) else ""
+        k = cells[ki] if ki is not None and ki < len(cells) else ""
+        if not k:
+            k = next((c for c in cells[1:] if KIND.match(str(c or ""))), "")
+        return nm, str(k or "")
+
+    kind_of = {}
+    for st in states:
+        for tb in tables_of(st):
+            for row in tb.rows:
+                nm, k = row_name_kind(tb, row)
+                if nm and KIND.match(k):
+                    kind_of.setdefault(nm, k.strip().lower().startswith("folder"))
+    for st in states:
+        for tb in tables_of(st):
+            for row in tb.rows:
+                nm, k = row_name_kind(tb, row)
+                if not KIND.match(k) and nm in kind_of:
+                    row["folder"] = kind_of[nm]
+
     clocks = [c for m in moments for p in m.get("panes") or [] for c in [old.clock_in(p)] if c]
     parts = [f"# {title}", ""]
     head = f"A screen recording, {old.minutes(secs)} read, {len(moments)} screen moments."
