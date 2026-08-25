@@ -3416,14 +3416,27 @@ def note(records_path, diary_text=None):
                 # draws one of them wrong; and the pitch is what the screen
                 # and the style sheet have in common, where a glyph's
                 # measured box and a font-size are not the same quantity.
-                ys = []
+                def pitch_of(p_):
+                    ys = sorted(it["box"][1] for it in draw2.items_of(p_))
+                    tops = []
+                    for y in ys:                       # words on one line are one line
+                        if not tops or y - tops[-1] > 6:
+                            tops.append(y)
+                    if len(tops) < 5:
+                        return None
+                    gaps = sorted(b - a for a, b in zip(tops, tops[1:]) if b - a < 400)
+                    return (len(tops), gaps[len(gaps) // 2])
+                best = None
                 for m_, g_ in getattr(sl, "pieces", ()):
                     for p_ in g_.get("panes") or []:
-                        ys += [it["box"][1] for it in draw2.items_of(p_)]
-                ys.sort()
-                gaps = sorted(b - a for a, b in zip(ys, ys[1:]) if 4 < b - a < 400)
-                sl._row_step = (gaps[len(gaps) // 2] * furnish.CANVAS_W
-                                / max(1, s["size"][0])) if len(gaps) >= 6 else 0.0
+                        got = pitch_of(p_)
+                        if got and (best is None or got[0] > best[0]):
+                            best = got
+                # the pane with the most lines is the window's own body, and
+                # its pitch is the window's pitch: a narrow side pane holds a
+                # handful of lines set closer together and would speak for
+                # the whole window if it were let to
+                sl._row_step = (best[1] * furnish.CANVAS_W / max(1, s["size"][0])) if best else 0.0
                 sl._doc_pad = getattr(st, "_doc_pad", 0)
                 # the line length this stretch's own moments measured, so a
                 # picture shows the note as wide as it ran THEN
