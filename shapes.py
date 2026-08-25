@@ -314,9 +314,9 @@ def find(path):
                 abs(o[2] - x1) <= 0.02 * (x1 - x0)
             if not side:
                 continue
-            w = min(o[2], x1) - max(o[0], x0)
-            h = min(o[3], yb) - max(o[1], yt)
-            if w > 0 and h > 0 and (w * h) / area > 0.5:
+            ow = min(o[2], x1) - max(o[0], x0)
+            oh = min(o[3], yb) - max(o[1], yt)
+            if ow > 0 and oh > 0 and (ow * oh) / area > 0.5:
                 drop.add(id(r))
                 break
     kept = [r for r in kept if id(r) not in drop]
