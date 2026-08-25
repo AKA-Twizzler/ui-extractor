@@ -46,7 +46,7 @@ for k, ln in enumerate(lines, 1):
     lo, hi = st.group(1), st.group(2) or st.group(1)
     stamps = [t for t in by_ts if lo <= t <= hi]
     # each filled window and the text drawn in it
-    for m in re.finditer(r'<div class="sn-slot" style="([^"]+)"(.*?)(?=<div class="sn-(?:slot|ghost|camera)"|$)', ln):
+    for m in re.finditer(r'<div class="sn-slot" style="([^"]+)"(.*?)(?=<div class="sn-(?:slot|ghost|camera|stamp|deskbar)"|$)', ln):
         pos = SC._pos(m.group(1))
         if not pos:
             continue
