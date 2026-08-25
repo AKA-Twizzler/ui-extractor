@@ -3199,6 +3199,7 @@ def note(records_path, diary_text=None):
                             and "sn-h1" in fd.lines[0][1] and not any(
                                 fold(flat(t)) == fold(flat(fd.lines[0][0])) for t, _ in sd.lines[:3]):
                         sd.lines.insert(0, fd.lines[0])
+                    mend_slice_tree(sl, st)
                 sl._doc_pad = getattr(st, "_doc_pad", 0)
                 sl.rects, sl.measured = st.rects, st.measured
                 # The shape the window really had. Where the reader measured
