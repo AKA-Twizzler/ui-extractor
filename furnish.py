@@ -508,7 +508,8 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
             # the name is drawn last and over everything, because a window
             # filled in on top of this one would otherwise hide it and the
             # outline would stand there unnamed
-            names.append(f'<div class="sn-ghost-name" style="'
+            mod = " sn-away" if "sn-away" in cls else (" sn-subject" if "sn-subject" in cls else "")
+            names.append(f'<div class="sn-ghost-name{mod}" style="'
                          f'{slot_style(box, W, H, bar=barred)};z-index:40">'
                          f'<span class="sn-ghost-tag" style="{off}">{esc(tag)}</span></div>')
         return (f'<div class="{cls}" style="{slot_style(box, W, H, bar=barred)}{extra}">'
