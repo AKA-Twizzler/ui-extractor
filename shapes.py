@@ -303,17 +303,19 @@ def find(path):
     # a rectangle and shares the side it was built on, the rectangle is that
     # window's slab, not a window.
     for r in kept:
-        x0, yt, x1, yb, e0, e1 = r[:6]
-        if not (e0 or e1) or id(r) in drop:
+        x0, yt, x1, yb = r[:4]
+        if id(r) in drop:
             continue
         area = max(1.0, (x1 - x0) * (yb - yt))
+        tall = max(1.0, yb - yt)
         for o in kept:
-            if o is r or o[4] or o[5] or id(o) in drop:
+            if o is r or id(o) in drop:
                 continue
-            side = abs(o[0] - x0) <= 0.02 * (x1 - x0) if e1 else \
-                abs(o[2] - x1) <= 0.02 * (x1 - x0)
-            if not side:
-                continue
+            if (o[3] - o[1]) < 1.5 * tall:
+                continue                       # not the taller of the two
+            near = 0.02 * max(1.0, x1 - x0)
+            if abs(o[0] - x0) > near and abs(o[2] - x1) > near:
+                continue                       # they do not stand on a side
             ow = min(o[2], x1) - max(o[0], x0)
             oh = min(o[3], yb) - max(o[1], yt)
             if ow > 0 and oh > 0 and (ow * oh) / area > 0.5:
