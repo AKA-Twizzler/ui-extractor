@@ -2910,6 +2910,20 @@ def note(records_path, diary_text=None):
             clock = next((clock_at[t] for t in s["ts"] if clock_at.get(t)), "")
             barred = any(t in bar_seen for t in s["ts"])
 
+            kz_now = T[0] if T else 1.0
+            S_now = max(0.05, kz_now * furnish.UI_TXT / furnish.CSS_TXT)
+
+            def span_pad(st_, top):
+                seen = next((b_ for t_, b_ in getattr(st_, "_h1_read", ())
+                             if t_ in s["ts"]), None)
+                if seen is None:
+                    return getattr(st_, "_doc_pad", 0)
+                pad = (seen[1] - top) * furnish.CANVAS_W / Wf / S_now - 60
+                return round(pad) if pad > 12 else 0
+
+            for stx, sl, shape in subjects:
+                sl._doc_pad = span_pad(stx, shape[1])
+
             # which windows behind were read through or around the front ones
             seen_here = set()
             for f in frags:
@@ -2996,20 +3010,6 @@ def note(records_path, diary_text=None):
                     if strip:
                         behinds.append((strip[0][2], strip[0][1]))
                         break
-            kz_now = T[0] if T else 1.0
-            S_now = max(0.05, kz_now * furnish.UI_TXT / furnish.CSS_TXT)
-
-            def span_pad(st_, top):
-                seen = next((b_ for t_, b_ in getattr(st_, "_h1_read", ())
-                             if t_ in s["ts"]), None)
-                if seen is None:
-                    return getattr(st_, "_doc_pad", 0)
-                pad = (seen[1] - top) * furnish.CANVAS_W / Wf / S_now - 60
-                return round(pad) if pad > 12 else 0
-
-            for stx, sl, shape in subjects:
-                sl._doc_pad = span_pad(stx, shape[1])
-
             m_t0 = next((mm for mm in moments if mm["ts"] == s["t0"]), None)
             cam = shapes.camera_box(frame_of(m_t0)) if m_t0 else None
             cam_pic = camera_pic(frame_of(m_t0), cam) if cam else None
