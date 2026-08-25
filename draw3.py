@@ -3598,6 +3598,22 @@ def note(records_path, diary_text=None):
             # where a measured rectangle stands inside it running most of
             # its height, that rectangle is a pane of this same window and
             # its top and foot are this window's top and foot.
+            # A rectangle the frame drew that no window claimed is still a
+            # window - the screen drew it. Where a box that was worked out
+            # from where words sat overlaps exactly one such rectangle, the
+            # two are the same window, and the measured one is the truth.
+            taken = [sh for _, sl, sh in subjects if getattr(sl, "_on_frame", False)]
+            spare = [r for r in frame_rects(s)
+                     if not any(_within(r, t) > 0.7 or _within(t, r) > 0.7
+                                for t in taken)]
+            for stx, sl, shape in subjects:
+                if getattr(sl, "_on_frame", False):
+                    continue
+                near_ = [r for r in spare if _within(r, shape) > 0.7]
+                if len(near_) == 1:
+                    sl.rect = list(near_[0])
+                    sl._on_frame = True
+            subjects = [(stx, sl, sl.rect) for stx, sl, _ in subjects]
             fixed = [sh for _, sl, sh in subjects if getattr(sl, "_on_frame", False)]
             for stx, sl, shape in subjects:
                 if getattr(sl, "_on_frame", False):
