@@ -3934,6 +3934,21 @@ def note(records_path, diary_text=None):
                     print(f"   drawn {label_for(own)!r} box {[round(v) for v in box]}",
                           file=sys.stderr)
                 behinds.append((label_for(own, s["t0"]), snap_to_frame(list(box), s)))
+            # An outline is a window too, and a rectangle the frame drew
+            # that no window in front claimed is the window it outlines. A
+            # box worked out from where words sat can run a window off the
+            # side of the screen; the measured rectangle cannot.
+            claimed = [sh for _, _, sh in subjects]
+            free = [r for r in frame_rects(s)
+                    if not any(furnish._within(r, c) > 0.7
+                               or furnish._within(c, r) > 0.7 for c in claimed)]
+            for k, (tag_, box_) in enumerate(behinds):
+                if any(furnish._within(box_, r) > 0.9
+                       and furnish._within(r, box_) > 0.9 for r in free):
+                    continue                       # already on its rectangle
+                near_ = [r for r in free if furnish._within(r, box_) > 0.7]
+                if len(near_) == 1:
+                    behinds[k] = (tag_, list(near_[0]))
             behinds.sort(key=lambda hb: -(hb[1][2] - hb[1][0]) * (hb[1][3] - hb[1][1]))
             if barred:
                 for stx, sl, _ in subjects:
