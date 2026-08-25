@@ -3759,6 +3759,22 @@ def note(records_path, diary_text=None):
                         T0, hb = span_T.get(s["t0"]), home_at(st, s["t0"])
                         shape = (onto(T0, hb) if (T0 and hb) else None)
                 shape = shape or s["rects"].get(id(st)) or span_rect(st, s["t0"]) or st.rect
+                # A window holds the panes it was read from. Where a box
+                # worked out from readings comes out narrower than the
+                # panes themselves - a note window drawn as just its file
+                # tree - the panes widen it, because the reader cut them
+                # off THIS frame and they stood inside this window.
+                if shape:
+                    lo_x, hi_x = shape[0], shape[2]
+                    for m_, g_ in getattr(st, "pieces", ()):
+                        if m_["ts"] not in s["ts"]:
+                            continue
+                        for p_ in (g_.get("panes") or []):
+                            b_ = p_.get("box")
+                            if not b_ or b_[2] - b_[0] > 0.5 * Wf:
+                                continue      # a slab, not one window's pane
+                            lo_x, hi_x = min(lo_x, b_[0]), max(hi_x, b_[2])
+                    shape = [lo_x, shape[1], hi_x, shape[3]]
                 sl.rect = shape
                 if sl.has_content() and shape:
                     subjects.append((st, sl, shape))
