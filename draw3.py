@@ -3608,6 +3608,12 @@ def note(records_path, diary_text=None):
             tab.header = head
             tab.span = best.span
             tab.rh = best.rh
+            # the same window showing the same folder: its bar and its
+            # sidebar were read whole at that other moment, and this one
+            # only had them hidden
+            tab.path = list(best.path)
+            tab.paths = list(best.paths)
+            tab.side = list(best.side)
             by = {fold(flat((r.get("cells") or [""])[0])): r for r in best.rows
                   if (r.get("cells") or [""])[0]}
             for n in names:
