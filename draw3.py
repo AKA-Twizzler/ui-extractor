@@ -2191,6 +2191,12 @@ def state_slice(st, t0, t1):
     out.title_sure = getattr(st, "title_sure", False)
     out.said = [(ts, s) for ts, s in st.said if t0 <= ts <= t1]
     out.of = st
+    # a stretch reads the path bar in whatever pieces that stretch showed;
+    # the window's own fuller reading fills the gaps, so the bar under a
+    # picture says what the bar under the window's own card says
+    here, whole = out.main_table(), st.main_table()
+    if here and here.path and whole and whole.path:
+        here.path = mend_path(here.path, [whole.path])
     return out
 
 
