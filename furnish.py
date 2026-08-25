@@ -508,12 +508,18 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
         return (f'<div class="{cls}" style="{slot_style(box, W, H, bar=barred)}{extra}">'
                 + lab + "</div>")
 
-    def uncover(rect):
+    def uncover(rect, on_frame=False):
         """A window behind is drawn only because it was SEEN, so the window
         in front cannot have been standing over it. Where the front window's
-        measured box swallows a strip that was plainly in view - a row of
-        tabs above it, a bar down its side - the box reached too far, and it
-        is pulled back to the edge of what was showing."""
+        box swallows a strip that was plainly in view - a row of tabs above
+        it, a bar down its side - the box reached too far, and it is pulled
+        back to the edge of what was showing.
+
+        A box the frame itself drew is never pulled back. Its edges were
+        measured off the screen; a box worked out from where words sat is a
+        guess, and a guess does not get to move a measurement."""
+        if on_frame:
+            return list(rect)
         x0, y0, x1, y1 = rect
         w, h = max(1.0, x1 - x0), max(1.0, y1 - y0)
         for b in drawn:
