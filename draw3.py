@@ -3842,8 +3842,13 @@ def note(records_path, diary_text=None):
                 # run, taken against the width it is drawn at NOW. One
                 # moment on its own is far too noisy to size a window by -
                 # a pane can be a sliver, or missed altogether.
-                cut_x = shape[0] < 1 or shape[2] > Wf - 1
-                cut_y = shape[1] < 1 or shape[3] > Hf - 1
+                # a hair of margin: where the frame's edge stood in for a
+                # window's side, the rectangle stops a pixel or two short
+                # of it, and that side is still the screen's, not the
+                # window's
+                mx, my = max(4.0, 0.005 * Wf), max(4.0, 0.005 * Hf)
+                cut_x = shape[0] < mx or shape[2] > Wf - mx
+                cut_y = shape[1] < my or shape[3] > Hf - my
                 share = pitch_home.get(stx.name) or pitch_home.get("*") or 0.0
                 if not cut_x and share:
                     span_now = share * (shape[2] - shape[0])
@@ -3875,8 +3880,6 @@ def note(records_path, diary_text=None):
                 if getattr(sl, "_step_sure", False) and getattr(sl, "_row_step", 0):
                     sure.setdefault(stx.name, []).append(sl._row_step)
             for stx, sl, _ in subjects:
-                if getattr(sl, "_step_sure", False):
-                    continue
                 had = sure.get(stx.name)
                 if had:
                     sl._row_step = med(sorted(had))
