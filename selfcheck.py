@@ -175,9 +175,28 @@ def check(path, frames=None):
         #     one. A small outline inside a big one is a different thing: a
         #     window standing in front of another, which is what a browser's
         #     tab strip above a window looks like.
+        # The name written on each outline, matched to it by its place: two
+        # outlines over the same ground carrying DIFFERENT programs' names
+        # are two windows, one standing behind the other, which is what a
+        # note filling the screen behind a file list looks like.
+        named = {}
+        for m in re.finditer(
+                r'<div class="sn-ghost-name[^"]*" style="([^"]+)"[^>]*>'
+                r'\s*<span class="sn-ghost-tag"[^>]*>([^<]*)</span>', ln):
+            p = _pos(m.group(1))
+            if p:
+                named[tuple(round(v, 1) for v in p)] = m.group(2).split(":")[0].strip()
+
+        def app_of(box):
+            return named.get(tuple(round(v, 1) for v in box))
+
+        APPS = ("Finder", "Obsidian", "The browser", "The terminal", "The chat")
         for a in range(len(ghosts)):
             for b in range(len(ghosts)):
                 if a == b:
+                    continue
+                pa, pb = app_of(ghosts[a][0]), app_of(ghosts[b][0])
+                if pa in APPS and pb in APPS and pa != pb:
                     continue
                 aa = ghosts[a][0][2] * ghosts[a][0][3]
                 bb = ghosts[b][0][2] * ghosts[b][0][3]
