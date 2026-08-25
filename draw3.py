@@ -2257,6 +2257,13 @@ def state_slice(st, t0, t1):
     here, whole = out.main_table(), st.main_table()
     if here and here.path and whole and whole.path:
         here.path = mend_path(here.path, [whole.path])
+        # the bar ends at the folder this window is showing. Mending never
+        # adds to the END of a path, because that is where two windows
+        # genuinely differ - but this is the SAME window at the same folder,
+        # so its own bar's last crumb is this stretch's last crumb too
+        if len(whole.path) > len(here.path) and \
+                all(crumb_same(a, b) for a, b in zip(here.path, whole.path)):
+            here.path = list(whole.path)
     # A stretch reads the tree in whatever pieces it showed, sometimes as a
     # bare column of names with no shape at all. The window's own tree puts
     # those rows back where they stood.
