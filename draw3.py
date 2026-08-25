@@ -3052,7 +3052,20 @@ def note(records_path, diary_text=None):
                         sd.lines.insert(0, fd.lines[0])
                 sl._doc_pad = getattr(st, "_doc_pad", 0)
                 sl.rects, sl.measured = st.rects, st.measured
-                shape = s["rects"].get(id(st)) or span_rect(st, s["t0"]) or st.rect
+                # The shape the window really had. Where the reader measured
+                # its edges off the frame, those edges stand. Otherwise the
+                # window's own place - every reading of it carried home and
+                # put together - is brought into this stretch's zoom: the
+                # same box its outline would get, so a window drawn full and
+                # the same window drawn as an outline never disagree, and a
+                # window is not drawn round whichever corner of it had words
+                # at that moment.
+                if s["t0"] in getattr(st, "measured", set()):
+                    shape = s["rects"].get(id(st)) or st.rects.get(s["t0"])
+                else:
+                    T0, hb = span_T.get(s["t0"]), home_at(st, s["t0"])
+                    shape = (onto(T0, hb) if (T0 and hb) else None)
+                shape = shape or s["rects"].get(id(st)) or span_rect(st, s["t0"]) or st.rect
                 sl.rect = shape
                 if sl.has_content() and shape:
                     subjects.append((st, sl, shape))
