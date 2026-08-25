@@ -408,6 +408,48 @@ def _blocks(mask):
     return lab, n
 
 
+def windows(path):
+    """The DISTINCT windows of a frame, biggest first.
+
+    `find` returns every rectangle it can close, and one window closes
+    several: a shadow two pixels out, a side found twice, a pane inside it.
+    This folds those to one rectangle per window and drops the panes, so
+    the reader, the drawing and the checker can all say the same number.
+    """
+    got = [list(map(float, r)) for r in find(path)]
+    got.sort(key=lambda r: -(r[2] - r[0]) * (r[3] - r[1]))
+
+    def within(a, b):
+        ix = max(0.0, min(a[2], b[2]) - max(a[0], b[0]))
+        iy = max(0.0, min(a[3], b[3]) - max(a[1], b[1]))
+        return (ix * iy) / max(1e-6, (a[2] - a[0]) * (a[3] - a[1]))
+
+    kept = []
+    for r in got:
+        for k in kept:
+            ix = max(0.0, min(r[2], k[2]) - max(r[0], k[0]))
+            iy = max(0.0, min(r[3], k[3]) - max(r[1], k[1]))
+            inter = ix * iy
+            both = ((r[2]-r[0])*(r[3]-r[1]) + (k[2]-k[0])*(k[3]-k[1]) - inter)
+            if inter / max(1e-6, both) > 0.8:
+                break
+            wide = max(r[2] - r[0], k[2] - k[0])
+            tall = max(r[3] - r[1], k[3] - k[1])
+            if (abs(r[0]-k[0]) < 0.012*wide and abs(r[2]-k[2]) < 0.012*wide
+                    and abs(r[1]-k[1]) < 0.012*tall and abs(r[3]-k[3]) < 0.012*tall):
+                break
+        else:
+            kept.append(r)
+    out = []
+    for r in kept:
+        if any(k is not r and within(r, k) > 0.92
+               and (r[2]-r[0])*(r[3]-r[1]) < 0.75*(k[2]-k[0])*(k[3]-k[1])
+               for k in kept):
+            continue                       # a pane of another window
+        out.append(r)
+    return out
+
+
 def camera_box(path):
     """The camera picture laid over the screen, found by its colour: a
     screen's furniture is nearly grey, a camera's picture is not.
