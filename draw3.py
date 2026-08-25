@@ -3144,6 +3144,11 @@ def note(records_path, diary_text=None):
 
     for w, sts in [(w, g) for w in windows
                    for g in split_windows([st for st in shown if st.name == w])]:
+        # one window's path bar, read whole at one moment and in pieces at
+        # another: the pieces are filled in from the moment it stood clear
+        tables = [t for st in sts for t in [st.main_table()] if t and t.path]
+        for t in tables:
+            t.path = mend_path(t.path, [o.path for o in tables if o is not t])
         latest = max(sts, key=lambda st: st.times[-1])     # the last one on screen
         earlier = [st for st in sts if st is not latest]
         parts.append(f"## {w} - as at {span_of(latest)}" + (f", {latest.title}" if latest.title else ""))
