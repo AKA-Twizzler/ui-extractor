@@ -278,7 +278,7 @@ def find(path):
     # back on, so the two are compared at their true tops.
     drop = set()
     for r in kept:
-        x0, yt, x1, yb, e0, e1 = r
+        x0, yt, x1, yb, e0, e1 = r[:6]
         if not (e0 or e1):
             continue
         tall, wide = max(1.0, yb - yt), max(1.0, x1 - x0)
