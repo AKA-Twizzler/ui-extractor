@@ -3239,8 +3239,24 @@ def note(records_path, diary_text=None):
         the most of this window's rows IS this window - measured, not
         worked out. Counting rows rather than whole panes matters, because
         the reader often takes a whole side of the screen as one pane and
-        two windows can stand in it.
+        two windows can stand in it - so only the rows this window itself
+        holds are allowed to vote, told apart by their own words.
         """
+        def key_(v):
+            if isinstance(v, dict):
+                v = (v.get("cells") or [""])[0]
+            if isinstance(v, (list, tuple)):
+                v = v[0] if v else ""
+            return "".join(ch for ch in str(v).lower() if ch.isalnum())
+
+        want = set()
+        for t_ in (st.main_table(), ):
+            for r_ in (getattr(t_, "rows", None) or []):
+                k_ = key_(r_)
+                if len(k_) >= 3:
+                    want.add(k_)
+        if not want:
+            return None
         spots = []
         for m_, g_ in getattr(st, "pieces", ()):
             if m_["ts"] not in s["ts"]:
@@ -3250,17 +3266,24 @@ def note(records_path, diary_text=None):
                 d_ = p_.get("data") or {}
                 if not pb or len(pb) != 4:
                     continue
-                tops = []
-                for b_ in (d_.get("blocks") or []):
-                    tops += [rb for rb in (b_.get("row_boxes") or [])
-                             if isinstance(rb, (list, tuple)) and len(rb) >= 4]
-                if not tops:
-                    continue
                 up = float(d_.get("scale") or 0)
+                mine_ = []
+                for b_ in (d_.get("blocks") or []):
+                    rows_ = b_.get("rows") or []
+                    boxes_ = b_.get("row_boxes") or []
+                    for r_, rb in zip(rows_, boxes_):
+                        if (isinstance(rb, (list, tuple)) and len(rb) >= 4
+                                and key_(r_) in want):
+                            mine_.append(rb)
+                if not mine_:
+                    continue
                 if not up:
                     high = max(1.0, pb[3] - pb[1])
-                    up = max(1.0, round(max(rb[3] for rb in tops) / high))
-                for rb in tops:
+                    all_ = [rb for b_ in (d_.get("blocks") or [])
+                            for rb in (b_.get("row_boxes") or [])
+                            if isinstance(rb, (list, tuple)) and len(rb) >= 4]
+                    up = max(1.0, round(max(rb[3] for rb in all_) / high))
+                for rb in mine_:
                     spots.append(((pb[0] + (rb[0] + rb[2]) / 2 / up),
                                   (pb[1] + (rb[1] + rb[3]) / 2 / up)))
         if not spots:
