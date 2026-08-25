@@ -106,8 +106,15 @@ def _index(lines, step=8):
 def _across(shelf, pos, a, b, slack, part, outward):
     """The line running along most of a to b nearest `pos`, or None. A
     window's corners are rounded, so its top and bottom sit a little past
-    where its sides begin; `outward` says which way to look first."""
+    where its sides begin; `outward` says which way to look first.
+
+    The line must also BEGIN and END at the two sides, within the slack a
+    rounded corner needs. A line that merely crosses the span belongs to
+    something else on the screen - a divider inside another window, a bar
+    running the whole width - and pairing it with these two sides invents a
+    rectangle whose corners were never drawn."""
     want = part * (b - a)
+    ends = max(6.0, 0.03 * (b - a))
     best = None
     lines, step = shelf
     lo, hi = int(pos - slack) // step, int(pos + slack) // step
@@ -117,6 +124,10 @@ def _across(shelf, pos, a, b, slack, part, outward):
                 continue
             if min(b, lb) - max(a, la) < want:
                 continue
+            if la > a + ends or lb < b - ends:
+                continue                  # it does not reach both corners
+            if la < a - ends or lb > b + ends:
+                continue                  # it runs on past them
             if best is None or (p - pos) * outward > (best - pos) * outward:
                 best = p
     return best
