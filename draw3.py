@@ -2879,6 +2879,33 @@ def note(records_path, diary_text=None):
             continue
         if not any(same_text(c, name) for c in t.path):
             t.path = list(t.path) + [name]
+    # A crumb the reader cut short - "02 Con" where the folder is called
+    # "02 Company A (Info Product)" - is spelt the way the video itself
+    # spelt it, but only when exactly one name in the whole video opens
+    # that way. Two candidates and the crumb stays as it was read.
+    known = {}
+    for st in states:
+        if st.title:
+            known.setdefault(flat(st.title), st.title)
+        for q in st.parts:
+            if q["fam"] != "table":
+                continue
+            for r in q["model"].rows:
+                if r["cells"] and r["cells"][0] and "..." not in r["cells"][0]:
+                    known.setdefault(flat(r["cells"][0]), r["cells"][0])
+    for st in states:
+        t = st.main_table()
+        if not (t and t.path):
+            continue
+        fixed = []
+        for c in t.path:
+            f = flat(c)
+            if len(f) >= 4 and f not in known:
+                fits = [v for k, v in known.items() if len(k) > len(f) and k.startswith(f)]
+                if len(set(fits)) == 1:
+                    c = fits[0]
+            fixed.append(c)
+        t.path = fixed
 
     # Folder or file, settled once for the whole video. A name whose Kind was
     # read at any moment is that kind at every moment, so a row read without
