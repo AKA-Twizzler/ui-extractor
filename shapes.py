@@ -55,9 +55,22 @@ def _sides(g, least_v, least_h):
     """The long straight edges on the screen, down and across. An edge is
     often a soft shadow spread over two or three pixels, so each line is
     looked at together with its neighbours."""
-    from scipy.ndimage import maximum_filter1d
-    dv = maximum_filter1d(np.abs(g[:, 2:] - g[:, :-2]), 3, axis=1)
-    dh = maximum_filter1d(np.abs(g[2:, :] - g[:-2, :]), 3, axis=0)
+    def widest(a, axis):
+        """Each value raised to the largest of itself and its two
+        neighbours along one axis - a three-wide maximum, written out so
+        this module needs only numpy."""
+        prev = np.roll(a, 1, axis=axis)
+        nxt = np.roll(a, -1, axis=axis)
+        if axis == 1:
+            prev[:, 0] = a[:, 0]
+            nxt[:, -1] = a[:, -1]
+        else:
+            prev[0, :] = a[0, :]
+            nxt[-1, :] = a[-1, :]
+        return np.maximum(np.maximum(a, prev), nxt)
+
+    dv = widest(np.abs(g[:, 2:] - g[:, :-2]), 1)
+    dh = widest(np.abs(g[2:, :] - g[:-2, :]), 0)
     verts, hors = [], []
     for x in range(dv.shape[1]):
         for y0, y1 in _runs(dv[:, x] > EDGE, least_v):
