@@ -2284,6 +2284,13 @@ def state_slice(st, t0, t1):
         # folder comes across and nothing else does
         if not getattr(st, "title_from_path", False):
             here.path = end_at_folder(here.path, st.title)
+        # the window's own bar may carry the folder's name where this
+        # stretch's reading lost it. Only the folder crosses over: anything
+        # further along is a row that was selected at some other moment
+        extra = whole.path[len(here.path):]
+        if len(extra) == 1 and st.title and same_text(extra[0], st.title) \
+                and all(crumb_same(a, b) for a, b in zip(here.path, whole.path)):
+            here.path = list(here.path) + [extra[0]]
     # A stretch reads the tree in whatever pieces it showed, sometimes as a
     # bare column of names with no shape at all. The window's own tree puts
     # those rows back where they stood.
