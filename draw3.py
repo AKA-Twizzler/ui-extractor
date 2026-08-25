@@ -3173,6 +3173,42 @@ def note(records_path, diary_text=None):
         _frame_rects[t0] = kept
         return kept
 
+    def carry_by_neighbour(st, s):
+        """This window's measured box from another moment, carried onto this
+        frame by a window that WAS measured at both moments.
+
+        Where a window's own edges were not measured here, its place has to
+        come from somewhere. A neighbour measured on both frames gives the
+        move between them outright - how much bigger everything got, and
+        how far it slid - and that move carries this window across. It is
+        two measurements and a ratio, not a guess about where words sat."""
+        here = s["t0"]
+        mine = [t for t in getattr(st, "measured", ()) if st.rects.get(t)]
+        if not mine or here in mine:
+            return None
+        secs_here = secs_of.get(here, 0)
+        for t in sorted(mine, key=lambda t: abs(secs_of.get(t, 0) - secs_here)):
+            there = st.rects[t]
+            for u in states:
+                if u is st:
+                    continue
+                a = u.rects.get(t) if t in getattr(u, "measured", ()) else None
+                b = u.rects.get(here) if here in getattr(u, "measured", ()) else None
+                if not a or not b or a[2] - a[0] <= 0 or a[3] - a[1] <= 0:
+                    continue
+                kx = (b[2] - b[0]) / (a[2] - a[0])
+                ky = (b[3] - b[1]) / (a[3] - a[1])
+                if not (0.2 <= kx <= 6.0 and 0.2 <= ky <= 6.0):
+                    continue
+                if abs(kx - ky) > 0.15 * max(kx, ky):
+                    continue        # not one move: the neighbour was resized
+                k = (kx + ky) / 2
+                return [b[0] + (there[0] - a[0]) * k,
+                        b[1] + (there[1] - a[1]) * k,
+                        b[0] + (there[2] - a[0]) * k,
+                        b[1] + (there[3] - a[1]) * k]
+        return None
+
     def rect_over_panes(st, s):
         """The rectangle the frame drew AROUND this window's own panes.
 
@@ -3570,7 +3606,7 @@ def note(records_path, diary_text=None):
                 else:
                     # the frame's own rectangle round this window's panes
                     # comes first: it is measured on this very frame
-                    shape = rect_over_panes(st, s)
+                    shape = rect_over_panes(st, s) or carry_by_neighbour(st, s)
                     if not shape:
                         T0, hb = span_T.get(s["t0"]), home_at(st, s["t0"])
                         shape = (onto(T0, hb) if (T0 and hb) else None)
