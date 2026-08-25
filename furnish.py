@@ -580,8 +580,12 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
             # the same window read twice; only boxes of a like size are one
             # window seen twice
             like = min(a, b) / max(1.0, max(a, b)) > 0.5
-            if like and (max(_within(box, other[0]), _within(other[0], box)) > 0.85
-                         or _close(box, other[0])):
+            # two outlines carrying the SAME name, one standing inside the
+            # other, are that one window twice over whatever their sizes:
+            # a window cannot stand in front of itself
+            same = tag and tag == other[1]
+            if (like or same) and (max(_within(box, other[0]), _within(other[0], box)) > 0.85
+                                   or _close(box, other[0])):
                 if (box[2] - box[0]) * (box[3] - box[1]) > \
                         (other[0][2] - other[0][0]) * (other[0][3] - other[0][1]):
                     other[0] = box
