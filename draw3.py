@@ -3504,6 +3504,34 @@ def note(records_path, diary_text=None):
         return [min(m[1][0] for m in take), min(m[1][1] for m in take),
                 max(m[1][2] for m in take), max(m[1][3] for m in take)]
 
+    def hold_words(box, st_, times, Wf_, Hf_):
+        """The same box, widened to hold the words this window's own reading
+        carries, where the reader found them at these moments.
+
+        A window holds its own words - that is what a window is. A box
+        worked out from readings carried across zooms can come out beside
+        them or inside them, and then the picture shows words standing on
+        bare desktop with the window they belong to drawn somewhere else.
+        A window behind is read in fragments, the windows in front cutting
+        its lines up, so a run of six letters sitting inside one of its own
+        lines counts.
+        """
+        if not box:
+            return box
+        keys = own_words.get(id(st_)) or set()
+        if not keys:
+            return box
+        out = list(box)
+        for t in times:
+            for key, b in (words_of.get(t) or {}).items():
+                if not ((len(key) >= 5 and key in keys)
+                        or (len(key) >= 6 and any(key in sk for sk in keys))
+                        or (len(key) >= 12 and any(sk in key for sk in keys))):
+                    continue
+                out = [min(out[0], b[0]), min(out[1], b[1]),
+                       max(out[2], b[2]), max(out[3], b[3])]
+        return out
+
     own_words = {id(st): {flat(w) for w in box_texts(st)[1] if len(flat(w)) >= 8}
                  for st in states}
     bar_seen = set()               # moments whose own top strip held readings
@@ -3775,6 +3803,7 @@ def note(records_path, diary_text=None):
                                 continue      # a slab, not one window's pane
                             lo_x, hi_x = min(lo_x, b_[0]), max(hi_x, b_[2])
                     shape = [lo_x, shape[1], hi_x, shape[3]]
+                    shape = hold_words(shape, st, s["ts"], Wf, Hf)
                 sl.rect = shape
                 if sl.has_content() and shape:
                     subjects.append((st, sl, shape))
@@ -3945,7 +3974,7 @@ def note(records_path, diary_text=None):
 
             # every other window this stretch's frame still shows, drawn
             # whole where its zoom put it; the screen's edge cuts the rest
-            behinds, carded = [], set()
+            behinds, carded, behind_state = [], set(), {}
             lo, hi = s["t0"], s["t1"]
             # rectangles the frame drew that no window in front stands on:
             # the screen drew them, so a window IS there, and a window
@@ -4034,6 +4063,7 @@ def note(records_path, diary_text=None):
                 if os.environ.get("UIX_WHY") == s["t0"]:
                     print(f"   drawn {label_for(own)!r} box {[round(v) for v in box]}",
                           file=sys.stderr)
+                behind_state[len(behinds)] = own
                 behinds.append((label_for(own, s["t0"]), snap_to_frame(list(box), s)))
             # An outline is a window too, and a rectangle the frame drew
             # that no window in front claimed is the window it outlines. A
@@ -4056,6 +4086,11 @@ def note(records_path, diary_text=None):
                          and furnish._within(box_, r) > 0.5]
                 if len(near_) == 1:
                     behinds[k] = (tag_, list(near_[0]))
+            for k, (tag_, box_) in enumerate(behinds):
+                own_ = behind_state.get(k)
+                if own_ is not None:
+                    behinds[k] = (tag_, hold_words(list(box_), own_,
+                                                   s["ts"], Wf, Hf))
             behinds.sort(key=lambda hb: -(hb[1][2] - hb[1][0]) * (hb[1][3] - hb[1][1]))
             if barred:
                 for stx, sl, _ in subjects:
