@@ -2877,6 +2877,54 @@ def note(records_path, diary_text=None):
 
     span_T = {s["t0"]: fit_map(s["ts"]) for s in spans}
 
+    _frame_rects = {}
+
+    def frame_rects(s):
+        """The rectangles drawn on this stretch's own frame, near-duplicates
+        folded together. These are window edges as the screen drew them, not
+        edges worked out from where words sat."""
+        t0 = s["t0"]
+        if t0 in _frame_rects:
+            return _frame_rects[t0]
+        m0 = next((mm for mm in moments if mm["ts"] == t0), None)
+        got = shapes.find(frame_of(m0)) if m0 else []
+        kept = []
+        for r in got:
+            for k in kept:
+                w = min(r[2], k[2]) - max(r[0], k[0])
+                h = min(r[3], k[3]) - max(r[1], k[1])
+                if w > 0 and h > 0:
+                    inter = w * h
+                    both = ((r[2] - r[0]) * (r[3] - r[1])
+                            + (k[2] - k[0]) * (k[3] - k[1]) - inter)
+                    if inter / max(1.0, both) > 0.9:     # the same rectangle
+                        break
+            else:
+                kept.append([float(v) for v in r])
+        _frame_rects[t0] = kept
+        return kept
+
+    def snap_to_frame(box, s):
+        """A box pulled onto the rectangle the frame itself drew there. Only
+        a rectangle this box plainly IS - most of each inside the other -
+        may claim it; anything looser leaves the box alone, because a wrong
+        snap moves a window somewhere it never stood."""
+        if not box:
+            return box
+        area = max(1.0, (box[2] - box[0]) * (box[3] - box[1]))
+        best, score = None, 0.0
+        for r in frame_rects(s):
+            w = min(box[2], r[2]) - max(box[0], r[0])
+            h = min(box[3], r[3]) - max(box[1], r[1])
+            if w <= 0 or h <= 0:
+                continue
+            inter = w * h
+            ra = max(1.0, (r[2] - r[0]) * (r[3] - r[1]))
+            sc = min(inter / area, inter / ra)
+            if sc > score:
+                best, score = r, sc
+        return list(best) if best is not None and score >= 0.7 else box
+
     home_reads = {}                # state -> every reading's box, carried home
     secs_of = {m["ts"]: m.get("secs", 0) for m in moments}
     for st in states:
