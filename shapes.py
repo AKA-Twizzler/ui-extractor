@@ -313,6 +313,8 @@ def find(path):
                 continue
             if (o[3] - o[1]) < 1.5 * tall:
                 continue                       # not the taller of the two
+            if (o[2] - o[0]) >= (x1 - x0):
+                continue     # a band lies WIDER than the window it is a slab of
             near = 0.02 * max(1.0, x1 - x0)
             if abs(o[0] - x0) > near and abs(o[2] - x1) > near:
                 continue                       # they do not stand on a side
