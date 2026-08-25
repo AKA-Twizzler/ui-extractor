@@ -631,8 +631,15 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
             out.append(outline(rect, getattr(st, "_label", "") or "",
                                "sn-ghost sn-subject", f";z-index:{3 + z}"))
             continue
-        out.append(f'<div class="sn-slot" style="{slot_style(rect, W, H, bar=barred)}'
-                   f';z-index:{3 + z}">' + html + "</div>")
+        # The window is drawn to SCALE inside its rectangle: the card is laid
+        # out over the width that rectangle really had, and the style
+        # sheet's writing is shrunk to the height the screen's writing had,
+        # so a line of text stands in the same proportion to its window as
+        # it did in the video. Drawing the card at reading size and cutting
+        # it off at the box shows a corner of a window at the wrong scale,
+        # which is not a picture of that screen.
+        out.append(scaled(html, clip_box(rect, W, H, bar=barred), W, kz=kz,
+                          extra=f'{slot_style(rect, W, H, bar=barred)};z-index:{3 + z}'))
     if camera:
         cbox = camera[0] if isinstance(camera, (tuple, list)) else camera
         out.append(f'<div class="sn-camera" style="{slot_style(cbox, W, H, bar=barred)}">'
