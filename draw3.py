@@ -3199,11 +3199,17 @@ def note(records_path, diary_text=None):
 
     # two windows of one program are two windows, and the note's first line
     # says so rather than counting a program's states as one window's history
+    COUNT = {2: "two", 3: "three", 4: "four", 5: "five", 6: "six",
+             7: "seven", 8: "eight", 9: "nine", 10: "ten"}
     for w in windows:
         k = len(split_windows([st for st in shown if st.name == w]))
         say = w[0].lower() + w[1:]
-        parts[head_at] = parts[head_at].replace(f"@@{w}@@",
-                                                f"{k} of {say}" if k > 1 else say)
+        if k > 1:                      # "the Finder window" -> "two Finder windows"
+            bare = re.sub(r"^the ", "", say)
+            say = f"{COUNT.get(k, k)} {bare}s"
+        parts[head_at] = parts[head_at].replace(f"@@{w}@@", say)
+    parts[head_at] = re.sub(r"(\w+ windows) \((\d+) states\)",
+                            r"\1 (\2 states between them)", parts[head_at])
 
     for w, sts in [(w, g) for w in windows
                    for g in split_windows([st for st in shown if st.name == w])]:
