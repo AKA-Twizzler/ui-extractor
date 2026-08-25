@@ -2945,6 +2945,8 @@ def note(records_path, diary_text=None):
                     c = fits.pop()
             fixed.append(c)
         t.path = fixed
+        if os.environ.get("UIX_CRUMB") and any("02 C" in c for c in fixed):
+            print("healed", st.times[:1], id(t), fixed, file=sys.stderr)
     for w in {st.name for st in states}:
         pool = [t for st in states if st.name == w
                 for t in [st.main_table()] if t and t.path]
