@@ -138,6 +138,14 @@ def check(path, frames=None):
                     bad("nothing swallows a window in view", where,
                         "an outline is drawn under a window that covered it whole")
 
+        # 9b. one place, one window: an outline drawn inside another outline
+        #     is the same window twice - its old place and its new one
+        for a in range(len(ghosts)):
+            for b in range(len(ghosts)):
+                if a != b and _overlap(ghosts[a][0], ghosts[b][0]) > 0.85:
+                    bad("one outline per window", where,
+                        "two outlines mark the same place, so one window is drawn twice")
+
         # 10. the desktop bar, when drawn, carries the bar's real words
         bar = re.search(r'<div class="sn-deskbar">(.*?)</div>\s*<div', ln)
         if bar and bar.group(1).count("<span") < 4:
