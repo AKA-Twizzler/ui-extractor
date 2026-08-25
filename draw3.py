@@ -4116,9 +4116,19 @@ def note(records_path, diary_text=None):
                 # this box mostly inside the rectangle. A window that fills
                 # the screen holds every other window's rectangle inside
                 # it, and one of those is not the window.
+                # A window that was never measured anywhere near this wide
+                # cannot be this wide now: a box carried across zooms has
+                # run away, and the rectangle the frame drew is the window.
+                own_k = behind_state.get(k)
+                ever = [own_k.rects[t] for t in getattr(own_k, "measured", ())
+                        if own_k and own_k.rects.get(t)] if own_k else []
+                small = bool(ever) and max(
+                    (r[2] - r[0]) for r in ever) < 0.7 * Wf
+                grown = (box_[2] - box_[0]) > 0.9 * Wf
                 near_ = [r for r in free
                          if furnish._within(r, box_) > 0.7
-                         and furnish._within(box_, r) > 0.5]
+                         and (furnish._within(box_, r) > 0.5
+                              or (small and grown))]
                 if len(near_) == 1:
                     behinds[k] = (tag_, list(near_[0]))
             for k, (tag_, box_) in enumerate(behinds):
