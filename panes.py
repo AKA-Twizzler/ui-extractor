@@ -155,9 +155,9 @@ def _measured_windows(img):
     reader take two windows standing side by side as one pane, and read
     their two lists as one table with the wrong words in every row.
     """
-    got = []
+    got = [tuple(int(round(v)) for v in r) for r in overlay.windows(img)]
     try:
-        more = [tuple(int(round(v)) for v in r) for r in shapes.find(img)]
+        more = [tuple(int(round(v)) for v in r) for r in shapes.windows(img)]
     except Exception:
         more = []
 
@@ -215,7 +215,7 @@ def frame_regions(img, engine=None):
             boxes.append((x_at + int(a * back), y_at,
                           x_at + int(b * back), y_at + height))
 
-    found = overlay.windows(img)
+    found = _measured_windows(img)
     for x0, y0, x1, y1 in found:
         split(img[y0:y1, x0:x1], x0, y0, y1 - y0)
 
@@ -272,42 +272,6 @@ def frame_regions(img, engine=None):
             else:
                 boxes.append((a, top, b, bottom))
 
-    # A pane that runs across TWO windows reads their two lists as one
-    # table, and every row of it comes out with one window's word in the
-    # first cell and the other's in the second. Where a window's own side
-    # stands inside a pane, that pane is cut there. Only those cuts are
-    # added, so a frame keeps the panes it had and gains one where two
-    # windows really do stand side by side in the same strip.
-    # Only where two windows really stand SIDE BY SIDE: the edge between
-    # them is what a pane must not read across. A frame holding one window
-    # has no such edge and keeps exactly the panes it always had - which
-    # matters, because the screen's own border pairs with any line on a
-    # single-window picture and would otherwise slice it into strips.
-    wins = _measured_windows(img)
-    sides = set()
-    for i, a in enumerate(wins):
-        for b in wins:
-            if b is a:
-                continue
-            if min(a[3], b[3]) - max(a[1], b[1]) <= 0.3 * (a[3] - a[1]):
-                continue                       # not beside each other at all
-            gap = b[0] - a[2]
-            if -0.02 * w <= gap <= 0.06 * w:
-                sides.add(int(round((a[2] + b[0]) / 2.0)))
-    if sides:
-        # a cut that would leave a sliver is not made: a strip too thin to
-        # be a pane belongs to its neighbour, never to nobody
-        least = max(8, int(MIN_PANE * scale / 2))
-        cut = []
-        for x0, y0, x1, y1 in boxes:
-            marks = [x0]
-            for x in sorted(x for x in sides if x0 < x < x1):
-                if x - marks[-1] >= least and x1 - x >= least:
-                    marks.append(x)
-            marks.append(x1)
-            for a, b in zip(marks, marks[1:]):
-                cut.append((a, y0, b, y1))
-        boxes = cut or boxes
     boxes.sort(key=lambda box: (box[0], box[1]))
     return boxes
 
