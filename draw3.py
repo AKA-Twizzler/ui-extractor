@@ -3329,15 +3329,16 @@ def note(records_path, diary_text=None):
     for st in states:
         wide = []
         for m, g in getattr(st, "pieces", ()):
-            for p_ in g.get("panes") or []:
-                if p_.get("kind") != "an open document":
-                    continue
-                pw = p_["box"][2] - p_["box"][0]
-                xs = [it["box"] for it in draw2.items_of(p_) if it["box"][2] - it["box"][0] > 20]
-                if pw > 0 and len(xs) >= 6:
-                    span = max(b[2] for b in xs) - min(b[0] for b in xs)
-                    if 0.2 <= span / pw <= 1.0:
-                        wide.append(span / pw)
+            docs = [q for q in (g.get("panes") or []) if q.get("kind") == "an open document"]
+            if not docs:
+                continue
+            p_ = max(docs, key=lambda q: q["box"][2] - q["box"][0])
+            pw = p_["box"][2] - p_["box"][0]
+            xs = [it["box"] for it in draw2.items_of(p_) if it["box"][2] - it["box"][0] > 20]
+            if pw > 0 and len(xs) >= 3:
+                span = max(b[2] for b in xs) - min(b[0] for b in xs)
+                if 0.2 <= span / pw <= 1.0:
+                    wide.append(span / pw)
         if wide:
             st._doc_wide = round(100 * med(sorted(wide)))
 
