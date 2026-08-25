@@ -2862,11 +2862,6 @@ def note(records_path, diary_text=None):
     # tree whichever window shows them, and only what sits between two crumbs
     # a reading already carries is ever filled in, so this cannot move a
     # window into a folder it was never in.
-    for w in {st.name for st in states}:
-        pool = [t for st in states if st.name == w
-                for t in [st.main_table()] if t and t.path]
-        for t in pool:
-            t.path = mend_path(t.path, [o.path for o in pool if o is not t])
     # A crumb the reader cut short - "02 Con" where the folder is called
     # "02 Company A (Info Product)" - is spelt the way the video itself
     # spelt it, but only when exactly one name in the whole video opens
@@ -2932,6 +2927,11 @@ def note(records_path, diary_text=None):
         else:
             t.path = list(t.path) + [name]
 
+    for w in {st.name for st in states}:
+        pool = [t for st in states if st.name == w
+                for t in [st.main_table()] if t and t.path]
+        for t in pool:
+            t.path = mend_path(t.path, [o.path for o in pool if o is not t])
     # Folder or file, settled once for the whole video. A name whose Kind was
     # read at any moment is that kind at every moment, so a row read without
     # its Kind column borrows the answer rather than guessing at the shape of
