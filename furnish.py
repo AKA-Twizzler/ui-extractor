@@ -345,11 +345,33 @@ def window(st, behind=True):
 BAR = 0.026            # the desktop bar's share of the screen's height
 
 
-def slot_style(rect, W, H, bar=True):
+def clip_box(rect, W, H, bar=True):
+    """A window cannot stand outside the screen it was on. An edge measured
+    past the frame is a measurement that slipped, and drawing it makes a
+    window taller than the desktop, so the box is cut back to the screen -
+    which is also what the screen itself did to the window."""
     x0, y0, x1, y1 = rect
     if bar:
         y0 = max(y0, BAR * H)      # nothing sits on top of the desktop bar
-    y1 = max(y1, y0 + 8)
+    x0 = min(max(float(x0), 0.0), float(W))
+    x1 = min(max(float(x1), 0.0), float(W))
+    y0 = min(max(float(y0), 0.0), float(H))
+    y1 = min(max(float(y1), 0.0), float(H))
+    return [x0, y0, max(x1, x0 + 8), max(y1, y0 + 8)]
+
+
+def off_screen(rect, W, H):
+    """How much of a measured box fell outside the screen, as a share of the
+    box. Anything much above nothing means the edges are not to be trusted."""
+    x0, y0, x1, y1 = rect
+    area = max(1.0, (float(x1) - x0) * (float(y1) - y0))
+    ix = max(0.0, min(float(x1), float(W)) - max(float(x0), 0.0))
+    iy = max(0.0, min(float(y1), float(H)) - max(float(y0), 0.0))
+    return max(0.0, 1.0 - (ix * iy) / area)
+
+
+def slot_style(rect, W, H, bar=True):
+    x0, y0, x1, y1 = clip_box(rect, W, H, bar=bar)
     return (f"left:{100.0 * x0 / W:.2f}%;top:{100.0 * y0 / H:.2f}%;"
             f"width:{100.0 * (x1 - x0) / W:.2f}%;height:{100.0 * (y1 - y0) / H:.2f}%")
 
