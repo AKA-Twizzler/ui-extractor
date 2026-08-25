@@ -3424,8 +3424,11 @@ def note(records_path, diary_text=None):
                             tops.append(y)
                     if len(tops) < 5:
                         return None
-                    gaps = sorted(b - a for a, b in zip(tops, tops[1:]) if b - a < 400)
-                    return (len(tops), gaps[len(gaps) // 2])
+                    # the pitch over the WHOLE block, not the middle gap: a
+                    # line's measured top jumps about with its tall letters,
+                    # and one crooked gap in the middle should not set the
+                    # size of the window
+                    return (len(tops), (tops[-1] - tops[0]) / (len(tops) - 1))
                 best = None
                 for m_, g_ in getattr(sl, "pieces", ()):
                     for p_ in g_.get("panes") or []:
