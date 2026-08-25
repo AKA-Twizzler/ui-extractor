@@ -771,12 +771,38 @@ def block_of(pane, window_rect):
 
 # ------------------------------------------------------------- windows and moments
 
+SIDE_NAMES = {
+    "recents", "shared", "airdrop", "favorites", "applications", "pictures",
+    "movies", "music", "desktop", "documents", "downloads", "locations",
+    "icloud drive", "icloud", "network", "tags", "home", "library",
+}
+
+
+def finder_sidebar(pane):
+    """A Finder window's own sidebar, read as though it were a file tree.
+
+    Down the left of every Finder window stands a fixed list - Recents,
+    Shared, Applications, Pictures, and the rest - and read on its own,
+    with the window's list hidden behind whatever stands in front, it has
+    the shape of a tree. Called a tree, it names the window Obsidian, and
+    a Finder window comes out labelled for the wrong program.
+    """
+    rows = [str(r.get("name") or "").strip().lower()
+            for r in ((pane.get("data") or {}).get("rows") or [])]
+    rows = [r for r in rows if r]
+    if len(rows) < 4:
+        return False
+    return sum(1 for r in rows if r in SIDE_NAMES) >= max(3, 0.6 * len(rows))
+
+
 def name_of(entry, panes):
     """The program, from its furniture; a list under Finder's own column
     headings is Finder even with its sidebar out of view."""
     app = old.app_name(entry, panes)
-    if any(p["kind"] == "a file tree" for p in panes):
+    if any(p["kind"] == "a file tree" and not finder_sidebar(p) for p in panes):
         app = "Obsidian"        # a file tree is the vault's; a browser shows none
+    elif any(finder_sidebar(p) for p in panes):
+        app = app or "Finder"   # its sidebar is the one thing still in view
     elif app in (None, "the browser"):
         # a note with a properties panel is Obsidian's, whatever tab strip
         # shows behind it
