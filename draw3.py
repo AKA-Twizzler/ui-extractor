@@ -2938,6 +2938,9 @@ def note(records_path, diary_text=None):
                     par = flat(fixed[-1]) if fixed else None
                     fits = {v for v in after.get(par, ()) if flat(v)[:3] == f[:3]
                             and len(flat(v)) > len(f)}
+                if os.environ.get("UIX_CRUMB"):
+                    print("crumb", repr(c), "par", repr(fixed[-1] if fixed else None),
+                          "fits", fits, file=sys.stderr)
                 if len(fits) == 1:
                     c = fits.pop()
             fixed.append(c)
