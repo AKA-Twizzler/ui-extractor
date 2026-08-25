@@ -477,6 +477,7 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
     # The boxes the front windows really filled are settled first: a window
     # behind is drawn because it was SEEN, and whether it was seen depends
     # on what stood over it.
+    shown = []
     for tag, box in behind_cards:
         drawn.append(clip_box(box, W, H, bar=barred))
     fronts = []
