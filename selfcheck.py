@@ -110,8 +110,6 @@ def check(path, frames=None):
             bad("stamped with its time", where, "the picture carries no timestamp")
 
         # 7. every outline says what it is
-        for (_, cls) in ghosts:
-            pass
         for m in re.finditer(r'<div class="[^"]*sn-ghost[^"]*"[^>]*>(.*?)</div>', ln):
             if "sn-ghost-tag" not in m.group(1):
                 bad("outlines are labelled", where, "an outline has no name on it")
