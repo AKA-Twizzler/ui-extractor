@@ -3424,11 +3424,22 @@ def note(records_path, diary_text=None):
                             tops.append(y)
                     if len(tops) < 5:
                         return None
-                    # the pitch over the WHOLE block, not the middle gap: a
-                    # line's measured top jumps about with its tall letters,
-                    # and one crooked gap in the middle should not set the
-                    # size of the window
-                    return (len(tops), (tops[-1] - tops[0]) / (len(tops) - 1))
+                    # Rows in a list are set evenly, so the pitch is the gap
+                    # the MOST gaps agree on. A middle gap can be crooked and
+                    # an average is pulled about by the empty space around a
+                    # heading; the spacing the rows keep is neither.
+                    gaps = [b - a for a, b in zip(tops, tops[1:]) if 0 < b - a < 400]
+                    if not gaps:
+                        return None
+                    best_g, best_n = None, 0
+                    for g in gaps:
+                        n = sum(1 for h in gaps if abs(h - g) <= 0.15 * g)
+                        if n > best_n or (n == best_n and best_g and g < best_g):
+                            best_g, best_n = g, n
+                    if best_n < 3:
+                        return None
+                    like = [h for h in gaps if abs(h - best_g) <= 0.15 * best_g]
+                    return (len(tops), sum(like) / len(like))
                 best = None
                 for m_, g_ in getattr(sl, "pieces", ()):
                     for p_ in g_.get("panes") or []:
