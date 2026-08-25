@@ -3173,6 +3173,38 @@ def note(records_path, diary_text=None):
         _frame_rects[t0] = kept
         return kept
 
+    def rect_over_panes(st, s):
+        """The rectangle the frame drew AROUND this window's own panes.
+
+        Where a window's edges were not measured, its place is usually
+        worked out from readings carried back and forth across zooms, and
+        that arithmetic can run a window clean off the side of the screen.
+        But the panes this window was READ from at this very moment have
+        boxes on this very frame. The window holds its own panes, so the
+        smallest rectangle the frame drew that holds all of them IS the
+        window - measured, not worked out."""
+        mine = []
+        for m_, g_ in getattr(st, "pieces", ()):
+            if m_["ts"] not in s["ts"]:
+                continue
+            for p_ in (g_.get("panes") or []):
+                b_ = p_.get("box")
+                if b_ and len(b_) == 4 and b_[2] > b_[0] and b_[3] > b_[1]:
+                    mine.append(tuple(b_))
+        if not mine:
+            return None
+        x0 = min(b[0] for b in mine); y0 = min(b[1] for b in mine)
+        x1 = max(b[2] for b in mine); y1 = max(b[3] for b in mine)
+        holds = []
+        for r in frame_rects(s):
+            # a hair of slack: a pane is drawn inside its window's frame,
+            # and the reader's box can sit a pixel or two proud of it
+            slack = max(4.0, 0.01 * (r[2] - r[0]))
+            if (r[0] - slack <= x0 and x1 <= r[2] + slack
+                    and r[1] - slack <= y0 and y1 <= r[3] + slack):
+                holds.append(((r[2] - r[0]) * (r[3] - r[1]), r))
+        return list(min(holds)[1]) if holds else None
+
     def snap_to_frame(box, s):
         """A box pulled onto the rectangle the frame itself drew there. Only
         a rectangle this box plainly IS - most of each inside the other -
@@ -3536,8 +3568,12 @@ def note(records_path, diary_text=None):
                 if s["t0"] in getattr(st, "measured", set()):
                     shape = s["rects"].get(id(st)) or st.rects.get(s["t0"])
                 else:
-                    T0, hb = span_T.get(s["t0"]), home_at(st, s["t0"])
-                    shape = (onto(T0, hb) if (T0 and hb) else None)
+                    # the frame's own rectangle round this window's panes
+                    # comes first: it is measured on this very frame
+                    shape = rect_over_panes(st, s)
+                    if not shape:
+                        T0, hb = span_T.get(s["t0"]), home_at(st, s["t0"])
+                        shape = (onto(T0, hb) if (T0 and hb) else None)
                 shape = shape or s["rects"].get(id(st)) or span_rect(st, s["t0"]) or st.rect
                 sl.rect = shape
                 if sl.has_content() and shape:
