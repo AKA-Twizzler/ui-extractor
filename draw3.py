@@ -2858,12 +2858,15 @@ def note(records_path, diary_text=None):
             got.append((list(f.rects[ts]), "a window behind", "behind"))
         return got
     if spans:
-        parts += ["## The screen, moment by moment", "",
-                  "Each picture is the whole screen as the video showed it over that stretch of time: the same zoom, "
-                  "every window in view filled in with its real content -- a window behind included, from the moments "
-                  "it stood clear -- and the camera picture where it lay. A stretch covers several timestamps whenever "
-                  "the screen stood still. Where the reader measured a window's edges, those are the edges drawn; "
-                  "otherwise they are taken from where that window's own content sat.", ""]
+        parts += ["## Where the windows stood, moment by moment", "",
+                  "Where everything stood, and nothing more. Each picture is the shape of the screen over that stretch of "
+                  "time: the desktop bar with its own words along the top, and every window outlined where it stood, "
+                  "at the size it was, named. The window the stretch is about is the one drawn brightest. Nothing is "
+                  "filled in here and no photograph is ever pasted in -- where the camera covered the screen, that "
+                  "corner is outlined and said. Every window's content is drawn below, large enough to read. A stretch "
+                  "covers several timestamps whenever the screen stood still, and the stamp in the corner says which; "
+                  "where the reader measured a window's edges those are the edges drawn, otherwise they are taken from "
+                  "where that window's own words sat.", ""]
         last_T = None
         for s in spans:
             subjects = []
@@ -3028,10 +3031,11 @@ def note(records_path, diary_text=None):
                         parts += [ln, ""]
         parts += ["---", ""]
 
-    parts += ["## Every window, filled in", "",
-              "The same windows again, each on its own and large enough to read, holding everything read from it "
-              "across every moment it showed that same thing. This is where content that never fit on the screen at "
-              "once can be seen whole.", ""]
+    parts += ["## Every window, rebuilt to read", "",
+              "Every window rebuilt, large enough to read: the toolbar, the sidebar, the rows with their dates and "
+              "sizes, the path bar, the note's own text -- drawn from what was read off the screen, holding everything "
+              "gathered across every moment that window showed the same thing. This is the content; the pictures above "
+              "only say where each of these stood.", ""]
     for w in windows:
         sts = [st for st in shown if st.name == w]
         latest = max(sts, key=lambda st: st.times[-1])     # the last one on screen
