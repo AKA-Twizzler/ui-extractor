@@ -3562,7 +3562,7 @@ def note(records_path, diary_text=None):
                 if not b_ or b_[2] - b_[0] > 0.5 * Wf_:
                     continue
                 lo_x, hi_x = min(lo_x, b_[0]), max(hi_x, b_[2])
-        if hi_x - lo_x > 2.0 * max(1.0, box[2] - box[0]):
+        if hi_x - lo_x > Wf_:
             return list(box)
         return [lo_x, box[1], hi_x, box[3]]
 
@@ -4040,10 +4040,11 @@ def note(records_path, diary_text=None):
                             if not b_ or b_[2] - b_[0] > 0.5 * Wf:
                                 continue      # a slab, not one window's pane
                             lo_x, hi_x = min(lo_x, b_[0]), max(hi_x, b_[2])
-                    # panes that would DOUBLE the window are not its panes:
-                    # on a whole desktop the reader cuts many strips, and
-                    # a window stretched over its neighbours' is no window
-                    if hi_x - lo_x <= 2.0 * max(1.0, shape[2] - shape[0]):
+                    # A pane is filed under the window it was cut from, so
+                    # a window's panes really are its own and may be as wide
+                    # as they like - what they may not do is reach past the
+                    # screen, because nothing was shown there.
+                    if hi_x - lo_x <= Wf:
                         shape = [lo_x, shape[1], hi_x, shape[3]]
                 sl.rect = shape
                 if sl.has_content() and shape:
