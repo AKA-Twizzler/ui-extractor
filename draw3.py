@@ -3927,8 +3927,12 @@ def note(records_path, diary_text=None):
                 long_hits = []
                 for t in s["ts"]:
                     for key, b in (words_of.get(t) or {}).items():
-                        if len(key) >= 12 and (key in keys or any(
-                                key in sk or sk in key for sk in keys)):
+                        # a word of this window's own, read at this moment,
+                        # stands inside it: exactly its own word from six
+                        # letters up, or a long one carrying it
+                        if (len(key) >= 6 and key in keys) or (
+                                len(key) >= 12 and any(
+                                    key in sk or sk in key for sk in keys)):
                             long_hits.append(b)
                 for b in long_hits:
                     box = [min(box[0], b[0]), min(box[1], b[1]),
