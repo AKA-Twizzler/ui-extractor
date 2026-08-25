@@ -604,7 +604,11 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
             # two outlines carrying the SAME name, one standing inside the
             # other, are that one window twice over whatever their sizes:
             # a window cannot stand in front of itself
-            same = tag and tag == other[1]
+            # the same program, one box inside the other, is that one window
+            # twice: a stretch that could not name its folder says only
+            # "Finder", and the fuller name belongs to the same window
+            same = bool(tag) and bool(other[1]) and \
+                tag.split(":")[0].strip() == other[1].split(":")[0].strip()
             share = max(_within(box, other[0]), _within(other[0], box))
             if (like and (share > 0.85 or _close(box, other[0]))) or (same and share > 0.5):
                 if (box[2] - box[0]) * (box[3] - box[1]) > \
