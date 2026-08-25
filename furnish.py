@@ -391,7 +391,7 @@ def _close(a, b):
 
 
 def deskbar(bar_words, clock):
-    left = "".join(f"<span>{esc(w)}</span>" for w in bar_words[:8])
+    left = "".join(f"<span>{esc(w)}</span>" for w in bar_words[:14])
     right = f"<span class=\"sn-right\">{esc(clock)}</span>" if clock else ""
     return f'<div class="sn-deskbar">{left}{right}</div>'
 
