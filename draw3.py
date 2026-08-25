@@ -2156,6 +2156,7 @@ def state_slice(st, t0, t1):
         if m["ts"] not in out.times:
             out.times.append(m["ts"])
     out.name, out.title = st.name, st.title
+    out.theme = st.theme
     out.title_sure = getattr(st, "title_sure", False)
     out.said = [(ts, s) for ts, s in st.said if t0 <= ts <= t1]
     out.of = st
@@ -2977,7 +2978,10 @@ def note(records_path, diary_text=None):
                                 hits += 1
                     if hits < 2:
                         continue
+                was_pad = getattr(own, "_doc_pad", 0)
+                own._doc_pad = span_pad(own, box[1])
                 html = furnish.window(own, behind=False) or own.plain_window_html()
+                own._doc_pad = was_pad
                 if not html:
                     continue
                 # a selection band belongs to the moment it was seen, and
@@ -2992,6 +2996,20 @@ def note(records_path, diary_text=None):
                     if strip:
                         behinds.append((strip[0][2], strip[0][1]))
                         break
+            kz_now = T[0] if T else 1.0
+            S_now = max(0.05, kz_now * furnish.UI_TXT / furnish.CSS_TXT)
+
+            def span_pad(st_, top):
+                seen = next((b_ for t_, b_ in getattr(st_, "_h1_read", ())
+                             if t_ in s["ts"]), None)
+                if seen is None:
+                    return getattr(st_, "_doc_pad", 0)
+                pad = (seen[1] - top) * furnish.CANVAS_W / Wf / S_now - 60
+                return round(pad) if pad > 12 else 0
+
+            for stx, sl, shape in subjects:
+                sl._doc_pad = span_pad(stx, shape[1])
+
             m_t0 = next((mm for mm in moments if mm["ts"] == s["t0"]), None)
             cam = shapes.camera_box(frame_of(m_t0)) if m_t0 else None
             cam_pic = camera_pic(frame_of(m_t0), cam) if cam else None
