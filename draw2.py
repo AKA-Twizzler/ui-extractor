@@ -799,10 +799,28 @@ def name_of(entry, panes):
     """The program, from its furniture; a list under Finder's own column
     headings is Finder even with its sidebar out of view."""
     app = old.app_name(entry, panes)
-    if any(p["kind"] == "a file tree" and not finder_sidebar(p) for p in panes):
-        app = "Obsidian"        # a file tree is the vault's; a browser shows none
+
+    def finder_columns(p):
+        """A list standing under Finder's own column headings."""
+        if p["kind"] != "a list of columns":
+            return False
+        d = p.get("data") or {}
+        heads = {h for b in d.get("blocks") or [] for h in (b.get("header") or [])}
+        heads |= {r["text"] for r in d.get("remainder") or []
+                  if r.get("where") in ("above", "beside")}
+        return len(heads & FINDER_HEADS) >= 2
+
+    # Finder's own furniture is asked about FIRST. A window's list read
+    # with only its Name column showing - the rest off the side of the
+    # screen or behind another window - comes back as a file tree, and a
+    # tree taken as the deciding word names a Finder window Obsidian even
+    # while its column headings stand in the pane beside it.
+    if any(finder_columns(p) for p in panes):
+        app = "Finder"
     elif any(finder_sidebar(p) for p in panes):
         app = app or "Finder"   # its sidebar is the one thing still in view
+    elif any(p["kind"] == "a file tree" for p in panes):
+        app = "Obsidian"        # a file tree is the vault's; a browser shows none
     elif app in (None, "the browser"):
         # a note with a properties panel is Obsidian's, whatever tab strip
         # shows behind it
