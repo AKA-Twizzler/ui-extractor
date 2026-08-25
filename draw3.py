@@ -1452,8 +1452,23 @@ def mend_path(mine, others):
             ja = next((k for k, c in enumerate(other) if crumb_same(c, out[i])), None)
             jb = next((k for k, c in enumerate(other) if crumb_same(c, out[i + 1])), None)
             if ja is not None and jb is not None and jb > ja + 1:
-                out[i + 1:i + 1] = other[ja + 1:jb]
-                i += jb - ja
+                # a crumb about to be filled in that opens the same way as
+                # the crumb beside it is not a folder of its own: it is that
+                # same folder, read better. It corrects the spelling instead
+                # of standing next to it as a second folder.
+                keep = []
+                for c in other[ja + 1:jb]:
+                    fc = flat(c)
+                    for idx in (i, i + 1):
+                        fo = flat(out[idx])
+                        if len(fc) >= 4 and len(fo) >= 4 and fc[:3] == fo[:3]:
+                            if len(fc) > len(fo):
+                                out[idx] = c
+                            break
+                    else:
+                        keep.append(c)
+                out[i + 1:i + 1] = keep
+                i += len(keep) + 1
             else:
                 i += 1
     return out
