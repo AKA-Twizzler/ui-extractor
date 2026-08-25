@@ -1464,6 +1464,14 @@ def chain_paths(paths):
     for p in paths:
         if p is base:
             continue
+        # a path bar starts at the disk: where a shorter reading carries the
+        # crumb the longest one starts from somewhere in its middle, what sits
+        # in front of it belongs to something else on the screen - a
+        # neighbouring window's sidebar read into the same row - and is dropped
+        # rather than merged in front of the root
+        j = next((k for k, c in enumerate(p) if crumb_same(c, base[0])), None)
+        if j:
+            p = p[j:]
         at = 0                     # insertion point in base
         for c in p:
             j = next((k for k in range(len(base)) if crumb_same(base[k], c)), None)
