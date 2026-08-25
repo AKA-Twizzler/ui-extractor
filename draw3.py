@@ -2280,24 +2280,33 @@ def mend_tree(mine, whole):
     hits = [where[k] for k in (fold(flat(row_name(t))) for t, _ in mine) if k in where]
     if len(hits) < 0.6 * len(mine) or len(hits) < 3:
         return mine                       # not the same tree; leave it alone
-    lo, hi = min(hits), max(hits)
-    out = list(whole[lo:hi + 1])
-    # the chain of parents above the first row. A row hangs from the
-    # nearest row above it that is shallower, or - where the reader read
-    # every name at one depth - from the nearest folder above it standing
-    # open, since a shut folder shows nothing underneath it
-    up, want = [], row_depth(whole[lo][0])
-    for t, h in reversed(whole[:lo]):
-        d = row_depth(t)
-        if d < want:
-            up.append((t, h))
-            want = d
-        elif d == want and row_name(t) and t.lstrip("│ ")[:1] == "˅":
-            up.append((t, h))
-            want = d - 1
-        if want < 0:
-            break
-    return list(reversed(up)) + out
+
+    def parents(i):
+        """The chain of rows the row at i hangs from. A row hangs from the
+        nearest row above it that is shallower, or - where the reader read
+        every name at one depth - from the nearest folder above it standing
+        open, since a shut folder shows nothing underneath it."""
+        want = row_depth(whole[i][0])
+        for j in range(i - 1, -1, -1):
+            t = whole[j][0]
+            d = row_depth(t)
+            if d < want:
+                yield j
+                want = d
+            elif d == want and row_name(t) and t.lstrip("│ ")[:1] == "˅":
+                yield j
+                want = d - 1
+            if want < 0:
+                return
+
+    # Only what this stretch showed, and the rows it hung from. Nothing is
+    # filled in between: a folder standing shut shows none of its files,
+    # and a row the whole tree carries because some other moment opened
+    # that folder was not on the screen now.
+    take = set(hits)
+    for i in list(take):
+        take.update(parents(i))
+    return [whole[i] for i in sorted(take)]
 
 
 def name_fits(short, full_name):
