@@ -2912,7 +2912,7 @@ def note(records_path, diary_text=None):
         if not box:
             return box
         area = max(1.0, (box[2] - box[0]) * (box[3] - box[1]))
-        best, score = None, 0.0
+        fits = []
         for r in frame_rects(s):
             w = min(box[2], r[2]) - max(box[0], r[0])
             h = min(box[3], r[3]) - max(box[1], r[1])
@@ -2920,10 +2920,12 @@ def note(records_path, diary_text=None):
                 continue
             inter = w * h
             ra = max(1.0, (r[2] - r[0]) * (r[3] - r[1]))
-            sc = min(inter / area, inter / ra)
-            if sc > score:
-                best, score = r, sc
-        return list(best) if best is not None and score >= 0.7 else box
+            if min(inter / area, inter / ra) >= 0.7:
+                fits.append((ra, r))
+        # the outermost rectangle that still matches: a window is drawn as a
+        # rectangle and so is each pane inside it, and it is the window that
+        # is wanted, never one of its panes
+        return list(max(fits)[1]) if fits else box
 
     home_reads = {}                # state -> every reading's box, carried home
     secs_of = {m["ts"]: m.get("secs", 0) for m in moments}
