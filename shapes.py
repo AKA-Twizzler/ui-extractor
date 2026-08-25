@@ -140,7 +140,7 @@ def _across(shelf, pos, a, b, slack, part, outward, corner=False):
     return best
 
 
-def _edge_of_head(shelf, pos, a, b, reach, way):
+def _edge_of_head(shelf, pos, a, b, reach, way, reaches=None):
     """The window's own top (or foot) lying beyond an edge already found.
 
     The line has to COVER this window's whole width, and it may run a
@@ -160,7 +160,8 @@ def _edge_of_head(shelf, pos, a, b, reach, way):
                 continue
             if la > a + ends or lb < b - ends:
                 continue                      # it does not cover the window
-            if lb - la > 1.6 * (b - a):
+            if lb - la > 1.6 * (b - a) and not (
+                    reaches and reaches[0] <= p <= reaches[1]):
                 continue                      # far too long to be its edge
             if best is None or (p - pos) * way > (best - pos) * way:
                 best = p
@@ -224,7 +225,7 @@ def find(path):
             tall = y_bot - y_top
             if bot - top < ALONG * tall:
                 continue                       # the sides must run its height
-            found.append([x0, y_top, x1, y_bot, e0, e1])
+            found.append([x0, y_top, x1, y_bot, e0, e1, top, bot])
     found.sort(key=lambda r: -(r[2] - r[0]) * (r[3] - r[1]))
     # near-identical rectangles are the same window found twice: one edge
     # is a shadow two pixels wide. Rectangles that merely overlap are kept,
@@ -246,8 +247,15 @@ def find(path):
     for r in kept:
         x0, y_top, x1, y_bot = r[:4]
         reach = 0.4 * (y_bot - y_top)
+        ran = (r[6], r[7]) if len(r) > 7 else (y_top, y_bot)
         for side, way in ((1, -1), (3, +1)):
-            edge = _edge_of_head(shelf, r[side], x0, x1, reach, way)
+            # how far the window's own SIDES ran: a line the sides reach is
+            # that window's own edge however far it goes on past it, where
+            # a line lying well beyond them belongs to the screen
+            end = ran[0] if way < 0 else ran[1]
+            slack_e = max(4.0, 0.03 * (y_bot - y_top))
+            edge = _edge_of_head(shelf, r[side], x0, x1, reach, way,
+                                 reaches=(end - slack_e, end + slack_e))
             if edge is None or (edge - r[side]) * way <= 2:
                 continue
             lo, hi = min(edge, r[side]), max(edge, r[side])
