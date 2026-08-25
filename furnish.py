@@ -484,6 +484,7 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
     if barred:
         out.append(deskbar(bar_words, clock))
     drawn = []
+    names = []          # every outline's name, drawn last so none is hidden
 
     placed = []
 
@@ -503,8 +504,13 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
             t = 100.0 * box[1] / max(1, H)
             step = sum(1 for pl, pt in placed if abs(pl - l) < 14 and abs(pt - t) < 5)
             placed.append((l, t))
-            off = f' style="top:{5 + step * 15}px"' if step else ""
-            lab = f'<span class="sn-ghost-tag"{off}>{esc(tag)}</span>'
+            off = f'top:{5 + step * 15}px;' if step else ""
+            # the name is drawn last and over everything, because a window
+            # filled in on top of this one would otherwise hide it and the
+            # outline would stand there unnamed
+            names.append(f'<div class="sn-ghost-name" style="'
+                         f'{slot_style(box, W, H, bar=barred)};z-index:40">'
+                         f'<span class="sn-ghost-tag" style="{off}">{esc(tag)}</span></div>')
         return (f'<div class="{cls}" style="{slot_style(box, W, H, bar=barred)}{extra}">'
                 + lab + "</div>")
 
@@ -626,6 +632,7 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
         cbox = camera[0] if isinstance(camera, (tuple, list)) else camera
         out.append(f'<div class="sn-camera" style="{slot_style(cbox, W, H, bar=barred)}">'
                    f'<span class="sn-camera-tag">the camera picture</span></div>')
+    out.extend(names)
     stamp = span["t0"] if span["t0"] == span["t1"] else f"{span['t0']} to {span['t1']}"
     if not sure:
         stamp += " \u00b7 edges taken from where its words sat"
