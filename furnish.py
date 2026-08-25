@@ -435,6 +435,10 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
 
     def outline(box, tag, cls="sn-ghost", extra=""):
         lab = ""
+        # a box measured well past the screen's edge is a box that cannot be
+        # trusted, so it is drawn the way anything unsure is drawn
+        if off_screen(box, W, H) > 0.25 and "sn-away" not in cls:
+            cls += " sn-away"
         if tag:
             # two windows whose top-left corners nearly meet would print
             # their names over each other, so each later one steps down
