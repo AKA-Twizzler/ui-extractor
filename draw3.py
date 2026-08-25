@@ -3008,8 +3008,16 @@ def note(records_path, diary_text=None):
                                     key in sk or sk in key for sk in keys)):
                                 hits += 1
                     if hits < 2:
+                        if os.environ.get("UIX_WHY") == s["t0"]:
+                            print(f"   dropped {label_for(own)!r} box "
+                                  f"{[round(v) for v in box]} hits {hits} "
+                                  f"long {len(long_hits)} reach {reach.get(id(own))}",
+                                  file=sys.stderr)
                         continue
                 carded.add(id(own))
+                if os.environ.get("UIX_WHY") == s["t0"]:
+                    print(f"   drawn {label_for(own)!r} box {[round(v) for v in box]}",
+                          file=sys.stderr)
                 behinds.append((label_for(own), list(box)))
             behinds.sort(key=lambda hb: -(hb[1][2] - hb[1][0]) * (hb[1][3] - hb[1][1]))
             if barred:
