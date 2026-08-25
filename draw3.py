@@ -3566,6 +3566,66 @@ def note(records_path, diary_text=None):
             return list(box)
         return [lo_x, box[1], hi_x, box[3]]
 
+    def list_not_tree(states):
+        """A Finder list that came back as a file tree, put right.
+
+        A window showing only its Name column - the rest of it off the side
+        of the screen or behind another window - has no columns left to
+        tell the reader it is a list, and its rows come back as a tree with
+        a level of nesting that was never on the screen. The same folder
+        names read as a LIST elsewhere in the video say what that window
+        is: one window, one program. Nothing is invented - the names are
+        the ones that were read, and only what KIND of thing they are in
+        changes.
+        """
+        lists = []
+        for st_ in states:
+            t_ = st_.main_table()
+            if st_.name == "The Finder window" and t_ and len(t_.rows) >= 4:
+                lists.append((t_, {fold(flat((r.get("cells") or [""])[0]))
+                                   for r in t_.rows if (r.get("cells") or [""])[0]}))
+        if not lists:
+            return
+        for st_ in states:
+            if st_.name != "The Obsidian window":
+                continue
+            q = next((x for x in st_.parts if x["fam"] == "tree"), None)
+            if q is None or not getattr(q["model"], "lines", None):
+                continue
+            names = [row_name(t) for t, _h in q["model"].lines]
+            keys = {fold(flat(n)) for n in names if n}
+            if len(keys) < 4:
+                continue
+            best, hit = None, 0
+            for t_, ks in lists:
+                n = len(keys & ks)
+                if n > hit:
+                    best, hit = t_, n
+            if best is None or hit < max(4, 0.6 * len(keys)):
+                continue
+            head = list(best.header) or ["Name"]
+            tab = Table()
+            tab.header = head
+            tab.span = best.span
+            tab.rh = best.rh
+            by = {fold(flat((r.get("cells") or [""])[0])): r for r in best.rows
+                  if (r.get("cells") or [""])[0]}
+            for n in names:
+                if not n:
+                    continue
+                src = by.get(fold(flat(n)))
+                cells = list(src["cells"]) if src else [n] + [""] * (len(head) - 1)
+                if src:
+                    cells[0] = src["cells"][0]
+                tab.rows.append({"cells": cells,
+                                 "italic": [False] * len(cells),
+                                 "band": (src or {}).get("band"),
+                                 "icon": (src or {}).get("icon", "green")})
+            q["fam"] = "table"
+            q["model"] = tab
+            st_.parts.sort(key=lambda x: x["slot"])
+            st_.name = "The Finder window"
+
     def words_in(box, st_, times):
         """How many of this window's OWN words were read inside that box."""
         keys = own_words.get(id(st_)) or set()
@@ -3619,6 +3679,7 @@ def note(records_path, diary_text=None):
             return list(box)
         return out
 
+    list_not_tree(states)
     own_words = {id(st): {flat(w) for w in box_texts(st)[1] if len(flat(w)) >= 8}
                  for st in states}
     bar_seen = set()               # moments whose own top strip held readings
