@@ -287,7 +287,11 @@ def obsidian(st, behind=True):
                     + '<div class="sn-tree">' + "".join(f"<div>{l}</div>" for l in lines) + "</div></div>")
         cols.append(explorer)
     if doc:
-        pad = 0 if behind else getattr(st, "_doc_pad", 0)
+        # How far down the pane the note had been scrolled matters in a
+        # picture of the screen, where the text has to sit where it sat.
+        # On the window's own card it is only a hole at the top: the card
+        # is the window rebuilt to READ, so it starts at its first line.
+        pad = getattr(st, "_doc_pad", 0) if (not behind and st.shape) else 0
         sty_doc = f' style="padding-top:{pad}px"' if pad else ""
         cols.append(f'<div class="sn-doc"{sty_doc}>' + note_html(st, doc, title) + "</div>")
     grid = "30px " + ("minmax(180px, 38fr) " if tree else "") + ("62fr" if doc else "")
