@@ -53,7 +53,7 @@ def junky(s):
     toks = re.findall(r"[A-Za-z][A-Za-z'\u2019_.]*", s)
     if not toks:
         return True
-    good = sum(1 for t in toks if re.search(r"[aeiouyAEIOUY]", t) and len(t) >= 2)
+    good = sum(1 for t in toks if re.search(r"[aeiouyAEIOUY]", t) and len(t) >= 3)
     return good * 2 < len(toks) or len(re.sub(r"[^A-Za-z0-9]", "", s)) < 2
 
 
