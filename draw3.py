@@ -1422,6 +1422,26 @@ def crumb_same(a, b):
     return k >= 5 and abs(len(fa) - len(fb)) <= 12 and sum(1 for x, y in zip(fa[:k], fb[:k]) if x != y) <= 1
 
 
+def mend_path(mine, others):
+    """The gaps in one reading of a path bar, filled from another reading of
+    the SAME window's bar. Only what sits BETWEEN two crumbs both readings
+    carry is filled in: the ancestors of a folder do not change when the
+    folder does, so they are revealed, not guessed. Nothing is ever added to
+    the end, where the readings genuinely differ."""
+    out = list(mine)
+    for other in others:
+        i = 0
+        while i + 1 < len(out):
+            ja = next((k for k, c in enumerate(other) if crumb_same(c, out[i])), None)
+            jb = next((k for k, c in enumerate(other) if crumb_same(c, out[i + 1])), None)
+            if ja is not None and jb is not None and jb > ja + 1:
+                out[i + 1:i + 1] = other[ja + 1:jb]
+                i += jb - ja
+            else:
+                i += 1
+    return out
+
+
 def chain_paths(paths):
     """Partial readings of one path bar joined: the longest read is the
     spine, and crumbs the other reads carry between its anchors slot in
