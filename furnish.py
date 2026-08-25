@@ -363,8 +363,16 @@ def window(st, behind=True):
             return obsidian(st, behind=behind)
     except Exception as e:      # a drawing must never take the note down
         import sys
+        FELL.append((st.name, list(st.times[:1]), repr(e)))
         print(f"furnish: {st.name} {st.times[:1]}: {e!r}", file=sys.stderr)
     return None
+
+
+# A window that falls back to the plain drawing still writes a note, so the
+# fault is invisible in the finished file: the window is simply poorer than
+# it should be. Every fall is kept here so the build can count them and
+# refuse the note, the same way it refuses one that breaks a drawing rule.
+FELL: list = []
 
 
 # ---------------------------------------------------------------- the screen
