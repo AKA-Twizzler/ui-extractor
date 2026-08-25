@@ -2579,9 +2579,16 @@ def bar_title(st, H):
     return False
 
 
-def label_for(st):
-    """What to call a window in a picture: its program and what it showed."""
+def label_for(st, at=None):
+    """What to call a window in a picture: its program, and what it was
+    showing AT THAT MOMENT. A window that opens a different folder later
+    must not be named here by the folder it opened later - the picture is of
+    this stretch, and the name has to be true of this stretch. Where the
+    window was on the screen at a time it says nothing about, the program's
+    name stands alone."""
     name = st.name.replace("The ", "").replace(" window", "")
+    if at is not None and st.times and not (st.times[0] <= at <= st.times[-1]):
+        return name
     return f"{name}: {st.title}" if st.title else name
 
 
@@ -3247,7 +3254,7 @@ def note(records_path, diary_text=None):
                 if os.environ.get("UIX_WHY") == s["t0"]:
                     print(f"   drawn {label_for(own)!r} box {[round(v) for v in box]}",
                           file=sys.stderr)
-                behinds.append((label_for(own), snap_to_frame(list(box), s)))
+                behinds.append((label_for(own, s["t0"]), snap_to_frame(list(box), s)))
             behinds.sort(key=lambda hb: -(hb[1][2] - hb[1][0]) * (hb[1][3] - hb[1][1]))
             if barred:
                 for stx, sl, _ in subjects:
