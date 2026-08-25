@@ -89,6 +89,22 @@ def check(path, frames=None):
                 bad("one window per card", f"line {k}",
                     "a browser strip is drawn inside the Obsidian window")
 
+    # 5b. a path bar starts where every other path bar in the note starts:
+    #     at the disk. One that starts elsewhere has a neighbouring window's
+    #     words read into its row.
+    bars = [re.sub(r"<[^>]+>", "", m.group(1))
+            for m in re.finditer(r'<div class="sn-pathbar">(.*?)</div>', text)]
+    roots = [b.split("›")[0].strip() for b in bars if b.strip()]
+    if len(roots) >= 3:
+        common = max(set(roots), key=roots.count)
+        for k, ln in enumerate(lines, 1):
+            for m in re.finditer(r'<div class="sn-pathbar">(.*?)</div>', ln):
+                b = re.sub(r"<[^>]+>", "", m.group(1))
+                if b.strip() and b.split("›")[0].strip() != common:
+                    bad("a path starts at the disk", f"line {k}",
+                        f"a path bar starts at {b.split(chr(8250))[0].strip()!r}, "
+                        f"where the rest of the note starts at {common!r}")
+
     # every screen picture, one at a time
     pics = [(k, ln) for k, ln in enumerate(lines, 1) if BLOCK.match(ln)]
     if not pics:
