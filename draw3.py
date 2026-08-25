@@ -3566,6 +3566,23 @@ def note(records_path, diary_text=None):
             return list(box)
         return [lo_x, box[1], hi_x, box[3]]
 
+    def words_in(box, st_, times):
+        """How many of this window's OWN words were read inside that box."""
+        keys = own_words.get(id(st_)) or set()
+        if not keys:
+            return 0
+        n = 0
+        for t in times:
+            for key, b in (words_of.get(t) or {}).items():
+                if not ((len(key) >= 5 and key in keys)
+                        or (len(key) >= 6 and any(key in sk for sk in keys))
+                        or (len(key) >= 12 and any(sk in key for sk in keys))):
+                    continue
+                cx, cy = (b[0] + b[2]) / 2, (b[1] + b[3]) / 2
+                if box[0] <= cx <= box[2] and box[1] <= cy <= box[3]:
+                    n += 1
+        return n
+
     def hold_words(box, st_, times, Wf_, Hf_):
         """The same box, widened to hold the words this window's own reading
         carries, where the reader found them at these moments.
@@ -4268,15 +4285,19 @@ def note(records_path, diary_text=None):
                             best, bk = v, k
                     tag = behinds[bk][0] if (bk is not None and best > 0.15) else ""
                     if not tag:
+                        # the window whose OWN words stand inside this
+                        # rectangle most - not the first that happens to
+                        # have one, which names a window for whichever
+                        # program the loop reached first
+                        pick, most = None, 0
                         for own in states:
                             if own in sub_states:
                                 continue
-                            got = hold_words([r[0], r[1], r[0], r[1]], own,
-                                             s["ts"], Wf, Hf)
-                            if got != [r[0], r[1], r[0], r[1]] and \
-                                    furnish._within(got, r) > 0.6:
-                                tag = label_for(own, s["t0"])
-                                break
+                            n = words_in(r, own, s["ts"])
+                            if n > most:
+                                pick, most = own, n
+                        if pick is not None and most >= 2:
+                            tag = label_for(pick, s["t0"])
                     if bk is not None and best > 0.15:
                         taken_k.add(bk)
                     fresh.append((tag or "a window behind", list(r)))

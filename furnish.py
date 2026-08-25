@@ -628,7 +628,13 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
             if all(n in apps for n in named) and named[0] != named[1]:
                 continue
             share = max(_within(box, other[0]), _within(other[0], box))
-            if (like and (share > 0.85 or _close(box, other[0]))) or (same and share > 0.5):
+            # `same` folds a stretch that could only say "Finder" into the
+            # one that named its folder - two readings of ONE window, so
+            # they stand at a like size. A small box inside a big one of
+            # the same program is a window in FRONT of it: a note filling
+            # the screen holds every other Obsidian window's rectangle, and
+            # swallowing them loses the windows that were really there.
+            if (like and (share > 0.85 or _close(box, other[0]))) or (same and like and share > 0.5):
                 if (box[2] - box[0]) * (box[3] - box[1]) > \
                         (other[0][2] - other[0][0]) * (other[0][3] - other[0][1]):
                     other[0] = box
