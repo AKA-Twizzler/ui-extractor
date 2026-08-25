@@ -3412,6 +3412,42 @@ def note(records_path, diary_text=None):
                 # a box the frame itself drew: its edges are measured, and
                 # nothing worked out from where words sat may move them
                 sl._on_frame = any(shape == r for r in frame_rects(s))
+            # A box still worked out from where words sat is squared up
+            # against what the frame DID measure. Two things settle it: it
+            # cannot reach into a window whose edges were measured, and
+            # where a measured rectangle stands inside it running most of
+            # its height, that rectangle is a pane of this same window and
+            # its top and foot are this window's top and foot.
+            fixed = [sh for _, sl, sh in subjects if getattr(sl, "_on_frame", False)]
+            for stx, sl, shape in subjects:
+                if getattr(sl, "_on_frame", False):
+                    continue
+                box = list(shape)
+                for m in fixed:
+                    tall = min(box[3], m[3]) - max(box[1], m[1])
+                    wide = min(box[2], m[2]) - max(box[0], m[0])
+                    if tall > 0.5 * (box[3] - box[1]):
+                        if m[0] <= box[0] < m[2] < box[2]:
+                            box[0] = m[2]
+                        elif box[0] < m[0] < box[2] <= m[2]:
+                            box[2] = m[0]
+                    if wide > 0.5 * (box[2] - box[0]):
+                        if m[1] <= box[1] < m[3] < box[3]:
+                            box[1] = m[3]
+                        elif box[1] < m[1] < box[3] <= m[3]:
+                            box[3] = m[1]
+                for r in frame_rects(s):
+                    if not (box[0] <= r[0] and r[2] <= box[2]
+                            and box[1] <= r[1] and r[3] <= box[3]):
+                        continue
+                    if r[3] - r[1] < 0.5 * (box[3] - box[1]):
+                        continue
+                    box[1], box[3] = r[1], r[3]
+                    break
+                sl.rect = shape = box
+                subjects[subjects.index((stx, sl, shape))] = (stx, sl, box) \
+                    if (stx, sl, shape) in subjects else (stx, sl, box)
+            subjects = [(stx, sl, sl.rect) for stx, sl, _ in subjects]
             # deepest first: the bigger window lies under the smaller one
             subjects.sort(key=lambda x: -(x[2][2] - x[2][0]) * (x[2][3] - x[2][1]))
             # the windows truly behind, their own content where it sat: told
