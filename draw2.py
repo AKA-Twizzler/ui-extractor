@@ -151,6 +151,23 @@ def items_of(pane):
             b = r.get("box")
             if b:
                 put(r["text"], [b[0] + ox, b[1] + oy, b[2] + ox, b[3] + oy], ok=r.get("confirmed", False), role="left")
+    # A pane is a piece of the frame, so nothing read inside it can reach
+    # past its own edges. When the readings do, the pane was read enlarged
+    # and came back in the enlarged picture's pixels: how far they overrun
+    # is the enlargement, so they are put back at the size they really were.
+    # Left alone, a file tree read at twice size drags every window edge
+    # measured from it out to twice its true place.
+    pw = pane["box"][2] - ox
+    ph = pane["box"][3] - oy
+    if out and pw > 0 and ph > 0:
+        over = max(max((it["box"][2] - ox) / pw for it in out),
+                   max((it["box"][3] - oy) / ph for it in out))
+        if over > 1.2:
+            for it in out:
+                b = it["box"]
+                it["box"] = [ox + (b[0] - ox) / over, oy + (b[1] - oy) / over,
+                             ox + (b[2] - ox) / over, oy + (b[3] - oy) / over]
+
     # a selection band the reader measured but no row carried: an item whose
     # middle sits inside a row-height band on this pane is on that band
     look_bg = ((d.get("style") or {}).get("look") or {}).get("background") or [0, 0, 0]
