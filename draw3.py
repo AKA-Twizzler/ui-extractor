@@ -2280,11 +2280,11 @@ def mend_tree(mine, whole):
     # window's own tree carries both of them, one after the other
     split = []
     for t, h in mine:
-        k = fold(flat(row_name(t)))
-        if k not in where:
+        k = key_of(t)
+        if find(k) is None:
             for i in range(len(whole) - 1):
-                a = fold(flat(row_name(whole[i][0])))
-                b = fold(flat(row_name(whole[i + 1][0])))
+                a = key_of(whole[i][0])
+                b = key_of(whole[i + 1][0])
                 if len(a) >= 6 and len(b) >= 6 and k == a + b:
                     split.extend([whole[i], whole[i + 1]])
                     break
@@ -2293,7 +2293,7 @@ def mend_tree(mine, whole):
             continue
         split.append((t, h))
     mine = split
-    hits = [where[k] for k in (fold(flat(row_name(t))) for t, _ in mine) if k in where]
+    hits = [i for i in (find(key_of(t)) for t, _ in mine) if i is not None]
     if len(hits) < 0.6 * len(mine) or len(hits) < 3:
         return mine                       # not the same tree; leave it alone
 
