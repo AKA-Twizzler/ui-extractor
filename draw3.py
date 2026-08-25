@@ -3120,14 +3120,25 @@ def note(records_path, diary_text=None):
             if not free:
                 groups.append([st])
                 continue
-            # a window keeps its place when it is navigated, so of the
-            # windows this state COULD continue, it continues the one
-            # standing where it stands; with no place to compare, the one
-            # that was on screen most recently
+            # A window walks up and down one tree, so the strongest sign that
+            # this state continues that window is its path bar: consecutive
+            # states of one window share a long run of ancestors, and two
+            # windows opened on different folders do not. After that, a
+            # window keeps its place when it is navigated; failing both, the
+            # window that was on screen most recently.
             here = home_at(st, st.times[0])
+            my_t = st.main_table()
+            my_path = list(my_t.path) if my_t and my_t.path else []
 
             def fits(g):
                 prev = max(g, key=lambda o: o.times[-1])
+                pt = prev.main_table()
+                its_path = list(pt.path) if pt and pt.path else []
+                same = 0
+                for a, b in zip(my_path, its_path):
+                    if not crumb_same(a, b):
+                        break
+                    same += 1
                 there = home_at(prev, prev.times[-1])
                 share = 0.0
                 if here and there:
