@@ -3153,6 +3153,17 @@ def note(records_path, diary_text=None):
             max(free, key=fits).append(st)
         return groups
 
+    # The path bars are mended before the windows are told apart, because
+    # telling them apart reads the paths. A folder's ancestors are the same
+    # tree whichever window shows them, and only what sits between two crumbs
+    # a reading already carries is ever filled in, so this cannot move a
+    # window into a folder it was never in.
+    for w in windows:
+        pool = [t for st in shown if st.name == w
+                for t in [st.main_table()] if t and t.path]
+        for t in pool:
+            t.path = mend_path(t.path, [o.path for o in pool if o is not t])
+
     for w, sts in [(w, g) for w in windows
                    for g in split_windows([st for st in shown if st.name == w])]:
         # one window's path bar, read whole at one moment and in pieces at
