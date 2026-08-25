@@ -28,9 +28,14 @@ def _pos(style):
 
 
 def _boxes(block, cls):
-    """Every box of one kind in a picture: (left, top, width, height, tag)."""
+    """Every box of one kind in a picture: (left, top, width, height, tag).
+
+    The kind is a whole class name, not a piece of one: sn-ghost-name is a
+    name box laid over the picture, never one of the sn-ghost outlines."""
     out = []
-    for m in re.finditer(r'<div class="([^"]*\b' + cls + r'\b[^"]*)" style="([^"]+)"', block):
+    for m in re.finditer(r'<div class="([^"]*)" style="([^"]+)"', block):
+        if cls not in m.group(1).split():
+            continue
         p = _pos(m.group(2))
         if p:
             out.append((p, m.group(1)))
