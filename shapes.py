@@ -131,6 +131,33 @@ def _across(shelf, pos, a, b, slack, part, outward, corner=False):
     return best
 
 
+def _edge_of_head(shelf, pos, a, b, reach, way):
+    """The window's own top (or foot) lying beyond an edge already found.
+
+    The line has to COVER this window's whole width, and it may run a
+    little past the sides - a window's shadow spills out beyond it. What
+    it may not do is run far past, because a line much longer than the
+    window belongs to the screen, not to this window: the desktop bar and
+    a divider inside a wider window behind both cross this span, and
+    taking either would stretch the window over ground it never had."""
+    lines, step = shelf
+    ends = max(6.0, 0.03 * (b - a))
+    best = None
+    lo = int(min(pos, pos + way * reach)) // step
+    hi = int(max(pos, pos + way * reach)) // step
+    for shelf_no in range(lo, hi + 1):
+        for p, la, lb in lines.get(shelf_no, ()):
+            if (p - pos) * way <= 0 or (p - pos) * way > reach:
+                continue
+            if la > a + ends or lb < b - ends:
+                continue                      # it does not cover the window
+            if lb - la > 1.6 * (b - a):
+                continue                      # far too long to be its edge
+            if best is None or (p - pos) * way > (best - pos) * way:
+                best = p
+    return best
+
+
 def find(path):
     """Every window on the frame, biggest first, in the frame's own pixels."""
     if path in _CACHE:
@@ -196,8 +223,7 @@ def find(path):
         x0, y_top, x1, y_bot = r
         reach = 0.4 * (y_bot - y_top)
         for side, way in ((1, -1), (3, +1)):
-            edge = _across(shelf, r[side] + way * reach / 2, x0, x1,
-                           reach / 2, ALONG, way, corner=True)
+            edge = _edge_of_head(shelf, r[side], x0, x1, reach, way)
             if edge is None or (edge - r[side]) * way <= 2:
                 continue
             lo, hi = min(edge, r[side]), max(edge, r[side])
