@@ -3566,6 +3566,26 @@ def note(records_path, diary_text=None):
             return list(box)
         return [lo_x, box[1], hi_x, box[3]]
 
+    def title_from_bar(states):
+        """A Finder window with no title takes the folder its own path bar
+        ends at. The bar reads from the disk down to what is showing, and
+        where its last crumb is a row of the list it is the SELECTED item,
+        not the folder - the folder is the crumb before it."""
+        for st_ in states:
+            if st_.title or st_.name != "The Finder window":
+                continue
+            t_ = st_.main_table()
+            path = list(getattr(t_, "path", None) or [])
+            if len(path) < 2:
+                continue
+            rows = {fold(flat((r.get("cells") or [""])[0])) for r in t_.rows
+                    if (r.get("cells") or [""])[0]}
+            last = path[-1]
+            if fold(flat(last)) in rows and len(path) >= 2:
+                last = path[-2]
+            if last and len(flat(last)) >= 2:
+                st_.title = last
+
     def heal_titles(states):
         """A window's title read badly at one moment, spelt from the moment
         it was read well.
@@ -3739,6 +3759,7 @@ def note(records_path, diary_text=None):
         return out
 
     list_not_tree(states)
+    title_from_bar(states)
     heal_titles(states)
     own_words = {id(st): {flat(w) for w in box_texts(st)[1] if len(flat(w)) >= 8}
                  for st in states}
