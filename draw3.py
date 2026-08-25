@@ -3256,11 +3256,23 @@ def note(records_path, diary_text=None):
 
     _frame_rects = {}
 
+    _frame_wins = {}
+
     def frame_rects(s):
         """The rectangles drawn on this stretch's own frame, near-duplicates
         folded together. These are window edges as the screen drew them, not
         edges worked out from where words sat."""
         return rects_at(s["t0"])
+
+    def frame_windows(s):
+        """The DISTINCT windows the screen drew on this stretch's frame."""
+        t0 = s["t0"]
+        if t0 in _frame_wins:
+            return _frame_wins[t0]
+        m0 = next((mm for mm in moments if mm["ts"] == t0), None)
+        got = shapes.windows(frame_of(m0)) if m0 else []
+        _frame_wins[t0] = [[float(v) for v in r] for r in got]
+        return _frame_wins[t0]
 
     def rects_at(t0):
         """The rectangles the screen drew on one moment's frame."""
@@ -4227,6 +4239,60 @@ def note(records_path, diary_text=None):
                     box_ = hold_panes(list(box_), own_, s["ts"], Wf)
                     behinds[k] = (tag_, hold_words(box_, own_,
                                                    s["ts"], Wf, Hf))
+            # THE PICTURE'S WINDOWS COME FROM THE FRAME. Every window the
+            # screen drew gets a box: the ones drawn in full, and an outline
+            # for every other. Built the other way round - from the windows
+            # the reader happened to follow - a window the reader never
+            # named is simply absent from the picture, and the picture says
+            # the screen showed nothing there.
+            #
+            # A name is found for each by asking which of the windows the
+            # reader DID follow stands on that rectangle: the one whose own
+            # box covers it best, else the one whose own words were read
+            # inside it. A window nobody can name is still drawn, and says
+            # so.
+            real_w = [r for r in frame_windows(s)]
+            held = [sh for _, _, sh in subjects if sh]
+            spare_w = [r for r in real_w
+                       if not any(furnish._within(r, c) > 0.7
+                                  and furnish._within(c, r) > 0.7 for c in held)]
+            if spare_w:
+                fresh, taken_k = [], set()
+                for r in spare_w:
+                    best, bk = 0.0, None
+                    for k, (tag_, box_) in enumerate(behinds):
+                        if k in taken_k:
+                            continue
+                        v = furnish._within(r, box_) * furnish._within(box_, r)
+                        if v > best:
+                            best, bk = v, k
+                    tag = behinds[bk][0] if (bk is not None and best > 0.15) else ""
+                    if not tag:
+                        for own in states:
+                            if own in sub_states:
+                                continue
+                            got = hold_words([r[0], r[1], r[0], r[1]], own,
+                                             s["ts"], Wf, Hf)
+                            if got != [r[0], r[1], r[0], r[1]] and \
+                                    furnish._within(got, r) > 0.6:
+                                tag = label_for(own, s["t0"])
+                                break
+                    if bk is not None and best > 0.15:
+                        taken_k.add(bk)
+                    fresh.append((tag or "a window behind", list(r)))
+                # what is left over: a window with no rectangle to measure -
+                # one filling the screen, or the browser's strip along the
+                # top - is kept as it was drawn
+                for k, (tag_, box_) in enumerate(behinds):
+                    if k in taken_k:
+                        continue
+                    wide = box_[2] - box_[0] >= 0.88 * Wf
+                    tall = box_[3] - box_[1] >= 0.80 * Hf
+                    strip = box_[2] - box_[0] >= 0.88 * Wf and \
+                        box_[3] - box_[1] <= 0.20 * Hf
+                    if (wide and tall) or strip:
+                        fresh.append((tag_, box_))
+                behinds = fresh
             behinds.sort(key=lambda hb: -(hb[1][2] - hb[1][0]) * (hb[1][3] - hb[1][1]))
             if barred:
                 for stx, sl, _ in subjects:
