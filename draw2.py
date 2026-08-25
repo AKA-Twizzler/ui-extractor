@@ -22,6 +22,7 @@ import sys
 import difflib
 
 import draw as old   # the helpers that do not change: app names, clocks, the loose split
+import shapes        # the windows the screen itself drew, to keep panes of different windows apart
 
 SCALE = 3                # the enlargement the structural readers measured in
 LONG_SAID = 700          # Jared's words fold past this many characters
@@ -829,6 +830,33 @@ def window_groups(m):
         # with any narrow loose strip beside it as its sidebar; loose panes
         # left over stand alone
         W = size[0]
+        # The windows the screen itself drew. Panes on opposite sides of a
+        # window's own edge are panes of DIFFERENT windows, and joining
+        # them makes one window out of two: a Finder list beside another
+        # Finder's sidebar reads as a tree next to a list, which is the
+        # shape of Obsidian, and the window comes out named for the wrong
+        # program with the wrong content in it.
+        drawn_wins = []
+        try:
+            got = shapes.find(shapes.frame_of(m))
+            got.sort(key=lambda r: -(r[2] - r[0]) * (r[3] - r[1]))
+            for r in got:
+                if not any(min(r[2], k[2]) - max(r[0], k[0]) > 0.85 * (r[2] - r[0])
+                           and min(r[3], k[3]) - max(r[1], k[1]) > 0.85 * (r[3] - r[1])
+                           for k in drawn_wins):
+                    drawn_wins.append(r)
+        except Exception:
+            drawn_wins = []
+
+        def whose(p):
+            """Which drawn window this pane's middle stands in, or None."""
+            cx = (p["box"][0] + p["box"][2]) / 2
+            cy = (p["box"][1] + p["box"][3]) / 2
+            for i, r in enumerate(drawn_wins):
+                if r[0] <= cx <= r[2] and r[1] <= cy <= r[3]:
+                    return i
+            return None
+
         structural = [p for p in rest if p["kind"] in old.STRUCTURAL]
         loose = [p for p in rest if p["kind"] not in old.STRUCTURAL]
         taken = set()
@@ -851,6 +879,10 @@ def window_groups(m):
                         continue
                     if q["kind"] == "a list of columns" and any(r["kind"] == "a list of columns" for r in members):
                         continue      # two lists are two windows, one behind the other
+                    qw = whose(q)
+                    if qw is not None and any(whose(r) is not None and whose(r) != qw
+                                              for r in members):
+                        continue      # the screen drew a window edge between them
                     if any(touching(q["box"], r["box"], W) for r in members):
                         members.append(q)
                         grew = True
