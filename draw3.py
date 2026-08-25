@@ -3395,9 +3395,16 @@ def note(records_path, diary_text=None):
     for st_ in states:
         seen_ = []
         for m_, g_ in getattr(st_, "pieces", ()):
-            s_ = next((x for x in spans if m_["ts"] in x["ts"]), None)
-            T_ = span_T.get(s_["t0"]) if s_ else None
-            kz_ = (T_[0] if T_ else 1.0) or 1.0
+            # how far this window was zoomed at that moment: its own box
+            # then, against its box at home. That is measured from the
+            # window itself, where a zoom fitted on words can be missing
+            hb_ = home_at(st_, m_["ts"])
+            rc_ = st_.rects.get(m_["ts"])
+            kz_ = 1.0
+            if hb_ and rc_ and hb_[2] > hb_[0] and rc_[2] > rc_[0]:
+                kz_ = (rc_[2] - rc_[0]) / (hb_[2] - hb_[0])
+            if not 0.2 <= kz_ <= 6.0:
+                kz_ = 1.0
             best_ = None
             for p_ in g_.get("panes") or []:
                 got_ = pitch_of_pane(p_)
@@ -3510,7 +3517,12 @@ def note(records_path, diary_text=None):
                 # its own zoom - and the vote is brought into this stretch's
                 # zoom. One moment on its own is far too noisy to size a
                 # window by: a pane can be a sliver, or missed altogether.
-                kz_here = (span_T.get(s["t0"]) or [1.0])[0]
+                hb_now = home_at(st, s["t0"])
+                kz_here = 1.0
+                if hb_now and hb_now[2] > hb_now[0] and shape and shape[2] > shape[0]:
+                    kz_here = (shape[2] - shape[0]) / (hb_now[2] - hb_now[0])
+                if not 0.2 <= kz_here <= 6.0:
+                    kz_here = (span_T.get(s["t0"]) or [1.0])[0]
                 home = pitch_home.get(st.name) or pitch_home.get("*")
                 sl._row_step = home * kz_here if home else 0.0
                 sl._doc_pad = getattr(st, "_doc_pad", 0)
