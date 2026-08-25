@@ -103,7 +103,7 @@ def _index(lines, step=8):
     return shelf, step
 
 
-def _across(shelf, pos, a, b, slack, part, outward):
+def _across(shelf, pos, a, b, slack, part, outward, corner=False):
     """The line running along most of a to b nearest `pos`, or None. A
     window's corners are rounded, so its top and bottom sit a little past
     where its sides begin; `outward` says which way to look first.
@@ -124,10 +124,8 @@ def _across(shelf, pos, a, b, slack, part, outward):
                 continue
             if min(b, lb) - max(a, la) < want:
                 continue
-            if la > a + ends or lb < b - ends:
-                continue                  # it does not reach both corners
-            if la < a - ends or lb > b + ends:
-                continue                  # it runs on past them
+            if corner and not (a - ends <= la <= a + ends and b - ends <= lb <= b + ends):
+                continue        # it does not begin and end at the two sides
             if best is None or (p - pos) * outward > (best - pos) * outward:
                 best = p
     return best
@@ -158,8 +156,18 @@ def find(path):
             if share < 0.55:
                 continue
             slack = max(12, int(0.05 * (bot - top)))
-            y_top = _across(shelf, top, x0, x1, slack, ALONG, -1)
-            y_bot = _across(shelf, bot, x0, x1, slack, ALONG, +1)
+            # A window has at least ONE edge drawn corner to corner - its
+            # title bar or its foot. The other need only span the width:
+            # an edge can lie along something else on the screen and so run
+            # on past the window's own side. Demanding both be exact loses
+            # real windows; demanding neither invents rectangles out of a
+            # divider inside one window and a side of another.
+            top_c = _across(shelf, top, x0, x1, slack, ALONG, -1, corner=True)
+            bot_c = _across(shelf, bot, x0, x1, slack, ALONG, +1, corner=True)
+            if top_c is None and bot_c is None:
+                continue
+            y_top = top_c if top_c is not None else _across(shelf, top, x0, x1, slack, ALONG, -1)
+            y_bot = bot_c if bot_c is not None else _across(shelf, bot, x0, x1, slack, ALONG, +1)
             if y_top is None or y_bot is None or y_bot - y_top < min_h:
                 continue
             tall = y_bot - y_top
