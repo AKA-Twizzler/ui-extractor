@@ -2252,20 +2252,43 @@ def mend_tree(mine, whole):
     where = {}
     for i, (t, _) in enumerate(whole):
         where.setdefault(fold(flat(row_name(t))), i)
+    # two rows the reader ran into one line are two rows again, when the
+    # window's own tree carries both of them, one after the other
+    split = []
+    for t, h in mine:
+        k = fold(flat(row_name(t)))
+        if k not in where:
+            for i in range(len(whole) - 1):
+                a = fold(flat(row_name(whole[i][0])))
+                b = fold(flat(row_name(whole[i + 1][0])))
+                if len(a) >= 6 and len(b) >= 6 and k == a + b:
+                    split.extend([whole[i], whole[i + 1]])
+                    break
+            else:
+                split.append((t, h))
+            continue
+        split.append((t, h))
+    mine = split
     hits = [where[k] for k in (fold(flat(row_name(t))) for t, _ in mine) if k in where]
     if len(hits) < 0.6 * len(mine) or len(hits) < 3:
         return mine                       # not the same tree; leave it alone
     lo, hi = min(hits), max(hits)
     out = list(whole[lo:hi + 1])
-    up = []                               # the parents the first row hangs from
-    want = row_depth(whole[lo][0])
+    # the chain of parents above the first row. A row hangs from the
+    # nearest row above it that is shallower, or - where the reader read
+    # every name at one depth - from the nearest folder above it standing
+    # open, since a shut folder shows nothing underneath it
+    up, want = [], row_depth(whole[lo][0])
     for t, h in reversed(whole[:lo]):
         d = row_depth(t)
         if d < want:
             up.append((t, h))
             want = d
-            if want == 0:
-                break
+        elif d == want and row_name(t) and t.lstrip("│ ")[:1] == "˅":
+            up.append((t, h))
+            want = d - 1
+        if want < 0:
+            break
     return list(reversed(up)) + out
 
 
