@@ -2412,6 +2412,11 @@ def screens(states, moments):
     return spans
 
 
+def bare(w):
+    """A bar word without the mark that says one engine only read it."""
+    return w[3:-4] if w.startswith("<i>") else w
+
+
 def desktop_bar(moments):
     """The menu bar as it stood at each moment -- the program at the front
     changes it -- and the clock reading, which stands until it is read
