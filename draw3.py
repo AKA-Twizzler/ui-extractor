@@ -2313,6 +2313,29 @@ def row_name(t):
     return t.lstrip("│ ˃˅").strip()
 
 
+def row_mark(t):
+    """A tree row's open-or-shut mark, or empty where it has none."""
+    lead = t[:len(t) - len(t.lstrip("│ ˃˅"))]
+    for ch in reversed(lead):
+        if ch in "˃˅":
+            return ch
+    return ""
+
+
+def set_mark(t, ch):
+    """The same row with its open-or-shut mark changed, guides untouched."""
+    lead = t[:len(t) - len(t.lstrip("│ ˃˅"))]
+    rest = t[len(lead):]
+    out, done = [], False
+    for c in reversed(lead):
+        if not done and c in "˃˅":
+            out.append(ch)
+            done = True
+        else:
+            out.append(c)
+    return "".join(reversed(out)) + rest
+
+
 def row_depth(t):
     """How deep a tree row hangs, counted off its guides."""
     return t[:len(t) - len(t.lstrip("│ ˃˅"))].count("│")
@@ -2385,11 +2408,12 @@ def mend_tree(mine, whole):
             continue
         split.append((t, h))
     mine = split
-    hits, walk = [], 0
+    hits, walk, mark = [], 0, {}
     for t, _ in mine:
         i = find(key_of(t), walk)
         if i is not None:
             hits.append(i)
+            mark[i] = row_mark(t)
             walk = i + 1
     if len(hits) < 0.6 * len(mine) or len(hits) < 3:
         return mine                       # not the same tree; leave it alone
@@ -2419,7 +2443,18 @@ def mend_tree(mine, whole):
     take = set(hits)
     for i in list(take):
         take.update(parents(i))
-    return [whole[i] for i in sorted(take)]
+    # Depth is the tree's own and never changes, so it comes from the whole
+    # tree. Whether a folder stood open does change - that is the whole
+    # point of a video of someone opening folders - so where THIS stretch
+    # saw the mark, that is the mark the picture shows.
+    out = []
+    for i in sorted(take):
+        t, h = whole[i]
+        if i in mark and mark[i] and row_mark(t) and mark[i] != row_mark(t):
+            t = set_mark(t, mark[i])
+            h = esc(t)
+        out.append((t, h))
+    return out
 
 
 def name_fits(short, full_name):
