@@ -2992,27 +2992,18 @@ def note(records_path, diary_text=None):
                                 hits += 1
                     if hits < 2:
                         continue
-                was_pad = getattr(own, "_doc_pad", 0)
-                own._doc_pad = span_pad(own, box[1])
-                html = furnish.window(own, behind=False) or own.plain_window_html()
-                own._doc_pad = was_pad
-                if not html:
-                    continue
-                # a selection band belongs to the moment it was seen, and
-                # this is another moment
-                html = re.sub(r" ?\bsn-selected\b| ?\bsn-band-\w+\b", "", html)
                 carded.add(id(own))
-                behinds.append((html, list(box)))
+                behinds.append((label_for(own), list(box)))
             behinds.sort(key=lambda hb: -(hb[1][2] - hb[1][0]) * (hb[1][3] - hb[1][1]))
             if barred:
                 for stx, sl, _ in subjects:
                     strip = behind_for(sl, dict(s, size=s["size"]), stx)
                     if strip:
-                        behinds.append((strip[0][2], strip[0][1]))
+                        behinds.append(("the browser, behind", strip[0][1]))
                         break
             m_t0 = next((mm for mm in moments if mm["ts"] == s["t0"]), None)
             cam = shapes.camera_box(frame_of(m_t0)) if m_t0 else None
-            cam_pic = camera_pic(frame_of(m_t0), cam) if cam else None
+            cam_pic = None   # a camera picture is never pasted in; it is outlined
             head = f"### {s['t0']}" + ("" if s["t0"] == s["t1"] else f" to {s['t1']}") + \
                    " - " + " \u00b7 ".join(label_for(st) for st, _, _ in subjects)
             parts += [head, ""]
