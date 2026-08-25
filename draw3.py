@@ -2714,8 +2714,8 @@ def note(records_path, diary_text=None):
     # tree whichever window shows them, and only what sits between two crumbs
     # a reading already carries is ever filled in, so this cannot move a
     # window into a folder it was never in.
-    for w in windows:
-        pool = [t for st in shown if st.name == w
+    for w in {st.name for st in states}:
+        pool = [t for st in states if st.name == w
                 for t in [st.main_table()] if t and t.path]
         for t in pool:
             t.path = mend_path(t.path, [o.path for o in pool if o is not t])
