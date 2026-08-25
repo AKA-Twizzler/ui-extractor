@@ -105,7 +105,14 @@ def band_of(bands_, y0, y1, bgr=None, x0=None, x1=None):
     """
     for b in bands_:
         top, bottom = max(b["y0"], y0), min(b["y1"], y1)
-        if bottom - top < 0.6 * max(1, y1 - y0):
+        mid = (b["y0"] + b["y1"]) / 2.0
+        # Most of the BAND has to lie in the row, not most of the row in the
+        # band. A row's box is the line of text with the space around it and
+        # stands taller than the paint behind it, so asking the paint to
+        # cover the whole row throws away every real highlight.
+        if bottom - top < 0.6 * max(1, min(y1 - y0, b["y1"] - b["y0"])):
+            continue
+        if not (y0 <= mid <= y1):
             continue
         if bgr is not None and x0 is not None and x1 > x0:
             region = bgr[max(0, top):bottom, max(0, int(x0)):int(x1)]
