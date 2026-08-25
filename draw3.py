@@ -3768,7 +3768,8 @@ def note(records_path, diary_text=None):
             for stx, sl, shape in subjects:
                 if getattr(sl, "_on_frame", False):
                     continue
-                near_ = [r for r in spare if furnish._within(r, shape) > 0.7]
+                near_ = [r for r in spare if furnish._within(r, shape) > 0.7
+                         and furnish._within(shape, r) > 0.4]
                 if len(near_) == 1:
                     sl.rect = list(near_[0])
                     sl._on_frame = True
@@ -3996,7 +3997,13 @@ def note(records_path, diary_text=None):
                 if any(furnish._within(box_, r) > 0.9
                        and furnish._within(r, box_) > 0.9 for r in free):
                     continue                       # already on its rectangle
-                near_ = [r for r in free if furnish._within(r, box_) > 0.7]
+                # both ways round: the rectangle mostly inside this box AND
+                # this box mostly inside the rectangle. A window that fills
+                # the screen holds every other window's rectangle inside
+                # it, and one of those is not the window.
+                near_ = [r for r in free
+                         if furnish._within(r, box_) > 0.7
+                         and furnish._within(box_, r) > 0.5]
                 if len(near_) == 1:
                     behinds[k] = (tag_, list(near_[0]))
             behinds.sort(key=lambda hb: -(hb[1][2] - hb[1][0]) * (hb[1][3] - hb[1][1]))
