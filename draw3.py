@@ -3933,8 +3933,8 @@ def note(records_path, diary_text=None):
                         # - so a run of eight letters sitting inside one of
                         # its own lines counts, where waiting for a whole
                         # line loses the window altogether.
-                        if (len(key) >= 6 and key in keys) or (
-                                len(key) >= 8 and any(
+                        if (len(key) >= 5 and key in keys) or (
+                                len(key) >= 6 and any(
                                     key in sk for sk in keys)) or (
                                 len(key) >= 12 and any(
                                     sk in key for sk in keys)):
