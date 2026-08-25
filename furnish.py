@@ -399,10 +399,10 @@ def deskbar(bar_words, clock):
 def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
                 ghosts=(), camera=None, sure=True, kz=1.0):
     """The layout of the screen over one stretch of time: the desktop bar
-    with its own words, and every window standing where it stood, at the
-    shape it had, drawn as a labelled outline. Nothing is filled in here
-    and no picture is ever pasted in -- a window's content belongs to its
-    own card below, large enough to read."""
+    with its own words, the window this stretch is about filled in with
+    what it really said, and every other window standing where it stood,
+    at the shape it had, drawn as a labelled outline. No picture is ever
+    pasted in -- where the camera lay, an outline says so."""
     barred = bar_words is not None
     out = [f'<div class="sn-screen" style="aspect-ratio:{W} / {H}">']
     if barred:
