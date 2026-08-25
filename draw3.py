@@ -2446,12 +2446,25 @@ def desktop_bar(moments):
                 if (not old.CLOCK.match(w) and len(w) <= 24 and " " not in w.strip()
                         and not any(same_text(w, x) for x in here)):
                     here.append(w)
-    # the bar and the clock stand until they are read again
+    # The bar and the clock stand until they are read again. A bar is read
+    # short as often as it is read whole - a word sits under the cursor, or
+    # the strip is cut - so a shorter reading of the SAME bar does not
+    # replace the fuller one: the two are put together, the way any part of
+    # the screen is filled in from the moment it stood clear. Only a
+    # different program at the front, which shows as a different first
+    # word, starts the bar over.
     last_w, last_c = [], ""
     for m in moments:
         got = words_at.get(m["ts"]) or []
         if len(got) >= 3:
-            last_w = got
+            if last_w and same_text(got[0], last_w[0]):
+                merged = list(last_w)
+                for w in got:
+                    if not any(same_text(w, x) for x in merged):
+                        merged.append(w)
+                last_w = merged
+            else:
+                last_w = got
         words_at[m["ts"]] = last_w
         last_c = clock_at.get(m["ts"], last_c)
         if last_c:
