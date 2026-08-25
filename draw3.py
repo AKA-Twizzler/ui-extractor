@@ -4314,6 +4314,13 @@ def note(records_path, diary_text=None):
                     if (wide and tall) or strip:
                         fresh.append((tag_, box_))
                 behinds = fresh
+            behinds.sort(key=lambda hb: -(hb[1][2] - hb[1][0]) * (hb[1][3] - hb[1][1]))
+            if barred:
+                for stx, sl, _ in subjects:
+                    strip = behind_for(sl, dict(s, size=s["size"]), stx)
+                    if strip:
+                        behinds.append(("the browser, behind", strip[0][1]))
+                        break
             # A WINDOW DRAWN IN FULL MUST ITSELF BE A WINDOW. Its box has
             # to be one the frame drew, or - where the frame drew none,
             # because the window fills the screen - a box that fills the
@@ -4340,13 +4347,6 @@ def note(records_path, diary_text=None):
                 fine.append((stx, sl, shape))
             if fine:
                 subjects = fine
-            behinds.sort(key=lambda hb: -(hb[1][2] - hb[1][0]) * (hb[1][3] - hb[1][1]))
-            if barred:
-                for stx, sl, _ in subjects:
-                    strip = behind_for(sl, dict(s, size=s["size"]), stx)
-                    if strip:
-                        behinds.append(("the browser, behind", strip[0][1]))
-                        break
             m_t0 = next((mm for mm in moments if mm["ts"] == s["t0"]), None)
             cam = shapes.camera_box(frame_of(m_t0)) if m_t0 else None
             cam_pic = None   # a camera picture is never pasted in; it is outlined
