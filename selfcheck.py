@@ -164,7 +164,8 @@ def check(path, frames=None):
             by_ts = {}
             for line in open(recs, encoding="utf-8"):
                 r = json.loads(line)
-                by_ts[r["ts"]] = r
+                if r.get("ts"):
+                    by_ts[r["ts"]] = r
             for k, ln in pics:
                 st = re.search(r'class="sn-stamp">([\d:]+)(?: to ([\d:]+))?', ln)
                 if not st:
