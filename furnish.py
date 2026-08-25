@@ -513,15 +513,11 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
     # the biggest first, so a window's older place - the same window before
     # it was navigated, still carried in the record - does not get a second
     # outline inside the one that is really showing
+    marks = []          # [box, tag, class] - gathered first, then merged
     for tag, box in behind_cards:
         box = clip_box(box, W, H, bar=barred)
-        if not in_view(box):
-            continue
-        if any(max(_within(box, d), _within(d, box)) > 0.85 or _close(box, d)
-               for d in shown):
-            continue
-        shown.append(box)
-        out.append(outline(box, tag))
+        if in_view(box):
+            marks.append([box, tag, "sn-ghost"])
     for box, tag, kind in ghosts:
         if not box:
             continue
@@ -531,7 +527,31 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
         if any(_close(box, d) for d in drawn):
             continue
         drawn.append(box)
-        out.append(outline(box, tag, "sn-ghost sn-away" if kind == "away" else "sn-ghost"))
+        marks.append([box, tag, "sn-ghost sn-away" if kind == "away" else "sn-ghost"])
+
+    # One place, one window. Two outlines over the same ground are the same
+    # window twice - a window's older place still carried in the record, or a
+    # patch of words that turned out to belong to a window already named. The
+    # two become one: the name that says something, over the box the words
+    # themselves reach to.
+    merged = []
+    for box, tag, cls in marks:
+        for other in merged:
+            if max(_within(box, other[0]), _within(other[0], box)) > 0.85 \
+                    or _close(box, other[0]):
+                if (box[2] - box[0]) * (box[3] - box[1]) > \
+                        (other[0][2] - other[0][0]) * (other[0][3] - other[0][1]):
+                    other[0] = box
+                if len(tag) > len(other[1]) and not tag.startswith("a window"):
+                    other[1] = tag
+                if "sn-away" not in cls:
+                    other[2] = cls
+                break
+        else:
+            merged.append([box, tag, cls])
+    for box, tag, cls in merged:
+        shown.append(box)
+        out.append(outline(box, tag, cls))
 
     # the windows this stretch is about: the top layer, drawn with its real
     # content at a size that reads, cut off by the edges of the box it
