@@ -3417,35 +3417,33 @@ def note(records_path, diary_text=None):
                 # and the style sheet have in common, where a glyph's
                 # measured box and a font-size are not the same quantity.
                 def pitch_of(p_):
-                    got = draw2.items_of(p_)
-                    hs = sorted(it["box"][3] - it["box"][1] for it in got
-                                if it["box"][3] > it["box"][1])
-                    if not hs:
-                        return None
-                    tall = hs[len(hs) // 2]            # how tall a line of it is
-                    ys = sorted(it["box"][1] for it in got)
+                    """How far apart this pane set one row from the next, in
+                    the frame's own pixels. The reader's own row boxes are
+                    the measurement - one box per row, already sorted out
+                    from the words - and they are kept in the pane image's
+                    coordinates, which stand `scale` times the frame."""
+                    d_ = p_.get("data") or {}
                     tops = []
-                    for y in ys:                       # words on one line are one line
-                        if not tops or y - tops[-1] > 0.6 * tall:
-                            tops.append(y)
-                    if len(tops) < 5:
+                    for b_ in (d_.get("blocks") or []):
+                        tops += [rb[1] for rb in (b_.get("row_boxes") or [])
+                                 if isinstance(rb, (list, tuple)) and len(rb) >= 4]
+                    for key in ("rows", "body_rows"):
+                        tops += [x["y0"] for x in (d_.get(key) or [])
+                                 if isinstance(x, dict) and "y0" in x]
+                    tops = sorted(set(tops))
+                    if len(tops) < 4:
                         return None
-                    # Rows in a list are set evenly, so the pitch is the gap
-                    # the MOST gaps agree on. A middle gap can be crooked and
-                    # an average is pulled about by the empty space around a
-                    # heading; the spacing the rows keep is neither.
-                    gaps = [b - a for a, b in zip(tops, tops[1:]) if 0 < b - a < 400]
-                    if not gaps:
+                    gaps = [b - a for a, b in zip(tops, tops[1:]) if 0 < b - a < 1200]
+                    if len(gaps) < 3:
                         return None
-                    best_g, best_n = None, 0
-                    for g in gaps:
-                        n = sum(1 for h in gaps if abs(h - g) <= 0.15 * g)
-                        if n > best_n or (n == best_n and best_g and g < best_g):
-                            best_g, best_n = g, n
-                    if best_n < 3:
+                    # rows are set evenly, so the pitch is the gap the most
+                    # gaps agree on - a heading's extra space does not vote
+                    best = max(gaps, key=lambda g: sum(1 for h in gaps if abs(h - g) <= 0.15 * g))
+                    like = [h for h in gaps if abs(h - best) <= 0.15 * best]
+                    if len(like) < 3:
                         return None
-                    like = [h for h in gaps if abs(h - best_g) <= 0.15 * best_g]
-                    return (len(tops), sum(like) / len(like))
+                    up = float(d_.get("scale") or 1) or 1.0
+                    return (len(tops), (sum(like) / len(like)) / up)
                 # A window keeps one pitch: what changes between moments is
                 # how far the video was zoomed in. So every moment of this
                 # WINDOW votes - each one's measured pitch taken back out of
