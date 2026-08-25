@@ -517,7 +517,8 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
         box = clip_box(box, W, H, bar=barred)
         if not in_view(box):
             continue
-        if any(_within(box, d) > 0.8 or _close(box, d) for d in shown):
+        if any(max(_within(box, d), _within(d, box)) > 0.85 or _close(box, d)
+               for d in shown):
             continue
         shown.append(box)
         out.append(outline(box, tag))
