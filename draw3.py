@@ -3321,6 +3321,14 @@ def note(records_path, diary_text=None):
     if heights:
         ui = heights[len(heights) // 4] * furnish.CANVAS_W / max(1, Wf)
         furnish.UI_TXT = min(16.0, max(5.0, ui))
+    # and how far apart the screen set one row from the next. A drawn window
+    # is scaled on THIS, because it is the one measurement the screen and the
+    # style sheet share: a row on the screen against a row on the sheet.
+    ys = sorted(b[1] for b in base_words.values())
+    gaps = sorted(b - a for a, b in zip(ys, ys[1:]) if 4 < b - a < 400)
+    if len(gaps) >= 8:
+        pitch = gaps[len(gaps) // 2] * furnish.CANVAS_W / max(1, Wf)
+        furnish.UI_ROW = min(40.0, max(6.0, pitch))
 
     # How wide the note's own text ran inside its pane. A note is set to a
     # readable line length, not to the width of the window, so a drawn note

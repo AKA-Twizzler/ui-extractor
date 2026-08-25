@@ -418,6 +418,12 @@ def slot_style(rect, W, H, bar=True):
 
 UI_TXT = 7.0        # a line of screen text, in canvas pixels, at the base zoom
 CSS_TXT = 11.5      # the same line as the style sheet draws it
+# How far apart the screen set one row from the next, in canvas pixels at the
+# base zoom, measured off the frame. This is what a drawn window is scaled by:
+# a row's PITCH is the thing both the screen and the style sheet have, where a
+# glyph's measured box and a style sheet's font-size are not the same quantity
+# at all and comparing them drew every list a third too tall.
+UI_ROW = 0.0
 
 
 def scaled(html, rect, W, kz=1.0, cls="sn-slot", extra=""):
@@ -425,7 +431,8 @@ def scaled(html, rect, W, kz=1.0, cls="sn-slot", extra=""):
     sheet's writing shrunk to the screen's, and the window's own layout
     spread over the width its rectangle really had."""
     wide = max(1.0, rect[2] - rect[0])
-    k = max(0.05, kz * UI_TXT / CSS_TXT)
+    step = (UI_ROW / ROW_H) if UI_ROW else (UI_TXT / CSS_TXT)
+    k = max(0.05, kz * step)
     w_css = (CANVAS_W * wide / W) / k
     tall = w_css * (rect[3] - rect[1]) / wide
     html = re.sub(r'^(<div class="sn-window[^"]*")',
