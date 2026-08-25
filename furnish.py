@@ -413,7 +413,13 @@ def _close(a, b):
 
 
 def deskbar(bar_words, clock):
-    left = "".join(f"<span>{esc(w)}</span>" for w in bar_words[:14])
+    def word(w):
+        # a menu name only one engine read is marked the way every other
+        # one-engine reading in the note is marked
+        if w.startswith("<i>") and w.endswith("</i>"):
+            return f"<span><i>{esc(w[3:-4])}</i></span>"
+        return f"<span>{esc(w)}</span>"
+    left = "".join(word(w) for w in bar_words[:14])
     right = f"<span class=\"sn-right\">{esc(clock)}</span>" if clock else ""
     return f'<div class="sn-deskbar">{left}{right}</div>'
 
