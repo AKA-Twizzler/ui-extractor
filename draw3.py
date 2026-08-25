@@ -43,12 +43,18 @@ MAX_NAMES = 6
 
 
 def junky(s):
-    """A reading with no word in it: letters the engines guessed at."""
+    """A reading with no word in it: letters the engines guessed at.
+
+    Word-likeness decides this, never length. A folder really can be called
+    Dev, or src, or bin, and throwing away every reading under four letters
+    threw those away with the letter-soup - "Dev" went missing out of a tree
+    it plainly sat in. What marks a guess is a run of letters that no word
+    could be: no vowel in it at all."""
     toks = re.findall(r"[A-Za-z][A-Za-z'\u2019_.]*", s)
     if not toks:
         return True
-    good = sum(1 for t in toks if re.search(r"[aeiouyAEIOUY]", t) and len(t) >= 3)
-    return good * 2 < len(toks) or len(re.sub(r"[^A-Za-z0-9]", "", s)) < 4
+    good = sum(1 for t in toks if re.search(r"[aeiouyAEIOUY]", t) and len(t) >= 2)
+    return good * 2 < len(toks) or len(re.sub(r"[^A-Za-z0-9]", "", s)) < 2
 
 
 def flat(s):
