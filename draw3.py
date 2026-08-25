@@ -2212,16 +2212,61 @@ def state_slice(st, t0, t1):
     here, whole = out.main_table(), st.main_table()
     if here and here.path and whole and whole.path:
         here.path = mend_path(here.path, [whole.path])
-    # A file tree is the window's own furniture, and one stretch may read
-    # only a handful of its rows, out of the order they stood in. The
-    # window's whole tree - the same rows, gathered and put back in order
-    # across every moment of this same view - is what that stretch was
-    # looking at, so it is what the picture shows.
+    # A stretch reads the tree in whatever pieces it showed, sometimes as a
+    # bare column of names with no shape at all. The window's own tree puts
+    # those rows back where they stood.
     mine, all_of = out.tree(), st.tree()
-    if mine is not None and all_of is not None and mine is not all_of \
-            and len(all_of.lines) > len(mine.lines):
-        mine.lines = list(all_of.lines)
+    if mine is not None and all_of is not None and mine is not all_of:
+        mine.lines = mend_tree(mine.lines, all_of.lines)
     return out
+
+
+def row_name(t):
+    """A tree row's name, without the guides and the open/shut mark."""
+    return t.lstrip("│ ˃˅").strip()
+
+
+def row_depth(t):
+    """How deep a tree row hangs, counted off its guides."""
+    return t[:len(t) - len(t.lstrip("│ ˃˅"))].count("│")
+
+
+def mend_tree(mine, whole):
+    """A stretch's tree rows put back into the shape the window's own tree
+    says they had.
+
+    Three things are restored and nothing else. Each row takes its true
+    depth and its open-or-shut mark. Rows the whole tree places BETWEEN two
+    rows this stretch read are filled in - the same law the path bars keep,
+    that only what sits between two things you carry is ever filled. And
+    the chain of parents above the first row comes back, because a row
+    cannot stand on the screen unless the rows it hangs from stand open
+    above it.
+
+    Rows that had scrolled off above or below are NOT brought back: the
+    picture is of a stretch, and a row nothing in that stretch showed is
+    not part of it.
+    """
+    if not mine or not whole:
+        return mine
+    where = {}
+    for i, (t, _) in enumerate(whole):
+        where.setdefault(fold(flat(row_name(t))), i)
+    hits = [where[k] for k in (fold(flat(row_name(t))) for t, _ in mine) if k in where]
+    if len(hits) < 0.6 * len(mine) or len(hits) < 3:
+        return mine                       # not the same tree; leave it alone
+    lo, hi = min(hits), max(hits)
+    out = list(whole[lo:hi + 1])
+    up = []                               # the parents the first row hangs from
+    want = row_depth(whole[lo][0])
+    for t, h in reversed(whole[:lo]):
+        d = row_depth(t)
+        if d < want:
+            up.append((t, h))
+            want = d
+            if want == 0:
+                break
+    return list(reversed(up)) + out
 
 
 def name_fits(short, full_name):
