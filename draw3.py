@@ -2340,19 +2340,32 @@ def mend_tree(mine, whole):
         # a name cut short by the pane's edge is the same name: the dots
         # that say it was cut are not part of it
         return fold(flat(row_name(t).rstrip(".…")))
+    keys = [key_of(t) for t, _ in whole]
     where = {}
-    for i, (t, _) in enumerate(whole):
-        where.setdefault(key_of(t), i)
-    long_keys = sorted((k, i) for k, i in where.items() if len(k) >= 10)
+    for i, k in enumerate(keys):
+        where.setdefault(k, i)
 
-    def find(k):
-        """The row of the whole tree this reading is of, cut short or not."""
-        if k in where:
-            return where[k]
-        if len(k) < 10:
-            return None
-        for wk, i in long_keys:
-            if wk.startswith(k) or k.startswith(wk):
+    def alike(a, b):
+        """The same name, one of them cut short by the pane's edge."""
+        if a == b:
+            return True
+        return (len(a) >= 10 and len(b) >= 10
+                and (a.startswith(b) or b.startswith(a)))
+
+    def find(k, after=0):
+        """The row of the whole tree this reading is of, cut short or not.
+
+        A tree carries the same name twice over - a folder and the note
+        inside it are named alike, and Jared's vault is full of them - so
+        a name on its own cannot say WHICH row was read. The order the
+        rows stand in can, and both lists stand in screen order, so the
+        search runs on from the last row matched and only falls back to
+        the top when nothing below fits."""
+        for i in range(after, len(keys)):
+            if alike(k, keys[i]):
+                return i
+        for i in range(0, min(after, len(keys))):
+            if alike(k, keys[i]):
                 return i
         return None
     # two rows the reader ran into one line are two rows again, when the
@@ -2372,7 +2385,12 @@ def mend_tree(mine, whole):
             continue
         split.append((t, h))
     mine = split
-    hits = [i for i in (find(key_of(t)) for t, _ in mine) if i is not None]
+    hits, walk = [], 0
+    for t, _ in mine:
+        i = find(key_of(t), walk)
+        if i is not None:
+            hits.append(i)
+            walk = i + 1
     if len(hits) < 0.6 * len(mine) or len(hits) < 3:
         return mine                       # not the same tree; leave it alone
 
