@@ -2430,10 +2430,15 @@ def desktop_bar(moments):
                 clock_at[m["ts"]] = f"{day} {c}".strip() if day else c
             if p["box"][1] > 0.02 * H:
                 continue
+            # The menu bar is set in the smallest type on the screen, so half
+            # its words come back from one engine only. Throwing those away
+            # left the bar saying "Obsidian File Edit" where it really said
+            # eight menus, so they are kept and marked the way every other
+            # one-engine reading in this note is marked.
             strip = [it for it in draw2.items_of(p)
-                     if it["ok"] and it["box"][1] <= 0.015 * H and it["box"][3] <= 0.035 * H]
+                     if it["box"][1] <= 0.015 * H and it["box"][3] <= 0.035 * H]
             for it in strip:
-                if len(it["text"]) >= 8:
+                if it["ok"] and len(it["text"]) >= 8:
                     strip_at.setdefault(m["ts"], set()).add(it["text"])
             if strip:
                 top_it = min(strip, key=lambda it: it["box"][1])
