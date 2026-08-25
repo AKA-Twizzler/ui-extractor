@@ -2821,7 +2821,11 @@ def note(records_path, diary_text=None):
         if any(fold(flat(t)) == hf for t, _ in doc.lines[:4]):
             continue
         doc.lines.insert(0, (raw, f'<div class="sn-h1"><b>{esc(raw)}</b></div>'))
-        st._h1_read = [(t_, list(b_)) for _, b_, t_ in hit]
+        # WHERE the heading sat is evidence about this window at this time,
+        # so only readings taken while this state was on the screen count.
+        # The same note read at some other moment says nothing about how far
+        # this window had been scrolled now.
+        st._h1_read = [(t_, list(b_)) for _, b_, t_ in hit if t_ in st.times]
     real = [st for st in states if is_real_window(st.name)]
     shown = real if real else states          # a video with no named window shows its screens
     windows = []                               # names in order of first appearance
