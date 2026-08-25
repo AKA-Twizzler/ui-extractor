@@ -702,8 +702,10 @@ def block_document(pane):
         text, notes = strip_note(raw)
         for n in notes:
             if n.startswith("drawn in ") and n[len("drawn in "):] in old.HUES:
-                hue = n[len("drawn in "):]
-                text = f'<span class="sn-{hue}">{text.strip()}</span>'
+                # the colour was measured for the whole line, and a line is
+                # rarely coloured whole; it is said rather than painted
+                doubts.append(f"{text.strip()[:30]}: something on this line "
+                              f"was drawn in {n[len('drawn in '):]}")
             elif n.startswith("the line runs on past the edge"):
                 text = text.rstrip() + "…"
             else:

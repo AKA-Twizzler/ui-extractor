@@ -212,7 +212,14 @@ def doc_line(line, fine):
             fine.append(f"{text[:40]!r}: {note}")
     if not text:
         return ""
-    cls = f' class="sn-{hue}"' if hue in HUES else ""
+    # A colour is measured for the WHOLE line, and a line is rarely coloured
+    # whole: the ink the reader saw belonged to a few words inside it - a
+    # code span, a link. Painting the line makes the drawing say something
+    # the screen never said, so the colour is told in the fine print and the
+    # line is drawn in the note's own ink.
+    if hue in HUES:
+        fine.append(f"{text[:40]!r}: something on this line was drawn in {hue}")
+    cls = ""
     body = esc(text)
     body = BOLD.sub(r"<b>\1</b>", body)
     body = ITALIC.sub(r"<i>\1</i>", body)
@@ -229,7 +236,7 @@ def doc_line(line, fine):
     if m:
         level = min(3, len(m.group(1)))
         inner = esc(m.group(2))
-        both = f"sn-h{level}" + (f" sn-{hue}" if hue in HUES else "")
+        both = f"sn-h{level}"
         return f'<div class="{both}">{m.group(1)} {inner}</div>'
     pad = "&nbsp;" * min(12, indent)
     return f"<div{cls}>{pad}{body}</div>"
