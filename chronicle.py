@@ -64,7 +64,17 @@ def main():
                     shutil.move(os.path.join(src, f), os.path.join(dst, f))
             if not os.listdir(src):
                 os.rmdir(src)
+    # the note judges itself before anyone reads it: every rule in selfcheck
+    # was a fault first, and a note that fails one of them is not a note that
+    # should quietly go into the vault
+    import selfcheck
+    faults = selfcheck.check(note, imgs)
     print(note)
+    if faults:
+        sys.stderr.write(f"{len(faults)} faults in {os.path.basename(note)}\n")
+        for rule, where, what in faults[:12]:
+            sys.stderr.write(f"  {rule} — {where}: {what}\n")
+        return 3
     return 0
 
 
