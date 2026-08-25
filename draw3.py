@@ -1429,6 +1429,17 @@ def mend_path(mine, others):
     folder does, so they are revealed, not guessed. Nothing is ever added to
     the end, where the readings genuinely differ."""
     out = list(mine)
+    # A path bar starts at the disk. When a reading carries the crumb that
+    # every other reading starts from somewhere in the MIDDLE, what sits in
+    # front of it was never part of this bar - a neighbouring window's
+    # sidebar, read into the same row - and it goes.
+    for other in others:
+        if not other:
+            continue
+        j = next((k for k, c in enumerate(out) if crumb_same(c, other[0])), None)
+        if j:
+            out = out[j:]
+            break
     for other in others:
         i = 0
         while i + 1 < len(out):
