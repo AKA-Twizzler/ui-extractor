@@ -3442,8 +3442,15 @@ def note(records_path, diary_text=None):
                     like = [h for h in gaps if abs(h - best) <= 0.15 * best]
                     if len(like) < 3:
                         return None
-                    up = float(d_.get("scale") or 1) or 1.0
-                    return (len(tops), (sum(like) / len(like)) / up)
+                    # The row boxes are kept in the pane image's own pixels,
+                    # and that image was read at a whole-number upscale. The
+                    # upscale is not always written down, so it is taken from
+                    # how far the rows reach against the pane's own height.
+                    high = p_["box"][3] - p_["box"][1]
+                    up = float(d_.get("scale") or 0)
+                    if not up and high > 0:
+                        up = max(1.0, round(max(tops) / high))
+                    return (len(tops), (sum(like) / len(like)) / max(1.0, up))
                 # A window keeps one pitch: what changes between moments is
                 # how far the video was zoomed in. So every moment of this
                 # WINDOW votes - each one's measured pitch taken back out of
