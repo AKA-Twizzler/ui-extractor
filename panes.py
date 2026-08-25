@@ -157,23 +157,32 @@ def _all_windows(img):
     """
     got = [tuple(int(round(v)) for v in r) for r in overlay.windows(img)]
     try:
-        more = shapes.find(img)
+        more = [tuple(int(round(v)) for v in r) for r in shapes.find(img)]
     except Exception:
         more = []
-    for r in more:
-        box = tuple(int(round(v)) for v in r)
+
+    def inside(a, b):
+        """How much of a stands within b."""
+        w = min(a[2], b[2]) - max(a[0], b[0])
+        h = min(a[3], b[3]) - max(a[1], b[1])
+        if w <= 0 or h <= 0:
+            return 0.0
+        return (w * h) / max(1.0, (a[2] - a[0]) * (a[3] - a[1]))
+
+    # Only whole WINDOWS are added, never the panes inside them: a window is
+    # cut into its own panes below, and adding its list and its sidebar as
+    # windows too cuts the same ground three times over. On one frame that
+    # turned two windows into forty-nine and the read took four minutes.
+    more.sort(key=lambda r: -(r[2] - r[0]) * (r[3] - r[1]))
+    top = []
+    for box in more:
         if box[2] - box[0] < 8 or box[3] - box[1] < 8:
             continue
-        for k in got:
-            w = min(box[2], k[2]) - max(box[0], k[0])
-            h = min(box[3], k[3]) - max(box[1], k[1])
-            if w > 0 and h > 0:
-                inter = w * h
-                both = ((box[2]-box[0])*(box[3]-box[1])
-                        + (k[2]-k[0])*(k[3]-k[1]) - inter)
-                if inter / max(1.0, both) > 0.8:
-                    break
-        else:
+        if any(inside(box, k) > 0.85 for k in top):
+            continue
+        top.append(box)
+    for box in top:
+        if not any(inside(box, k) > 0.8 and inside(k, box) > 0.8 for k in got):
             got.append(box)
     return got
 
