@@ -1429,6 +1429,26 @@ def crumb_same(a, b):
 
 
 
+
+def end_at_folder(path, name):
+    """A list window's path bar ends at the folder the window is showing.
+
+    Where that folder's own name was read off the window itself and the bar
+    stops short of it, the bar lost its last crumb to the reading and gets
+    it back. Where the last crumb opens the same way but reads shorter, that
+    crumb IS this folder read badly, and it is corrected rather than
+    repeated. A name the path itself supplied is never added back - that
+    would be the bar arguing with itself.
+    """
+    if not path or not name:
+        return path
+    if any(same_text(c, name) for c in path):
+        return path
+    last = flat(path[-1])
+    if last[:3] == flat(name)[:3] and len(last) < len(flat(name)):
+        return list(path[:-1]) + [name]
+    return list(path) + [name]
+
 def align_crumbs(mine, whole):
     """One stretch's path bar spelt the way the window's own bar spells it.
 
@@ -2257,13 +2277,13 @@ def state_slice(st, t0, t1):
     here, whole = out.main_table(), st.main_table()
     if here and here.path and whole and whole.path:
         here.path = mend_path(here.path, [whole.path])
-        # the bar ends at the folder this window is showing. Mending never
-        # adds to the END of a path, because that is where two windows
-        # genuinely differ - but this is the SAME window at the same folder,
-        # so its own bar's last crumb is this stretch's last crumb too
-        if len(whole.path) > len(here.path) and \
-                all(crumb_same(a, b) for a, b in zip(here.path, whole.path)):
-            here.path = list(whole.path)
+        # the bar ends at the folder this window is showing, which does not
+        # change across the stretch. What the whole window's bar carries
+        # BEYOND that is a row that happened to be selected at some other
+        # moment, and Finder puts the selected row on the end - so the
+        # folder comes across and nothing else does
+        if not getattr(st, "title_from_path", False):
+            here.path = end_at_folder(here.path, st.title)
     # A stretch reads the tree in whatever pieces it showed, sometimes as a
     # bare column of names with no shape at all. The window's own tree puts
     # those rows back where they stood.
@@ -2924,15 +2944,7 @@ def note(records_path, diary_text=None):
         name = st.title
         if not (t and t.path and name) or getattr(st, "title_from_path", False):
             continue
-        if any(same_text(c, name) for c in t.path):
-            continue
-        # where the last crumb opens the same way but reads shorter, that
-        # crumb IS this folder, read badly: it is corrected, not repeated
-        last = flat(t.path[-1])
-        if last[:3] == flat(name)[:3] and len(last) < len(flat(name)):
-            t.path = list(t.path[:-1]) + [name]
-        else:
-            t.path = list(t.path) + [name]
+        t.path = end_at_folder(t.path, name)
 
     # A crumb the reader cut short - "02 Con" where the folder is called
     # "02 Company A (Info Product)" - is spelt the way the video itself
