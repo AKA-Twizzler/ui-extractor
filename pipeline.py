@@ -1105,7 +1105,14 @@ def main():
         # is really a WINDOW this frame's panes were cut inside -- one thing,
         # to be said once -- is compose()'s question, and it cannot be
         # answered before the panes are read.
-        wins = guard(f"windows at {ts}", overlay.windows, img) or []
+        # The frame's windows, from both ways of measuring one: four drawn
+        # sides (overlay), and the rectangles shapes.py closes - which also
+        # finds a window pushed off the side of the screen and a window
+        # whose sides fade across its title bar. The panes are cut inside
+        # these, and each pane is filed under the window it was cut from,
+        # so a window's sidebar and its list are read as ONE window rather
+        # than as two things standing side by side.
+        wins = guard(f"windows at {ts}", panes._measured_windows, img) or []
         panels_found = list(overlay.floating(
             (guard(f"panel reader at {ts}", overlay.read_overlays,
                    path, engine) or {"panels": []})["panels"],
