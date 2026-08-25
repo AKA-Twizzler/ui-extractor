@@ -3605,7 +3605,9 @@ def note(records_path, diary_text=None):
                 if other == mine:
                     continue
                 fo = fold(flat(other))
-                near = fo.startswith(fm) and len(fm) >= 4
+                near = (len(fm) >= 4 and len(fo) > len(fm)
+                        and difflib.SequenceMatcher(
+                            None, fm, fo[:len(fm)]).ratio() >= 0.8)
                 like = (len(fm) >= 6 and abs(len(fo) - len(fm)) <= 2
                         and difflib.SequenceMatcher(None, fm, fo).ratio() >= 0.85)
                 if (near or like) and rank(other) > rank(best):
