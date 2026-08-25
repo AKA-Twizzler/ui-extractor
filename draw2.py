@@ -909,6 +909,16 @@ def window_groups(m):
                     if qw is not None and any(whose(r) is not None and whose(r) != qw
                                               for r in members):
                         continue      # the screen drew a window edge between them
+                    # two panes that name DIFFERENT programs are two windows:
+                    # a note with its properties panel showing in the gap
+                    # beside a file list is Obsidian standing behind Finder,
+                    # not one window that is somehow both
+                    e0 = {"rect": [0, 0] + size, "top": None}
+                    qn = name_of(e0, [q])
+                    if qn:
+                        mine_ = [name_of(e0, [r]) for r in members]
+                        if any(n and n != qn for n in mine_):
+                            continue
                     if any(touching(q["box"], r["box"], W) for r in members):
                         members.append(q)
                         grew = True
