@@ -426,13 +426,15 @@ CSS_TXT = 11.5      # the same line as the style sheet draws it
 UI_ROW = 0.0
 
 
-def scaled(html, rect, W, kz=1.0, cls="sn-slot", extra=""):
+def scaled(html, rect, W, kz=1.0, cls="sn-slot", extra="", step=0.0):
     """A window drawn so its text stands the height the frame gave it: the
     sheet's writing shrunk to the screen's, and the window's own layout
     spread over the width its rectangle really had."""
     wide = max(1.0, rect[2] - rect[0])
-    step = (UI_ROW / ROW_H) if UI_ROW else (UI_TXT / CSS_TXT)
-    k = max(0.05, kz * step)
+    if step:
+        k = max(0.05, step / ROW_H)          # measured on this very frame
+    else:
+        k = max(0.05, kz * (UI_TXT / CSS_TXT))
     w_css = (CANVAS_W * wide / W) / k
     tall = w_css * (rect[3] - rect[1]) / wide
     html = re.sub(r'^(<div class="sn-window[^"]*")',
@@ -653,7 +655,8 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
         # it off at the box shows a corner of a window at the wrong scale,
         # which is not a picture of that screen.
         out.append(scaled(html, clip_box(rect, W, H, bar=barred), W, kz=kz,
-                          extra=f'{slot_style(rect, W, H, bar=barred)};z-index:{3 + z}'))
+                          extra=f'{slot_style(rect, W, H, bar=barred)};z-index:{3 + z}',
+                          step=getattr(st, "_row_step", 0.0)))
     if camera:
         cbox = camera[0] if isinstance(camera, (tuple, list)) else camera
         out.append(f'<div class="sn-camera" style="{slot_style(cbox, W, H, bar=barred)}">'

@@ -3321,14 +3321,7 @@ def note(records_path, diary_text=None):
     if heights:
         ui = heights[len(heights) // 4] * furnish.CANVAS_W / max(1, Wf)
         furnish.UI_TXT = min(16.0, max(5.0, ui))
-    # and how far apart the screen set one row from the next. A drawn window
-    # is scaled on THIS, because it is the one measurement the screen and the
-    # style sheet share: a row on the screen against a row on the sheet.
-    ys = sorted(b[1] for b in base_words.values())
-    gaps = sorted(b - a for a, b in zip(ys, ys[1:]) if 4 < b - a < 400)
-    if len(gaps) >= 8:
-        pitch = gaps[len(gaps) // 2] * furnish.CANVAS_W / max(1, Wf)
-        furnish.UI_ROW = min(40.0, max(6.0, pitch))
+
 
     # How wide the note's own text ran inside its pane. A note is set to a
     # readable line length, not to the width of the window, so a drawn note
@@ -3417,6 +3410,20 @@ def note(records_path, diary_text=None):
                                 fold(flat(t)) == fold(flat(fd.lines[0][0])) for t, _ in sd.lines[:3]):
                         sd.lines.insert(0, fd.lines[0])
                     mend_slice_tree(sl, st)
+                # How far apart THIS window set one row from the next, on
+                # THIS frame. A file list and a note's prose are set at
+                # different pitches, so one figure for the whole screen
+                # draws one of them wrong; and the pitch is what the screen
+                # and the style sheet have in common, where a glyph's
+                # measured box and a font-size are not the same quantity.
+                ys = []
+                for m_, g_ in getattr(sl, "pieces", ()):
+                    for p_ in g_.get("panes") or []:
+                        ys += [it["box"][1] for it in draw2.items_of(p_)]
+                ys.sort()
+                gaps = sorted(b - a for a, b in zip(ys, ys[1:]) if 4 < b - a < 400)
+                sl._row_step = (gaps[len(gaps) // 2] * furnish.CANVAS_W
+                                / max(1, s["size"][0])) if len(gaps) >= 6 else 0.0
                 sl._doc_pad = getattr(st, "_doc_pad", 0)
                 # the line length this stretch's own moments measured, so a
                 # picture shows the note as wide as it ran THEN
