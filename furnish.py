@@ -472,8 +472,8 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(), ghosts=
     # the whole picture on a fixed stage, scaled as one piece to whatever
     # width the reading pane gives it -- the way an image scales -- so no
     # window's inside ever outgrows its box
-    return (f'<svg class="sn-stage" viewBox="0 0 {CANVAS_W} {ch:.0f}" '
-            f'preserveAspectRatio="xMinYMin meet">'
-            f'<foreignObject x="0" y="0" width="{CANVAS_W}" height="{ch:.0f}">'
-            + "".join(out) + "</foreignObject></svg>")
+    # the whole picture sits on a fixed stage; the style sheet shrinks or
+    # grows that stage as one piece to whatever width the reading pane
+    # gives it, so no window's inside ever outgrows its box
+    return ('<div class="sn-stage">' + "".join(out) + "</div>")
 
