@@ -1739,6 +1739,7 @@ def harmonise(states):
                     b = better(name, fuzzy=True)
                     if b:
                         b = re.sub(r"\.md$", "", b)      # the tree shows names without .md
+                        b = b.lstrip("│ ˃˅")             # a name, never the row's own marks
                     if b and b != name:
                         if flat(b) != flat(name):
                             st.fine.append(f"{name} read as {b} in the list")
