@@ -509,8 +509,12 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
             # filled in on top of this one would otherwise hide it and the
             # outline would stand there unnamed
             mod = " sn-away" if "sn-away" in cls else (" sn-subject" if "sn-subject" in cls else "")
-            names.append(f'<div class="sn-ghost-name{mod}" style="'
-                         f'{slot_style(box, W, H, bar=barred)};z-index:40">'
+            # the placing is written into the tag itself, not left to the
+            # style sheet: a name box is a NEW class, and a picture must
+            # not fall apart on a reader whose snippet has not caught up
+            names.append(f'<div class="sn-ghost-name{mod}" style="position:absolute;'
+                         f'{slot_style(box, W, H, bar=barred)};z-index:40;'
+                         f'border:0;background:none;pointer-events:none">'
                          f'<span class="sn-ghost-tag" style="{off}">{esc(tag)}</span></div>')
         return (f'<div class="{cls}" style="{slot_style(box, W, H, bar=barred)}{extra}">'
                 + lab + "</div>")
