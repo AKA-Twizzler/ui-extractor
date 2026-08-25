@@ -131,13 +131,9 @@ def finder(st):
     # the empty striped rows below the last file, as many as the real window
     # had room for: its shape, drawn at the card's width, less what the
     # toolbar, the headings and the path bar take
-    empty = 2
-    rect = getattr(st, "shape", None) or (st.best_shape() if hasattr(st, "best_shape") else st.rect)
-    if rect and rect[2] > rect[0]:
-        tall = CARD_W * (rect[3] - rect[1]) / (rect[2] - rect[0])
-        room = tall - 40 - 26 - (30 if table.path else 0) - len(table.rows) * ROW_H
-        empty = int(max(2, min(60, room / EMPTY_H)))
-    for _ in range(empty):
+    # a couple of striped rows say "the list ended here"; padding a short
+    # list out to the window's full height only makes the card long
+    for _ in range(2):
         out.append(f'<tr class="sn-empty"><td colspan="{n}">&nbsp;</td></tr>')
     out.append("</table>")
     body = '<div class="sn-body">' + "".join(out) + "</div>"
@@ -443,12 +439,21 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
             continue
         drawn.append(box)
         out.append(outline(box, tag, "sn-ghost sn-away" if kind == "away" else "sn-ghost"))
-    # the windows this stretch is about, marked
+    # the windows this stretch is about: the top layer, drawn with its real
+    # content at a size that reads, cut off by the edges of the box it
+    # really stood in
     for z, (st, rect) in enumerate(subjects):
         if not rect:
             continue
-        out.append(outline(rect, getattr(st, "_label", "") or "",
-                           "sn-ghost sn-subject", f";z-index:{3 + z}"))
+        st.shape = rect
+        html = window(st, behind=False) or st.plain_window_html()
+        st.shape = None
+        if not html:
+            out.append(outline(rect, getattr(st, "_label", "") or "",
+                               "sn-ghost sn-subject", f";z-index:{3 + z}"))
+            continue
+        out.append(f'<div class="sn-slot" style="{slot_style(rect, W, H, bar=barred)}'
+                   f';z-index:{3 + z}">' + html + "</div>")
     if camera:
         cbox = camera[0] if isinstance(camera, (tuple, list)) else camera
         out.append(f'<div class="sn-camera" style="{slot_style(cbox, W, H, bar=barred)}">'

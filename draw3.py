@@ -1025,7 +1025,7 @@ class State:
 
     def window_html(self):
         import furnish
-        html = furnish.window(self)
+        html = furnish.window(self, behind=False)
         if html is not None:
             return html
         return self.plain_window_html()
@@ -3067,7 +3067,9 @@ def note(records_path, diary_text=None):
                     parts.append("")
         parts.append("---")
         parts.append("")
-    parts += desktop(moments)
+    # the desktop bar stands in the screen pictures themselves; saying it
+    # again at the end is the same fact twice
+
     parts += ["", f"> [!note]- The moment-by-moment record, {len(moments)} moments (appendix)", "> ````text"]
     for ln in diary_text.rstrip("\n").split("\n"):
         parts.append("> " + ln if ln else ">")
