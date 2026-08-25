@@ -232,10 +232,11 @@ def find(path):
             if abs(o[1] - yt) > 0.06 * tall or abs(o[3] - yb) > 0.06 * tall:
                 continue
             wide = max(1.0, x1 - x0)
-            if e1 and not o[5] and abs(o[0] - x0) <= 0.06 * wide and o[2] < x1 - 0.06 * wide:
+            step = max(3.0, 0.01 * wide)
+            if e1 and not o[5] and abs(o[0] - x0) <= 0.06 * wide and o[2] < x1 - step:
                 real.append(id(r))
                 break
-            if e0 and not o[4] and abs(o[2] - x1) <= 0.06 * wide and o[0] > x0 + 0.06 * wide:
+            if e0 and not o[4] and abs(o[2] - x1) <= 0.06 * wide and o[0] > x0 + step:
                 real.append(id(r))
                 break
     drop = set(real)
