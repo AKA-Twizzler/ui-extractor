@@ -1508,8 +1508,12 @@ def chain_paths(paths):
     if not paths:
         return []
     base = list(max(paths, key=len))
+    # every reading spelt the way the fullest reading spells it, before any
+    # of them is slotted in: otherwise one reading's worse spelling of a
+    # crumb stands beside the other's better one as a second folder
+    paths = [p if p is base else align_crumbs(p, base) for p in paths]
     for p in paths:
-        if p is base:
+        if p == base:
             continue
         # a path bar starts at the disk: where a shorter reading carries the
         # crumb the longest one starts from somewhere in its middle, what sits
