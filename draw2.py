@@ -815,7 +815,16 @@ def name_of(entry, panes):
     # screen or behind another window - comes back as a file tree, and a
     # tree taken as the deciding word names a Finder window Obsidian even
     # while its column headings stand in the pane beside it.
-    if any(finder_columns(p) for p in panes):
+    def finder_bar(p):
+        """A path bar: the disk, then the folders down to this one. No
+        other program draws that, and it is the one piece of furniture a
+        Finder window keeps however little of it is showing."""
+        w = old.pane_words(p) or ""
+        flat = w.replace(" ", "")
+        return ("MacintoshHD>" in flat or "MacintoshHD›" in flat
+                or ("Users>" in flat and flat.count(">") >= 2))
+
+    if any(finder_columns(p) or finder_bar(p) for p in panes):
         app = "Finder"
     elif any(finder_sidebar(p) for p in panes):
         app = app or "Finder"   # its sidebar is the one thing still in view
@@ -865,6 +874,30 @@ def window_groups(m):
         title = e.get("top")
         groups.append({"name": name, "title": title, "rect": e["rect"], "panes": panes, "where": e.get("where")})
     rest = [p for p in m["panes"] if p.get("wi") is None or p.get("wi") >= len(wins)]
+    # A window's path bar sits at its foot, and its foot can fall a little
+    # below the rectangle the frame measured - on a frame caught mid-scroll
+    # it always does. The pane holding it is then filed under no window at
+    # all, and the window loses the one piece of furniture that says beyond
+    # doubt which program it is. A leftover pane standing at a window's own
+    # width, right against its top or its foot, belongs to that window.
+    if rest and groups:
+        still = []
+        for p in rest:
+            b = p["box"]
+            for g in groups:
+                r = g["rect"]
+                wide = max(1.0, r[2] - r[0])
+                if abs(b[0] - r[0]) > 0.06 * wide or abs(b[2] - r[2]) > 0.06 * wide:
+                    continue
+                gap = 0.06 * max(1.0, r[3] - r[1])
+                if -gap <= b[1] - r[3] <= gap or -gap <= r[1] - b[3] <= gap:
+                    g["panes"].append(p)
+                    g["rect"] = [min(r[0], b[0]), min(r[1], b[1]),
+                                 max(r[2], b[2]), max(r[3], b[3])]
+                    break
+            else:
+                still.append(p)
+        rest = still
     size = list(m.get("size") or [1920, 1080])
     if rest and groups:
         groups.append({"name": "The rest of the screen", "title": None, "rect": [0, 0] + size,
