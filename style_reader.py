@@ -464,9 +464,20 @@ def measure(pane_path, kind, data, res):
     icons = icons_before(img, geo) if geo else []
     said = [f"{out['look']['theme']} look"]
     banded, iconed, icon_hues = [], 0, {}
+    # A list is painted in alternating stripes, and every one of them is a
+    # band. The row the screen had SELECTED is the one whose paint stands
+    # out from that: a colour that is not grey at all, or a grey clearly
+    # lighter than the stripes around it. Marking every striped row as
+    # selected would say the whole list was picked out.
+    greys = sorted(sum(b["colour"]) / 3.0 for b in bd if b["hue"] == "grey")
+    usual = greys[len(greys) // 2] if greys else 0.0
+    def stands_out(b):
+        if b["hue"] not in ("grey", "black", "white"):
+            return True
+        return sum(b["colour"]) / 3.0 >= usual + 25
     for (row, _, mark), g, ic in zip(rows, geo, icons):
         b = band_of(bd, g["y0"], g["y1"], img, g["x0"], g["x1"])
-        if b and b["hue"] not in ("black", "white"):
+        if b and b["hue"] not in ("black", "white") and stands_out(b):
             mark["band"] = b["hue"]
             mark["band_colour"] = b["colour"]
             banded.append((b["hue"], _name(row)[:40]))
