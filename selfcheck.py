@@ -125,10 +125,21 @@ def check(path, frames=None):
         if not stamp:
             bad("stamped with its time", where, "the picture carries no timestamp")
 
-        # 7. every outline says what it is
-        for m in re.finditer(r'<div class="[^"]*sn-ghost[^"]*"[^>]*>(.*?)</div>', ln):
+        # 7. every outline says what it is. The names are drawn in their own
+        #    boxes over the top of the picture, so that a window filled in
+        #    on top of an outline cannot hide the name of the window under
+        #    it; there must be one name for every outline, at its place.
+        named = _boxes(ln, "sn-ghost-name")
+        if len(named) < len(ghosts):
+            bad("outlines are labelled", where,
+                f"{len(ghosts)} outlines and only {len(named)} names")
+        for (gp, _) in ghosts:
+            if not any(abs(np[0] - gp[0]) < 0.5 and abs(np[1] - gp[1]) < 0.5
+                       for (np, _) in named):
+                bad("outlines are labelled", where, "an outline has no name at its place")
+        for m in re.finditer(r'<div class="sn-ghost-name[^"]*"[^>]*>(.*?)</div>', ln):
             if "sn-ghost-tag" not in m.group(1):
-                bad("outlines are labelled", where, "an outline has no name on it")
+                bad("outlines are labelled", where, "a name box carries no name")
 
         # 8. no window stands outside the screen it was on. Only a picture
         #    with the desktop bar in it holds the whole screen; without the
