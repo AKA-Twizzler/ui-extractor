@@ -201,7 +201,12 @@ def check(path, frames=None):
                 aa = ghosts[a][0][2] * ghosts[a][0][3]
                 bb = ghosts[b][0][2] * ghosts[b][0][3]
                 like = min(aa, bb) / max(1e-6, max(aa, bb)) > 0.5
-                if like and _overlap(ghosts[a][0], ghosts[b][0]) > 0.85:
+                # each mostly inside the other: one window drawn twice. A
+                # smaller box lying inside a bigger one is a window in
+                # front of it, and that is two windows, not one twice.
+                both = min(_overlap(ghosts[a][0], ghosts[b][0]),
+                           _overlap(ghosts[b][0], ghosts[a][0]))
+                if like and both > 0.85:
                     bad("one outline per window", where,
                         "two outlines mark the same place, so one window is drawn twice")
 
