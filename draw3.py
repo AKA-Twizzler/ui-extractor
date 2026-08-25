@@ -3862,6 +3862,24 @@ def note(records_path, diary_text=None):
                     wide = (hb_now[2] - hb_now[0]) * kzf if hb_now else 0.0
                     span_now = share * wide
                 sl._row_step = span_now * furnish.CANVAS_W / Wf
+                sl._step_sure = not (cut_x or cut_y)
+
+            # Two windows of the same program standing on one screen set
+            # their rows at the SAME pitch: the pitch belongs to the screen,
+            # not to the window, and what changes between frames is only how
+            # far the video zoomed. So a window cut off by the frame's edge,
+            # whose own width says nothing, takes the pitch from the window
+            # beside it that the frame shows whole.
+            sure = {}
+            for stx, sl, _ in subjects:
+                if getattr(sl, "_step_sure", False) and getattr(sl, "_row_step", 0):
+                    sure.setdefault(stx.name, []).append(sl._row_step)
+            for stx, sl, _ in subjects:
+                if getattr(sl, "_step_sure", False):
+                    continue
+                had = sure.get(stx.name)
+                if had:
+                    sl._row_step = med(sorted(had))
 
             # which windows behind were read through or around the front ones
             seen_here = set()
