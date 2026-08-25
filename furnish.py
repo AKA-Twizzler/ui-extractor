@@ -413,8 +413,19 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
         out.append(deskbar(bar_words, clock))
     drawn = []
 
+    placed = []
+
     def outline(box, tag, cls="sn-ghost", extra=""):
-        lab = f'<span class="sn-ghost-tag">{esc(tag)}</span>' if tag else ""
+        lab = ""
+        if tag:
+            # two windows whose top-left corners nearly meet would print
+            # their names over each other, so each later one steps down
+            l = 100.0 * box[0] / max(1, W)
+            t = 100.0 * box[1] / max(1, H)
+            step = sum(1 for pl, pt in placed if abs(pl - l) < 14 and abs(pt - t) < 5)
+            placed.append((l, t))
+            off = f' style="top:{5 + step * 15}px"' if step else ""
+            lab = f'<span class="sn-ghost-tag"{off}>{esc(tag)}</span>'
         return (f'<div class="{cls}" style="{slot_style(box, W, H, bar=barred)}{extra}">'
                 + lab + "</div>")
 
