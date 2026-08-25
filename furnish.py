@@ -465,12 +465,33 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
             continue
         drawn.append(box)
         out.append(outline(box, tag, "sn-ghost sn-away" if kind == "away" else "sn-ghost"))
+    def uncover(rect):
+        """A window behind is drawn only because it was SEEN, so the window
+        in front cannot have been standing over it. Where the front window's
+        measured box swallows a strip that was plainly in view - a row of
+        tabs above it, a bar down its side - the box reached too far, and it
+        is pulled back to the edge of what was showing."""
+        x0, y0, x1, y1 = rect
+        w, h = max(1.0, x1 - x0), max(1.0, y1 - y0)
+        for b in drawn:
+            bx0, by0, bx1, by1 = b
+            if min(x1, bx1) - max(x0, bx0) <= 0 or min(y1, by1) - max(y0, by0) <= 0:
+                continue
+            wide = (min(x1, bx1) - max(x0, bx0)) >= 0.6 * w
+            tall = (min(y1, by1) - max(y0, by0)) >= 0.6 * h
+            if wide and by1 - y0 > 0 and by1 - y0 <= 0.25 * h and by0 <= y0 + 0.02 * h:
+                y0 = by1                      # a strip lying across the top
+            elif tall and bx1 - x0 > 0 and bx1 - x0 <= 0.25 * w and bx0 <= x0 + 0.02 * w:
+                x0 = bx1                      # a bar standing down the side
+        return [x0, y0, max(x1, x0 + 8), max(y1, y0 + 8)]
+
     # the windows this stretch is about: the top layer, drawn with its real
     # content at a size that reads, cut off by the edges of the box it
     # really stood in
     for z, (st, rect) in enumerate(subjects):
         if not rect:
             continue
+        rect = uncover(clip_box(rect, W, H, bar=barred))
         st.shape = rect
         html = window(st, behind=False) or st.plain_window_html()
         st.shape = None
