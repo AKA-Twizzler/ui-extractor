@@ -2215,10 +2215,18 @@ def state_slice(st, t0, t1):
     # A stretch reads the tree in whatever pieces it showed, sometimes as a
     # bare column of names with no shape at all. The window's own tree puts
     # those rows back where they stood.
-    mine, all_of = out.tree(), st.tree()
+    mend_slice_tree(out, st)
+    return out
+
+
+def mend_slice_tree(sl, st):
+    """Put this stretch's tree rows back into the shape the window's own
+    tree gives them. Run last, after every pass that drops or rewrites a
+    line: those passes judge a row on its own, and a row of a tree is only
+    as good as the rows it hangs from."""
+    mine, all_of = sl.tree(), st.tree()
     if mine is not None and all_of is not None and mine is not all_of:
         mine.lines = mend_tree(mine.lines, all_of.lines)
-    return out
 
 
 def row_name(t):
