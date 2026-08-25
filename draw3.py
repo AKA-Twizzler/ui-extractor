@@ -3446,17 +3446,27 @@ def note(records_path, diary_text=None):
                         return None
                     like = [h for h in gaps if abs(h - best_g) <= 0.15 * best_g]
                     return (len(tops), sum(like) / len(like))
-                best = None
-                for m_, g_ in getattr(sl, "pieces", ()):
+                # A window keeps one pitch: what changes between moments is
+                # how far the video was zoomed in. So every moment of this
+                # WINDOW votes - each one's measured pitch taken back out of
+                # its own zoom - and the vote is brought into this stretch's
+                # zoom. One moment on its own is far too noisy to size a
+                # window by: a pane can be a sliver, or missed altogether.
+                home = []
+                for m_, g_ in getattr(stx, "pieces", ()):
+                    s_ = next((x for x in spans if m_["ts"] in x["ts"]), None)
+                    T_ = span_T.get(s_["t0"]) if s_ else None
+                    kz_ = T_[0] if T_ else 1.0
+                    best = None
                     for p_ in g_.get("panes") or []:
                         got = pitch_of(p_)
                         if got and (best is None or got[0] > best[0]):
                             best = got
-                # the pane with the most lines is the window's own body, and
-                # its pitch is the window's pitch: a narrow side pane holds a
-                # handful of lines set closer together and would speak for
-                # the whole window if it were let to
-                sl._row_step = (best[1] * furnish.CANVAS_W / max(1, s["size"][0])) if best else 0.0
+                    if best and kz_ > 0:
+                        home.append(best[1] * furnish.CANVAS_W
+                                    / max(1, (m_.get("size") or [3840])[0]) / kz_)
+                kz_here = (span_T.get(s["t0"]) or [1.0])[0]
+                sl._row_step = med(sorted(home)) * kz_here if home else 0.0
                 sl._doc_pad = getattr(st, "_doc_pad", 0)
                 # the line length this stretch's own moments measured, so a
                 # picture shows the note as wide as it ran THEN
