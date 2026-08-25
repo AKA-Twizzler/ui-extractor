@@ -4480,6 +4480,21 @@ def note(records_path, diary_text=None):
                 tall = (b[3] - b[1]) >= 0.60 * Hf
                 strip = (b[2] - b[0]) >= 0.88 * Wf and (b[3] - b[1]) <= 0.20 * Hf
                 return (wide and tall) or strip
+            # A frame the screen drew no rectangle on is a window filling
+            # it: either maximised, or the video zoomed inside one. Its
+            # edges are the frame's own, less whatever strip stands across
+            # the top - the browser's chrome over it. Drawn instead at the
+            # spread of the panes it was read from, such a window comes out
+            # a patch in the middle with its own tree standing outside it.
+            if not real_w and len(subjects) == 1:
+                stx0, sl0, sh0 = subjects[0]
+                top = 0.0
+                for tag_, b_ in behinds:
+                    if b_[2] - b_[0] >= 0.88 * Wf and b_[3] - b_[1] <= 0.20 * Hf:
+                        top = max(top, b_[3])
+                box0 = [0.0, top, float(Wf), float(Hf)]
+                sl0.rect = box0
+                subjects = [(stx0, sl0, box0)]
             fine = []
             for stx, sl, shape in subjects:
                 if shape and not is_window(shape):
