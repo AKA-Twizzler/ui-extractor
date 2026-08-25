@@ -215,39 +215,13 @@ def find(path):
             if bot - top < ALONG * tall:
                 continue                       # the sides must run its height
             found.append([x0, y_top, x1, y_bot, e0, e1])
-    # The screen's edge stood in for a side. Where a window with a side of
-    # its OWN sits against the same top and foot and ends before the edge,
-    # the edge rectangle reached past that window and swallowed whatever
-    # lay beyond it - two windows read as one. The real-sided one is the
-    # window; the edge one is dropped.
-    real = []
-    for r in found:
-        x0, yt, x1, yb, e0, e1 = r
-        if not (e0 or e1):
-            continue
-        tall = max(1.0, yb - yt)
-        for o in found:
-            if o is r or (o[4] and o[5]):
-                continue
-            if abs(o[1] - yt) > 0.06 * tall or abs(o[3] - yb) > 0.06 * tall:
-                continue
-            wide = max(1.0, x1 - x0)
-            step = max(3.0, 0.01 * wide)
-            if e1 and not o[5] and abs(o[0] - x0) <= 0.06 * wide and o[2] < x1 - step:
-                real.append(id(r))
-                break
-            if e0 and not o[4] and abs(o[2] - x1) <= 0.06 * wide and o[0] > x0 + step:
-                real.append(id(r))
-                break
-    drop = set(real)
-    found = [r[:4] for r in found if id(r) not in drop]
     found.sort(key=lambda r: -(r[2] - r[0]) * (r[3] - r[1]))
     # near-identical rectangles are the same window found twice: one edge
     # is a shadow two pixels wide. Rectangles that merely overlap are kept,
     # because two windows may sit one inside the other's reach.
     kept, seen = [], set()
     for r in found:
-        key = tuple(int(round(v / 3.0)) for v in r)
+        key = tuple(int(round(v / 3.0)) for v in r[:4])
         if key in seen:
             continue
         seen.add(key)
@@ -260,7 +234,7 @@ def find(path):
     # line is the window's own top edge, measured like any other, and the
     # rectangle reaches up to it. The same holds under its foot.
     for r in kept:
-        x0, y_top, x1, y_bot = r
+        x0, y_top, x1, y_bot = r[:4]
         reach = 0.4 * (y_bot - y_top)
         for side, way in ((1, -1), (3, +1)):
             edge = _edge_of_head(shelf, r[side], x0, x1, reach, way)
@@ -278,6 +252,32 @@ def find(path):
                     break
             if not blocked:
                 r[side] = edge
+    # The screen's edge stood in for a side. Where a window with a side of
+    # its OWN sits against the same top and foot and ends before the edge,
+    # the edge rectangle reached past that window and swallowed whatever
+    # lay beyond it - two windows read as one. The real-sided one is the
+    # window; the edge one is dropped. This runs after the heads are put
+    # back on, so the two are compared at their true tops.
+    drop = set()
+    for r in kept:
+        x0, yt, x1, yb, e0, e1 = r
+        if not (e0 or e1):
+            continue
+        tall, wide = max(1.0, yb - yt), max(1.0, x1 - x0)
+        step = max(3.0, 0.01 * wide)
+        for o in kept:
+            if o is r or (o[4] and o[5]):
+                continue
+            if abs(o[1] - yt) > 0.06 * tall or abs(o[3] - yb) > 0.06 * tall:
+                continue
+            if e1 and not o[5] and abs(o[0] - x0) <= 0.06 * wide and o[2] < x1 - step:
+                drop.add(id(r))
+                break
+            if e0 and not o[4] and abs(o[2] - x1) <= 0.06 * wide and o[0] > x0 + step:
+                drop.add(id(r))
+                break
+    kept = [r for r in kept if id(r) not in drop]
+    kept = [r[:4] for r in kept]
     # A window the video caught mid-scroll is drawn on the frame in slabs:
     # the parts that were painted, with a band of unpainted screen between
     # them. Those slabs stand on the same two sides with nothing measured
