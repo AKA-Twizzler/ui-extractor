@@ -573,7 +573,7 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
         """What is left of a window once the windows in front are over it.
         Covered whole, it was not on the screen, and drawing its outline
         would put back something the video never showed."""
-        return max((_within(box, r) for r in solid), default=0.0) < 0.92
+        return max((_within(box, r) for r in solid), default=0.0) < 0.85
 
     # the windows standing behind, and the places words were read that no
     # window of this stretch owns
