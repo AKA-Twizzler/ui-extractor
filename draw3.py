@@ -4486,15 +4486,17 @@ def note(records_path, diary_text=None):
             # the top - the browser's chrome over it. Drawn instead at the
             # spread of the panes it was read from, such a window comes out
             # a patch in the middle with its own tree standing outside it.
-            if not real_w and len(subjects) == 1:
-                stx0, sl0, sh0 = subjects[0]
+            if not real_w and subjects:
+                big = max(subjects, key=lambda x: (x[2][2] - x[2][0]) * (x[2][3] - x[2][1])
+                          if x[2] else 0)
                 top = 0.0
                 for tag_, b_ in behinds:
                     if b_[2] - b_[0] >= 0.88 * Wf and b_[3] - b_[1] <= 0.20 * Hf:
                         top = max(top, b_[3])
                 box0 = [0.0, top, float(Wf), float(Hf)]
-                sl0.rect = box0
-                subjects = [(stx0, sl0, box0)]
+                big[1].rect = box0
+                subjects = [(x[0], x[1], box0 if x is big else x[2])
+                            for x in subjects]
             fine = []
             for stx, sl, shape in subjects:
                 if shape and not is_window(shape):
