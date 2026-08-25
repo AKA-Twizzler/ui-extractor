@@ -35,14 +35,16 @@ def main():
         sys.stderr.write(r.stderr or f"pipeline exited {r.returncode}\n")
         return r.returncode or 1
     note = os.path.join(out_dir, f"{title}.md")
-    # the note is drawn from the run's records -- each window on the screen
-    # as its own section, on the vault's style sheet -- and the run's own
-    # output rides at the end as the moment-by-moment appendix. See draw.py;
-    # a changed shape changes that file, never the readers
-    import draw
+    # The note is drawn from the run's records -- the screen moment by
+    # moment, then every window rebuilt on its own -- and the run's own
+    # output rides at the end as the moment-by-moment appendix. See
+    # draw3.py; a changed shape changes that file, never the readers.
+    # draw.py is the shape this one replaced and is kept only for redrawing
+    # an old note: the library run must not use it.
+    import draw3
     records = os.path.join(out_dir, "records.jsonl")
     if os.path.exists(records):
-        text = draw.note(records, diary_text=body)
+        text = draw3.note(records, diary_text=body)
     else:
         text = (f"# {title}\n\n````text\n" + body + "\n````\n")
     tmp = note + ".tmp-write"
