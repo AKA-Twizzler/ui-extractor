@@ -551,8 +551,14 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
     merged = []
     for box, tag, cls in marks:
         for other in merged:
-            if max(_within(box, other[0]), _within(other[0], box)) > 0.85 \
-                    or _close(box, other[0]):
+            a = (box[2] - box[0]) * (box[3] - box[1])
+            b = (other[0][2] - other[0][0]) * (other[0][3] - other[0][1])
+            # a strip lying inside a window is a window IN FRONT of it, not
+            # the same window read twice; only boxes of a like size are one
+            # window seen twice
+            like = min(a, b) / max(1.0, max(a, b)) > 0.5
+            if like and (max(_within(box, other[0]), _within(other[0], box)) > 0.85
+                         or _close(box, other[0])):
                 if (box[2] - box[0]) * (box[3] - box[1]) > \
                         (other[0][2] - other[0][0]) * (other[0][3] - other[0][1]):
                     other[0] = box
