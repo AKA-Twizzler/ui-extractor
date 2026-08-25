@@ -268,7 +268,12 @@ def obsidian(st, behind=True):
                 rest = rest[1:].lstrip()
             else:
                 rest = rest.lstrip()
+            # a row the screen set in bold is marked with stars in the
+            # record; the drawing sets it in bold, it does not print stars
             body = esc(rest)
+            body = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", body)
+            body = re.sub(r"(?<!\*)\*([^*]+?)\*(?!\*)", r"<i>\1</i>", body)
+            body = body.replace("**", "").replace("*", "")
             if "<i>" in h:
                 body = f"<i>{body}</i>"      # a name no engine read cleanly
             m = re.search(r'<span class="(sn-[a-z]+)"', h)
