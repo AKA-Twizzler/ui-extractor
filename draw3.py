@@ -1047,11 +1047,11 @@ class State:
             if fam == "table":
                 cols.append(('<div class="sn-body">' + model.html() + "</div>", width))
             elif fam == "tree":
-                cols.append(('<div class="sn-tree">' + "\n".join(h for _, h in model.lines) + "</div>", width))
+                cols.append(('<div class="sn-tree">' + "".join(f"<div>{h}</div>" for _, h in model.lines) + "</div>", width))
             elif fam == "doc":
                 cols.append(('<div class="sn-doc">' + doc_html(model) + "</div>", width))
             elif fam == "term":
-                cols.append(('<div class="sn-tree">' + "\n".join(h for _, h in model.lines) + "</div>", width))
+                cols.append(('<div class="sn-tree">' + "".join(f"<div>{h}</div>" for _, h in model.lines) + "</div>", width))
             else:
                 if not model:
                     continue

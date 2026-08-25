@@ -263,7 +263,7 @@ def obsidian(st, behind=True):
         explorer = ('<div class="sn-explorer"><div class="sn-explorer-head"><span class="sn-g">✎</span><span class="sn-g">▱+</span>'
                     '<span class="sn-g">⇅</span><span class="sn-g">⊟</span><span class="sn-g">⌃</span></div>'
                     + (f'<div class="sn-count">{esc(count)}</div>' if count else "")
-                    + '<div class="sn-tree">' + "\n".join(lines) + "</div></div>")
+                    + '<div class="sn-tree">' + "".join(f"<div>{l}</div>" for l in lines) + "</div></div>")
         cols.append(explorer)
     if doc:
         pad = 0 if behind else getattr(st, "_doc_pad", 0)
