@@ -3444,9 +3444,7 @@ def note(records_path, diary_text=None):
                         continue
                     box[1], box[3] = r[1], r[3]
                     break
-                sl.rect = shape = box
-                subjects[subjects.index((stx, sl, shape))] = (stx, sl, box) \
-                    if (stx, sl, shape) in subjects else (stx, sl, box)
+                sl.rect = box
             subjects = [(stx, sl, sl.rect) for stx, sl, _ in subjects]
             # deepest first: the bigger window lies under the smaller one
             subjects.sort(key=lambda x: -(x[2][2] - x[2][0]) * (x[2][3] - x[2][1]))
