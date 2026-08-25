@@ -3360,6 +3360,59 @@ def note(records_path, diary_text=None):
                 st._doc_pad = round(pad_css)
             break
 
+    # How far apart each program sets one row from the next, at the base
+    # zoom. One window of a program is measured badly now and then - a pane
+    # comes out a sliver, or is missed - but the program's rows are the same
+    # height everywhere, so every window of it votes and the vote stands for
+    # all of them. Without this the same list is drawn at three sizes in
+    # three pictures of the same screen.
+    def pitch_of_pane(p_):
+        d_ = p_.get("data") or {}
+        tops = []
+        for b_ in (d_.get("blocks") or []):
+            tops += [rb[1] for rb in (b_.get("row_boxes") or [])
+                     if isinstance(rb, (list, tuple)) and len(rb) >= 4]
+        for key in ("rows", "body_rows"):
+            tops += [x["y0"] for x in (d_.get(key) or [])
+                     if isinstance(x, dict) and "y0" in x]
+        tops = sorted(set(tops))
+        if len(tops) < 4:
+            return None
+        gaps = [b - a for a, b in zip(tops, tops[1:]) if 0 < b - a < 1200]
+        if len(gaps) < 3:
+            return None
+        best = max(gaps, key=lambda g: sum(1 for h in gaps if abs(h - g) <= 0.15 * g))
+        like = [h for h in gaps if abs(h - best) <= 0.15 * best]
+        if len(like) < 3:
+            return None
+        high = p_["box"][3] - p_["box"][1]
+        up = float(d_.get("scale") or 0)
+        if not up and high > 0:
+            up = max(1.0, round(max(tops) / high))
+        return (len(tops), (sum(like) / len(like)) / max(1.0, up))
+
+    pitch_home, every = {}, []
+    for st_ in states:
+        seen_ = []
+        for m_, g_ in getattr(st_, "pieces", ()):
+            s_ = next((x for x in spans if m_["ts"] in x["ts"]), None)
+            T_ = span_T.get(s_["t0"]) if s_ else None
+            kz_ = (T_[0] if T_ else 1.0) or 1.0
+            best_ = None
+            for p_ in g_.get("panes") or []:
+                got_ = pitch_of_pane(p_)
+                if got_ and (best_ is None or got_[0] > best_[0]):
+                    best_ = got_
+            if best_:
+                seen_.append(best_[1] * furnish.CANVAS_W
+                             / max(1, (m_.get("size") or [3840])[0]) / kz_)
+        if seen_:
+            pitch_home.setdefault(st_.name, []).extend(seen_)
+            every.extend(seen_)
+    pitch_home = {k: med(sorted(v)) for k, v in pitch_home.items()}
+    if every:
+        pitch_home["*"] = med(sorted(every))
+
     def ghost_list(s, sub_states, carded):
         got = []
         for f in frags:
@@ -3457,21 +3510,9 @@ def note(records_path, diary_text=None):
                 # its own zoom - and the vote is brought into this stretch's
                 # zoom. One moment on its own is far too noisy to size a
                 # window by: a pane can be a sliver, or missed altogether.
-                home = []
-                for m_, g_ in getattr(st, "pieces", ()):
-                    s_ = next((x for x in spans if m_["ts"] in x["ts"]), None)
-                    T_ = span_T.get(s_["t0"]) if s_ else None
-                    kz_ = T_[0] if T_ else 1.0
-                    best = None
-                    for p_ in g_.get("panes") or []:
-                        got = pitch_of(p_)
-                        if got and (best is None or got[0] > best[0]):
-                            best = got
-                    if best and kz_ > 0:
-                        home.append(best[1] * furnish.CANVAS_W
-                                    / max(1, (m_.get("size") or [3840])[0]) / kz_)
                 kz_here = (span_T.get(s["t0"]) or [1.0])[0]
-                sl._row_step = med(sorted(home)) * kz_here if home else 0.0
+                home = pitch_home.get(st.name) or pitch_home.get("*")
+                sl._row_step = home * kz_here if home else 0.0
                 sl._doc_pad = getattr(st, "_doc_pad", 0)
                 # the line length this stretch's own moments measured, so a
                 # picture shows the note as wide as it ran THEN
