@@ -152,7 +152,47 @@ def check(path, frames=None):
             bad("the whole bar", where,
                 "the desktop bar is drawn with only a word or two of its menu")
 
-    # 11. against the frames themselves: the camera drawn where it really lay
+    # 11. against the record: every word the reader saw stands in some window,
+    #     so a word read where the picture draws nothing means the picture is
+    #     missing a window
+    if frames and os.path.isdir(frames):
+        recs = os.path.join(os.path.dirname(frames.rstrip("/")), "records.jsonl")
+        if os.path.exists(recs):
+            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+            import json
+            import draw2
+            by_ts = {}
+            for line in open(recs, encoding="utf-8"):
+                r = json.loads(line)
+                by_ts[r["ts"]] = r
+            for k, ln in pics:
+                st = re.search(r'class="sn-stamp">([\d:]+)(?: to ([\d:]+))?', ln)
+                if not st:
+                    continue
+                lo, hi = st.group(1), st.group(2) or st.group(1)
+                boxes = [p for (p, _) in _boxes(ln, "sn-slot") + _boxes(ln, "sn-ghost")
+                         + _boxes(ln, "sn-camera")]
+                if not boxes:
+                    continue
+                out_of, seen = 0, 0
+                for ts, r in by_ts.items():
+                    if not (lo <= ts <= hi):
+                        continue
+                    W, H = r.get("size") or [3840, 2160]
+                    for p in r.get("panes") or []:
+                        for it in draw2.items_of(p):
+                            b = it["box"]
+                            cx, cy = 100.0 * (b[0] + b[2]) / 2 / W, 100.0 * (b[1] + b[3]) / 2 / H
+                            seen += 1
+                            if not any(l - 1 <= cx <= l + w + 1 and t - 1 <= cy <= t + h + 1
+                                       for (l, t, w, h) in boxes):
+                                out_of += 1
+                if seen >= 20 and out_of > 0.15 * seen:
+                    bad("every word stands in a window", f"line {k} ({lo})",
+                        f"{100 * out_of // seen}% of the words read were drawn "
+                        f"on bare desktop, so a window is missing from the picture")
+
+    # 12. against the frames themselves: the camera drawn where it really lay
     if frames and os.path.isdir(frames):
         sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
         import shapes
