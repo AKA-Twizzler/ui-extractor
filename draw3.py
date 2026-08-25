@@ -3566,6 +3566,53 @@ def note(records_path, diary_text=None):
             return list(box)
         return [lo_x, box[1], hi_x, box[3]]
 
+    def heal_titles(states):
+        """A window's title read badly at one moment, spelt from the moment
+        it was read well.
+
+        The title bar is the same pixels every moment; what differs is how
+        much of it the frame gave up. "vautt-demo" and "02Con" are the same
+        two folders as "vault-demo" and "02 Company A (Info Product)" -
+        one a letter mistaken, one a name cut short - and the picture
+        should call a folder by its name, not by the worst reading of it.
+        Only a title ANOTHER moment actually read may stand in; nothing is
+        spelt out that was never on the screen.
+        """
+        import difflib
+        titles = [st_.title for st_ in states if st_.title]
+        if len(titles) < 2:
+            return
+        seen = {}
+        for t_ in titles:
+            seen[t_] = seen.get(t_, 0) + 1
+        # a title that also stands in some window's path bar was read whole
+        crumbs = set()
+        for st_ in states:
+            t_ = st_.main_table()
+            for c in (getattr(t_, "path", None) or []):
+                crumbs.add(fold(flat(c)))
+
+        def rank(t_):
+            return (fold(flat(t_)) in crumbs, seen[t_], len(t_))
+
+        for st_ in states:
+            mine = st_.title
+            if not mine:
+                continue
+            fm = fold(flat(mine))
+            best = mine
+            for other in seen:
+                if other == mine:
+                    continue
+                fo = fold(flat(other))
+                near = fo.startswith(fm) and len(fm) >= 4
+                like = (len(fm) >= 6 and abs(len(fo) - len(fm)) <= 2
+                        and difflib.SequenceMatcher(None, fm, fo).ratio() >= 0.85)
+                if (near or like) and rank(other) > rank(best):
+                    best = other
+            if best != mine:
+                st_.title = best
+
     def list_not_tree(states):
         """A Finder list that came back as a file tree, put right.
 
@@ -3690,6 +3737,7 @@ def note(records_path, diary_text=None):
         return out
 
     list_not_tree(states)
+    heal_titles(states)
     own_words = {id(st): {flat(w) for w in box_texts(st)[1] if len(flat(w)) >= 8}
                  for st in states}
     bar_seen = set()               # moments whose own top strip held readings
