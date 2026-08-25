@@ -3170,29 +3170,6 @@ def note(records_path, diary_text=None):
                         break
             else:
                 kept.append([float(v) for v in r])
-        # A window the video caught mid-scroll is drawn on the frame in
-        # slabs: the parts that were painted, with a band of black between
-        # them where the screen had not caught up. Those slabs share their
-        # two sides and nothing is measured between them, so they are one
-        # window, and the window is the whole of it.
-        joined, used = [], set()
-        for i, a in enumerate(kept):
-            if i in used:
-                continue
-            box = list(a)
-            for j, b in enumerate(kept):
-                if j <= i or j in used:
-                    continue
-                wide = max(box[2] - box[0], b[2] - b[0])
-                if abs(b[0] - box[0]) > 0.04 * wide or abs(b[2] - box[2]) > 0.04 * wide:
-                    continue                       # not the same two sides
-                gap = max(box[1], b[1]) - min(box[3], b[3])
-                if gap > 0.6 * (box[3] - box[1] + b[3] - b[1]):
-                    continue                       # too far apart to be one
-                used.add(j)
-                box[1], box[3] = min(box[1], b[1]), max(box[3], b[3])
-            joined.append(box)
-        kept = joined
         _frame_rects[t0] = kept
         return kept
 

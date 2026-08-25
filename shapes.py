@@ -185,6 +185,35 @@ def find(path):
             continue
         seen.add(key)
         kept.append(r)
+    # A window the video caught mid-scroll is drawn on the frame in slabs:
+    # the parts that were painted, with a band of unpainted screen between
+    # them. Those slabs stand on the same two sides with nothing measured
+    # between them, so they are one window and the window is the whole of
+    # it. Left as slabs, a window is drawn as a third of its real height.
+    joined, used = [], set()
+    for i, a in enumerate(kept):
+        if i in used:
+            continue
+        box = list(a)
+        for j, b in enumerate(kept):
+            if j <= i or j in used:
+                continue
+            wide = max(box[2] - box[0], b[2] - b[0])
+            if abs(b[0] - box[0]) > 0.02 * wide or abs(b[2] - box[2]) > 0.02 * wide:
+                continue                       # not standing on the same sides
+            lo, hi = min(box[3], b[3]), max(box[1], b[1])
+            if hi <= lo:
+                continue                       # they already touch or overlap
+            if hi - lo > 2.5 * ((box[3] - box[1]) + (b[3] - b[1])):
+                continue                       # too far apart to be one window
+            if any(c is not a and c is not b and lo < (c[1] + c[3]) / 2 < hi
+                   and min(box[2], c[2]) - max(box[0], c[0]) > 0.5 * wide
+                   for c in kept):
+                continue                       # something else stands between
+            used.add(j)
+            box[1], box[3] = min(box[1], b[1]), max(box[3], b[3])
+        joined.append(box)
+    kept = joined
     k = W / float(w)
     out = [[r[0] * k, r[1] * k, r[2] * k, r[3] * k] for r in kept]
     _CACHE[path] = out
