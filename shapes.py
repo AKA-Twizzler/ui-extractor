@@ -180,6 +180,30 @@ def frame_of(m):
 _CAM: dict[str, object] = {}
 
 
+def _blocks(mask):
+    """Number the runs of touching true squares in a small grid: the same
+    answer a labelling library gives, worked out here so the drawing side of
+    the tool needs nothing installed beyond what reads the pictures."""
+    h, w = mask.shape
+    lab = np.zeros((h, w), dtype=np.int32)
+    n = 0
+    for sy in range(h):
+        for sx in range(w):
+            if not mask[sy, sx] or lab[sy, sx]:
+                continue
+            n += 1
+            stack = [(sy, sx)]
+            lab[sy, sx] = n
+            while stack:
+                y, x = stack.pop()
+                for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                    ny, nx = y + dy, x + dx
+                    if 0 <= ny < h and 0 <= nx < w and mask[ny, nx] and not lab[ny, nx]:
+                        lab[ny, nx] = n
+                        stack.append((ny, nx))
+    return lab, n
+
+
 def camera_box(path):
     """The camera picture laid over the screen, found by its colour: a
     screen's furniture is nearly grey, a camera's picture is not.
