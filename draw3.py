@@ -1428,6 +1428,25 @@ def crumb_same(a, b):
     return k >= 5 and abs(len(fa) - len(fb)) <= 12 and sum(1 for x, y in zip(fa[:k], fb[:k]) if x != y) <= 1
 
 
+
+def align_crumbs(mine, whole):
+    """One stretch's path bar spelt the way the window's own bar spells it.
+
+    A crumb read here that opens the same way as a crumb over there, is
+    longer over there, and appears nowhere in that bar as it stands, is the
+    same folder read worse. It takes the better spelling. Nothing is added
+    and nothing is dropped - only a name is corrected."""
+    out = []
+    for c in mine:
+        f = flat(c)
+        if len(f) >= 4 and not any(crumb_same(c, w) for w in whole):
+            fits = {w for w in whole if len(flat(w)) > len(f) and flat(w)[:3] == f[:3]
+                    and not any(crumb_same(w, m) for m in mine)}
+            if len(fits) == 1:
+                c = fits.pop()
+        out.append(c)
+    return out
+
 def mend_path(mine, others):
     """The gaps in one reading of a path bar, filled from another reading of
     the SAME window's bar. Only what sits BETWEEN two crumbs both readings
@@ -2226,6 +2245,7 @@ def state_slice(st, t0, t1):
     # picture says what the bar under the window's own card says
     here, whole = out.main_table(), st.main_table()
     if here and here.path and whole and whole.path:
+        here.path = align_crumbs(here.path, whole.path)
         here.path = mend_path(here.path, [whole.path])
     # A stretch reads the tree in whatever pieces it showed, sometimes as a
     # bare column of names with no shape at all. The window's own tree puts
@@ -2938,15 +2958,10 @@ def note(records_path, diary_text=None):
                     par = flat(fixed[-1]) if fixed else None
                     fits = {v for v in after.get(par, ()) if flat(v)[:3] == f[:3]
                             and len(flat(v)) > len(f)}
-                if os.environ.get("UIX_CRUMB"):
-                    print("crumb", repr(c), "par", repr(fixed[-1] if fixed else None),
-                          "fits", fits, file=sys.stderr)
                 if len(fits) == 1:
                     c = fits.pop()
             fixed.append(c)
         t.path = fixed
-        if os.environ.get("UIX_CRUMB") and any("02 C" in c for c in fixed):
-            print("healed", st.times[:1], id(t), fixed, file=sys.stderr)
     for w in {st.name for st in states}:
         pool = [t for st in states if st.name == w
                 for t in [st.main_table()] if t and t.path]
