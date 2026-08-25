@@ -406,7 +406,7 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(), ghosts=
     no bar is drawn."""
     ch = CANVAS_W * H / max(1, W)
     barred = bar_words is not None
-    out = [f'<div class="sn-screen" style="height:{ch:.0f}px">']
+    out = [f'<div class="sn-screen" style="width:{CANVAS_W}px;height:{ch:.0f}px">']
     if barred:
         out.append(deskbar(bar_words, clock))
     drawn = []
@@ -467,5 +467,11 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(), ghosts=
         stamp += " \u00b7 edges taken from where its words sat"
     out.append(f'<div class="sn-stamp">{esc(stamp)}</div>')
     out.append("</div>")
-    return "".join(out)
+    # the whole picture on a fixed stage, scaled as one piece to whatever
+    # width the reading pane gives it -- the way an image scales -- so no
+    # window's inside ever outgrows its box
+    return (f'<svg class="sn-stage" viewBox="0 0 {CANVAS_W} {ch:.0f}" '
+            f'preserveAspectRatio="xMinYMin meet">'
+            f'<foreignObject x="0" y="0" width="{CANVAS_W}" height="{ch:.0f}">'
+            + "".join(out) + "</foreignObject></svg>")
 
