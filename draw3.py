@@ -2922,7 +2922,8 @@ def note(records_path, diary_text=None):
             if T is None:
                 T = last_T          # nothing readable moved between the two
             last_T = T
-            bar_words = next((bar_at[t] for t in s["ts"] if bar_at.get(t)), [])
+            bar_words = max((bar_at[t] for t in s["ts"] if bar_at.get(t)),
+                            key=len, default=[])
             clock = next((clock_at[t] for t in s["ts"] if clock_at.get(t)), "")
             barred = any(t in bar_seen for t in s["ts"])
 
