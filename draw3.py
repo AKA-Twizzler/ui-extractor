@@ -3228,36 +3228,56 @@ def note(records_path, diary_text=None):
         return None
 
     def rect_over_panes(st, s):
-        """The rectangle the frame drew AROUND this window's own panes.
+        """The rectangle the frame drew around the ROWS this window was read
+        from at this moment.
 
-        Where a window's edges were not measured, its place is usually
+        Where a window's own edges were not measured, its place is usually
         worked out from readings carried back and forth across zooms, and
         that arithmetic can run a window clean off the side of the screen.
-        But the panes this window was READ from at this very moment have
-        boxes on this very frame. The window holds its own panes, so the
-        smallest rectangle the frame drew that holds all of them IS the
-        window - measured, not worked out."""
-        mine = []
+        But every row read here has a box on this very frame, and a row
+        sits inside the window it was read from. So the rectangle holding
+        the most of this window's rows IS this window - measured, not
+        worked out. Counting rows rather than whole panes matters, because
+        the reader often takes a whole side of the screen as one pane and
+        two windows can stand in it.
+        """
+        spots = []
         for m_, g_ in getattr(st, "pieces", ()):
             if m_["ts"] not in s["ts"]:
                 continue
             for p_ in (g_.get("panes") or []):
-                b_ = p_.get("box")
-                if b_ and len(b_) == 4 and b_[2] > b_[0] and b_[3] > b_[1]:
-                    mine.append(tuple(b_))
-        if not mine:
+                pb = p_.get("box")
+                d_ = p_.get("data") or {}
+                if not pb or len(pb) != 4:
+                    continue
+                tops = []
+                for b_ in (d_.get("blocks") or []):
+                    tops += [rb for rb in (b_.get("row_boxes") or [])
+                             if isinstance(rb, (list, tuple)) and len(rb) >= 4]
+                if not tops:
+                    continue
+                up = float(d_.get("scale") or 0)
+                if not up:
+                    high = max(1.0, pb[3] - pb[1])
+                    up = max(1.0, round(max(rb[3] for rb in tops) / high))
+                for rb in tops:
+                    spots.append(((pb[0] + (rb[0] + rb[2]) / 2 / up),
+                                  (pb[1] + (rb[1] + rb[3]) / 2 / up)))
+        if not spots:
             return None
-        x0 = min(b[0] for b in mine); y0 = min(b[1] for b in mine)
-        x1 = max(b[2] for b in mine); y1 = max(b[3] for b in mine)
-        holds = []
+        best, most = None, 0
         for r in frame_rects(s):
-            # a hair of slack: a pane is drawn inside its window's frame,
-            # and the reader's box can sit a pixel or two proud of it
-            slack = max(4.0, 0.01 * (r[2] - r[0]))
-            if (r[0] - slack <= x0 and x1 <= r[2] + slack
-                    and r[1] - slack <= y0 and y1 <= r[3] + slack):
-                holds.append(((r[2] - r[0]) * (r[3] - r[1]), r))
-        return list(min(holds)[1]) if holds else None
+            n = sum(1 for x, y in spots
+                    if r[0] <= x <= r[2] and r[1] <= y <= r[3])
+            if n > most or (n == most and best is not None and n
+                            and (r[2] - r[0]) * (r[3] - r[1])
+                            < (best[2] - best[0]) * (best[3] - best[1])):
+                best, most = r, n
+        # a clear majority, or it says nothing: rows scattered evenly over
+        # two rectangles mean the reader took in more than this one window
+        if best is None or most < 3 or most < 0.6 * len(spots):
+            return None
+        return list(best)
 
     def snap_to_frame(box, s):
         """A box pulled onto the rectangle the frame itself drew there. Only
