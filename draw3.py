@@ -2893,11 +2893,14 @@ def note(records_path, diary_text=None):
             for r in q["model"].rows:
                 if r["cells"] and r["cells"][0] and "..." not in r["cells"][0]:
                     known.setdefault(flat(r["cells"][0]), r["cells"][0])
-    times_seen = {}
+    times_seen, after = {}, {}
     for st in states:
         t = st.main_table()
-        for c in (t.path if t else ()):
+        crumbs = list(t.path) if t else []
+        for i, c in enumerate(crumbs):
             times_seen[flat(c)] = times_seen.get(flat(c), 0) + 1
+            if i:
+                after.setdefault(flat(crumbs[i - 1]), set()).add(c)
     for st in states:
         t = st.main_table()
         if not (t and t.path):
