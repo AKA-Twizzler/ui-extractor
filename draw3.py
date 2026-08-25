@@ -2803,7 +2803,13 @@ def behind_for(slice_st, span, subject):
             # the strip ends where the window in front of it begins: that is
             # all of it that was showing. Its own words must sit above that
             # line, and when they do not they were never part of this strip.
-            y1 = rect[1] if rect[1] > 0.01 * H else max(t[4] for t in tops) + 0.02 * H
+            # A strip reaches as far as its OWN words reach, and no
+            # further. The window in front of it may be some other window
+            # entirely - the one whose top edge we happen to know is not
+            # necessarily the one doing the covering - so the words are the
+            # measurement and the front window's top edge is only a cap.
+            words_end = max(t[4] for t in tops) + 0.02 * H
+            y1 = min(words_end, rect[1]) if rect[1] > 0.01 * H else words_end
             if os.environ.get("UIX_STRIP"):
                 print("   strip y1", round(y1), "rect", [round(v) for v in rect],
                       "tops", round(max(t[4] for t in tops)), file=sys.stderr)
