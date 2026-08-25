@@ -3247,7 +3247,7 @@ def note(records_path, diary_text=None):
                 if os.environ.get("UIX_WHY") == s["t0"]:
                     print(f"   drawn {label_for(own)!r} box {[round(v) for v in box]}",
                           file=sys.stderr)
-                behinds.append((label_for(own), list(box)))
+                behinds.append((label_for(own), snap_to_frame(list(box), s)))
             behinds.sort(key=lambda hb: -(hb[1][2] - hb[1][0]) * (hb[1][3] - hb[1][1]))
             if barred:
                 for stx, sl, _ in subjects:
