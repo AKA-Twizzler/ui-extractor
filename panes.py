@@ -282,19 +282,18 @@ def frame_regions(img, engine=None):
     for wx0, _, wx1, _ in _measured_windows(img):
         sides.update((wx0, wx1))
     if sides:
-        least = max(8, int(MIN_PANE * scale / 3))
+        # a cut that would leave a sliver is not made: a strip too thin to
+        # be a pane belongs to its neighbour, never to nobody
+        least = max(8, int(MIN_PANE * scale / 2))
         cut = []
         for x0, y0, x1, y1 in boxes:
-            at = sorted(x for x in sides if x0 + least <= x <= x1 - least)
-            last = x0
-            for x in at + [x1]:
-                if x - last >= least:
-                    cut.append((last, y0, x, y1))
-                    last = x
-            if last < x1 and cut and cut[-1][0] == last:
-                pass
-            elif last < x1:
-                cut.append((last, y0, x1, y1))
+            marks = [x0]
+            for x in sorted(x for x in sides if x0 < x < x1):
+                if x - marks[-1] >= least and x1 - x >= least:
+                    marks.append(x)
+            marks.append(x1)
+            for a, b in zip(marks, marks[1:]):
+                cut.append((a, y0, b, y1))
         boxes = cut or boxes
     boxes.sort(key=lambda box: (box[0], box[1]))
     return boxes
