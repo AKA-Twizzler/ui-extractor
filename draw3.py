@@ -2998,7 +2998,8 @@ def note(records_path, diary_text=None):
                 if not alive:
                     # its own words read inside its place this stretch
                     px, py = 0.02 * Wf, 0.02 * Hf
-                    hits = 0
+                    hits, open_hits = 0, 0
+                    fronts = [r for _, _, r in subjects if r]
                     for t in s["ts"]:
                         for key, b in (words_of.get(t) or {}).items():
                             if not (box[0] - px <= b[0] and b[2] <= box[2] + px
@@ -3007,7 +3008,17 @@ def note(records_path, diary_text=None):
                             if key in keys or (len(key) >= 12 and any(
                                     key in sk or sk in key for sk in keys)):
                                 hits += 1
-                    if hits < 2:
+                            # a word standing where NO window in front stood:
+                            # something was showing there, and this window's
+                            # own place is what covers it. A file list says
+                            # "55 bytes" and "Folder" like every other, so
+                            # asking for its own turn of phrase loses windows
+                            # that are plainly in view down an edge.
+                            elif not any(r[0] - px <= (b[0] + b[2]) / 2 <= r[2] + px
+                                         and r[1] - py <= (b[1] + b[3]) / 2 <= r[3] + py
+                                         for r in fronts):
+                                open_hits += 1
+                    if hits < 2 and open_hits < 8:
                         if os.environ.get("UIX_WHY") == s["t0"]:
                             print(f"   dropped {label_for(own)!r} box "
                                   f"{[round(v) for v in box]} hits {hits} "
