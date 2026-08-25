@@ -1492,6 +1492,18 @@ def mend_path(mine, others):
         if j:
             out = out[j:]
             break
+    # And where NOTHING at the head lines up but the bar ends at the same
+    # folder, the head was never this bar at all - it was read off whatever
+    # else stood in that row. The other reading, which does start at the
+    # disk, is the bar that stood there.
+    for other in others:
+        if not other or not out:
+            continue
+        if (crumb_same(out[-1], other[-1])
+                and not any(crumb_same(out[0], c) for c in other)
+                and len(other) > 1):
+            out = list(other)
+            break
     for other in others:
         i = 0
         while i + 1 < len(out):
