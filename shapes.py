@@ -205,7 +205,7 @@ def camera_box(path):
     cell = 8
     gh, gw = sh // cell, sw // cell
     grid = mask[:gh * cell, :gw * cell].reshape(gh, cell, gw, cell).mean(axis=(1, 3))
-    lab, n = ndimage.label(grid > 0.33)
+    lab, n = _blocks(grid > 0.33)
     best = None
     for i in range(1, n + 1):
         ys, xs = np.where(lab == i)
