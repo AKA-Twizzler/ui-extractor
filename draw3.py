@@ -2893,6 +2893,11 @@ def note(records_path, diary_text=None):
             for r in q["model"].rows:
                 if r["cells"] and r["cells"][0] and "..." not in r["cells"][0]:
                     known.setdefault(flat(r["cells"][0]), r["cells"][0])
+    times_seen = {}
+    for st in states:
+        t = st.main_table()
+        for c in (t.path if t else ()):
+            times_seen[flat(c)] = times_seen.get(flat(c), 0) + 1
     for st in states:
         t = st.main_table()
         if not (t and t.path):
@@ -2900,10 +2905,13 @@ def note(records_path, diary_text=None):
         fixed = []
         for c in t.path:
             f = flat(c)
-            if len(f) >= 4 and f not in known:
-                fits = [v for k, v in known.items() if len(k) > len(f) and k.startswith(f)]
-                if len(set(fits)) == 1:
-                    c = fits[0]
+            # a crumb every other bar also carries is spelt the way the
+            # video keeps spelling it; only a crumb read once, and never
+            # read as a whole name anywhere, can be a cut-short reading
+            if len(f) >= 4 and f not in known and times_seen.get(f, 0) == 1:
+                fits = {v for k, v in known.items() if len(k) > len(f) and k.startswith(f)}
+                if len(fits) == 1:
+                    c = fits.pop()
             fixed.append(c)
         t.path = fixed
 
