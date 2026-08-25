@@ -3086,8 +3086,25 @@ def note(records_path, diary_text=None):
               "sizes, the path bar, the note's own text -- drawn from what was read off the screen, holding everything "
               "gathered across every moment that window showed the same thing. This is the content; the pictures above "
               "only say where each of these stood.", ""]
-    for w in windows:
-        sts = [st for st in shown if st.name == w]
+    def split_windows(sts):
+        """Two windows of one program are two windows. Whatever else is
+        uncertain, two states that stood on the screen at the SAME moment
+        cannot be one window opened twice, so a program's states are dealt
+        into as many windows as the clock demands: each state joins a window
+        it never shared a moment with, the one it follows most closely, and
+        starts a new one when there is none."""
+        groups = []
+        for st in sorted(sts, key=lambda s: s.times[0]):
+            mine = set(st.times)
+            free = [g for g in groups if not any(mine & set(o.times) for o in g)]
+            if free:
+                max(free, key=lambda g: max(o.times[-1] for o in g)).append(st)
+            else:
+                groups.append([st])
+        return groups
+
+    for w, sts in [(w, g) for w in windows
+                   for g in split_windows([st for st in shown if st.name == w])]:
         latest = max(sts, key=lambda st: st.times[-1])     # the last one on screen
         earlier = [st for st in sts if st is not latest]
         parts.append(f"## {w} - as at {span_of(latest)}" + (f", {latest.title}" if latest.title else ""))
