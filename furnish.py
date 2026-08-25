@@ -435,9 +435,12 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
 
     def outline(box, tag, cls="sn-ghost", extra=""):
         lab = ""
-        # a box measured well past the screen's edge is a box that cannot be
-        # trusted, so it is drawn the way anything unsure is drawn
-        if off_screen(box, W, H) > 0.25 and "sn-away" not in cls:
+        # When the desktop bar is in view the picture holds the whole screen,
+        # so a window measured half outside it cannot be right and is drawn
+        # the way anything unsure is drawn. With no bar the video was zoomed
+        # into a part of the screen, and a window running past the edge is
+        # exactly what was there.
+        if barred and off_screen(box, W, H) > 0.25 and "sn-away" not in cls:
             cls += " sn-away"
         if tag:
             # two windows whose top-left corners nearly meet would print
