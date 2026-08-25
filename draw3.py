@@ -3604,12 +3604,12 @@ def note(records_path, diary_text=None):
             # two are the same window, and the measured one is the truth.
             taken = [sh for _, sl, sh in subjects if getattr(sl, "_on_frame", False)]
             spare = [r for r in frame_rects(s)
-                     if not any(_within(r, t) > 0.7 or _within(t, r) > 0.7
+                     if not any(furnish._within(r, t) > 0.7 or furnish._within(t, r) > 0.7
                                 for t in taken)]
             for stx, sl, shape in subjects:
                 if getattr(sl, "_on_frame", False):
                     continue
-                near_ = [r for r in spare if _within(r, shape) > 0.7]
+                near_ = [r for r in spare if furnish._within(r, shape) > 0.7]
                 if len(near_) == 1:
                     sl.rect = list(near_[0])
                     sl._on_frame = True
