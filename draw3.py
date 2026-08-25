@@ -2867,6 +2867,18 @@ def note(records_path, diary_text=None):
                 for t in [st.main_table()] if t and t.path]
         for t in pool:
             t.path = mend_path(t.path, [o.path for o in pool if o is not t])
+    # A list window's path bar ends at the folder the window is showing.
+    # Where the folder's own name was read off the window itself and the
+    # bar stops short of it, the bar lost its last crumb to the reading and
+    # gets it back. A name the path itself supplied is never added back:
+    # that would be the bar arguing with itself.
+    for st in states:
+        t = st.main_table()
+        name = st.title
+        if not (t and t.path and name) or getattr(st, "title_from_path", False):
+            continue
+        if not any(same_text(c, name) for c in t.path):
+            t.path = list(t.path) + [name]
 
     # Folder or file, settled once for the whole video. A name whose Kind was
     # read at any moment is that kind at every moment, so a row read without
