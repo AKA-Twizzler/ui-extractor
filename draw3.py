@@ -3453,7 +3453,7 @@ def note(records_path, diary_text=None):
                 # zoom. One moment on its own is far too noisy to size a
                 # window by: a pane can be a sliver, or missed altogether.
                 home = []
-                for m_, g_ in getattr(stx, "pieces", ()):
+                for m_, g_ in getattr(st, "pieces", ()):
                     s_ = next((x for x in spans if m_["ts"] in x["ts"]), None)
                     T_ = span_T.get(s_["t0"]) if s_ else None
                     kz_ = T_[0] if T_ else 1.0
