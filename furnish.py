@@ -130,7 +130,12 @@ def finder(st):
                 t = f"<i>{t}</i>"
             if i == name_i:
                 fico = "file md" if re.search(r"Markdo|\.md$", kind or cells[name_i]) else "file"
-                lead = ('<span class="sn-tri">›</span>' + ico("")) if folder else ('<span class="sn-tri"></span>' + ico(fico))
+                if folder is None:
+                    lead = '<span class="sn-tri"></span>' + ico("unknown")
+                elif folder:
+                    lead = '<span class="sn-tri">›</span>' + ico("")
+                else:
+                    lead = '<span class="sn-tri"></span>' + ico(fico)
                 t = lead + t
             elif i == size_i and not c and folder:
                 t = "--"
