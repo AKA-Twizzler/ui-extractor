@@ -3803,7 +3803,6 @@ def note(records_path, diary_text=None):
                                 continue      # a slab, not one window's pane
                             lo_x, hi_x = min(lo_x, b_[0]), max(hi_x, b_[2])
                     shape = [lo_x, shape[1], hi_x, shape[3]]
-                    shape = hold_words(shape, st, s["ts"], Wf, Hf)
                 sl.rect = shape
                 if sl.has_content() and shape:
                     subjects.append((st, sl, shape))
@@ -3906,6 +3905,15 @@ def note(records_path, diary_text=None):
                 pad = (seen[1] - top) * furnish.CANVAS_W / Wf / S_now - 60
                 return round(pad) if pad > 12 else 0
 
+            # Last of all, once every box has been pulled onto what the
+            # frame measured: a window holds its own words. A box that
+            # ended up beside them or inside them leaves those words
+            # standing on bare desktop, with the window they belong to
+            # drawn somewhere else on the same picture.
+            for i_, (stx, sl, shape) in enumerate(subjects):
+                if not getattr(sl, "_on_frame", False):
+                    sl.rect = hold_words(list(shape), stx, s["ts"], Wf, Hf)
+            subjects = [(stx, sl, sl.rect) for stx, sl, _ in subjects]
             for stx, sl, shape in subjects:
                 sl._doc_pad = span_pad(stx, shape[1])
                 # How tall a row stands here: this window's own share of
