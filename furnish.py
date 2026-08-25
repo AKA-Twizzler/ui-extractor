@@ -618,6 +618,15 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
             # "Finder", and the fuller name belongs to the same window
             same = bool(tag) and bool(other[1]) and \
                 tag.split(":")[0].strip() == other[1].split(":")[0].strip()
+            # Two windows of DIFFERENT programs are two windows however
+            # much ground they share - a note standing behind a file list
+            # is not the same window as the list. Only a tag that names no
+            # program at all folds into one that does.
+            apps = ("Finder", "Obsidian", "The browser", "The terminal",
+                    "The chat")
+            named = [t.split(":")[0].strip() for t in (tag, other[1])]
+            if all(n in apps for n in named) and named[0] != named[1]:
+                continue
             share = max(_within(box, other[0]), _within(other[0], box))
             if (like and (share > 0.85 or _close(box, other[0]))) or (same and share > 0.5):
                 if (box[2] - box[0]) * (box[3] - box[1]) > \
