@@ -3548,6 +3548,14 @@ def note(records_path, diary_text=None):
                     continue
                 out = [min(out[0], b[0]), min(out[1], b[1]),
                        max(out[2], b[2]), max(out[3], b[3])]
+        # A window's own words place it; words that would DOUBLE it are
+        # not its own. Two windows showing the same folder names read
+        # alike, and a box stretched over both says one window stood where
+        # two did.
+        wide0 = max(1.0, box[2] - box[0])
+        tall0 = max(1.0, box[3] - box[1])
+        if (out[2] - out[0]) > 2.0 * wide0 or (out[3] - out[1]) > 2.0 * tall0:
+            return list(box)
         return out
 
     own_words = {id(st): {flat(w) for w in box_texts(st)[1] if len(flat(w)) >= 8}
