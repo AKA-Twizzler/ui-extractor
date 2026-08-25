@@ -3579,28 +3579,37 @@ def note(records_path, diary_text=None):
     # window running off the side of the frame has no true width, so it
     # never votes - its box is cut by the frame, not by the window.
     pitch_home, every = {}, []
+    tall_home, tall_every = {}, []
     for st_ in states:
-        seen_ = []
+        seen_, high_ = [], []
         for m_, g_ in getattr(st_, "pieces", ()):
             rc_ = st_.rects.get(m_["ts"])
-            if not rc_ or rc_[2] - rc_[0] <= 0:
+            if not rc_ or rc_[2] - rc_[0] <= 0 or rc_[3] - rc_[1] <= 0:
                 continue
-            Wm_ = (m_.get("size") or [3840, 2160])[0]
-            if rc_[0] < 1 or rc_[2] > Wm_ - 1:
-                continue                      # cut off by the frame's edge
+            Wm_, Hm_ = (m_.get("size") or [3840, 2160])[:2]
             best_ = None
             for p_ in g_.get("panes") or []:
                 got_ = pitch_of_pane(p_)
                 if got_ and (best_ is None or got_[0] > best_[0]):
                     best_ = got_
-            if best_:
+            if not best_:
+                continue
+            if rc_[0] >= 1 and rc_[2] <= Wm_ - 1:
                 seen_.append(best_[1] / (rc_[2] - rc_[0]))
+            if rc_[1] >= 1 and rc_[3] <= Hm_ - 1:
+                high_.append(best_[1] / (rc_[3] - rc_[1]))
         if seen_:
             pitch_home.setdefault(st_.name, []).extend(seen_)
             every.extend(seen_)
+        if high_:
+            tall_home.setdefault(st_.name, []).extend(high_)
+            tall_every.extend(high_)
     pitch_home = {k: med(sorted(v)) for k, v in pitch_home.items()}
     if every:
         pitch_home["*"] = med(sorted(every))
+    tall_home = {k: med(sorted(v)) for k, v in tall_home.items()}
+    if tall_every:
+        tall_home["*"] = med(sorted(tall_every))
 
     def ghost_list(s, sub_states, carded):
         got = []
@@ -3833,17 +3842,26 @@ def note(records_path, diary_text=None):
                 # run, taken against the width it is drawn at NOW. One
                 # moment on its own is far too noisy to size a window by -
                 # a pane can be a sliver, or missed altogether.
+                cut_x = shape[0] < 1 or shape[2] > Wf - 1
+                cut_y = shape[1] < 1 or shape[3] > Hf - 1
                 share = pitch_home.get(stx.name) or pitch_home.get("*") or 0.0
-                wide_now = shape[2] - shape[0]
-                if shape[0] < 1 or shape[2] > Wf - 1:
-                    # cut by the frame's edge: its drawn width is not the
-                    # window's width, so the window's width at home is
-                    # brought forward on the zoom the frame itself carries
+                if not cut_x and share:
+                    span_now = share * (shape[2] - shape[0])
+                elif not cut_y and (tall_home.get(stx.name)
+                                    or tall_home.get("*")):
+                    # cut off at the side, so its drawn width is not the
+                    # window's width - but its height is still the window's
+                    # own, and a row stands in a fixed share of that too
+                    tall = tall_home.get(stx.name) or tall_home.get("*")
+                    span_now = tall * (shape[3] - shape[1])
+                else:
+                    # cut off both ways: the window's width at home carried
+                    # forward on the zoom the frame itself gives
                     hb_now = home_at(stx, s["t0"])
                     kzf = (span_T.get(s["t0"]) or [1.0])[0] or 1.0
-                    if hb_now and hb_now[2] > hb_now[0]:
-                        wide_now = (hb_now[2] - hb_now[0]) * kzf
-                sl._row_step = share * wide_now * furnish.CANVAS_W / Wf
+                    wide = (hb_now[2] - hb_now[0]) * kzf if hb_now else 0.0
+                    span_now = share * wide
+                sl._row_step = span_now * furnish.CANVAS_W / Wf
 
             # which windows behind were read through or around the front ones
             seen_here = set()
