@@ -542,7 +542,8 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
         drawn.append(clip_box(box, W, H, bar=barred))
     fronts = []
     for st, rect in subjects:
-        fronts.append((st, uncover(clip_box(rect, W, H, bar=barred)) if rect else None))
+        fronts.append((st, uncover(clip_box(rect, W, H, bar=barred),
+                                   getattr(st, "_on_frame", False)) if rect else None))
     solid = [r for _, r in fronts if r]
 
     def in_view(box):
