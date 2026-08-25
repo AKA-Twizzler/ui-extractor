@@ -293,7 +293,7 @@ def frame_regions(img, engine=None):
                 continue                       # not beside each other at all
             gap = b[0] - a[2]
             if -0.02 * w <= gap <= 0.06 * w:
-                sides.add((a[2] + b[0]) / 2.0)
+                sides.add(int(round((a[2] + b[0]) / 2.0)))
     if sides:
         # a cut that would leave a sliver is not made: a strip too thin to
         # be a pane belongs to its neighbour, never to nobody
