@@ -894,10 +894,18 @@ def window_groups(m):
                     g["panes"].append(p)
                     g["rect"] = [min(r[0], b[0]), min(r[1], b[1]),
                                  max(r[2], b[2]), max(r[3], b[3])]
+                    g["grew"] = True
                     break
             else:
                 still.append(p)
         rest = still
+        # named again, now the window has all of its furniture: the bar it
+        # just gained is the one thing that says beyond doubt what program
+        # this window belongs to
+        for g in groups:
+            if g.pop("grew", False):
+                e = {"rect": g["rect"], "top": g.get("title")}
+                g["name"] = name_of(e, g["panes"]) or g["name"]
     size = list(m.get("size") or [1920, 1080])
     if rest and groups:
         groups.append({"name": "The rest of the screen", "title": None, "rect": [0, 0] + size,
