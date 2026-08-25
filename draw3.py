@@ -2807,6 +2807,36 @@ def desktop_bar(moments):
     return words_at, clock_at, strip_at
 
 
+def drop_side_prefix(st):
+    """A sidebar name left sitting in front of a file's name.
+
+    A Finder window's sidebar and its list stand side by side inside the
+    one window, and where the reader took a row across both, the sidebar's
+    word ends up in front of the file: a row reading "Shared .obsidian"
+    where the screen showed "Shared" down the side and ".obsidian" in the
+    list. The window's own sidebar says which words those are, so they can
+    be taken back off - and only those, so a file genuinely named after a
+    folder keeps its name.
+    """
+    for q in st.parts:
+        if q["fam"] != "table":
+            continue
+        t = q["model"]
+        side = {fold(flat(w)) for w in (getattr(t, "side", None) or [])
+                if len(flat(w)) >= 4}
+        if not side:
+            continue
+        for r in t.rows:
+            cells = r.get("cells") or []
+            if not cells or not cells[0]:
+                continue
+            head = cells[0].split()
+            for n in (2, 1):
+                if len(head) > n and fold(flat(" ".join(head[:n]))) in side:
+                    cells[0] = " ".join(head[n:])
+                    break
+
+
 def strip_furniture(st, strip_at):
     """What the frame's own top strip said -- the menu bar, a tab row -- is
     the desk's furniture, not a window's title or a note's first line. The
@@ -3728,6 +3758,7 @@ def note(records_path, diary_text=None):
                     drop_guessed([sl])
                     mend_cells(sl, st)
                     strip_furniture(sl, strip_at)
+                    drop_side_prefix(sl)
                     if bar_title(sl, s["size"][1]):
                         sl.title = None
                     sl.title = sl.title or st.title
