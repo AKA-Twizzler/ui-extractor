@@ -266,7 +266,9 @@ def obsidian(st, behind=True):
                     + '<div class="sn-tree">' + "\n".join(lines) + "</div></div>")
         cols.append(explorer)
     if doc:
-        cols.append('<div class="sn-doc">' + note_html(st, doc, title) + "</div>")
+        pad = 0 if behind else getattr(st, "_doc_pad", 0)
+        sty_doc = f' style="padding-top:{pad}px"' if pad else ""
+        cols.append(f'<div class="sn-doc"{sty_doc}>' + note_html(st, doc, title) + "</div>")
     grid = "30px " + ("minmax(180px, 38fr) " if tree else "") + ("62fr" if doc else "")
     body = f'<div class="sn-cols sn-obsidian-cols" style="grid-template-columns: {grid.strip()}">' + "".join(cols) + "</div>"
     cls = "sn-window sn-obsidian" + (" sn-dark" if st.theme == "dark" else "")
