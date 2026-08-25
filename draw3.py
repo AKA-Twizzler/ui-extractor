@@ -2922,7 +2922,14 @@ def note(records_path, diary_text=None):
         name = st.title
         if not (t and t.path and name) or getattr(st, "title_from_path", False):
             continue
-        if not any(same_text(c, name) for c in t.path):
+        if any(same_text(c, name) for c in t.path):
+            continue
+        # where the last crumb opens the same way but reads shorter, that
+        # crumb IS this folder, read badly: it is corrected, not repeated
+        last = flat(t.path[-1])
+        if last[:3] == flat(name)[:3] and len(last) < len(flat(name)):
+            t.path = list(t.path[:-1]) + [name]
+        else:
             t.path = list(t.path) + [name]
 
     # Folder or file, settled once for the whole video. A name whose Kind was
