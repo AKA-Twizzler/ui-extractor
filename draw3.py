@@ -2921,8 +2921,13 @@ def note(records_path, diary_text=None):
             else:
                 clusters.append([list(r), [mem]])
         best = min(clusters, key=lambda c: min(abs(m[0] - want) for m in c[1]))
-        flatly = [m for m in best[1] if abs(m[2] - 1.0) <= 0.15]
-        take = flatly or best[1]
+        # Every reading in the cluster, not the straight-on ones alone. A
+        # window does not get smaller because one moment read less of it:
+        # the moments are pieces of one window standing still, and the
+        # window is as big as the largest piece anyone saw. Taking only the
+        # unzoomed readings made the same window change shape from picture
+        # to picture, and shrank it to whichever corner had words in it.
+        take = best[1]
         return [min(m[1][0] for m in take), min(m[1][1] for m in take),
                 max(m[1][2] for m in take), max(m[1][3] for m in take)]
 
