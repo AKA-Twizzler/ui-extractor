@@ -3118,6 +3118,13 @@ def note(records_path, diary_text=None):
             parts += [head, ""]
             for stx, sl, _ in subjects:
                 sl._label = label_for(stx)
+                # the bar under a window in a picture says what the bar under
+                # that window's own card says: the stretch's own reading, with
+                # its gaps filled and anything read in front of the root - a
+                # neighbour's sidebar landing in the same row - dropped
+                mine, whole = sl.main_table(), stx.main_table()
+                if mine and mine.path and whole and whole.path:
+                    mine.path = mend_path(mine.path, [whole.path])
             parts.append(furnish.screen_shot(
                 {"t0": s["t0"], "t1": s["t1"]},
                 [(sl, shape) for _, sl, shape in subjects],
