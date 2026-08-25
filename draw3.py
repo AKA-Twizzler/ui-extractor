@@ -2501,6 +2501,18 @@ def mend_cells(sl, full):
             # a path bar has no gaps, so the middle fills in; the tail stays
             # the stretch's own, because a selection deepens the real bar
             st_.path = list(ft.path[hits[0]:hits[-1] + 1])
+        elif st_.path and ft.path:
+            # Nothing in this stretch's bar lines up with the window's own.
+            # A bar reads from the disk down to the folder shown, so a bar
+            # whose LAST crumb is the window's own folder but whose head is
+            # not on the window's path was read off something else standing
+            # in that row - a sidebar name in the same strip. The window's
+            # own bar, read whole elsewhere, is the one that stood there.
+            same_end = (fold(flat(st_.path[-1])) == fold(flat(ft.path[-1]))
+                        if st_.path and ft.path else False)
+            starts = any(name_fits(st_.path[0], c) for c in ft.path)
+            if same_end and not starts:
+                st_.path = list(ft.path)
     # the sidebar: fixed furniture, filled in when the stretch saw only part
     if ft.side and st_.side and len(ft.side) > len(st_.side):
         walk = 0
