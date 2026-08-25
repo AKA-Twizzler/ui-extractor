@@ -4256,7 +4256,7 @@ def note(records_path, diary_text=None):
             spare_w = [r for r in real_w
                        if not any(furnish._within(r, c) > 0.7
                                   and furnish._within(c, r) > 0.7 for c in held)]
-            if spare_w:
+            if True:
                 fresh, taken_k = [], set()
                 for r in spare_w:
                     best, bk = 0.0, None

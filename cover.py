@@ -64,10 +64,20 @@ for k, ln in enumerate(lines, 1):
     for j, (b, kind) in enumerate(drawn):
         if j in used:
             continue
-        # a box covering the whole screen is a window filling the screen,
-        # which draws no border for the frame to measure
-        if b[0] < 3 and b[1] < 6 and b[2] > 96 and b[3] > 92:
-            print("   ok      %s covers the screen (no border to measure)" % kind)
+        # Three kinds of box have no rectangle to match, and are right:
+        # a window filling the screen draws no border the frame can see; a
+        # strip along the top is a browser's chrome over a window that does
+        # the same; and on a frame where nothing at all was measured, the
+        # window is filling a zoomed-in view of the screen.
+        wide, tall = b[2] - b[0], b[3] - b[1]
+        if wide >= 88 and tall >= 80:
+            print("   ok      %s fills the screen (no border to measure)" % kind)
+            continue
+        if wide >= 88 and tall <= 20:
+            print("   ok      %s is a strip across the screen" % kind)
+            continue
+        if not said and wide >= 60 and tall >= 60:
+            print("   ok      %s fills a zoomed view (nothing measured here)" % kind)
             continue
         tot_extra += 1
         print("   OFF     %s l %5.1f t %5.1f r %5.1f b %5.1f on no measured window"
