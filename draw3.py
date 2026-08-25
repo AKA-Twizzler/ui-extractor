@@ -2920,6 +2920,33 @@ def note(records_path, diary_text=None):
                     break
             else:
                 clusters.append([list(r), [mem]])
+        # A window standing still is read in pieces, and a piece read on its
+        # own looks like a place of its own. Two places that lie one inside
+        # the other are one place seen twice, so they are put together; a
+        # window that really moved leaves places that do not sit inside each
+        # other at all. Without this the same window changed shape from one
+        # picture to the next, drawn around whichever corner of it had words.
+        merged = True
+        while merged and len(clusters) > 1:
+            merged = False
+            for i in range(len(clusters)):
+                for j in range(len(clusters)):
+                    if i == j:
+                        continue
+                    a, b = clusters[i][0], clusters[j][0]
+                    small = min((a[2] - a[0]) * (a[3] - a[1]),
+                                (b[2] - b[0]) * (b[3] - b[1]))
+                    w = min(a[2], b[2]) - max(a[0], b[0])
+                    h = min(a[3], b[3]) - max(a[1], b[1])
+                    if w > 0 and h > 0 and (w * h) / max(1.0, small) > 0.6:
+                        clusters[i][0] = [min(a[0], b[0]), min(a[1], b[1]),
+                                          max(a[2], b[2]), max(a[3], b[3])]
+                        clusters[i][1].extend(clusters[j][1])
+                        clusters.pop(j)
+                        merged = True
+                        break
+                if merged:
+                    break
         best = min(clusters, key=lambda c: min(abs(m[0] - want) for m in c[1]))
         # Every reading in the cluster, not the straight-on ones alone. A
         # window does not get smaller because one moment read less of it:
