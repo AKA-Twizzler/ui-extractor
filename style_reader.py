@@ -103,17 +103,9 @@ def band_of(bands_, y0, y1, bgr=None, x0=None, x1=None):
     while the row's own words sit on plain background -- measured on a
     note page, where a "purple band" was the camera, not a highlight.
     """
-    best, best_over = None, 0.0
     for b in bands_:
         top, bottom = max(b["y0"], y0), min(b["y1"], y1)
-        mid = (b["y0"] + b["y1"]) / 2.0
-        # Most of the BAND has to lie in the row, not most of the row in the
-        # band. A row's box is the line of text with the space around it and
-        # stands taller than the paint behind it, so asking the paint to
-        # cover the whole row throws away every real highlight.
-        if bottom - top < 0.6 * max(1, min(y1 - y0, b["y1"] - b["y0"])):
-            continue
-        if not (y0 <= mid <= y1):
+        if bottom - top < 0.6 * max(1, y1 - y0):
             continue
         if bgr is not None and x0 is not None and x1 > x0:
             region = bgr[max(0, top):bottom, max(0, int(x0)):int(x1)]
@@ -122,12 +114,8 @@ def band_of(bands_, y0, y1, bgr=None, x0=None, x1=None):
             med = np.median(region.reshape(-1, 3), axis=0)
             if np.abs(med - np.array(b["colour"])).sum() > 60:
                 continue
-        # the paint that covers most of the row, not merely the first found:
-        # a thin stripe overlapping the row's edge must not beat the band
-        # the row actually sits on
-        if bottom - top > best_over:
-            best, best_over = b, bottom - top
-    return best
+        return b
+    return None
 
 
 # ----------------------------------------------------------------- icons
@@ -469,20 +457,9 @@ def measure(pane_path, kind, data, res):
     icons = icons_before(img, geo) if geo else []
     said = [f"{out['look']['theme']} look"]
     banded, iconed, icon_hues = [], 0, {}
-    # A list is painted in alternating stripes, and every one of them is a
-    # band. The row the screen had SELECTED is the one whose paint stands
-    # out from that: a colour that is not grey at all, or a grey clearly
-    # lighter than the stripes around it. Marking every striped row as
-    # selected would say the whole list was picked out.
-    greys = sorted(sum(b["colour"]) / 3.0 for b in bd if b["hue"] == "grey")
-    usual = greys[len(greys) // 2] if greys else 0.0
-    def stands_out(b):
-        if b["hue"] not in ("grey", "black", "white"):
-            return True
-        return sum(b["colour"]) / 3.0 >= usual + 25
     for (row, _, mark), g, ic in zip(rows, geo, icons):
         b = band_of(bd, g["y0"], g["y1"], img, g["x0"], g["x1"])
-        if b and b["hue"] not in ("black", "white") and stands_out(b):
+        if b and b["hue"] not in ("black", "white"):
             mark["band"] = b["hue"]
             mark["band_colour"] = b["colour"]
             banded.append((b["hue"], _name(row)[:40]))
