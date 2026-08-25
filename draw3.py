@@ -3097,10 +3097,29 @@ def note(records_path, diary_text=None):
         for st in sorted(sts, key=lambda s: s.times[0]):
             mine = set(st.times)
             free = [g for g in groups if not any(mine & set(o.times) for o in g)]
-            if free:
-                max(free, key=lambda g: max(o.times[-1] for o in g)).append(st)
-            else:
+            if not free:
                 groups.append([st])
+                continue
+            # a window keeps its place when it is navigated, so of the
+            # windows this state COULD continue, it continues the one
+            # standing where it stands; with no place to compare, the one
+            # that was on screen most recently
+            here = home_at(st, st.times[0])
+
+            def fits(g):
+                prev = max(g, key=lambda o: o.times[-1])
+                there = home_at(prev, prev.times[-1])
+                share = 0.0
+                if here and there:
+                    w = min(here[2], there[2]) - max(here[0], there[0])
+                    h = min(here[3], there[3]) - max(here[1], there[1])
+                    if w > 0 and h > 0:
+                        small = min((here[2] - here[0]) * (here[3] - here[1]),
+                                    (there[2] - there[0]) * (there[3] - there[1]))
+                        share = (w * h) / max(1.0, small)
+                return (round(share, 2), prev.times[-1])
+
+            max(free, key=fits).append(st)
         return groups
 
     for w, sts in [(w, g) for w in windows
