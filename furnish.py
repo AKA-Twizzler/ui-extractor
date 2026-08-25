@@ -454,20 +454,6 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
         return (f'<div class="{cls}" style="{slot_style(box, W, H, bar=barred)}{extra}">'
                 + lab + "</div>")
 
-    # the windows standing behind, and the places words were read that no
-    # window of this stretch owns
-    for tag, box in behind_cards:
-        drawn.append(box)
-        out.append(outline(box, tag))
-    for box, tag, kind in ghosts:
-        if not box:
-            continue
-        if any(_shares(box, d) > 0.5 for d in drawn + [r for _, r in subjects if r]):
-            continue
-        if any(_close(box, d) for d in drawn):
-            continue
-        drawn.append(box)
-        out.append(outline(box, tag, "sn-ghost sn-away" if kind == "away" else "sn-ghost"))
     def uncover(rect):
         """A window behind is drawn only because it was SEEN, so the window
         in front cannot have been standing over it. Where the front window's
