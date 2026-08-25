@@ -3417,10 +3417,16 @@ def note(records_path, diary_text=None):
                 # and the style sheet have in common, where a glyph's
                 # measured box and a font-size are not the same quantity.
                 def pitch_of(p_):
-                    ys = sorted(it["box"][1] for it in draw2.items_of(p_))
+                    got = draw2.items_of(p_)
+                    hs = sorted(it["box"][3] - it["box"][1] for it in got
+                                if it["box"][3] > it["box"][1])
+                    if not hs:
+                        return None
+                    tall = hs[len(hs) // 2]            # how tall a line of it is
+                    ys = sorted(it["box"][1] for it in got)
                     tops = []
                     for y in ys:                       # words on one line are one line
-                        if not tops or y - tops[-1] > 6:
+                        if not tops or y - tops[-1] > 0.6 * tall:
                             tops.append(y)
                     if len(tops) < 5:
                         return None
