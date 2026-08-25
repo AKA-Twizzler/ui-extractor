@@ -474,13 +474,45 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
                 x0 = bx1                      # a bar standing down the side
         return [x0, y0, max(x1, x0 + 8), max(y1, y0 + 8)]
 
+    # The boxes the front windows really filled are settled first: a window
+    # behind is drawn because it was SEEN, and whether it was seen depends
+    # on what stood over it.
+    for tag, box in behind_cards:
+        drawn.append(clip_box(box, W, H, bar=barred))
+    fronts = []
+    for st, rect in subjects:
+        fronts.append((st, uncover(clip_box(rect, W, H, bar=barred)) if rect else None))
+    solid = [r for _, r in fronts if r]
+
+    def in_view(box):
+        """What is left of a window once the windows in front are over it.
+        Covered whole, it was not on the screen, and drawing its outline
+        would put back something the video never showed."""
+        return max((_shares(box, r) for r in solid), default=0.0) < 0.92
+
+    # the windows standing behind, and the places words were read that no
+    # window of this stretch owns
+    for tag, box in behind_cards:
+        box = clip_box(box, W, H, bar=barred)
+        if in_view(box):
+            out.append(outline(box, tag))
+    for box, tag, kind in ghosts:
+        if not box:
+            continue
+        box = clip_box(box, W, H, bar=barred)
+        if any(_shares(box, d) > 0.5 for d in drawn) or not in_view(box):
+            continue
+        if any(_close(box, d) for d in drawn):
+            continue
+        drawn.append(box)
+        out.append(outline(box, tag, "sn-ghost sn-away" if kind == "away" else "sn-ghost"))
+
     # the windows this stretch is about: the top layer, drawn with its real
     # content at a size that reads, cut off by the edges of the box it
     # really stood in
-    for z, (st, rect) in enumerate(subjects):
+    for z, (st, rect) in enumerate(fronts):
         if not rect:
             continue
-        rect = uncover(clip_box(rect, W, H, bar=barred))
         st.shape = rect
         html = window(st, behind=False) or st.plain_window_html()
         st.shape = None
