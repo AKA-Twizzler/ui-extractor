@@ -173,6 +173,8 @@ def check(path, frames=None):
                 lo, hi = st.group(1), st.group(2) or st.group(1)
                 boxes = [p for (p, _) in _boxes(ln, "sn-slot") + _boxes(ln, "sn-ghost")
                          + _boxes(ln, "sn-camera")]
+                if "sn-deskbar" in ln:
+                    boxes.append((0.0, 0.0, 100.0, 3.0))   # the bar is drawn too
                 if not boxes:
                     continue
                 out_of, seen = 0, 0
