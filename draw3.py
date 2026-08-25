@@ -3322,6 +3322,25 @@ def note(records_path, diary_text=None):
         ui = heights[len(heights) // 4] * furnish.CANVAS_W / max(1, Wf)
         furnish.UI_TXT = min(16.0, max(5.0, ui))
 
+    # How wide the note's own text ran inside its pane. A note is set to a
+    # readable line length, not to the width of the window, so a drawn note
+    # spread over the whole pane does not look like the note in the video.
+    # The measure is the words' own span against the pane they sat in.
+    for st in states:
+        wide = []
+        for m, g in getattr(st, "pieces", ()):
+            for p_ in g.get("panes") or []:
+                if p_.get("kind") != "an open document":
+                    continue
+                pw = p_["box"][2] - p_["box"][0]
+                xs = [it["box"] for it in draw2.items_of(p_) if it["box"][2] - it["box"][0] > 20]
+                if pw > 0 and len(xs) >= 6:
+                    span = max(b[2] for b in xs) - min(b[0] for b in xs)
+                    if 0.2 <= span / pw <= 1.0:
+                        wide.append(span / pw)
+        if wide:
+            st._doc_wide = round(100 * med(sorted(wide)))
+
     for st in states:
         for t_, b_ in getattr(st, "_h1_read", ()):
             s_ = next((x for x in spans if t_ in x["ts"]), None)

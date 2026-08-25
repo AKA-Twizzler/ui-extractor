@@ -292,7 +292,10 @@ def obsidian(st, behind=True):
         # On the window's own card it is only a hole at the top: the card
         # is the window rebuilt to READ, so it starts at its first line.
         pad = getattr(st, "_doc_pad", 0) if (not behind and getattr(st, "shape", None)) else 0
-        sty_doc = f' style="padding-top:{pad}px"' if pad else ""
+        wide = getattr(st, "_doc_wide", 0)
+        bits = ([f"padding-top:{pad}px"] if pad else []) + \
+               ([f"--sn-line:{wide}%"] if wide and wide < 98 else [])
+        sty_doc = f' style="{";".join(bits)}"' if bits else ""
         cols.append(f'<div class="sn-doc"{sty_doc}>' + note_html(st, doc, title) + "</div>")
     grid = "30px " + ("minmax(180px, 38fr) " if tree else "") + ("62fr" if doc else "")
     body = f'<div class="sn-cols sn-obsidian-cols" style="grid-template-columns: {grid.strip()}">' + "".join(cols) + "</div>"
