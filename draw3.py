@@ -2888,13 +2888,14 @@ def note(records_path, diary_text=None):
         return got
     if spans:
         parts += ["## Where the windows stood, moment by moment", "",
-                  "Where everything stood, and nothing more. Each picture is the shape of the screen over that stretch of "
-                  "time: the desktop bar with its own words along the top, and every window outlined where it stood, "
-                  "at the size it was, named. The window the stretch is about is the one drawn brightest. Nothing is "
-                  "filled in here and no photograph is ever pasted in -- where the camera covered the screen, that "
-                  "corner is outlined and said. Every window's content is drawn below, large enough to read. A stretch "
-                  "covers several timestamps whenever the screen stood still, and the stamp in the corner says which; "
-                  "where the reader measured a window's edges those are the edges drawn, otherwise they are taken from "
+                  "Each picture is the shape of the screen over that stretch of time: the desktop bar with its own "
+                  "words along the top, and every window standing where it stood, at the size it was. The window the "
+                  "stretch is about is filled in with what it really said, at type that reads, cut off by the edges of "
+                  "the box it stood in; every window behind it is a named outline, because only the front one was "
+                  "fully in view. No photograph is ever pasted in -- where the camera covered the screen, that corner "
+                  "is outlined and said. Each window is drawn again below, on its own and whole. A stretch covers "
+                  "several timestamps whenever the screen stood still, and the stamp in the corner says which; where "
+                  "the reader measured a window's edges those are the edges drawn, otherwise they are taken from "
                   "where that window's own words sat.", ""]
         last_T = None
         for s in spans:
