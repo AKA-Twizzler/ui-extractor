@@ -171,15 +171,29 @@ def find(path):
     verts, hors = _thin(verts), _thin(hors)
     shelf = _index(hors)
     min_w, min_h = MIN_W * w, MIN_H * h
+    # A window pushed off the side of the screen has only ONE side of its
+    # own; the screen's edge is where the rest of it went. Without the edge
+    # standing in as a side, such a window is never measured at all and has
+    # to be guessed at instead. The edge only ever becomes a window's side
+    # when that window's top or foot RUNS to it, which is what a window cut
+    # off by the screen does and a window sitting short of it does not.
+    edges = {0.0, float(w - 1)}
+    sides = [(x, ya, yb, False) for x, ya, yb in verts] + \
+            [(x, 0.0, float(h), True) for x in edges]
+    sides.sort(key=lambda v: v[0])
     found = []
-    for i, (x0, ya, yb) in enumerate(verts):
-        for x1, yc, yd in verts[i + 1:]:
-            if x1 - x0 < min_w:
+    for i, (x0, ya, yb, e0) in enumerate(sides):
+        for x1, yc, yd, e1 in sides[i + 1:]:
+            if x1 - x0 < min_w or (e0 and e1):
                 continue
             top, bot = max(ya, yc), min(yb, yd)
             if bot - top < min_h:
                 continue
-            share = (bot - top) / max(yb - ya, yd - yc)
+            # the screen's edge runs the whole height, so it says nothing
+            # about how much of a side this window's own side gave up
+            runs = [yb - ya] if not e0 else []
+            runs += [yd - yc] if not e1 else []
+            share = (bot - top) / max(runs)
             if share < 0.55:
                 continue
             slack = max(12, int(0.05 * (bot - top)))
