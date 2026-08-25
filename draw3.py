@@ -3583,7 +3583,7 @@ def note(records_path, diary_text=None):
             t_ = st_.main_table()
             if st_.name == "The Finder window" and t_ and len(t_.rows) >= 4:
                 lists.append((t_, {fold(flat((r.get("cells") or [""])[0]))
-                                   for r in t_.rows if (r.get("cells") or [""])[0]}))
+                                   for r in t_.rows if (r.get("cells") or [""])[0]}, st_))
         if not lists:
             return
         for st_ in states:
@@ -3596,11 +3596,11 @@ def note(records_path, diary_text=None):
             keys = {fold(flat(n)) for n in names if n}
             if len(keys) < 4:
                 continue
-            best, hit = None, 0
-            for t_, ks in lists:
+            best, hit, from_ = None, 0, None
+            for t_, ks, o_ in lists:
                 n = len(keys & ks)
                 if n > hit:
-                    best, hit = t_, n
+                    best, hit, from_ = t_, n, o_
             if best is None or hit < max(4, 0.6 * len(keys)):
                 continue
             head = list(best.header) or ["Name"]
@@ -3631,6 +3631,10 @@ def note(records_path, diary_text=None):
             q["model"] = tab
             st_.parts.sort(key=lambda x: x["slot"])
             st_.name = "The Finder window"
+            # and the folder it was showing: the window's own title bar,
+            # read whole at the moment the window stood clear
+            if not st_.title and from_ is not None and from_.title:
+                st_.title = from_.title
 
     def words_in(box, st_, times):
         """How many of this window's OWN words were read inside that box."""
