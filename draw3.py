@@ -4153,9 +4153,11 @@ def note(records_path, diary_text=None):
             free = [r for r in frame_rects(s)
                     if not any(furnish._within(r, c) > 0.7
                                or furnish._within(c, r) > 0.7 for c in claimed)]
+            on_rect_k = set()
             for k, (tag_, box_) in enumerate(behinds):
                 if any(furnish._within(box_, r) > 0.9
                        and furnish._within(r, box_) > 0.9 for r in free):
+                    on_rect_k.add(k)
                     continue                       # already on its rectangle
                 # both ways round: the rectangle mostly inside this box AND
                 # this box mostly inside the rectangle. A window that fills
@@ -4182,9 +4184,13 @@ def note(records_path, diary_text=None):
                               or (small and (grown or over)))]
                 if len(near_) == 1:
                     behinds[k] = (tag_, list(near_[0]))
+                    on_rect_k.add(k)
+            # A box standing on a rectangle the frame MEASURED is not moved
+            # by panes or words: measurement outranks inference, and
+            # widening it afterwards puts the window back where it never was.
             for k, (tag_, box_) in enumerate(behinds):
                 own_ = behind_state.get(k)
-                if own_ is not None:
+                if own_ is not None and k not in on_rect_k:
                     box_ = hold_panes(list(box_), own_, s["ts"], Wf)
                     behinds[k] = (tag_, hold_words(box_, own_,
                                                    s["ts"], Wf, Hf))
