@@ -3071,6 +3071,15 @@ def note(records_path, diary_text=None):
                     subjects.append((st, sl, shape))
             if not subjects:
                 continue
+            # The frame draws its windows as rectangles, and those rectangles
+            # were measured off it. A box worked out from where a window's
+            # words sat is a guess about its edges; a rectangle on the frame
+            # IS its edges. So every box is pulled onto the measured
+            # rectangle it belongs to, which is what stops a window being
+            # drawn round whichever corner of it happened to hold text.
+            subjects = [(stx, sl, snap_to_frame(shape, s)) for stx, sl, shape in subjects]
+            for stx, sl, shape in subjects:
+                sl.rect = shape
             # deepest first: the bigger window lies under the smaller one
             subjects.sort(key=lambda x: -(x[2][2] - x[2][0]) * (x[2][3] - x[2][1]))
             # the windows truly behind, their own content where it sat: told
