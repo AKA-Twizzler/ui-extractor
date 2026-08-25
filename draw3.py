@@ -2459,7 +2459,7 @@ def desktop_bar(moments):
                     w = w.strip(" .,:;·|")
                     if not w or not re.match(r"^[A-Za-z][A-Za-z&'-]*$", w):
                         continue
-                    if any(same_text(w, x) for x in here):
+                    if any(same_text(w, bare(x)) for x in here):
                         continue
                     here.append(w if it["ok"] else "<i>" + w + "</i>")
     # The bar and the clock stand until they are read again. A bar is read
@@ -2473,10 +2473,10 @@ def desktop_bar(moments):
     for m in moments:
         got = words_at.get(m["ts"]) or []
         if len(got) >= 3:
-            if last_w and same_text(got[0], last_w[0]):
+            if last_w and same_text(bare(got[0]), bare(last_w[0])):
                 merged = list(last_w)
                 for w in got:
-                    if not any(same_text(w, x) for x in merged):
+                    if not any(same_text(bare(w), bare(x)) for x in merged):
                         merged.append(w)
                 last_w = merged
             else:
