@@ -3844,6 +3844,14 @@ def note(records_path, diary_text=None):
                         T0, hb = span_T.get(s["t0"]), home_at(st, s["t0"])
                         shape = (onto(T0, hb) if (T0 and hb) else None)
                 shape = shape or s["rects"].get(id(st)) or span_rect(st, s["t0"]) or st.rect
+                # A box as wide as the whole frame is the reader's own strip,
+                # not a window: it read a slab of the screen and the window's
+                # rect came back as the slab. This window's OWN rows say
+                # which rectangle on the frame it really is.
+                if shape and shape[2] - shape[0] >= 0.9 * Wf:
+                    by_rows = rect_over_panes(st, s)
+                    if by_rows and by_rows[2] - by_rows[0] < 0.9 * Wf:
+                        shape = by_rows
                 # A window holds the panes it was read from. Where a box
                 # worked out from readings comes out narrower than the
                 # panes themselves - a note window drawn as just its file
