@@ -404,6 +404,17 @@ def _shares(a, b):
     return (w * h) / max(1.0, small)
 
 
+def _within(a, b):
+    """How much of box a lies inside box b, nought to one. Which way round
+    matters: a small window sitting inside a big one is covered by it, while
+    the big one is barely touched."""
+    w = min(a[2], b[2]) - max(a[0], b[0])
+    h = min(a[3], b[3]) - max(a[1], b[1])
+    if w <= 0 or h <= 0:
+        return 0.0
+    return (w * h) / max(1.0, (a[2] - a[0]) * (a[3] - a[1]))
+
+
 def _close(a, b):
     """Two outlines in the same place, near enough to be the one window."""
     wide = max(1.0, min(a[2] - a[0], b[2] - b[0]))
@@ -495,7 +506,7 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
         """What is left of a window once the windows in front are over it.
         Covered whole, it was not on the screen, and drawing its outline
         would put back something the video never showed."""
-        return max((_shares(box, r) for r in solid), default=0.0) < 0.92
+        return max((_within(box, r) for r in solid), default=0.0) < 0.92
 
     # the windows standing behind, and the places words were read that no
     # window of this stretch owns
@@ -506,7 +517,7 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
         box = clip_box(box, W, H, bar=barred)
         if not in_view(box):
             continue
-        if any(_shares(box, d) > 0.8 or _close(box, d) for d in shown):
+        if any(_within(box, d) > 0.8 or _close(box, d) for d in shown):
             continue
         shown.append(box)
         out.append(outline(box, tag))
@@ -514,7 +525,7 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
         if not box:
             continue
         box = clip_box(box, W, H, bar=barred)
-        if any(_shares(box, d) > 0.5 for d in drawn) or not in_view(box):
+        if any(_within(box, d) > 0.5 for d in drawn) or not in_view(box):
             continue
         if any(_close(box, d) for d in drawn):
             continue
