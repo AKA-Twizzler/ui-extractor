@@ -3206,7 +3206,15 @@ def note(records_path, diary_text=None):
     secs_of = {m["ts"]: m.get("secs", 0) for m in moments}
     for st in states:
         outs = []
+        # Where the reader MEASURED this window's own edges, those moments
+        # are the whole story of where it stood: a box worked out from where
+        # its words sat is a different shape - taller or wider by whatever
+        # the words happened to cover - and averaging the two carries that
+        # error into every moment the window has to be drawn from memory.
+        only = set(st.measured) & set(st.rects)
         for t, r in st.rects.items():
+            if only and t not in only:
+                continue
             if not r or r[2] <= r[0]:
                 continue
             s_ = next((x for x in spans if t in x["ts"]), None)
