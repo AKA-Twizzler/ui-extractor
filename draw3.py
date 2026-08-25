@@ -2597,7 +2597,13 @@ def behind_for(slice_st, span, subject):
         if tops:
             W = span["size"][0] if "size" in span else 3840
             H = span["size"][1] if "size" in span else 2160
-            y1 = max(rect[1], max(t[4] for t in tops) + 0.02 * H)
+            # the strip ends where the window in front of it begins: that is
+            # all of it that was showing. Its own words must sit above that
+            # line, and when they do not they were never part of this strip.
+            y1 = rect[1] if rect[1] > 0.01 * H else max(t[4] for t in tops) + 0.02 * H
+            if os.environ.get("UIX_STRIP"):
+                print("   strip y1", round(y1), "rect", [round(v) for v in rect],
+                      "tops", round(max(t[4] for t in tops)), file=sys.stderr)
             out.append((None, [0, 0, W, y1], strip))
     return out
 
