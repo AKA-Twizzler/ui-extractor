@@ -1497,12 +1497,13 @@ def mend_path(mine, others):
     # else stood in that row. The other reading, which does start at the
     # disk, is the bar that stood there.
     for other in others:
-        if not other or not out:
+        if not other or len(out) < 2 or len(other) < 2:
             continue
-        if (crumb_same(out[-1], other[-1])
-                and not any(crumb_same(out[0], c) for c in other)
-                and len(other) > 1):
-            out = list(other)
+        end = next((k for k, c in enumerate(other)
+                    if crumb_same(c, out[-1])), None)
+        if end is not None and end > 0 \
+                and not any(crumb_same(out[0], c) for c in other):
+            out = list(other[:end + 1])
             break
     for other in others:
         i = 0
