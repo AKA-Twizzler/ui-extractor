@@ -3905,6 +3905,14 @@ def note(records_path, diary_text=None):
             # whole where its zoom put it; the screen's edge cuts the rest
             behinds, carded = [], set()
             lo, hi = s["t0"], s["t1"]
+            # rectangles the frame drew that no window in front stands on:
+            # the screen drew them, so a window IS there, and a window
+            # whose carried place lands on one is on the screen whatever
+            # else can be said for it
+            held = [r for _, _, r in subjects if r]
+            spare_r = [r for r in frame_rects(s)
+                       if not any(furnish._within(r, c) > 0.6
+                                  or furnish._within(c, r) > 0.6 for c in held)]
             for own in states:
                 if own in sub_states or id(own) in carded or T is None:
                     continue
@@ -3936,7 +3944,10 @@ def note(records_path, diary_text=None):
                        for _, _, r in subjects):
                     continue
                 lo1, hi1 = reach.get(id(own), ("", ""))
+                on_rect = any(furnish._within(r, box) > 0.6
+                              or furnish._within(box, r) > 0.6 for r in spare_r)
                 alive = (id(own) in seen_here or len(long_hits) >= 2
+                         or on_rect
                          or (lo1 and lo1 <= lo and hi <= hi1))
                 if not alive:
                     # its own words read inside its place this stretch
