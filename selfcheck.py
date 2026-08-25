@@ -154,11 +154,19 @@ def check(path, frames=None):
                     bad("nothing swallows a window in view", where,
                         "an outline is drawn under a window that covered it whole")
 
-        # 9b. one place, one window: an outline drawn inside another outline
-        #     is the same window twice - its old place and its new one
+        # 9b. one place, one window: two outlines of a like size over the same
+        #     ground are one window drawn twice - its old place and its new
+        #     one. A small outline inside a big one is a different thing: a
+        #     window standing in front of another, which is what a browser's
+        #     tab strip above a window looks like.
         for a in range(len(ghosts)):
             for b in range(len(ghosts)):
-                if a != b and _overlap(ghosts[a][0], ghosts[b][0]) > 0.85:
+                if a == b:
+                    continue
+                aa = ghosts[a][0][2] * ghosts[a][0][3]
+                bb = ghosts[b][0][2] * ghosts[b][0][3]
+                like = min(aa, bb) / max(1e-6, max(aa, bb)) > 0.5
+                if like and _overlap(ghosts[a][0], ghosts[b][0]) > 0.85:
                     bad("one outline per window", where,
                         "two outlines mark the same place, so one window is drawn twice")
 
