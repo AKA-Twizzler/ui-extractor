@@ -3436,14 +3436,22 @@ def note(records_path, diary_text=None):
                             box[1] = m[3]
                         elif box[1] < m[1] < box[3] <= m[3]:
                             box[3] = m[1]
-                for r in frame_rects(s):
-                    if not (box[0] <= r[0] and r[2] <= box[2]
-                            and box[1] <= r[1] and r[3] <= box[3]):
-                        continue
-                    if r[3] - r[1] < 0.5 * (box[3] - box[1]):
-                        continue
+                inside = [r for r in frame_rects(s)
+                          if box[0] <= r[0] and r[2] <= box[2]
+                          and box[1] <= r[1] and r[3] <= box[3]
+                          and r[3] - r[1] >= 0.5 * (box[3] - box[1])]
+                if inside:
+                    r = max(inside, key=lambda r: r[3] - r[1])
                     box[1], box[3] = r[1], r[3]
-                    break
+                    # A pane running the window's whole height sits flush
+                    # against the side it is on, so that side of the pane is
+                    # that side of the window - but only where no other pane
+                    # was measured further out, and only on the side where
+                    # the window does not go on past it.
+                    if r[0] <= min(x[0] for x in inside) and r[2] < box[2]:
+                        box[0] = r[0]
+                    if r[2] >= max(x[2] for x in inside) and r[0] > box[0]:
+                        box[2] = r[2]
                 sl.rect = box
             subjects = [(stx, sl, sl.rect) for stx, sl, _ in subjects]
             # deepest first: the bigger window lies under the smaller one
