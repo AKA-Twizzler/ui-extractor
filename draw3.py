@@ -3190,10 +3190,16 @@ def note(records_path, diary_text=None):
             inter = w * h
             ra = max(1.0, (r[2] - r[0]) * (r[3] - r[1]))
             if min(inter / area, inter / ra) >= 0.7:
-                fits.append((ra, r))
-        # the outermost rectangle that still matches: a window is drawn as a
-        # rectangle and so is each pane inside it, and it is the window that
-        # is wanted, never one of its panes
+                fits.append((ra, r, inter / area))
+        # The tightest rectangle that holds the whole box. A box worked out
+        # from where a window's words sat always sits INSIDE that window, so
+        # the window is the smallest measured rectangle that contains it -
+        # a pane inside the window would cut a corner off the box, and a
+        # bigger rectangle drawn from some other window's edge would swallow
+        # ground this window never stood on.
+        whole = [(ra, r) for ra, r, cover in fits if cover >= 0.95]
+        if whole:
+            return list(min(whole)[1])
         return list(max(fits)[1]) if fits else box
 
     home_reads = {}                # state -> every reading's box, carried home
