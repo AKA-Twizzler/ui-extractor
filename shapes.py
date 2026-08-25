@@ -294,6 +294,31 @@ def find(path):
             if e0 and not o[4] and abs(o[2] - x1) <= 0.06 * wide and o[0] > x0 + step:
                 drop.add(id(r))
                 break
+    # And a band across the screen is not a window. A video caught mid-scroll
+    # paints the screen in slabs, and the boundary of a slab runs the WHOLE
+    # width - every window on the screen is unpainted above it. Paired with
+    # the screen's edge, that boundary makes a rectangle as wide as the
+    # screen and a third as tall, standing over the very window it was a
+    # slab of. Where a window with two sides of its OWN covers most of such
+    # a rectangle and shares the side it was built on, the rectangle is that
+    # window's slab, not a window.
+    for r in kept:
+        x0, yt, x1, yb, e0, e1 = r[:6]
+        if not (e0 or e1) or id(r) in drop:
+            continue
+        area = max(1.0, (x1 - x0) * (yb - yt))
+        for o in kept:
+            if o is r or o[4] or o[5] or id(o) in drop:
+                continue
+            side = abs(o[0] - x0) <= 0.02 * (x1 - x0) if e1 else \
+                abs(o[2] - x1) <= 0.02 * (x1 - x0)
+            if not side:
+                continue
+            w = min(o[2], x1) - max(o[0], x0)
+            h = min(o[3], yb) - max(o[1], yt)
+            if w > 0 and h > 0 and (w * h) / area > 0.5:
+                drop.add(id(r))
+                break
     kept = [r for r in kept if id(r) not in drop]
     kept = [r[:4] for r in kept]
     # A window the video caught mid-scroll is drawn on the frame in slabs:
