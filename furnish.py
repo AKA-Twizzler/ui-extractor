@@ -121,6 +121,12 @@ def finder(st):
             folder = bool(r["folder"])
         elif not r.get("band") and r.get("icon") in ("green", "white"):
             folder = r["icon"] == "green"
+        elif size_i is not None and size_i < len(cells) and \
+                re.match(r"^\s*[\d.]+\s*(bytes|KB|MB|GB|TB)\b", cells[size_i] or "", re.I):
+            folder = False        # a folder is measured in items, never in bytes
+        elif re.search(r"\.(md|json|log|txt|csv|png|jpe?g|pdf|zip|py|js|ts|html|css|ya?ml|sh)$",
+                       name.strip(), re.I):
+            folder = False        # the name carries the kind on its end
         else:
             folder = None
         tds = []
