@@ -3152,7 +3152,10 @@ def note(records_path, diary_text=None):
         """The rectangles drawn on this stretch's own frame, near-duplicates
         folded together. These are window edges as the screen drew them, not
         edges worked out from where words sat."""
-        t0 = s["t0"]
+        return rects_at(s["t0"])
+
+    def rects_at(t0):
+        """The rectangles the screen drew on one moment's frame."""
         if t0 in _frame_rects:
             return _frame_rects[t0]
         m0 = next((mm for mm in moments if mm["ts"] == t0), None)
@@ -3183,6 +3186,22 @@ def note(records_path, diary_text=None):
         how far it slid - and that move carries this window across. It is
         two measurements and a ratio, not a guess about where words sat."""
         here = s["t0"]
+
+        def settled(u, t):
+            """That window's box at that moment where the SCREEN drew it: its
+            own measured edges, or a box that lands on a rectangle the frame
+            drew there, which is the same thing said twice."""
+            b = u.rects.get(t)
+            if not b:
+                return None
+            if t in getattr(u, "measured", ()):
+                return list(b)
+            for r in rects_at(t):
+                if (furnish._within(b, r) > 0.92
+                        and furnish._within(r, b) > 0.92):
+                    return list(r)
+            return None
+
         mine = [t for t in getattr(st, "measured", ()) if st.rects.get(t)]
         if not mine or here in mine:
             return None
@@ -3192,8 +3211,7 @@ def note(records_path, diary_text=None):
             for u in states:
                 if u is st:
                     continue
-                a = u.rects.get(t) if t in getattr(u, "measured", ()) else None
-                b = u.rects.get(here) if here in getattr(u, "measured", ()) else None
+                a, b = settled(u, t), settled(u, here)
                 if not a or not b or a[2] - a[0] <= 0 or a[3] - a[1] <= 0:
                     continue
                 kx = (b[2] - b[0]) / (a[2] - a[0])
