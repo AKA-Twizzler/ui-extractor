@@ -294,35 +294,6 @@ def find(path):
             if e0 and not o[4] and abs(o[2] - x1) <= 0.06 * wide and o[0] > x0 + step:
                 drop.add(id(r))
                 break
-    # And a band across the screen is not a window. A video caught mid-scroll
-    # paints the screen in slabs, and the boundary of a slab runs the WHOLE
-    # width - every window on the screen is unpainted above it. Paired with
-    # the screen's edge, that boundary makes a rectangle as wide as the
-    # screen and a third as tall, standing over the very window it was a
-    # slab of. Where a window with two sides of its OWN covers most of such
-    # a rectangle and shares the side it was built on, the rectangle is that
-    # window's slab, not a window.
-    for r in kept:
-        x0, yt, x1, yb = r[:4]
-        if id(r) in drop:
-            continue
-        area = max(1.0, (x1 - x0) * (yb - yt))
-        tall = max(1.0, yb - yt)
-        for o in kept:
-            if o is r or id(o) in drop:
-                continue
-            if (o[3] - o[1]) < 1.5 * tall:
-                continue                       # not the taller of the two
-            if (o[2] - o[0]) >= (x1 - x0):
-                continue     # a band lies WIDER than the window it is a slab of
-            near = 0.02 * max(1.0, x1 - x0)
-            if abs(o[0] - x0) > near and abs(o[2] - x1) > near:
-                continue                       # they do not stand on a side
-            ow = min(o[2], x1) - max(o[0], x0)
-            oh = min(o[3], yb) - max(o[1], yt)
-            if ow > 0 and oh > 0 and (ow * oh) / area > 0.5:
-                drop.add(id(r))
-                break
     kept = [r for r in kept if id(r) not in drop]
     kept = [r[:4] for r in kept]
     # A window the video caught mid-scroll is drawn on the frame in slabs:
@@ -354,6 +325,37 @@ def find(path):
             box[1], box[3] = min(box[1], b[1]), max(box[3], b[3])
         joined.append(box)
     kept = joined
+    # And a band across the screen is not a window. A video caught mid-scroll
+    # paints the screen in slabs, and the boundary of a slab runs the WHOLE
+    # width - every window on the screen is unpainted above it. Paired with
+    # the screen's edge, that boundary makes a rectangle as wide as the
+    # screen and a third as tall, standing over the very window it was a
+    # slab of. Where a window with two sides of its OWN covers most of such
+    # a rectangle and shares the side it was built on, the rectangle is that
+    # window's slab, not a window.
+    drop = set()
+    for r in kept:
+        x0, yt, x1, yb = r[:4]
+        if id(r) in drop:
+            continue
+        area = max(1.0, (x1 - x0) * (yb - yt))
+        tall = max(1.0, yb - yt)
+        for o in kept:
+            if o is r or id(o) in drop:
+                continue
+            if (o[3] - o[1]) < 1.5 * tall:
+                continue                       # not the taller of the two
+            if (o[2] - o[0]) >= (x1 - x0):
+                continue     # a band lies WIDER than the window it is a slab of
+            near = 0.02 * max(1.0, x1 - x0)
+            if abs(o[0] - x0) > near and abs(o[2] - x1) > near:
+                continue                       # they do not stand on a side
+            ow = min(o[2], x1) - max(o[0], x0)
+            oh = min(o[3], yb) - max(o[1], yt)
+            if ow > 0 and oh > 0 and (ow * oh) / area > 0.5:
+                drop.add(id(r))
+                break
+    kept = [r for r in kept if id(r) not in drop]
     k = W / float(w)
     out = [[r[0] * k, r[1] * k, r[2] * k, r[3] * k] for r in kept]
     if keyed:
