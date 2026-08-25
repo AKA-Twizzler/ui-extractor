@@ -3230,6 +3230,9 @@ def note(records_path, diary_text=None):
             subjects = [(stx, sl, snap_to_frame(shape, s)) for stx, sl, shape in subjects]
             for stx, sl, shape in subjects:
                 sl.rect = shape
+                # a box the frame itself drew: its edges are measured, and
+                # nothing worked out from where words sat may move them
+                sl._on_frame = any(shape == r for r in frame_rects(s))
             # deepest first: the bigger window lies under the smaller one
             subjects.sort(key=lambda x: -(x[2][2] - x[2][0]) * (x[2][3] - x[2][1]))
             # the windows truly behind, their own content where it sat: told
