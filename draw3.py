@@ -2741,7 +2741,14 @@ def note(records_path, diary_text=None):
         counts = []
         for w in windows:
             n = sum(1 for st in shown if st.name == w)
-            counts.append(f"{w[0].lower() + w[1:]}" + (f" ({n} states)" if n > 1 else ""))
+            # two windows of one program are two windows, and the count says
+            # so: how many windows, and how many folders or notes they went
+            # through between them
+            k = len(split_windows([st for st in shown if st.name == w]))
+            say = w[0].lower() + w[1:]
+            if k > 1:
+                say = f"{k} of {say}"
+            counts.append(say + (f" ({n} states)" if n > 1 else ""))
         head += " On screen: " + "; ".join(counts) + "."
     if clocks:
         head += f" The desktop clock read {clocks[0]}" + (f" at the start and {clocks[-1]} at the end." if clocks[-1] != clocks[0] else ".")
