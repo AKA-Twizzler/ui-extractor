@@ -54,13 +54,23 @@ def _ink_columns(work):
 
 
 def _borders(work):
-    """Columns holding a line that runs the full height of the window."""
+    """Columns holding a line that runs the full height of the window.
+
+    The height counted is the window's BODY, not its title bar: the divider
+    between a Finder window's sidebar and its list begins under the title
+    bar and stops above the path bar, so measured against the whole crop it
+    covers four fifths of it and was missed. Missing it reads the sidebar
+    and the list as one thing, and a Finder window comes back as prose.
+    """
     g = cv2.cvtColor(work, cv2.COLOR_BGR2GRAY)
     k = np.ones((1, 41), np.uint8)
     lighter = cv2.subtract(g, cv2.morphologyEx(g, cv2.MORPH_OPEN, k))
     darker = cv2.subtract(cv2.morphologyEx(g, cv2.MORPH_CLOSE, k), g)
-    cov = (cv2.max(lighter, darker) > 4).mean(axis=0)
-    return [x for x, v in enumerate(cov) if v >= 0.75]
+    ink = cv2.max(lighter, darker) > 4
+    h = ink.shape[0]
+    head, foot = int(0.10 * h), max(1, int(0.96 * h))
+    body = ink[head:foot] if foot > head + 4 else ink
+    return [x for x, v in enumerate(body.mean(axis=0)) if v >= 0.75]
 
 
 def text_gaps(work, engine, min_gap=40):
