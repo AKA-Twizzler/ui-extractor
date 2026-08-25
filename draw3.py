@@ -3517,14 +3517,6 @@ def note(records_path, diary_text=None):
                 # its own zoom - and the vote is brought into this stretch's
                 # zoom. One moment on its own is far too noisy to size a
                 # window by: a pane can be a sliver, or missed altogether.
-                hb_now = home_at(st, s["t0"])
-                kz_here = 1.0
-                if hb_now and hb_now[2] > hb_now[0] and shape and shape[2] > shape[0]:
-                    kz_here = (shape[2] - shape[0]) / (hb_now[2] - hb_now[0])
-                if not 0.2 <= kz_here <= 6.0:
-                    kz_here = (span_T.get(s["t0"]) or [1.0])[0]
-                home = pitch_home.get(st.name) or pitch_home.get("*")
-                sl._row_step = home * kz_here if home else 0.0
                 sl._doc_pad = getattr(st, "_doc_pad", 0)
                 # the line length this stretch's own moments measured, so a
                 # picture shows the note as wide as it ran THEN
@@ -3634,6 +3626,22 @@ def note(records_path, diary_text=None):
 
             for stx, sl, shape in subjects:
                 sl._doc_pad = span_pad(stx, shape[1])
+                # A window keeps one pitch: what changes between moments is
+                # how far the video was zoomed in. So every moment of this
+                # WINDOW votes - each one's measured pitch taken back out of
+                # its own zoom - and the vote is brought into this stretch's
+                # zoom, which is read off the window's OWN settled box
+                # against its box at home. One moment on its own is far too
+                # noisy to size a window by: a pane can be a sliver, or
+                # missed altogether.
+                hb_now = home_at(stx, s["t0"])
+                kz_here = 1.0
+                if hb_now and hb_now[2] > hb_now[0] and shape[2] > shape[0]:
+                    kz_here = (shape[2] - shape[0]) / (hb_now[2] - hb_now[0])
+                if not 0.2 <= kz_here <= 6.0:
+                    kz_here = (span_T.get(s["t0"]) or [1.0])[0]
+                home = pitch_home.get(stx.name) or pitch_home.get("*")
+                sl._row_step = home * kz_here if home else 0.0
 
             # which windows behind were read through or around the front ones
             seen_here = set()
