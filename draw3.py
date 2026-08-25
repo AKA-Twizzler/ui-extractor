@@ -3327,7 +3327,7 @@ def note(records_path, diary_text=None):
     # spread over the whole pane does not look like the note in the video.
     # The measure is the words' own span against the pane they sat in.
     for st in states:
-        wide = []
+        wide, at = [], {}
         for m, g in getattr(st, "pieces", ()):
             docs = [q for q in (g.get("panes") or []) if q.get("kind") == "an open document"]
             if not docs:
@@ -3339,8 +3339,10 @@ def note(records_path, diary_text=None):
                 span = max(b[2] for b in xs) - min(b[0] for b in xs)
                 if 0.2 <= span / pw <= 1.0:
                     wide.append(span / pw)
+                    at[m["ts"]] = span / pw
         if wide:
             st._doc_wide = round(100 * med(sorted(wide)))
+            st._doc_wide_at = at
 
     for st in states:
         for t_, b_ in getattr(st, "_h1_read", ()):
@@ -3408,6 +3410,12 @@ def note(records_path, diary_text=None):
                         sd.lines.insert(0, fd.lines[0])
                     mend_slice_tree(sl, st)
                 sl._doc_pad = getattr(st, "_doc_pad", 0)
+                # the line length this stretch's own moments measured, so a
+                # picture shows the note as wide as it ran THEN
+                mine = [v for t_, v in getattr(st, "_doc_wide_at", {}).items()
+                        if t_ in s["ts"]]
+                sl._doc_wide = (round(100 * med(sorted(mine))) if mine
+                                else getattr(st, "_doc_wide", 0))
                 sl.rects, sl.measured = st.rects, st.measured
                 # The shape the window really had. Where the reader measured
                 # its edges off the frame, those edges stand. Otherwise the
