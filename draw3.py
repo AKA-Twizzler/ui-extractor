@@ -3504,6 +3504,24 @@ def note(records_path, diary_text=None):
         return [min(m[1][0] for m in take), min(m[1][1] for m in take),
                 max(m[1][2] for m in take), max(m[1][3] for m in take)]
 
+    def hold_panes(box, st_, times, Wf_):
+        """The same box, widened sideways to hold the panes this window was
+        read from at these moments. A pane wider than half the frame is a
+        slab the reader took in whole, covering more than one window, and
+        it says nothing about where this one stood."""
+        if not box:
+            return box
+        lo_x, hi_x = box[0], box[2]
+        for m_, g_ in getattr(st_, "pieces", ()):
+            if m_["ts"] not in times:
+                continue
+            for p_ in (g_.get("panes") or []):
+                b_ = p_.get("box")
+                if not b_ or b_[2] - b_[0] > 0.5 * Wf_:
+                    continue
+                lo_x, hi_x = min(lo_x, b_[0]), max(hi_x, b_[2])
+        return [lo_x, box[1], hi_x, box[3]]
+
     def hold_words(box, st_, times, Wf_, Hf_):
         """The same box, widened to hold the words this window's own reading
         carries, where the reader found them at these moments.
@@ -3912,7 +3930,8 @@ def note(records_path, diary_text=None):
             # drawn somewhere else on the same picture.
             for i_, (stx, sl, shape) in enumerate(subjects):
                 if not getattr(sl, "_on_frame", False):
-                    sl.rect = hold_words(list(shape), stx, s["ts"], Wf, Hf)
+                    sl.rect = hold_words(hold_panes(list(shape), stx, s["ts"], Wf),
+                                         stx, s["ts"], Wf, Hf)
             subjects = [(stx, sl, sl.rect) for stx, sl, _ in subjects]
             for stx, sl, shape in subjects:
                 sl._doc_pad = span_pad(stx, shape[1])
@@ -4097,7 +4116,8 @@ def note(records_path, diary_text=None):
             for k, (tag_, box_) in enumerate(behinds):
                 own_ = behind_state.get(k)
                 if own_ is not None:
-                    behinds[k] = (tag_, hold_words(list(box_), own_,
+                    box_ = hold_panes(list(box_), own_, s["ts"], Wf)
+                    behinds[k] = (tag_, hold_words(box_, own_,
                                                    s["ts"], Wf, Hf))
             behinds.sort(key=lambda hb: -(hb[1][2] - hb[1][0]) * (hb[1][3] - hb[1][1]))
             if barred:
