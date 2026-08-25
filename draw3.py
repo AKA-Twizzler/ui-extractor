@@ -4185,6 +4185,30 @@ def note(records_path, diary_text=None):
                 if len(near_) == 1:
                     behinds[k] = (tag_, list(near_[0]))
                     on_rect_k.add(k)
+            # One program, one truth. Where several outlines of the SAME
+            # program are drawn and any of them stands on a rectangle the
+            # frame measured, the ones that do not are that window's older
+            # place still carried in the record - they are dropped, and the
+            # fullest name among them goes onto the ones that stand on the
+            # screen's own rectangle. Left in, the biggest of them wins the
+            # merge and the window is drawn where it never was.
+            best_name = {}
+            for k, (tag_, _b) in enumerate(behinds):
+                app = tag_.split(":")[0].strip()
+                if k in on_rect_k and len(tag_) > len(best_name.get(app, "")):
+                    best_name[app] = tag_
+            keep = []
+            for k, (tag_, box_) in enumerate(behinds):
+                app = tag_.split(":")[0].strip()
+                if app in best_name and k not in on_rect_k:
+                    continue
+                if k in on_rect_k and len(best_name.get(app, "")) > len(tag_):
+                    tag_ = best_name[app]
+                keep.append((k, tag_, box_))
+            on_rect_k = {i for i, (k, _t, _b) in enumerate(keep) if k in on_rect_k}
+            behind_state = {i: behind_state.get(k) for i, (k, _t, _b) in enumerate(keep)}
+            behinds = [(t, b) for _k, t, b in keep]
+
             # A box standing on a rectangle the frame MEASURED is not moved
             # by panes or words: measurement outranks inference, and
             # widening it afterwards puts the window back where it never was.
