@@ -182,9 +182,15 @@ _CAM: dict[str, object] = {}
 
 def camera_box(path):
     """The camera picture laid over the screen, found by its colour: a
-    screen's furniture is nearly grey, a camera's picture is not. The one
-    large, solid patch of colourful pixels is the camera; small colourful
-    marks (icons, a selection band) are far too little of the frame."""
+    screen's furniture is nearly grey, a camera's picture is not.
+
+    Counting one unbroken patch of colour is too brittle to trust: a face,
+    dark hair and a shadow break the camera's picture into pieces, and the
+    same camera then passes at one moment and fails at the next. So the
+    frame is scored in coarse squares instead - a square counts when a
+    third of it is colourful - and the largest block of touching squares is
+    the camera. Small colourful marks (an icon, a selection band) never
+    fill a block that wide and that tall, so they fall out on their own."""
     if path in _CAM:
         return _CAM[path]
     if not path or not os.path.exists(path):
@@ -195,19 +201,23 @@ def camera_box(path):
     im = im.resize((320, max(1, int(320 * H / W))), Image.BILINEAR)
     a = np.asarray(im, dtype=np.int16)
     sat = a.max(axis=2) - a.min(axis=2)
-    mask = sat > 45
-    lab, n = ndimage.label(mask)
+    mask = (sat > 45)
+    sh, sw = mask.shape
+    cell = 8
+    gh, gw = sh // cell, sw // cell
+    grid = mask[:gh * cell, :gw * cell].reshape(gh, cell, gw, cell).mean(axis=(1, 3))
+    lab, n = ndimage.label(grid > 0.33)
     best = None
     for i in range(1, n + 1):
         ys, xs = np.where(lab == i)
-        if ys.size < 0.03 * mask.size:
-            continue
         y0, y1, x0, x1 = ys.min(), ys.max(), xs.min(), xs.max()
-        fill = ys.size / max(1, (y1 - y0 + 1) * (x1 - x0 + 1))
-        if fill < 0.45:
+        w, h = (x1 - x0 + 1) / gw, (y1 - y0 + 1) / gh
+        if w < 0.12 or h < 0.12 or w * h < 0.03:
+            continue
+        if ys.size / ((y1 - y0 + 1) * (x1 - x0 + 1)) < 0.5:
             continue
         if best is None or ys.size > best[0]:
-            best = (ys.size, [x0, y0, x1 + 1, y1 + 1])
+            best = (ys.size, [x0 * cell, y0 * cell, (x1 + 1) * cell, (y1 + 1) * cell])
     out = None
     if best:
         k = W / 320.0
