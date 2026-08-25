@@ -492,10 +492,17 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
 
     # the windows standing behind, and the places words were read that no
     # window of this stretch owns
+    # the biggest first, so a window's older place - the same window before
+    # it was navigated, still carried in the record - does not get a second
+    # outline inside the one that is really showing
     for tag, box in behind_cards:
         box = clip_box(box, W, H, bar=barred)
-        if in_view(box):
-            out.append(outline(box, tag))
+        if not in_view(box):
+            continue
+        if any(_shares(box, d) > 0.8 or _close(box, d) for d in shown):
+            continue
+        shown.append(box)
+        out.append(outline(box, tag))
     for box, tag, kind in ghosts:
         if not box:
             continue
