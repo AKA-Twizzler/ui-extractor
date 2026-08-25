@@ -3007,6 +3007,8 @@ def note(records_path, diary_text=None):
             head = f"### {s['t0']}" + ("" if s["t0"] == s["t1"] else f" to {s['t1']}") + \
                    " - " + " \u00b7 ".join(label_for(st) for st, _, _ in subjects)
             parts += [head, ""]
+            for stx, sl, _ in subjects:
+                sl._label = label_for(stx)
             parts.append(furnish.screen_shot(
                 {"t0": s["t0"], "t1": s["t1"]},
                 [(sl, shape) for _, sl, shape in subjects],
