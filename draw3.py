@@ -2211,6 +2211,15 @@ def state_slice(st, t0, t1):
     here, whole = out.main_table(), st.main_table()
     if here and here.path and whole and whole.path:
         here.path = mend_path(here.path, [whole.path])
+    # A file tree is the window's own furniture, and one stretch may read
+    # only a handful of its rows, out of the order they stood in. The
+    # window's whole tree - the same rows, gathered and put back in order
+    # across every moment of this same view - is what that stretch was
+    # looking at, so it is what the picture shows.
+    mine, all_of = out.tree(), st.tree()
+    if mine is not None and all_of is not None and mine is not all_of \
+            and len(all_of.lines) > len(mine.lines):
+        mine.lines = list(all_of.lines)
     return out
 
 
