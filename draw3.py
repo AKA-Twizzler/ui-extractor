@@ -4154,6 +4154,15 @@ def note(records_path, diary_text=None):
                     if not any(furnish._within(r, c) > 0.7
                                or furnish._within(c, r) > 0.7 for c in claimed)]
             on_rect_k = set()
+            # A box is judged by the part of it that is ON the screen. These
+            # boxes are worked out across zooms and often reach past the
+            # frame; the part beyond the edge was never shown, and counting
+            # it makes a window look far wider than it stood.
+            for k, (tag_, box_) in enumerate(behinds):
+                cut = [max(0.0, box_[0]), max(0.0, box_[1]),
+                       min(float(Wf), box_[2]), min(float(Hf), box_[3])]
+                if cut[2] > cut[0] and cut[3] > cut[1]:
+                    behinds[k] = (tag_, cut)
             for k, (tag_, box_) in enumerate(behinds):
                 if any(furnish._within(box_, r) > 0.9
                        and furnish._within(r, box_) > 0.9 for r in free):
