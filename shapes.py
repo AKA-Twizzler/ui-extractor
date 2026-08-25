@@ -195,7 +195,6 @@ def camera_box(path):
         return _CAM[path]
     if not path or not os.path.exists(path):
         return None
-    from scipy import ndimage
     im = Image.open(path).convert("RGB")
     W, H = im.size
     im = im.resize((320, max(1, int(320 * H / W))), Image.BILINEAR)
