@@ -105,15 +105,24 @@ def finder(st):
                 cells[kind_i] = kind = m.group(2)
                 if size_i is not None and not cells[size_i]:
                     cells[size_i] = m.group(1)
-        # what the Kind column says, first; a green icon means a folder only
-        # where no kind was read and no selection colour could have stained it
+        # Is this row a folder or a file? What the Kind column says, first.
+        # Then what the same name said in a moment where the Kind WAS read.
+        # Then the colour of its icon, which was measured: across this video
+        # a white icon was a file in every row whose Kind settled it, and a
+        # green icon a folder in all but one; grey said nothing either way.
+        # If none of that settles it, the row's nature was never on the
+        # screen, and the drawing says so with an empty mark rather than
+        # guessing from the shape of the name - plenty of folders are called
+        # "00 Inbox" and plenty of files have no dot in them.
         name = cells[name_i]
         if kind:
             folder = bool(FOLDER_KIND.match(kind))
-        elif r.get("icon") == "green" and not r.get("band"):
-            folder = True
+        elif r.get("folder") is not None:
+            folder = bool(r["folder"])
+        elif not r.get("band") and r.get("icon") in ("green", "white"):
+            folder = r["icon"] == "green"
         else:
-            folder = "." not in name and not re.search(r"\d", name)
+            folder = None
         tds = []
         for i, c in enumerate(cells):
             t = esc(c)
