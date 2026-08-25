@@ -3148,7 +3148,7 @@ def note(records_path, diary_text=None):
                         small = min((here[2] - here[0]) * (here[3] - here[1]),
                                     (there[2] - there[0]) * (there[3] - there[1]))
                         share = (w * h) / max(1.0, small)
-                return (round(share, 2), prev.times[-1])
+                return (same, round(share, 2), prev.times[-1])
 
             max(free, key=fits).append(st)
         return groups
