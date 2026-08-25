@@ -593,7 +593,7 @@ class Lines:
         """The note's title: its first line that is not a property, a bar
         or a scrap."""
         for t, _ in self.lines:
-            t = t.strip().strip("#*> ").strip()
+            t = t.strip().strip("#*>│ ˃˅").strip()
             if not t or t.startswith("---") or old.is_bar(t):
                 continue
             if len(norm(t)) < 4:
