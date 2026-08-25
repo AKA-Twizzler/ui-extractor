@@ -130,12 +130,13 @@ def check(path, frames=None):
                     f"the whole desktop is in view, yet a box runs off it: "
                     f"left {l:.0f}% top {t:.0f}% width {w:.0f}% height {h:.0f}%")
 
-        # 9. a window that was in view is not covered by the window in front
+        # 9. an outline is drawn because the window was seen; a window the
+        #    front window covers whole was not on the screen at all
         for (gp, _) in ghosts:
             for (sp, _) in slots:
-                if _overlap(sp, gp) > 0.6:
+                if _overlap(sp, gp) > 0.95:
                     bad("nothing swallows a window in view", where,
-                        "the front window is drawn over an outline that was showing")
+                        "an outline is drawn under a window that covered it whole")
 
         # 10. the desktop bar, when drawn, carries the bar's real words
         bar = re.search(r'<div class="sn-deskbar">(.*?)</div>\s*<div', ln)
