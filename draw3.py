@@ -2862,6 +2862,26 @@ def note(records_path, diary_text=None):
     # tree whichever window shows them, and only what sits between two crumbs
     # a reading already carries is ever filled in, so this cannot move a
     # window into a folder it was never in.
+    # A list window's path bar ends at the folder the window is showing.
+    # Where the folder's own name was read off the window itself and the
+    # bar stops short of it, the bar lost its last crumb to the reading and
+    # gets it back. A name the path itself supplied is never added back:
+    # that would be the bar arguing with itself.
+    for st in states:
+        t = st.main_table()
+        name = st.title
+        if not (t and t.path and name) or getattr(st, "title_from_path", False):
+            continue
+        if any(same_text(c, name) for c in t.path):
+            continue
+        # where the last crumb opens the same way but reads shorter, that
+        # crumb IS this folder, read badly: it is corrected, not repeated
+        last = flat(t.path[-1])
+        if last[:3] == flat(name)[:3] and len(last) < len(flat(name)):
+            t.path = list(t.path[:-1]) + [name]
+        else:
+            t.path = list(t.path) + [name]
+
     # A crumb the reader cut short - "02 Con" where the folder is called
     # "02 Company A (Info Product)" - is spelt the way the video itself
     # spelt it, but only when exactly one name in the whole video opens
@@ -2907,26 +2927,6 @@ def note(records_path, diary_text=None):
                     c = fits.pop()
             fixed.append(c)
         t.path = fixed
-    # A list window's path bar ends at the folder the window is showing.
-    # Where the folder's own name was read off the window itself and the
-    # bar stops short of it, the bar lost its last crumb to the reading and
-    # gets it back. A name the path itself supplied is never added back:
-    # that would be the bar arguing with itself.
-    for st in states:
-        t = st.main_table()
-        name = st.title
-        if not (t and t.path and name) or getattr(st, "title_from_path", False):
-            continue
-        if any(same_text(c, name) for c in t.path):
-            continue
-        # where the last crumb opens the same way but reads shorter, that
-        # crumb IS this folder, read badly: it is corrected, not repeated
-        last = flat(t.path[-1])
-        if last[:3] == flat(name)[:3] and len(last) < len(flat(name)):
-            t.path = list(t.path[:-1]) + [name]
-        else:
-            t.path = list(t.path) + [name]
-
     for w in {st.name for st in states}:
         pool = [t for st in states if st.name == w
                 for t in [st.main_table()] if t and t.path]
