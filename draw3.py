@@ -4125,10 +4125,16 @@ def note(records_path, diary_text=None):
                 small = bool(ever) and max(
                     (r[2] - r[0]) for r in ever) < 0.7 * Wf
                 grown = (box_[2] - box_[0]) > 0.9 * Wf
+                # or where it reaches across a window the frame measured
+                # and another window is drawn on: a window that never
+                # filled the screen does not stand behind AND beside the
+                # window in front of it - its own rectangle is the one the
+                # frame drew where no one else stands.
+                over = any(furnish._within(c, box_) > 0.4 for c in claimed)
                 near_ = [r for r in free
                          if furnish._within(r, box_) > 0.7
                          and (furnish._within(box_, r) > 0.5
-                              or (small and grown))]
+                              or (small and (grown or over)))]
                 if len(near_) == 1:
                     behinds[k] = (tag_, list(near_[0]))
             for k, (tag_, box_) in enumerate(behinds):
