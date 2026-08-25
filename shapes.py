@@ -185,6 +185,33 @@ def find(path):
             continue
         seen.add(key)
         kept.append(r)
+    # A window's sides are drawn faintly across its title bar and its
+    # toolbar, so the pair of sides can begin BELOW the head of the window
+    # and the rectangle come out missing it - a Finder window drawn from
+    # its column headers down, its whole top cut away. Where a line runs
+    # corner to corner across the SAME two sides above the top found, that
+    # line is the window's own top edge, measured like any other, and the
+    # rectangle reaches up to it. The same holds under its foot.
+    for r in kept:
+        x0, y_top, x1, y_bot = r
+        reach = 0.4 * (y_bot - y_top)
+        for side, way in ((1, -1), (3, +1)):
+            edge = _across(shelf, r[side] + way * reach / 2, x0, x1,
+                           reach / 2, ALONG, way, corner=True)
+            if edge is None or (edge - r[side]) * way <= 2:
+                continue
+            lo, hi = min(edge, r[side]), max(edge, r[side])
+            # nothing else the frame measured may stand in the way: a foot
+            # in that band belongs to a window in front, not to this one
+            blocked = False
+            for o in kept:
+                if o is r or min(o[2], x1) - max(o[0], x0) <= 0.5 * (x1 - x0):
+                    continue
+                if lo + 2 < o[1] < hi - 2 or lo + 2 < o[3] < hi - 2:
+                    blocked = True
+                    break
+            if not blocked:
+                r[side] = edge
     # A window the video caught mid-scroll is drawn on the frame in slabs:
     # the parts that were painted, with a band of unpainted screen between
     # them. Those slabs stand on the same two sides with nothing measured
