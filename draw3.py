@@ -2910,6 +2910,13 @@ def note(records_path, diary_text=None):
             # read as a whole name anywhere, can be a cut-short reading
             if len(f) >= 4 and f not in known and times_seen.get(f, 0) == 1:
                 fits = {v for k, v in known.items() if len(k) > len(f) and k.startswith(f)}
+                if len(fits) != 1:
+                    # a crumb misread mid-word is no prefix of anything. What
+                    # names it is the slot: the folders every other bar puts
+                    # straight after this same parent, opening the same way
+                    par = flat(fixed[-1]) if fixed else None
+                    fits = {v for v in after.get(par, ()) if flat(v)[:3] == f[:3]
+                            and len(flat(v)) > len(f)}
                 if len(fits) == 1:
                     c = fits.pop()
             fixed.append(c)
