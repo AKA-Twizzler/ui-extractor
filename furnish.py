@@ -400,44 +400,29 @@ def deskbar(bar_words, clock):
     return f'<div class="sn-deskbar">{left}{right}</div>'
 
 
-def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(), ghosts=(), camera=None, sure=True, kz=1.0):
-    """One picture of the whole screen for one stretch of time, at the zoom
-    the video had: every window in view filled with its real content, the
-    ones behind drawn whole and cut by the screen's edge, the camera's own
-    picture where it lay. When the video is zoomed past the desktop bar,
-    no bar is drawn."""
-    ch = CANVAS_W * H / max(1, W)
+def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
+                ghosts=(), camera=None, sure=True, kz=1.0):
+    """The layout of the screen over one stretch of time: the desktop bar
+    with its own words, and every window standing where it stood, at the
+    shape it had, drawn as a labelled outline. Nothing is filled in here
+    and no picture is ever pasted in -- a window's content belongs to its
+    own card below, large enough to read."""
     barred = bar_words is not None
-    out = [f'<div class="sn-screen" style="width:{CANVAS_W}px;height:{ch:.0f}px">']
+    out = [f'<div class="sn-screen" style="aspect-ratio:{W} / {H}">']
     if barred:
         out.append(deskbar(bar_words, clock))
     drawn = []
 
-    def sty(rect):
-        return slot_style(rect, W, H, bar=barred)
+    def outline(box, tag, cls="sn-ghost", extra=""):
+        lab = f'<span class="sn-ghost-tag">{esc(tag)}</span>' if tag else ""
+        return (f'<div class="{cls}" style="{slot_style(box, W, H, bar=barred)}{extra}">'
+                + lab + "</div>")
 
-    def tag_html(tag, box):
-        if not tag:
-            return ""
-        style = ""
-        for _, r in subjects:
-            if r and box[1] < r[3] and r[1] < box[1] + 0.2 * (box[3] - box[1]) \
-                    and r[0] <= box[0] < r[2] < box[2]:
-                style = f' style="left:{100.0 * (r[2] - box[0]) / (box[2] - box[0]) + 1:.1f}%"'
-                break
-        return f'<span class="sn-ghost-tag"{style}>{esc(tag)}</span>'
-
-    def bare(html):
-        # a span picture shows the camera itself, so the little note about
-        # the covered corner belongs only to the zoomed cards
-        return re.sub(r'<span class="sn-covered">[^<]*</span>', "", html)
-
-    # the windows behind, whole, under what stands in front
-    for html, box in behind_cards:
-        html = bare(html)
+    # the windows standing behind, and the places words were read that no
+    # window of this stretch owns
+    for tag, box in behind_cards:
         drawn.append(box)
-        out.append(scaled(html, box, W, kz, cls="sn-slot sn-partial", extra=sty(box)))
-    # outlines where words were read that no drawn window owns
+        out.append(outline(box, tag))
     for box, tag, kind in ghosts:
         if not box:
             continue
@@ -446,34 +431,22 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(), ghosts=
         if any(_close(box, d) for d in drawn):
             continue
         drawn.append(box)
-        cls = "sn-ghost sn-away" if kind == "away" else "sn-ghost"
-        out.append(f'<div class="{cls}" style="{sty(box)}">'
-                   + tag_html(tag, box) + "</div>")
-    # the windows of the stretch, biggest (deepest) first so the small ones
-    # land on top the way they really lay
+        out.append(outline(box, tag, "sn-ghost sn-away" if kind == "away" else "sn-ghost"))
+    # the windows this stretch is about, marked
     for z, (st, rect) in enumerate(subjects):
-        st.shape = rect
-        html = window(st, behind=False) or st.plain_window_html()
-        st.shape = None
-        out.append(scaled(bare(html), rect, W, kz, extra=sty(rect) + f";z-index:{2 + z}"))
+        if not rect:
+            continue
+        out.append(outline(rect, getattr(st, "_label", "") or "",
+                           "sn-ghost sn-subject", f";z-index:{3 + z}"))
     if camera:
-        cbox, cpic = camera
-        if cpic:
-            out.append(f'<div class="sn-camera sn-photo" style="{sty(cbox)}">'
-                       f'<img src="{cpic}" alt="the camera picture"></div>')
-        else:
-            out.append(f'<div class="sn-camera" style="{sty(cbox)}">'
-                       f'<span class="sn-camera-tag">the camera picture</span></div>')
+        cbox = camera[0] if isinstance(camera, (tuple, list)) else camera
+        out.append(f'<div class="sn-camera" style="{slot_style(cbox, W, H, bar=barred)}">'
+                   f'<span class="sn-camera-tag">the camera picture</span></div>')
     stamp = span["t0"] if span["t0"] == span["t1"] else f"{span['t0']} to {span['t1']}"
     if not sure:
         stamp += " \u00b7 edges taken from where its words sat"
     out.append(f'<div class="sn-stamp">{esc(stamp)}</div>')
     out.append("</div>")
-    # the whole picture on a fixed stage, scaled as one piece to whatever
-    # width the reading pane gives it -- the way an image scales -- so no
-    # window's inside ever outgrows its box
-    # the whole picture sits on a fixed stage; the style sheet shrinks or
-    # grows that stage as one piece to whatever width the reading pane
-    # gives it, so no window's inside ever outgrows its box
     return ('<div class="sn-stage">' + "".join(out) + "</div>")
+
 
