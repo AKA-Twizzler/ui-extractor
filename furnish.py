@@ -653,7 +653,7 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
         # reader could read, and filling it in says the screen showed a
         # window there at a size it never had. Where the box came out that
         # small, what is honestly known is that a window stood there.
-        thin = (rect[2] - rect[0] < 0.10 * W or rect[3] - rect[1] < 0.10 * H)
+        thin = (rect[2] - rect[0] < 0.15 * W or rect[3] - rect[1] < 0.12 * H)
         st.shape = rect
         html = None if thin else (window(st, behind=False) or st.plain_window_html())
         st.shape = None
