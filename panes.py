@@ -145,7 +145,7 @@ def _free_spans(taken, least):
     return spans
 
 
-def _all_windows(img):
+def _measured_windows(img):
     """Every window on this frame, from both ways of measuring one.
 
     A window is a rectangle with four drawn sides (overlay.py) - but a
@@ -155,7 +155,7 @@ def _all_windows(img):
     reader take two windows standing side by side as one pane, and read
     their two lists as one table with the wrong words in every row.
     """
-    got = [tuple(int(round(v)) for v in r) for r in overlay.windows(img)]
+    got = []
     try:
         more = [tuple(int(round(v)) for v in r) for r in shapes.find(img)]
     except Exception:
@@ -215,7 +215,7 @@ def frame_regions(img, engine=None):
             boxes.append((x_at + int(a * back), y_at,
                           x_at + int(b * back), y_at + height))
 
-    found = _all_windows(img)
+    found = overlay.windows(img)
     for x0, y0, x1, y1 in found:
         split(img[y0:y1, x0:x1], x0, y0, y1 - y0)
 
@@ -272,6 +272,30 @@ def frame_regions(img, engine=None):
             else:
                 boxes.append((a, top, b, bottom))
 
+    # A pane that runs across TWO windows reads their two lists as one
+    # table, and every row of it comes out with one window's word in the
+    # first cell and the other's in the second. Where a window's own side
+    # stands inside a pane, that pane is cut there. Only those cuts are
+    # added, so a frame keeps the panes it had and gains one where two
+    # windows really do stand side by side in the same strip.
+    sides = set()
+    for wx0, _, wx1, _ in _measured_windows(img):
+        sides.update((wx0, wx1))
+    if sides:
+        least = max(8, int(MIN_PANE * scale / 3))
+        cut = []
+        for x0, y0, x1, y1 in boxes:
+            at = sorted(x for x in sides if x0 + least <= x <= x1 - least)
+            last = x0
+            for x in at + [x1]:
+                if x - last >= least:
+                    cut.append((last, y0, x, y1))
+                    last = x
+            if last < x1 and cut and cut[-1][0] == last:
+                pass
+            elif last < x1:
+                cut.append((last, y0, x1, y1))
+        boxes = cut or boxes
     boxes.sort(key=lambda box: (box[0], box[1]))
     return boxes
 
