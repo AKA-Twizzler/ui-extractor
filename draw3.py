@@ -3224,7 +3224,10 @@ def note(records_path, diary_text=None):
                         sl.title = None
                     sl.title = sl.title or st.title
                     fd, sd = st.main_doc(), sl.main_doc()
-                    if fd and sd and fd.lines and sd.lines is not fd.lines \
+                    # a stretch that showed nothing in the note pane keeps
+                    # showing nothing: the window's heading belongs to the
+                    # note, and the note was not on the screen then
+                    if fd and sd and fd.lines and sd.lines and sd.lines is not fd.lines \
                             and "sn-h1" in fd.lines[0][1] and not any(
                                 fold(flat(t)) == fold(flat(fd.lines[0][0])) for t, _ in sd.lines[:3]):
                         sd.lines.insert(0, fd.lines[0])
