@@ -3200,7 +3200,20 @@ def note(records_path, diary_text=None):
         whole = [(ra, r) for ra, r, cover in fits if cover >= 0.95]
         if whole:
             return list(min(whole)[1])
-        return list(max(fits)[1]) if fits else box
+        if fits:
+            return list(max(fits)[1])
+        # Nothing matched outright. A box worked out from where words sat is
+        # a guess about four edges; where the frame drew a rectangle around
+        # the middle of that guess, those edges were MEASURED and they win,
+        # even though the guess reached further. The guess reached further
+        # because words from the window behind were swept in with this one's.
+        cx, cy = (box[0] + box[2]) / 2.0, (box[1] + box[3]) / 2.0
+        held = [r for r in frame_rects(s)
+                if r[0] <= cx <= r[2] and r[1] <= cy <= r[3]]
+        if held:
+            r = max(held, key=lambda r: (r[2] - r[0]) * (r[3] - r[1]))
+            return list(r)
+        return box
 
     home_reads = {}                # state -> every reading's box, carried home
     secs_of = {m["ts"]: m.get("secs", 0) for m in moments}
