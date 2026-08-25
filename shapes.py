@@ -28,7 +28,16 @@ _CACHE: dict[str, list] = {}
 
 
 def _grey(path):
-    im = Image.open(path).convert("L")
+    # a path, or the frame itself already in memory: the reader holds its
+    # frames as arrays and would otherwise have to write each one to disk
+    # just to ask where the windows are
+    if hasattr(path, "shape"):
+        a = path
+        if a.ndim == 3:
+            a = a[..., :3].mean(axis=2)
+        im = Image.fromarray(a.astype("uint8"), "L")
+    else:
+        im = Image.open(path).convert("L")
     w, h = im.size
     k = SMALL / float(w)
     im = im.resize((SMALL, max(1, int(round(h * k)))), Image.BILINEAR)
@@ -160,9 +169,10 @@ def _edge_of_head(shelf, pos, a, b, reach, way):
 
 def find(path):
     """Every window on the frame, biggest first, in the frame's own pixels."""
-    if path in _CACHE:
+    keyed = isinstance(path, str)
+    if keyed and path in _CACHE:
         return _CACHE[path]
-    if not path or not os.path.exists(path):
+    if path is None or (keyed and not os.path.exists(path)):
         return []
     g, W, H = _grey(path)
     h, w = g.shape
@@ -309,7 +319,8 @@ def find(path):
     kept = joined
     k = W / float(w)
     out = [[r[0] * k, r[1] * k, r[2] * k, r[3] * k] for r in kept]
-    _CACHE[path] = out
+    if keyed:
+        _CACHE[path] = out
     return out
 
 

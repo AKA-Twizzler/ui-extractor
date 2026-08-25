@@ -23,6 +23,7 @@ import numpy as np
 
 import overlay
 import screenness
+import shapes
 import machine
 
 MIN_PANE = 90          # a pane narrower than this is furniture, not a pane
@@ -144,6 +145,39 @@ def _free_spans(taken, least):
     return spans
 
 
+def _all_windows(img):
+    """Every window on this frame, from both ways of measuring one.
+
+    A window is a rectangle with four drawn sides (overlay.py) - but a
+    window pushed off the side of the screen has only three, and a window
+    whose sides fade across its title bar is found starting below its own
+    head. shapes.py measures those too. Missing a window is what makes the
+    reader take two windows standing side by side as one pane, and read
+    their two lists as one table with the wrong words in every row.
+    """
+    got = [tuple(int(round(v)) for v in r) for r in overlay.windows(img)]
+    try:
+        more = shapes.find(img)
+    except Exception:
+        more = []
+    for r in more:
+        box = tuple(int(round(v)) for v in r)
+        if box[2] - box[0] < 8 or box[3] - box[1] < 8:
+            continue
+        for k in got:
+            w = min(box[2], k[2]) - max(box[0], k[0])
+            h = min(box[3], k[3]) - max(box[1], k[1])
+            if w > 0 and h > 0:
+                inter = w * h
+                both = ((box[2]-box[0])*(box[3]-box[1])
+                        + (k[2]-k[0])*(k[3]-k[1]) - inter)
+                if inter / max(1.0, both) > 0.8:
+                    break
+        else:
+            got.append(box)
+    return got
+
+
 def frame_regions(img, engine=None):
     """The rectangles of this frame to read, one at a time, in its own pixels.
 
@@ -172,7 +206,7 @@ def frame_regions(img, engine=None):
             boxes.append((x_at + int(a * back), y_at,
                           x_at + int(b * back), y_at + height))
 
-    found = overlay.windows(img)
+    found = _all_windows(img)
     for x0, y0, x1, y1 in found:
         split(img[y0:y1, x0:x1], x0, y0, y1 - y0)
 
