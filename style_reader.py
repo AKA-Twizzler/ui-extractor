@@ -103,6 +103,7 @@ def band_of(bands_, y0, y1, bgr=None, x0=None, x1=None):
     while the row's own words sit on plain background -- measured on a
     note page, where a "purple band" was the camera, not a highlight.
     """
+    best, best_over = None, 0.0
     for b in bands_:
         top, bottom = max(b["y0"], y0), min(b["y1"], y1)
         mid = (b["y0"] + b["y1"]) / 2.0
@@ -121,8 +122,12 @@ def band_of(bands_, y0, y1, bgr=None, x0=None, x1=None):
             med = np.median(region.reshape(-1, 3), axis=0)
             if np.abs(med - np.array(b["colour"])).sum() > 60:
                 continue
-        return b
-    return None
+        # the paint that covers most of the row, not merely the first found:
+        # a thin stripe overlapping the row's edge must not beat the band
+        # the row actually sits on
+        if bottom - top > best_over:
+            best, best_over = b, bottom - top
+    return best
 
 
 # ----------------------------------------------------------------- icons
