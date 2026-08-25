@@ -2624,7 +2624,8 @@ def note(records_path, diary_text=None):
             for it in draw2.items_of(p):
                 tall = it["box"][3] - it["box"][1]
                 if (it.get("large") or tall >= 1.6 * usual_h) and len(flat(it["text"])) >= 6:
-                    bigs.setdefault(fold(flat(it["text"])), (it["text"].strip(), it["box"], m["ts"]))
+                    bigs.setdefault(fold(flat(it["text"])), []).append(
+                        (it["text"].strip(), it["box"], m["ts"]))
     for st in states:
         doc = st.main_doc()
         name = st.title or (doc.title() if doc else "")
@@ -2632,15 +2633,15 @@ def note(records_path, diary_text=None):
             continue
         tf = fold(flat(name))
         hit = max((v for key, v in bigs.items() if len(key) >= 6 and tf.startswith(key)),
-                  key=lambda v: len(v[0]), default=None)
+                  key=lambda v: len(v[0][0]), default=None)
         if not hit:
             continue
-        raw, h1_box, h1_ts = hit
+        raw = max((r for r, _, _ in hit), key=len)
         hf = fold(flat(raw))
         if any(fold(flat(t)) == hf for t, _ in doc.lines[:4]):
             continue
         doc.lines.insert(0, (raw, f'<div class="sn-h1"><b>{esc(raw)}</b></div>'))
-        st._h1_read = (h1_ts, list(h1_box))
+        st._h1_read = [(t_, list(b_)) for _, b_, t_ in hit]
     real = [st for st in states if is_real_window(st.name)]
     shown = real if real else states          # a video with no named window shows its screens
     windows = []                               # names in order of first appearance
@@ -2830,20 +2831,19 @@ def note(records_path, diary_text=None):
         furnish.UI_TXT = min(16.0, max(5.0, ui))
 
     for st in states:
-        got = getattr(st, "_h1_read", None)
-        if not got:
-            continue
-        t_, b_ = got
-        s_ = next((x for x in spans if t_ in x["ts"]), None)
-        T_ = (span_T.get(s_["t0"]) if s_ else None) or fit_map([t_])
-        hb = home_at(st, t_)
-        if T_ and hb:
+        for t_, b_ in getattr(st, "_h1_read", ()):
+            s_ = next((x for x in spans if t_ in x["ts"]), None)
+            T_ = (span_T.get(s_["t0"]) if s_ else None) or fit_map([t_])
+            hb = home_at(st, t_)
+            if not T_ or not hb:
+                continue
             # the note's heading stands well below the window's top edge;
             # the drawn note takes the same top room, span pictures only
             pad_home = back(T_, b_)[1] - hb[1]
             pad_css = pad_home * furnish.CANVAS_W / Wf * furnish.CSS_TXT / furnish.UI_TXT - 60
             if pad_css > 12:
                 st._doc_pad = round(pad_css)
+            break
 
     def ghost_list(s, sub_states, carded):
         got = []
