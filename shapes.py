@@ -214,7 +214,32 @@ def find(path):
             tall = y_bot - y_top
             if bot - top < ALONG * tall:
                 continue                       # the sides must run its height
-            found.append([x0, y_top, x1, y_bot])
+            found.append([x0, y_top, x1, y_bot, e0, e1])
+    # The screen's edge stood in for a side. Where a window with a side of
+    # its OWN sits against the same top and foot and ends before the edge,
+    # the edge rectangle reached past that window and swallowed whatever
+    # lay beyond it - two windows read as one. The real-sided one is the
+    # window; the edge one is dropped.
+    real = []
+    for r in found:
+        x0, yt, x1, yb, e0, e1 = r
+        if not (e0 or e1):
+            continue
+        tall = max(1.0, yb - yt)
+        for o in found:
+            if o is r or (o[4] and o[5]):
+                continue
+            if abs(o[1] - yt) > 0.06 * tall or abs(o[3] - yb) > 0.06 * tall:
+                continue
+            wide = max(1.0, x1 - x0)
+            if e1 and not o[5] and abs(o[0] - x0) <= 0.06 * wide and o[2] < x1 - 0.06 * wide:
+                real.append(id(r))
+                break
+            if e0 and not o[4] and abs(o[2] - x1) <= 0.06 * wide and o[0] > x0 + 0.06 * wide:
+                real.append(id(r))
+                break
+    drop = set(real)
+    found = [r[:4] for r in found if id(r) not in drop]
     found.sort(key=lambda r: -(r[2] - r[0]) * (r[3] - r[1]))
     # near-identical rectangles are the same window found twice: one edge
     # is a shadow two pixels wide. Rectangles that merely overlap are kept,
