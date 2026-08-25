@@ -2741,18 +2741,12 @@ def note(records_path, diary_text=None):
         counts = []
         for w in windows:
             n = sum(1 for st in shown if st.name == w)
-            # two windows of one program are two windows, and the count says
-            # so: how many windows, and how many folders or notes they went
-            # through between them
-            k = len(split_windows([st for st in shown if st.name == w]))
-            say = w[0].lower() + w[1:]
-            if k > 1:
-                say = f"{k} of {say}"
-            counts.append(say + (f" ({n} states)" if n > 1 else ""))
+            counts.append(f"@@{w}@@" + (f" ({n} states)" if n > 1 else ""))
         head += " On screen: " + "; ".join(counts) + "."
     if clocks:
         head += f" The desktop clock read {clocks[0]}" + (f" at the start and {clocks[-1]} at the end." if clocks[-1] != clocks[0] else ".")
     head += " A word in italics was read by one engine only."
+    head_at = len(parts)           # filled in once the windows are told apart
     parts += [head, "", "**The order of events**", ""]
     for st in shown:
         parts.append(f"- {span_of(st)} - {st.name[0].lower() + st.name[1:]}" + (f": {st.title}" if st.title else ""))
@@ -3202,6 +3196,14 @@ def note(records_path, diary_text=None):
 
             max(free, key=fits).append(st)
         return groups
+
+    # two windows of one program are two windows, and the note's first line
+    # says so rather than counting a program's states as one window's history
+    for w in windows:
+        k = len(split_windows([st for st in shown if st.name == w]))
+        say = w[0].lower() + w[1:]
+        parts[head_at] = parts[head_at].replace(f"@@{w}@@",
+                                                f"{k} of {say}" if k > 1 else say)
 
     for w, sts in [(w, g) for w in windows
                    for g in split_windows([st for st in shown if st.name == w])]:
