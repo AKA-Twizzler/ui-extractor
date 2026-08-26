@@ -343,6 +343,20 @@ class Table:
                 self.top.append(t)
                 self.top_items.append((t, (it["box"][0] + it["box"][2]) / 2, it["ok"], it.get("above", 99)))
         rows_below = draw2.reading_order(list(bottom), lambda it: it["box"])
+        # a whole path bar read as ONE word keeps its chevrons inside it:
+        # cut after each one, and the crumbs come back separate, each still
+        # carrying the chevron that proves it was a crumb
+        def _cut_crumbs(row):
+            out = []
+            for it in row:
+                parts = [q.strip() for q in re.split(r"(?<=[>\u203a])", it["text"])
+                         if q.strip()]
+                if len(parts) >= 2:
+                    out.extend(dict(it, text=q) for q in parts)
+                else:
+                    out.append(it)
+            return out
+        rows_below = [_cut_crumbs(r) for r in rows_below]
         known = {norm(r["cells"][0]) for r in self.rows if r["cells"] and r["cells"][0]}
         known |= {norm(t) for t, _, _, _ in self.top_items if t}
         best = []
