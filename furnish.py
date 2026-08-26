@@ -516,7 +516,11 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
     for x0, y0, x1, y1, text in ink or ():
         if not text:
             continue
-        high = max(1.0, float(y1) - float(y0))
+        # what was MEASURED is the height of the ink; what CSS is told is
+        # the size of the type, and a font's ink stands about seven tenths
+        # of its own em. Setting the one as the other drew every word a
+        # third small.
+        high = max(1.0, float(y1) - float(y0)) / 0.72
         out.append(
             '<div class="sn-ink" style="left:%.2f%%;top:%.2f%%;'
             'font-size:calc(%.3fcqh)">%s</div>'
