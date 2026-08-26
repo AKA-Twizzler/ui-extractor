@@ -243,13 +243,6 @@ def frame_regions(img, engine=None):
             boxes.append((x_at + int(a * back), y_at,
                           x_at + int(b * back), y_at + height))
 
-    # A LONE RECTANGLE DOES NOT RE-CUT THE FRAME. Window edges are used
-    # here for one purpose: to keep two windows standing side by side from
-    # being read as one. With only one rectangle there is nothing to keep
-    # apart, and the one thing a lone rectangle is likely to be - on a
-    # frame where a window fills the screen and has no edges to measure -
-    # is a panel drawn INSIDE that window. Cutting the frame around it put
-    # the Obsidian sidebar in four pieces and left the tree in none of them.
     # A LONE SMALL RECTANGLE DOES NOT RE-CUT THE FRAME. Window edges are
     # used here for one purpose: to keep windows standing side by side from
     # being read as one. With one rectangle there is nothing to keep apart,
