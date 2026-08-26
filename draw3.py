@@ -796,6 +796,9 @@ class State:
                 t_.path = list(bar)
                 if bar not in t_.paths:
                     t_.paths.append(list(bar))
+                # the name rule reads the path, and the path only just
+                # arrived: ask it again now the window has its bar
+                self._title_rule()
         # where the window stood at this moment, measured from what it drew
         self.rects[m["ts"]] = content_rect(self, group, m)
 
@@ -911,6 +914,13 @@ class State:
             self.name = "The Finder window"
         if m["ts"] not in self.times:
             self.times.append(m["ts"])
+        self._title_rule()
+
+
+    def _title_rule(self):
+        """The folder's name, from the window's own furniture. Called
+        again once a path bar cut as its own pane has been folded in:
+        the rule reads the path, so it must run after the path is there."""
         table = self.main_table()
         if table and (not self.title or not getattr(self, "title_sure", False) or getattr(self, "title_from_path", False)):
             # the folder's name. Finder centres it in the title bar, so the
