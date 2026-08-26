@@ -351,7 +351,11 @@ class Table:
             for it in row:
                 parts = [q.strip() for q in re.split(r"(?<=[>\u203a])", it["text"])
                          if q.strip()]
-                if len(parts) >= 2:
+                # only a reading that swallowed a WHOLE bar is cut up: it
+                # starts at the disk and holds at least two chevrons. A lone
+                # crumb standing beside other words is left as it was read.
+                if len(parts) >= 3 and norm(parts[0].rstrip(">\u203a")) in (
+                        norm("Macintosh HD"), norm("MacintoshHD")):
                     out.extend(dict(it, text=q) for q in parts)
                 else:
                     out.append(it)
@@ -3776,7 +3780,7 @@ def note(records_path, diary_text=None):
     if os.environ.get("UIX_DEBUG_TITLES"):
         for _s in states:
             _t = _s.main_table()
-            print("STATE name=%r title=%r stamps=%s path=%s" % (
+            print("STATE name=%r title=%r stamps=%s path=%s bottom=%s" % (
                 _s.name, _s.title, list(getattr(_s, "times", []) or []),
                 list(getattr(_t, "path", None) or [])), file=sys.stderr)
     title_from_bar(states)
