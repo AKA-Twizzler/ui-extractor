@@ -875,11 +875,20 @@ def mend_prose(states):
                 out.extend(other[j1:j2])
                 filled = True
             else:
-                if not (seen_equal and (i2 - i1) <= 2 and (j2 - j1) > (i2 - i1)
-                        and _hole(mine[i1:i2], other[j1:j2])):
+                run, cut = other[j1:j2], mine[i1:i2]
+                if seen_equal and len(cut) <= 2 and len(run) > len(cut) \
+                        and _hole(cut, run):
+                    out.extend(run)
+                    filled = True
+                elif seen_equal and len(cut) <= 5 and _hole(cut[:1], run) \
+                        and [key(w) for w in cut[1:]] != [key(w) for w in run[-(len(cut) - 1):]]:
+                    # the cut word, then words of ours that simply run on
+                    # past where the other reading stopped
+                    out.extend(run)
+                    out.extend(cut[1:])
+                    filled = True
+                else:
                     return None       # they contradict: not the same line
-                out.extend(other[j1:j2])
-                filled = True
         if not filled or out == mine or len(out) > 1.5 * len(mine):
             return None
         return out
