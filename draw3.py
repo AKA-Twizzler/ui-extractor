@@ -4337,15 +4337,37 @@ def note(records_path, diary_text=None):
     if tall_every:
         tall_home["*"] = med(sorted(tall_every))
 
+    _zoom = {}
+
+    def _here(path):
+        """A path written by the Windows side, read from this one."""
+        if len(path) > 2 and path[1] == ":":
+            return "/mnt/" + path[0].lower() + path[2:].replace("\\", "/")
+        return path
+
     def pane_scale(p_):
         """How far the pane was zoomed when it was read.
 
-        Readings are kept in the pane picture's own pixels, and that
-        picture was read at a whole-number upscale. Where the run wrote the
-        number down it is used; otherwise it is taken from how far the
-        readings reach against the pane's own height.
+        Readings are kept in the pane picture's own pixels. THE PICTURE'S
+        OWN WIDTH OVER THE PANE'S WIDTH IS THAT ZOOM - it is written on
+        disk beside the record and needs no guessing. Worked out instead
+        from how far the readings happened to reach, it came out 1 where it
+        was 3, and a browser tab's title was drawn three times its size, a
+        third of the way down a screen it sat at the top of.
         """
         d_ = p_.get("data") or {}
+        pic = p_.get("image")
+        wide = max(1, p_["box"][2] - p_["box"][0])
+        if pic:
+            if pic not in _zoom:
+                try:
+                    from PIL import Image as _Im
+                    with _Im.open(_here(pic)) as im_:
+                        _zoom[pic] = im_.size[0] / float(wide)
+                except Exception:
+                    _zoom[pic] = 0.0
+            if _zoom[pic] >= 0.9:
+                return _zoom[pic]
         up = float(d_.get("scale") or 0)
         if up >= 1:
             return up
