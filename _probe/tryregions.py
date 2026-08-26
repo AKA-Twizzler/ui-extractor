@@ -5,4 +5,4 @@ for f in ("00-00-00", "00-02-50", "00-04-40"):
     img = cv2.imread(r"G:\Images\Move Memory Files Out of Claude Code Into Obsidian\Images\%s.png" % f)
     bs = panes.frame_regions(img)
     top = [b for b in bs if b[1] == 0 and b[3] <= 70]
-    print(f, "panes", len(bs), "top-strip panes", len(top), top[:6])
+    print(f, "panes", len(bs), "menu pieces", len(top), top)

@@ -238,9 +238,30 @@ def frame_regions(img, engine=None):
     top_edge = min([y0 for _, y0, _, _ in found] + [h])
     menu_h = int(min(0.03 * h, top_edge))
     if menu_h >= 8:
-        # read WHOLE, never cut into columns: the gaps between its words are
-        # not pane boundaries, and a cut that lands mid-word loses the word
-        boxes.append((0, 0, w, menu_h))
+        # Cut at the bar's OWN wide gaps, not into even columns. The menus
+        # sit together at the left with small gaps between them; then comes
+        # a long empty stretch, then the status icons and the clock at the
+        # right. Read as one line the two halves run together and the whole
+        # bar comes back as letter-soup; read in even columns a cut lands
+        # mid-word. So: split only where the bar is genuinely blank.
+        strip = img[0:menu_h, :]
+        g = cv2.cvtColor(strip, cv2.COLOR_BGR2GRAY) if strip.ndim == 3 else strip
+        bg = int(np.median(g))
+        ink = (np.abs(g.astype(int) - bg) > 24).any(axis=0)
+        gap = max(24, int(0.02 * w))
+        run, x0_ = 0, None
+        for x in range(w + 1):
+            lit = x < w and bool(ink[x])
+            if lit:
+                if x0_ is None:
+                    x0_ = x
+                run = 0
+            elif x0_ is not None:
+                run += 1
+                if run >= gap or x == w:
+                    if x - run - x0_ >= 40:
+                        boxes.append((x0_, 0, x - run, menu_h))
+                    x0_, run = None, 0
 
     # The columns no window occupies at all are the desktop, and they are cut
     # the full height of the frame, exactly as they always were.
