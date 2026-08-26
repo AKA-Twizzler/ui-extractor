@@ -1473,8 +1473,19 @@ def build_states(moments):
                 sliver = bool(t) and len(t.rows) < 3
                 if not all_repeat and not sliver:
                     cur.absorb(g, m)
-                elif m["ts"] not in cur.times:
-                    cur.times.append(m["ts"])
+                else:
+                    if m["ts"] not in cur.times:
+                        cur.times.append(m["ts"])
+                    # THE MOMENT IS KEPT AS A PIECE even when its reading is
+                    # too thin to join the window's settled list. Without
+                    # it that moment's picture has no reading of its own to
+                    # draw from and falls back to the whole window: at
+                    # 00:01:00 a window showing two rows of the folder just
+                    # opened was drawn holding sixteen rows of the folder
+                    # before it. The thin reading still stays OUT of the
+                    # settled list, which is what the rule was for.
+                    if not any(mm is m for mm, _g in cur.pieces):
+                        cur.pieces.append((m, g))
                 cur.rects.setdefault(m["ts"], content_rect(cur, g, m))
                 st = cur
             else:
