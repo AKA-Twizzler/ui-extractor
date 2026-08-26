@@ -3308,17 +3308,13 @@ def note(records_path, diary_text=None):
     # covered when the window was in front stayed half a line for good,
     # although a moment when the window stood behind had read it whole.
     # Its own readings belong to its own card: revealed, never invented.
-    if os.environ.get("UIX_FRAG"):
-        print("FRAGS", len(frags), file=sys.stderr)
-        for f in frags:
-            own = owner_of.get(id(f))
-            print("  frag", f.name, f.times[:3], "owner",
-                  (own.name, own.title) if hasattr(own, 'name') else own,
-                  [(q['fam'], len(getattr(q['model'], 'lines', []) or [])) for q in f.parts],
-                  file=sys.stderr)
-    for f in frags:
-        own = owner_of.get(id(f))
-        if own is None or own == "several":
+    real_states = [st for st in states if is_real_window(st.name)]
+    loose_states = [st for st in states
+                    if not is_real_window(st.name) and st.has_content()]
+    folding = [(f, owner_of.get(id(f))) for f in frags]
+    folding += [(st, frag_owner(st, real_states)) for st in loose_states]
+    for f, own in folding:
+        if own is None or own == "several" or own is f:
             continue
         for q in f.parts:
             model = q["model"]
