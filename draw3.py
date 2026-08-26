@@ -2456,6 +2456,24 @@ def content_rect(state, group, m):
     if not items:
         return list(group.get("rect") or [0, 0, 0, 0])
     W, H = (m.get("size") or [1920, 1080])[:2]
+    # THE READER ALREADY SAID WHICH WINDOW THESE PANES BELONG TO. Each pane
+    # carries the number of the window it was cut from, and that window's
+    # rectangle was measured off the frame. Deciding it again here - by
+    # counting how many words fall inside the rectangle - answers wrongly
+    # whenever a window's own path bar sits below its measured edge or a
+    # pane holds words showing through from behind, and the box then falls
+    # back to the bounding box of the words: a window drawn 84 pixels short
+    # of where the screen had it. A measured rectangle outranks anything
+    # worked out from words, and the number saying WHICH rectangle is the
+    # pane's own.
+    filed = collections.Counter(p_.get("wi") for p_ in group.get("panes") or []
+                                if p_.get("wi") is not None)
+    if filed:
+        wi = filed.most_common(1)[0][0]
+        for w in m.get("windows") or []:
+            if w.get("wi") == wi and w.get("rect"):
+                state.measured.add(m["ts"])
+                return [float(v) for v in w["rect"]]
     for w in m.get("windows") or []:
         r = w.get("rect")
         if not r:
