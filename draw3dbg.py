@@ -4255,6 +4255,13 @@ def note(records_path, diary_text=None):
                 if st not in shown:
                     continue
                 sl = state_slice(st, s["t0"], s["t1"]) or st
+                if s["t0"] == "00:01:00" and not getattr(note, "_dbg", False):
+                    note._dbg = True
+                    for o_ in states:
+                        has = [mm["ts"] for mm, _g in o_.pieces if mm["ts"] == "00:01:00"]
+                        print("DBG state", o_.name, repr(o_.title), o_.times[:5],
+                              "piece@01:00", bool(has), "shown", o_ in shown,
+                              "in stretch", o_ in s["states"], file=sys.stderr)
                 if s["t0"] == "00:01:00":
                     _t = sl.main_table()
                     print("DBG slice", st.title, "fallback", sl is st,
