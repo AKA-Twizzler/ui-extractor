@@ -821,10 +821,26 @@ def name_of(entry, panes):
         Finder window keeps however little of it is showing."""
         w = old.pane_words(p) or ""
         flat = w.replace(" ", "")
-        return ("MacintoshHD>" in flat or "MacintoshHD›" in flat
-                or ("Users>" in flat and flat.count(">") >= 2))
+        if ("MacintoshHD>" in flat or "MacintoshHD›" in flat
+                or ("Users>" in flat and flat.count(">") >= 2)):
+            return True
+        # the same bar read crumb by crumb: each folder comes back as its
+        # own word and the chevrons between them fall out, so the run of
+        # them is all that is left to recognise
+        return "MacintoshHD" in flat and "Users" in flat
 
-    if any(finder_columns(p) or finder_bar(p) for p in panes):
+    def finder_sizes(p):
+        """Finder's Size column: a run of byte counts down one column.
+        No document prints that, and it is still there when the column
+        headings are off the side of the screen or behind another window."""
+        n = 0
+        for it in items_of(p):
+            t = str(it.get("text", "")).replace(" ", "")
+            if re.match(r"^\d+(\.\d+)?(bytes?|KB|MB|GB|TB)$", t, re.I):
+                n += 1
+        return n >= 3
+
+    if any(finder_columns(p) or finder_bar(p) or finder_sizes(p) for p in panes):
         app = "Finder"
     elif any(finder_sidebar(p) for p in panes):
         app = app or "Finder"   # its sidebar is the one thing still in view
