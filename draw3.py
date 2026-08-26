@@ -4337,6 +4337,71 @@ def note(records_path, diary_text=None):
     if tall_every:
         tall_home["*"] = med(sorted(tall_every))
 
+    def pane_scale(p_):
+        """How far the pane was zoomed when it was read.
+
+        Readings are kept in the pane picture's own pixels, and that
+        picture was read at a whole-number upscale. Where the run wrote the
+        number down it is used; otherwise it is taken from how far the
+        readings reach against the pane's own height.
+        """
+        d_ = p_.get("data") or {}
+        up = float(d_.get("scale") or 0)
+        if up >= 1:
+            return up
+        high = max(1, p_["box"][3] - p_["box"][1])
+        reach = 0
+        for r_ in (d_.get("readings") or []):
+            b_ = r_.get("box")
+            if b_:
+                reach = max(reach, b_[3])
+        for row in (d_.get("rows") or []):
+            reach = max(reach, row.get("y1") or 0)
+        return max(1.0, round(reach / high)) if reach else 1.0
+
+    def screen_ink(s, taken):
+        """Every reading no filled window claims, back at its own place.
+
+        The screen is not only its windows: a browser filling it, a note
+        standing behind everything, the bar across the top. Those were read
+        and then dropped, because the picture drew what stood inside a
+        measured rectangle and nothing else.
+        """
+        m0 = next((mm for mm in moments if mm["ts"] == s["t0"]), None)
+        if not m0:
+            return []
+        W_, H_ = (m0.get("size") or [1920, 1080])[:2]
+        out = []
+        for p_ in (m0.get("panes") or []):
+            bx = p_.get("box")
+            if not bx:
+                continue
+            up = pane_scale(p_)
+            d_ = p_.get("data") or {}
+            said = []
+            for r_ in (d_.get("readings") or []):
+                b_, t_ = r_.get("box"), (r_.get("text") or "").strip()
+                if b_ and t_:
+                    said.append((b_, t_))
+            for row in (d_.get("rows") or []):
+                t_ = (row.get("text") or "").strip()
+                if t_ and row.get("x0") is not None:
+                    said.append(([row["x0"], row["y0"], row["x1"],
+                                  row["y1"]], t_))
+            for b_, t_ in said:
+                x0 = bx[0] + b_[0] / up
+                y0 = bx[1] + b_[1] / up
+                x1 = bx[0] + b_[2] / up
+                y1 = bx[1] + b_[3] / up
+                mid = ((x0 + x1) / 2.0, (y0 + y1) / 2.0)
+                if any(r[0] <= mid[0] <= r[2] and r[1] <= mid[1] <= r[3]
+                       for r in taken):
+                    continue          # this window draws it properly itself
+                if x1 <= x0 or y1 <= y0 or y1 - y0 > 0.2 * H_:
+                    continue
+                out.append((x0, y0, x1, y1, t_))
+        return out
+
     def ghost_list(s, sub_states, carded):
         got = []
         for f in frags:
@@ -5018,6 +5083,7 @@ def note(records_path, diary_text=None):
                 s["size"][0], s["size"][1],
                 bar_words if barred else None, clock if barred else "",
                 behind_cards=behinds,
+                ink=screen_ink(s, [sh for _st, _sl, sh in subjects if sh]),
                 ghosts=ghost_list(s, sub_states, carded),
                 camera=(cam, cam_pic) if cam else None,
                 sure=all(any(t in st.measured for t in s["ts"]) for st, _, _ in subjects),
