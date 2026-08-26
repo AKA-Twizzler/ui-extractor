@@ -923,6 +923,36 @@ def mend_prose(states):
             d.lines[i] = (lead + new_core, new_h)
 
 
+def flatten_sidebars(states):
+    """A Finder window's sidebar drawn FLAT, the way it stands.
+
+    Read on its own - the window's list hidden behind whatever is in front -
+    the fixed list down the left of every Finder window comes back with the
+    shape of a tree, and drawn as one it grows guide lines and open-or-shut
+    marks: "Applications" hanging off "Shared", which is nesting that was
+    never on the screen. The names are kept exactly as read; only the marks
+    that claim a structure are taken off."""
+    side = {norm(n) for n in draw2.SIDE_NAMES}
+    for st in states:
+        for q in st.parts:
+            if q["fam"] != "tree" or not getattr(q["model"], "lines", None):
+                continue
+            names = [row_name(t) for t, _h in q["model"].lines]
+            named = [n for n in names if n]
+            if len(named) < 4:
+                continue
+            if sum(1 for n in named if norm(n) in side) < 0.6 * len(named):
+                continue
+            fixed = []
+            for t, h in q["model"].lines:
+                n = row_name(t)
+                lead = t[:len(t) - len(t.lstrip("\u2502 \u02c3\u02c5"))]
+                if lead:
+                    h = h.replace(esc(lead), "", 1) if esc(lead) in h else h
+                fixed.append((n, h))
+            q["model"].lines = fixed
+
+
 def folder_marks(table):
     """The crumbs that name the folder, the generic ones left out."""
     return {norm(c) for c in table.path if norm(c) not in GENERIC and len(norm(c)) >= 3}
@@ -4140,6 +4170,7 @@ def note(records_path, diary_text=None):
     mend_prose(all_states)
     title_from_bar(states)
     heal_titles(states)
+    flatten_sidebars(all_states)
     parts[order_at] = "\n".join(
         f"- {span_of(st)} - {st.name[0].lower() + st.name[1:]}"
         + (f": {st.title}" if st.title else "") for st in shown)
