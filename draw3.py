@@ -4328,7 +4328,8 @@ def note(records_path, diary_text=None):
     if spans:
         parts += ["## Where the windows stood, moment by moment", "",
                   "Each picture is the shape of the screen over that stretch of time: the desktop bar with its own "
-                  "words along the top, and every window standing where it stood, at the size it was. The window the "
+                  "words along the top wherever the bar was read, and every window standing where it stood, at the "
+                  "size it was. The window the "
                   "stretch is about is filled in with what it really said, at type that reads, cut off by the edges of "
                   "the box it stood in; every window behind it is a named outline, because only the front one was "
                   "fully in view. No photograph is ever pasted in -- where the camera covered the screen, that corner "
