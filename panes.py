@@ -96,7 +96,7 @@ def text_gaps(work, engine, min_gap=40):
     return gaps, spans
 
 
-def pane_columns(img, engine=None, least=MIN_PANE):
+def pane_columns(img, engine=None, least=MIN_PANE, drawn_only=False):
     """The window's panes as (x0, x1) in working-size coordinates.
 
     `least` is the narrowest a pane may be, in those same coordinates. It has
@@ -114,11 +114,20 @@ def pane_columns(img, engine=None, least=MIN_PANE):
     for x in _borders(work):
         cuts.add(x)
 
-    if engine is None:
-        from rapidocr_onnxruntime import RapidOCR
-        engine = RapidOCR()
-    for x in text_gaps(work, engine)[0]:
-        cuts.add(x)
+    # INSIDE A WINDOW, ONLY WHAT THE WINDOW DRAWS DIVIDES IT. A window's own
+    # divisions - the line between a sidebar and its list - are drawn on
+    # purpose; the gap between a table's Name and Date Modified columns is
+    # not, and it runs the full height of the window, so cutting at blank
+    # corridors splits a Finder list down the middle and each half then
+    # reads as a table of its own with a row of data for its headings.
+    # Across a whole frame the same corridor is broken up by whatever else
+    # stands at that x, which is why this only bites inside a window.
+    if not drawn_only:
+        if engine is None:
+            from rapidocr_onnxruntime import RapidOCR
+            engine = RapidOCR()
+        for x in text_gaps(work, engine)[0]:
+            cuts.add(x)
 
     edges = [0] + sorted(cuts) + [w]
     panes, last = [], 0
@@ -217,17 +226,27 @@ def frame_regions(img, engine=None):
     scale = w / screenness.WORK_WIDTH
     boxes = []
 
-    def split(crop, x_at, y_at, height):
+    def split(crop, x_at, y_at, height, drawn_only=False):
         back = crop.shape[1] / screenness.WORK_WIDTH
         # a pane is thin or wide in the FRAME's pixels, never in the window's
         least = MIN_PANE * w / max(1, crop.shape[1])
-        for a, b in pane_columns(crop, engine=engine, least=least):
+        for a, b in pane_columns(crop, engine=engine, least=least,
+                                 drawn_only=drawn_only):
             boxes.append((x_at + int(a * back), y_at,
                           x_at + int(b * back), y_at + height))
 
+    # A LONE RECTANGLE DOES NOT RE-CUT THE FRAME. Window edges are used
+    # here for one purpose: to keep two windows standing side by side from
+    # being read as one. With only one rectangle there is nothing to keep
+    # apart, and the one thing a lone rectangle is likely to be - on a
+    # frame where a window fills the screen and has no edges to measure -
+    # is a panel drawn INSIDE that window. Cutting the frame around it put
+    # the Obsidian sidebar in four pieces and left the tree in none of them.
     found = _measured_windows(img)
+    if len(found) < 2:
+        found = []
     for x0, y0, x1, y1 in found:
-        split(img[y0:y1, x0:x1], x0, y0, y1 - y0)
+        split(img[y0:y1, x0:x1], x0, y0, y1 - y0, drawn_only=True)
 
     # The columns no window occupies at all are the desktop, and they are cut
     # the full height of the frame, exactly as they always were.
