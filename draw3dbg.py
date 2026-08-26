@@ -4303,16 +4303,26 @@ def note(records_path, diary_text=None):
                 if st not in shown:
                     continue
                 sl = state_slice(st, s["t0"], s["t1"]) or st
+                def _dump(tag_):
+                    if os.environ.get("UIX_TREE") and s["t0"] == "00:04:40" and st.name == "The Obsidian window":
+                        print("PARTS", tag_, [(q["fam"], len(getattr(q["model"], "lines", []) or []))
+                                              for q in sl.parts], file=sys.stderr)
+                _dump("after slice")
                 if sl is not st:
                     # the desk's chrome stands all video; a stretch that did
                     # not re-read it still lives under it
                     sl.topwords = sl.topwords + [t for t in st.topwords
                                                  if not any(same_text(t[0], u[0]) for u in sl.topwords)]
                     polish(sl, states)
+                    _dump("polish")
                     drop_guessed([sl])
+                    _dump("drop_guessed")
                     mend_cells(sl, st)
+                    _dump("mend_cells")
                     strip_furniture(sl, strip_at)
+                    _dump("strip_furniture")
                     drop_side_prefix(sl)
+                    _dump("drop_side_prefix")
                     if bar_title(sl, s["size"][1]):
                         sl.title = None
                     sl.title = sl.title or st.title
