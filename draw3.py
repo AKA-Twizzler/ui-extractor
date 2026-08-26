@@ -4076,50 +4076,49 @@ def note(records_path, diary_text=None):
                 _convert_tree(st_, q, lists)
 
     def _convert_tree(st_, q, lists):
-            if True:
-            names = [row_name(t) for t, _h in q["model"].lines]
-            keys = {fold(flat(n)) for n in names if n}
-            if len(keys) < 4:
-                continue
-            best, hit, from_ = None, 0, None
-            for t_, ks, o_ in lists:
-                n = len(keys & ks)
-                if n > hit:
-                    best, hit, from_ = t_, n, o_
-            if best is None or hit < max(4, 0.6 * len(keys)):
-                continue
-            head = list(best.header) or ["Name"]
-            tab = Table()
-            tab.header = head
-            tab.span = best.span
-            tab.rh = best.rh
-            # the same window showing the same folder: its bar and its
-            # sidebar were read whole at that other moment, and this one
-            # only had them hidden
-            tab.path = list(best.path)
-            tab.paths = list(best.paths)
-            tab.side = list(best.side)
-            by = {fold(flat((r.get("cells") or [""])[0])): r for r in best.rows
-                  if (r.get("cells") or [""])[0]}
-            for n in names:
-                if not n:
-                    continue
-                src = by.get(fold(flat(n)))
-                cells = list(src["cells"]) if src else [n] + [""] * (len(head) - 1)
-                if src:
-                    cells[0] = src["cells"][0]
-                tab.rows.append({"cells": cells,
-                                 "italic": [False] * len(cells),
-                                 "band": (src or {}).get("band"),
-                                 "icon": (src or {}).get("icon", "green")})
-            q["fam"] = "table"
-            q["model"] = tab
-            st_.parts.sort(key=lambda x: x["slot"])
-            st_.name = "The Finder window"
-            # and the folder it was showing: the window's own title bar,
-            # read whole at the moment the window stood clear
-            if not st_.title and from_ is not None and from_.title:
-                st_.title = from_.title
+                names = [row_name(t) for t, _h in q["model"].lines]
+                keys = {fold(flat(n)) for n in names if n}
+                if len(keys) < 4:
+                    return
+                best, hit, from_ = None, 0, None
+                for t_, ks, o_ in lists:
+                    n = len(keys & ks)
+                    if n > hit:
+                        best, hit, from_ = t_, n, o_
+                if best is None or hit < max(4, 0.6 * len(keys)):
+                    return
+                head = list(best.header) or ["Name"]
+                tab = Table()
+                tab.header = head
+                tab.span = best.span
+                tab.rh = best.rh
+                # the same window showing the same folder: its bar and its
+                # sidebar were read whole at that other moment, and this one
+                # only had them hidden
+                tab.path = list(best.path)
+                tab.paths = list(best.paths)
+                tab.side = list(best.side)
+                by = {fold(flat((r.get("cells") or [""])[0])): r for r in best.rows
+                      if (r.get("cells") or [""])[0]}
+                for n in names:
+                    if not n:
+                        return
+                    src = by.get(fold(flat(n)))
+                    cells = list(src["cells"]) if src else [n] + [""] * (len(head) - 1)
+                    if src:
+                        cells[0] = src["cells"][0]
+                    tab.rows.append({"cells": cells,
+                                     "italic": [False] * len(cells),
+                                     "band": (src or {}).get("band"),
+                                     "icon": (src or {}).get("icon", "green")})
+                q["fam"] = "table"
+                q["model"] = tab
+                st_.parts.sort(key=lambda x: x["slot"])
+                st_.name = "The Finder window"
+                # and the folder it was showing: the window's own title bar,
+                # read whole at the moment the window stood clear
+                if not st_.title and from_ is not None and from_.title:
+                    st_.title = from_.title
 
     def words_in(box, st_, times):
         """How many of this window's OWN words were read inside that box."""
