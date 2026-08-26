@@ -238,30 +238,22 @@ def frame_regions(img, engine=None):
     top_edge = min([y0 for _, y0, _, _ in found] + [h])
     menu_h = int(min(0.03 * h, top_edge))
     if menu_h >= 8:
-        # Cut at the bar's OWN wide gaps, not into even columns. The menus
-        # sit together at the left with small gaps between them; then comes
-        # a long empty stretch, then the status icons and the clock at the
-        # right. Read as one line the two halves run together and the whole
-        # bar comes back as letter-soup; read in even columns a cut lands
-        # mid-word. So: split only where the bar is genuinely blank.
-        strip = img[0:menu_h, :]
-        g = cv2.cvtColor(strip, cv2.COLOR_BGR2GRAY) if strip.ndim == 3 else strip
-        bg = int(np.median(g))
-        ink = (np.abs(g.astype(int) - bg) > 24).any(axis=0)
-        gap = max(24, int(0.02 * w))
-        run, x0_ = 0, None
-        for x in range(w + 1):
-            lit = x < w and bool(ink[x])
-            if lit:
-                if x0_ is None:
-                    x0_ = x
-                run = 0
-            elif x0_ is not None:
-                run += 1
-                if run >= gap or x == w:
-                    if x - run - x0_ >= 40:
-                        boxes.append((x0_, 0, x - run, menu_h))
-                    x0_, run = None, 0
+        # Read in OVERLAPPING pieces, each about a thousand pixels wide.
+        # Read as one line the menus at the left and the status icons at
+        # the right run together and the whole bar comes back letter-soup;
+        # cut at the bar's own blank gaps it cannot be cut at all, because
+        # the bar is translucent and the wallpaper behind it is never
+        # blank. Each piece is one line of words, which is what the engines
+        # read best, and the overlap means a word cut by one boundary is
+        # whole inside its neighbour.
+        n_ = max(1, int(round(w / 1000.0)))
+        step = w / n_
+        over = int(0.08 * step)
+        for i_ in range(n_):
+            a_ = max(0, int(i_ * step) - over)
+            b_ = min(w, int((i_ + 1) * step) + over)
+            if b_ - a_ >= 40:
+                boxes.append((a_, 0, b_, menu_h))
 
     # The columns no window occupies at all are the desktop, and they are cut
     # the full height of the frame, exactly as they always were.
