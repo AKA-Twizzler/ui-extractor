@@ -4382,13 +4382,22 @@ def note(records_path, diary_text=None):
             for r_ in (d_.get("readings") or []):
                 b_, t_ = r_.get("box"), (r_.get("text") or "").strip()
                 if b_ and t_:
-                    said.append((b_, t_))
+                    # a reading carries the height of its own letters; the
+                    # box around it can be taller than the type it holds
+                    said.append((b_, t_, r_.get("height") or (b_[3] - b_[1])))
+            line = float(d_.get("body_height") or 0)
             for row in (d_.get("rows") or []):
                 t_ = (row.get("text") or "").strip()
-                if t_ and row.get("x0") is not None:
-                    said.append(([row["x0"], row["y0"], row["x1"],
-                                  row["y1"]], t_))
-            for b_, t_ in said:
+                if not t_ or row.get("x0") is None:
+                    continue
+                # A ROW OF A DOCUMENT IS A BLOCK OF LINES, NOT ONE LINE. Its
+                # box is as tall as the paragraph, and sizing the type by
+                # that drew a sentence across half the screen. The pane's
+                # own measured line height is the size of its writing.
+                high = row["y1"] - row["y0"]
+                said.append(([row["x0"], row["y0"], row["x1"], row["y1"]],
+                             t_, line if line >= 1 else high))
+            for b_, t_, high in said:
                 x0 = bx[0] + b_[0] / up
                 y0 = bx[1] + b_[1] / up
                 x1 = bx[0] + b_[2] / up
@@ -4397,9 +4406,14 @@ def note(records_path, diary_text=None):
                 if any(r[0] <= mid[0] <= r[2] and r[1] <= mid[1] <= r[3]
                        for r in taken):
                     continue          # this window draws it properly itself
-                if x1 <= x0 or y1 <= y0 or y1 - y0 > 0.2 * H_:
+                if x1 <= x0 or y1 <= y0:
                     continue
-                out.append((x0, y0, x1, y1, t_))
+                tall_ = float(high) / up
+                # nothing on a screen is written a twentieth of the screen
+                # tall; a figure that says so is a block measured as a line
+                if tall_ < 1 or tall_ > 0.05 * H_:
+                    continue
+                out.append((x0, y0, x1, y0 + tall_, t_))
         return out
 
     def ghost_list(s, sub_states, carded):
