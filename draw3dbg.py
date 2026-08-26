@@ -1033,11 +1033,20 @@ class State:
             if k == "a list of columns":
                 tables = draw2.build_tables(p)
                 built = max(tables, key=lambda t: len(t[3])) if tables else None
-                if built and len(built[3]) < 6:
-                    # the reader's block was a sliver; the words' positions
-                    # may hold the whole list
-                    loose = draw2.table_from_loose(p)
-                    if loose and len(loose[3]) > len(built[3]):
+                # THE FULLER OF THE TWO READINGS OF THE SAME LIST. The
+                # reader's own blocks can stop short of the list while every
+                # name they dropped is still there in the pane's words:
+                # eight rows of sixteen at 00:00:10, the other eight sitting
+                # in the pane and drawn nowhere. The rebuild from the words'
+                # own positions is taken when it holds MORE rows and all but
+                # one of the names the blocks found are among them - more of
+                # the list, and nothing of the blocks lost.
+                loose = draw2.table_from_loose(p)
+                if loose and (not built or len(loose[3]) > len(built[3])):
+                    have = {norm(c[0]) for c, _i, _b in (built[3] if built else [])
+                            if c and c[0]}
+                    got = {norm(c[0]) for c, _i, _b in loose[3] if c and c[0]}
+                    if len(have - got) <= 1:
                         built = loose
                 if built:
                     part["model"].add(built)
@@ -1473,8 +1482,19 @@ def build_states(moments):
                 sliver = bool(t) and len(t.rows) < 3
                 if not all_repeat and not sliver:
                     cur.absorb(g, m)
-                elif m["ts"] not in cur.times:
-                    cur.times.append(m["ts"])
+                else:
+                    if m["ts"] not in cur.times:
+                        cur.times.append(m["ts"])
+                    # THE MOMENT IS KEPT AS A PIECE even when its reading is
+                    # too thin to join the window's settled list. Without
+                    # it that moment's picture has no reading of its own to
+                    # draw from and falls back to the whole window: at
+                    # 00:01:00 a window showing two rows of the folder just
+                    # opened was drawn holding sixteen rows of the folder
+                    # before it. The thin reading still stays OUT of the
+                    # settled list, which is what the rule was for.
+                    if not any(mm is m for mm, _g in cur.pieces):
+                        cur.pieces.append((m, g))
                 cur.rects.setdefault(m["ts"], content_rect(cur, g, m))
                 st = cur
             else:
@@ -2576,6 +2596,34 @@ def mend_slice_tree(sl, st):
     line: those passes judge a row on its own, and a row of a tree is only
     as good as the rows it hangs from."""
     mine, all_of = sl.tree(), st.tree()
+    if os.environ.get("UIX_TREE") and st.name == "The Obsidian window":
+        print("TREE slice", sl.times, "mine", mine is not None,
+              "all_of", all_of is not None,
+              [(q["fam"], len(getattr(q["model"], "lines", []) or []),
+                [t[:26] for t, _h in (getattr(q["model"], "lines", []) or [])[:3]])
+               for q in sl.parts], file=sys.stderr)
+    if mine is None and all_of is not None:
+        # THIS STRETCH READ THE TREE AS A PLAIN COLUMN OF NAMES. Nothing in
+        # the pane said "tree", so the names went to a document part and the
+        # picture drew no tree at all - two of eighteen pictures showed the
+        # Obsidian window with its whole left column empty, although the
+        # names were read and are in the record. The window's own tree says
+        # what shape they stood in; only the rows THIS stretch read are
+        # kept, so nothing is drawn that was not on the screen.
+        for q in sl.parts:
+            if q["fam"] != "doc" or not getattr(q["model"], "lines", None):
+                continue
+            names = {fold(flat(row_name(t))) for t, _h in q["model"].lines}
+            names.discard("")
+            hit = [ln for ln in all_of.lines
+                   if fold(flat(row_name(ln[0]))) in names]
+            if len(hit) >= max(4, 0.5 * len(q["model"].lines)):
+                tree = Lines("a file tree")
+                tree.lines = list(hit)
+                q["fam"] = "tree"
+                q["model"] = tree
+                sl.parts.sort(key=lambda x: x["slot"])
+                return
     if mine is not None and all_of is not None and mine is not all_of:
         mine.lines = mend_tree(mine.lines, all_of.lines)
 
@@ -4255,19 +4303,6 @@ def note(records_path, diary_text=None):
                 if st not in shown:
                     continue
                 sl = state_slice(st, s["t0"], s["t1"]) or st
-                if s["t0"] == "00:01:00" and not getattr(note, "_dbg", False):
-                    note._dbg = True
-                    for o_ in states:
-                        has = [mm["ts"] for mm, _g in o_.pieces if mm["ts"] == "00:01:00"]
-                        print("DBG state", o_.name, repr(o_.title), o_.times[:5],
-                              "piece@01:00", bool(has), "shown", o_ in shown,
-                              "in stretch", o_ in s["states"], file=sys.stderr)
-                if s["t0"] == "00:01:00":
-                    _t = sl.main_table()
-                    print("DBG slice", st.title, "fallback", sl is st,
-                          "rows", len(_t.rows) if _t else None,
-                          [r["cells"][0][:22] for r in (_t.rows[:4] if _t else [])],
-                          file=sys.stderr)
                 if sl is not st:
                     # the desk's chrome stands all video; a stretch that did
                     # not re-read it still lives under it
@@ -4276,12 +4311,6 @@ def note(records_path, diary_text=None):
                     polish(sl, states)
                     drop_guessed([sl])
                     mend_cells(sl, st)
-                    if s["t0"] == "00:01:00":
-                        _t = sl.main_table()
-                        print("DBG after mend", st.title, "rows",
-                              len(_t.rows) if _t else None,
-                              [r["cells"][0][:22] for r in (_t.rows[:4] if _t else [])],
-                              file=sys.stderr)
                     strip_furniture(sl, strip_at)
                     drop_side_prefix(sl)
                     if bar_title(sl, s["size"][1]):
