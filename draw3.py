@@ -852,7 +852,7 @@ def mend_prose(states):
         sm = difflib.SequenceMatcher(None, mine_l, other_l, autojunk=False)
         ops = sm.get_opcodes()
         equal = sum(i2 - i1 for tag, i1, i2, _j1, _j2 in ops if tag == "equal")
-        if equal < 5 or equal < 0.4 * min(len(mine), len(other)):
+        if equal < 5 or equal < 0.55 * min(len(mine), len(other)):
             return None
         last_equal = max((k for k, o in enumerate(ops) if o[0] == "equal"),
                          default=-1)
@@ -865,17 +865,14 @@ def mend_prose(states):
             if tag == "delete":
                 out.extend(mine[i1:i2])
                 continue
-            take = False
-            if seen_equal and k < last_equal:
-                if tag == "insert":
-                    # words the other reading has where this one has none,
-                    # standing BETWEEN two places the two agree
-                    take = True
-                elif (i2 - i1) <= 2 and (j2 - j1) > (i2 - i1):
-                    take = _hole(mine[i1:i2], other[j1:j2])
-            elif tag == "replace" and seen_equal and (i2 - i1) <= 2 and (j2 - j1) > (i2 - i1):
-                # the tail of the line, cut off where the cover began
-                take = _hole(mine[i1:i2], other[j1:j2])
+            # ONLY A CUT WORD IS EVIDENCE OF A HOLE. Words the other
+            # reading simply has more of, between two words the two agree
+            # on, are not: two bullets of the same note share their shape
+            # and half their words, and taking those would merge one into
+            # the other and make the note say a sentence it never said.
+            take = (tag == "replace" and seen_equal
+                    and (i2 - i1) <= 2 and (j2 - j1) > (i2 - i1)
+                    and _hole(mine[i1:i2], other[j1:j2]))
             if take:
                 out.extend(other[j1:j2])
                 filled = True
