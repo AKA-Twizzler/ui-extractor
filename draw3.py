@@ -789,6 +789,72 @@ def cut_glued(cell, parts_):
     return [out[q] for q in parts_]
 
 
+MARKER = re.compile(r"^(\s*(?:[-*\u2022#>]+\s*)*)")
+
+
+def mend_prose(states):
+    """A line of a note that something covered, filled from a reading of the
+    SAME line taken when nothing did.
+
+    The camera sits over the bottom right of every frame, so a line of the
+    note running under it is read short - "it only knows it" where the note
+    said "it only knows its own folder and the daily log. It". The same
+    note, read at a moment when it stood behind the other windows, was read
+    whole in the gap between them. This is the puzzle-piece rule for prose:
+    the line's own head and its own tail must both be found in the other
+    reading, and what is put back is exactly what stood BETWEEN them there.
+    Nothing is spelt out that was never read off the screen.
+    """
+    docs = [q["model"] for st in states for q in st.parts
+            if q["fam"] == "doc" and getattr(q["model"], "lines", None)]
+    pool = []
+    for d in docs:
+        words = []
+        for t, _h in d.lines:
+            words.extend(MARKER.sub("", t).split())
+        pool.append((d, words, [w.lower() for w in words]))
+    for d in docs:
+        for i, (t, h) in enumerate(list(d.lines)):
+            lead = MARKER.match(t).group(1)
+            core = t[len(lead):]
+            mine = core.split()
+            if len(mine) < 6:
+                continue
+            mine_l = [w.lower() for w in mine]
+            best = None
+            for od, ow, ow_l in pool:
+                if od is d or len(ow) < len(mine):
+                    continue
+                sm = difflib.SequenceMatcher(None, mine_l, ow_l, autojunk=False)
+                blocks = [b for b in sm.get_matching_blocks() if b.size >= 3]
+                if len(blocks) < 2:
+                    continue
+                first, last = blocks[0], blocks[-1]
+                # the line's own head and tail must BOTH be found there, or
+                # this is a different line that merely reads alike
+                if first.a > 2 or last.a + last.size < len(mine) - 2:
+                    continue
+                matched = sum(b.size for b in blocks)
+                if matched < 0.6 * len(mine):
+                    continue
+                span = ow[first.b:last.b + last.size]
+                if not (len(mine) < len(span) <= 2.2 * len(mine)):
+                    continue
+                if best is None or len(span) > len(best):
+                    best = span
+            if best is None:
+                continue
+            new_core = " ".join(best)
+            new_t = lead + new_core
+            if esc(core) in h:
+                new_h = h.replace(esc(core), esc(new_core), 1)
+            elif core in h:
+                new_h = h.replace(core, esc(new_core), 1)
+            else:
+                continue          # formatting in the way: leave it be
+            d.lines[i] = (new_t, new_h)
+
+
 def folder_marks(table):
     """The crumbs that name the folder, the generic ones left out."""
     return {norm(c) for c in table.path if norm(c) not in GENERIC and len(norm(c)) >= 3}
@@ -3308,15 +3374,6 @@ def note(records_path, diary_text=None):
     # covered when the window was in front stayed half a line for good,
     # although a moment when the window stood behind had read it whole.
     # Its own readings belong to its own card: revealed, never invented.
-    if os.environ.get("UIX_FRAG"):
-        for st in all_states:
-            hit = [(t[:60], h[:120]) for q in st.parts
-                   for t, h in (getattr(q["model"], "lines", []) or [])
-                   if "worker" in t][:1]
-            print("ST", st.name, st.title, st.times[:3], "in states",
-                  st in states, "frag", st in frags, "dailylog", hit,
-                  [(q["fam"], len(getattr(q["model"], "lines", []) or [])) for q in st.parts],
-                  file=sys.stderr)
     real_states = [st for st in states if is_real_window(st.name)]
     loose_states = [st for st in states
                     if not is_real_window(st.name) and st.has_content()]
@@ -3960,6 +4017,7 @@ def note(records_path, diary_text=None):
         return out
 
     list_not_tree(states)
+    mend_prose(all_states)
     heal_titles(states)
     own_words = {id(st): {flat(w) for w in box_texts(st)[1] if len(flat(w)) >= 8}
                  for st in states}
