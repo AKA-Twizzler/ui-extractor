@@ -3310,8 +3310,9 @@ def note(records_path, diary_text=None):
     # Its own readings belong to its own card: revealed, never invented.
     if os.environ.get("UIX_FRAG"):
         for st in all_states:
-            hit = any("daily log" in t for q in st.parts
-                      for t, _ in (getattr(q["model"], "lines", []) or []))
+            hit = [t[:70] for q in st.parts
+                   for t, _ in (getattr(q["model"], "lines", []) or [])
+                   if "worker" in t or "vault works" in t][:2]
             print("ST", st.name, st.title, st.times[:3], "in states",
                   st in states, "frag", st in frags, "dailylog", hit,
                   [(q["fam"], len(getattr(q["model"], "lines", []) or [])) for q in st.parts],
