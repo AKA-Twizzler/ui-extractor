@@ -96,7 +96,7 @@ def text_gaps(work, engine, min_gap=40):
     return gaps, spans
 
 
-def pane_columns(img, engine=None, least=MIN_PANE, drawn_only=False):
+def pane_columns(img, engine=None, least=MIN_PANE):
     """The window's panes as (x0, x1) in working-size coordinates.
 
     `least` is the narrowest a pane may be, in those same coordinates. It has
@@ -114,20 +114,11 @@ def pane_columns(img, engine=None, least=MIN_PANE, drawn_only=False):
     for x in _borders(work):
         cuts.add(x)
 
-    # INSIDE A WINDOW, ONLY WHAT THE WINDOW DRAWS DIVIDES IT. A window's own
-    # divisions - the line between a sidebar and its list - are drawn on
-    # purpose; the gap between a table's Name and Date Modified columns is
-    # not, and it runs the full height of the window, so cutting at blank
-    # corridors splits a Finder list down the middle and each half then
-    # reads as a table of its own with a row of data for its headings.
-    # Across a whole frame the same corridor is broken up by whatever else
-    # stands at that x, which is why this only bites inside a window.
-    if not drawn_only:
-        if engine is None:
-            from rapidocr_onnxruntime import RapidOCR
-            engine = RapidOCR()
-        for x in text_gaps(work, engine)[0]:
-            cuts.add(x)
+    if engine is None:
+        from rapidocr_onnxruntime import RapidOCR
+        engine = RapidOCR()
+    for x in text_gaps(work, engine)[0]:
+        cuts.add(x)
 
     edges = [0] + sorted(cuts) + [w]
     panes, last = [], 0
@@ -226,12 +217,21 @@ def frame_regions(img, engine=None):
     scale = w / screenness.WORK_WIDTH
     boxes = []
 
-    def split(crop, x_at, y_at, height, drawn_only=False):
-        back = crop.shape[1] / screenness.WORK_WIDTH
+    def split(crop, x_at, y_at, height, judge=None):
+        # WHERE TO CUT IS JUDGED OVER THE WHOLE HEIGHT OF THE FRAME. A
+        # window's own crop stops at its own top and foot, and inside it the
+        # gap between a table's Name and Date Modified columns runs clear
+        # from one end to the other - so it reads as a pane boundary, the
+        # Finder list is split down the middle, and each half comes back as
+        # a table whose headings are a row of its data. Over the full height
+        # that same gap is broken by the menu bar and by whatever else
+        # stands at that x, while a real divider inside the window still
+        # runs clear. The panes emitted still stop at the window's own edges.
+        j = crop if judge is None else judge
+        back = j.shape[1] / screenness.WORK_WIDTH
         # a pane is thin or wide in the FRAME's pixels, never in the window's
-        least = MIN_PANE * w / max(1, crop.shape[1])
-        for a, b in pane_columns(crop, engine=engine, least=least,
-                                 drawn_only=drawn_only):
+        least = MIN_PANE * w / max(1, j.shape[1])
+        for a, b in pane_columns(j, engine=engine, least=least):
             boxes.append((x_at + int(a * back), y_at,
                           x_at + int(b * back), y_at + height))
 
@@ -246,7 +246,7 @@ def frame_regions(img, engine=None):
     if len(found) < 2:
         found = []
     for x0, y0, x1, y1 in found:
-        split(img[y0:y1, x0:x1], x0, y0, y1 - y0, drawn_only=True)
+        split(img[y0:y1, x0:x1], x0, y0, y1 - y0, judge=img[:, x0:x1])
 
     # The columns no window occupies at all are the desktop, and they are cut
     # the full height of the frame, exactly as they always were.
