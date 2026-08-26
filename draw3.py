@@ -807,6 +807,16 @@ def mend_prose(states):
     """
     docs = [q["model"] for st in states for q in st.parts
             if q["fam"] == "doc" and getattr(q["model"], "lines", None)]
+    if os.environ.get("UIX_PROSE"):
+        for st in states:
+            for q in st.parts:
+                if q["fam"] != "doc" or not getattr(q["model"], "lines", None):
+                    continue
+                if not any("worker" in t for t, _ in q["model"].lines):
+                    continue
+                print("DOC", st.name, st.times[:3], file=sys.stderr)
+                for t, _h in q["model"].lines:
+                    print("   |", t[:100], file=sys.stderr)
     def bare(w):
         # the note's own emphasis marks are not part of the word, and a
         # word put back with them still on would show its asterisks
