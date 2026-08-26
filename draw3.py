@@ -3301,6 +3301,28 @@ def note(records_path, diary_text=None):
 
     owner_of = {id(f): frag_owner(f, states) for f in frags}
 
+    # THE PUZZLE-PIECE RULE, APPLIED TO WHAT WAS READ AROUND A WINDOW.
+    # A window standing behind others is still read, in whatever pieces the
+    # gaps around them leave; those readings were being used to say the
+    # window was THERE and never to say what it SAID. So a line the camera
+    # covered when the window was in front stayed half a line for good,
+    # although a moment when the window stood behind had read it whole.
+    # Its own readings belong to its own card: revealed, never invented.
+    for f in frags:
+        own = owner_of.get(id(f))
+        if own is None or own == "several":
+            continue
+        for q in f.parts:
+            model = q["model"]
+            if not hasattr(model, "lines"):
+                continue          # a list behind, read in part, is not folded in
+            tgt = own.main_doc() if q["fam"] == "doc" else (
+                own.tree() if q["fam"] == "tree" else None)
+            if tgt is None or tgt is model:
+                continue
+            tgt.doubt |= getattr(model, "doubt", set())
+            tgt.add(list(model.lines))
+
     # ------- one map of place: every moment's words matched to the richest
     # moment's, so a box measured under one zoom lands rightly under another
     def word_boxes(m):
