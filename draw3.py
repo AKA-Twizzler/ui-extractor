@@ -4528,9 +4528,16 @@ def note(records_path, diary_text=None):
                         for stx, sl, shape in subjects]
             for stx, sl, shape in subjects:
                 sl.rect = shape
-                # a box the frame itself drew: its edges are measured, and
-                # nothing worked out from where words sat may move them
-                sl._on_frame = any(shape == r for r in frame_rects(s))
+                # A box the frame itself drew: its edges are measured, and
+                # nothing worked out from where words sat may move them.
+                # The rectangles the READER measured count as drawn here -
+                # they are the same measurement, taken when the frame was
+                # read - and asking the picture for its rectangles again
+                # answers with a slightly different set, so a window whose
+                # box came straight from the record failed this test and
+                # every later rule then felt free to move it.
+                sl._on_frame = (id(stx) in settled
+                                or any(shape == r for r in frame_rects(s)))
             # A box still worked out from where words sat is squared up
             # against what the frame DID measure. Two things settle it: it
             # cannot reach into a window whose edges were measured, and
