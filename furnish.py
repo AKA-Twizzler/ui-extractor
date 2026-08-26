@@ -496,7 +496,7 @@ def deskbar(bar_words, clock):
 
 
 def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
-                ghosts=(), camera=None, sure=True, kz=1.0):
+                ghosts=(), camera=None, sure=True, kz=1.0, ink=()):
     """The layout of the screen over one stretch of time: the desktop bar
     with its own words, the window this stretch is about filled in with
     what it really said, and every other window standing where it stood,
@@ -504,6 +504,24 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
     pasted in -- where the camera lay, an outline says so."""
     barred = bar_words is not None
     out = [f'<div class="sn-screen" style="aspect-ratio:{W} / {H}">']
+    # THE SCREEN'S OWN INK, WHERE IT STOOD. A window the frame drew no
+    # rectangle around - a browser filling the screen, a note behind
+    # everything - was read and then thrown away, because only what stood
+    # inside a measured rectangle was ever drawn. The picture then showed
+    # two windows floating on black where the screen was full of words. So
+    # every reading no filled window claims is laid back down at its own
+    # place, in type the height it was measured at. It sits under
+    # everything: an outline, a filled window and the bar all cover it, the
+    # way they covered it on the screen.
+    for x0, y0, x1, y1, text in ink or ():
+        if not text:
+            continue
+        high = max(1.0, float(y1) - float(y0))
+        out.append(
+            '<div class="sn-ink" style="left:%.2f%%;top:%.2f%%;'
+            'font-size:calc(%.3fcqh)">%s</div>'
+            % (100.0 * float(x0) / W, 100.0 * float(y0) / H,
+               100.0 * high / H, esc(text)))
     if barred:
         out.append(deskbar(bar_words, clock))
     drawn = []
