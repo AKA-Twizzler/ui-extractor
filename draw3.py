@@ -3981,8 +3981,15 @@ def note(records_path, diary_text=None):
                                    for r in t_.rows if (r.get("cells") or [""])[0]}, st_))
         if not lists:
             return
+        own = {id(o_) for _t, _k, o_ in lists}
         for st_ in states:
-            if st_.name != "The Obsidian window":
+            # ANY window holding a tree whose names are some Finder list's
+            # names. Asking only about windows named for the vault left the
+            # case the naming rules had ALREADY got right: a window named
+            # Finder, drawn with a tree in it and a level of nesting that
+            # was never on the screen. A window that is itself one of the
+            # lists is not converted - it is the witness.
+            if id(st_) in own:
                 continue
             q = next((x for x in st_.parts if x["fam"] == "tree"), None)
             if q is None or not getattr(q["model"], "lines", None):
