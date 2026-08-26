@@ -3338,6 +3338,38 @@ def note(records_path, diary_text=None):
         _frame_wins[t0] = [[float(v) for v in r] for r in got]
         return _frame_wins[t0]
 
+    SIDE_FLAT = {norm(n) for n in draw2.SIDE_NAMES}
+
+    def sidebar_window(r, t0):
+        """A rectangle with a Finder sidebar standing down its own left edge.
+
+        The sidebar's fixed names - Recents, Shared, Applications and the
+        rest - are FURNITURE, and furniture belongs to the window it is
+        drawn in. The words of a note showing through the gaps around a
+        window are not. So a sidebar filling most of a rectangle's width,
+        hard against its left edge, says that rectangle is that Finder
+        window; the same names inside a much wider rectangle are the Finder
+        window standing in front of it, and say nothing about the wider one.
+        """
+        m0 = next((mm for mm in moments if mm["ts"] == t0), None)
+        if not m0:
+            return False
+        xs = []
+        for p_ in m0.get("panes") or []:
+            for it in draw2.items_of(p_):
+                b = it.get("box")
+                if not b or norm(it.get("text", "")) not in SIDE_FLAT:
+                    continue
+                if (r[0] - 4 <= b[0] and b[2] <= r[2] + 4
+                        and r[1] - 4 <= b[1] and b[3] <= r[3] + 4):
+                    xs.append((b[0], b[2]))
+        if len(xs) < 3:
+            return False
+        wide = max(1.0, r[2] - r[0])
+        x0 = min(a for a, _ in xs)
+        x1 = max(b for _, b in xs)
+        return (x1 - x0) >= 0.45 * wide and (x0 - r[0]) <= 0.25 * wide
+
     def rects_at(t0):
         """The rectangles the screen drew on one moment's frame."""
         if t0 in _frame_rects:
@@ -4426,7 +4458,9 @@ def note(records_path, diary_text=None):
                 near_ = [r for r in free
                          if furnish._within(r, box_) > 0.7
                          and (furnish._within(box_, r) > 0.5
-                              or (small and (grown or over)))]
+                              or (small and (grown or over)))
+                         and not (sidebar_window(r, s["t0"])
+                                  and not tag_.startswith("Finder"))]
                 if len(near_) == 1:
                     behinds[k] = (tag_, list(near_[0]))
                     on_rect_k.add(k)
@@ -4483,6 +4517,14 @@ def note(records_path, diary_text=None):
             if True:
                 fresh, taken_k = [], set()
                 for r in spare_w:
+                    if sidebar_window(r, s["t0"]):
+                        # this rectangle's own furniture names it, whatever
+                        # else showed through it
+                        near_f = [(t_, b_) for t_, b_ in behinds
+                                  if t_.startswith("Finder")
+                                  and furnish._within(r, b_) * furnish._within(b_, r) > 0.15]
+                        fresh.append((near_f[0][0] if near_f else "Finder", list(r)))
+                        continue
                     best, bk = 0.0, None
                     for k, (tag_, box_) in enumerate(behinds):
                         if k in taken_k:
