@@ -463,14 +463,15 @@ def windows(path):
 
 
 def _frame_area(path, kept):
-    """The frame's own area, for judging what share of it a rectangle is."""
+    """The frame's own area, for judging what share of it a rectangle is.
+
+    Where the frame cannot be measured, nothing is dropped: a rule that
+    cannot see what it is judging says nothing rather than guessing."""
     try:
-        a = _grey(path)
-        return float(a.shape[0]) * float(a.shape[1])
+        _a, w, h = _grey(path)
+        return float(w) * float(h)
     except Exception:
-        if not kept:
-            return 0.0
-        return max((r[2] - r[0]) * (r[3] - r[1]) for r in kept) / 0.5
+        return 0.0
 
 
 def camera_box(path):
