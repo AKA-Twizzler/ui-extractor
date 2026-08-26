@@ -235,6 +235,29 @@ class Table:
             head = self.STANDARD.get(len(head), [""] * len(head))
         if head and not head[0] and sum(1 for h in head if h in FINDER_WORDS) >= 2 and "Name" not in head:
             head[0] = "Name"
+        # A heading holding SEVERAL of Finder's headings means the reader ran
+        # the columns together, and the cells under it are glued too. Where
+        # the cells plainly hold a date or a size, the column is cut back
+        # apart rather than named for one of them and left glued.
+        wide_ = []
+        for i, h in enumerate(head):
+            parts_ = draw2.split_heads(h)
+            if len(parts_) < 2:
+                continue
+            col = [cells_[i] for cells_, _, _ in rows if i < len(cells_) and cells_[i]]
+            if col and sum(1 for c in col if GLUED_DATE.search(c) or GLUED_SIZE.search(c)) * 2 >= len(col):
+                wide_.append((i, parts_))
+        if wide_:
+            head2, rows2 = [], [[] for _ in rows]
+            for i, h in enumerate(head):
+                cut = next((q for j, q in wide_ if j == i), None)
+                head2.extend(cut if cut else [h])
+                for k, (cells_, _, _) in enumerate(rows):
+                    c = cells_[i] if i < len(cells_) else ""
+                    rows2[k].extend(cut_glued(c, cut) if cut else [c])
+            head = head2
+            rows = [(rows2[k], icon_, band_)
+                    for k, (_c, icon_, band_) in enumerate(rows)]
         for i, h in enumerate(head):
             parts_ = draw2.split_heads(h)
             if len(parts_) >= 2:
@@ -726,6 +749,44 @@ def bar_crumbs(pane):
     if len(parts) >= 3 and norm(parts[0]) == norm("Macintosh HD"):
         return parts
     return []
+
+
+GLUED_DATE = re.compile(
+    r"((?:Today|Yesterday|[A-Z][a-z]{2}\s?\d{1,2},?\s?\d{4})"
+    r"\s?(?:at)?\s?\d{1,2}:\d{2}\s?[AaPp]\.?[Mm])")
+GLUED_SIZE = re.compile(r"(\d+(?:[.,]\d+)?\s?(?:bytes|byte|KB|MB|GB|TB))", re.I)
+
+
+def cut_glued(cell, parts_):
+    """One cell holding several columns' text, cut back into them.
+
+    The reader sometimes runs a list's headings together - "Name Date
+    Modified Size" as one heading - and then every cell under it holds the
+    name, the date and the size in one string. Left glued, the file's NAME
+    carries a date on the end of it, and a name with a date stuck to it
+    matches the wrong row in every pass that works by name afterwards.
+    The date and the size say plainly where they begin, so the cell is cut
+    at them and each piece goes to its own column."""
+    out = {q: "" for q in parts_}
+    rest = cell
+    name_ = rest
+    m = GLUED_DATE.search(rest)
+    if m and "Date Modified" in parts_:
+        out["Date Modified"] = m.group(1).strip()
+        name_ = rest[:m.start()].strip()
+        rest = rest[m.end():].strip()
+    else:
+        rest = ""
+    m2 = GLUED_SIZE.search(rest)
+    if m2 and "Size" in parts_:
+        out["Size"] = m2.group(1).strip()
+        rest = (rest[:m2.start()] + " " + rest[m2.end():]).strip()
+    if rest and "Kind" in parts_:
+        out["Kind"] = rest
+    elif rest:
+        name_ = (name_ + " " + rest).strip()
+    out[parts_[0]] = name_
+    return [out[q] for q in parts_]
 
 
 def folder_marks(table):
