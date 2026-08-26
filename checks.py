@@ -1506,12 +1506,20 @@ def _coverage():
                 return False, (f"pane {p['pi']} at {m['ts']}: {c['readings']} "
                                f"readings, {total} placed")
     finder = moments[0]
-    top = (finder["windows"] or [{}])[0].get("top") or ""
-    if "Company A" not in top:
-        return False, f"the Finder's title did not reach the header: {top!r}"
     lst = [p for p in finder["panes"] if p["kind"] == "a list of columns"]
     if not lst:
         return False, "the file list was not read as a list"
+    # The window the LIST was cut from, not whichever window the screen drew
+    # first. A moment's windows are written in screen order, and this frame
+    # holds a second Finder window at its left edge - half off the screen,
+    # showing only its Size and Kind columns - so the window this asks about
+    # is the second of the two.
+    wi = lst[0].get("wi")
+    win = next((w for w in (finder["windows"] or [])
+                if w.get("wi") == wi), None)
+    top = (win or {}).get("top") or ""
+    if "Company A" not in top:
+        return False, f"the Finder's title did not reach the header: {top!r}"
     rest = [r["text"] for r in lst[0]["data"].get("remainder") or []
             if r["confirmed"]]
     if not any("Size" in r for r in rest):
