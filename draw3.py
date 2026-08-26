@@ -836,7 +836,7 @@ def mend_prose(states):
                     continue
                 for a0 in range(len(rows)):
                     ow = []
-                    for a1 in range(a0, min(a0 + 3, len(rows))):
+                    for a1 in range(a0, min(a0 + 5, len(rows))):
                         ow = ow + rows[a1]
                         if len(ow) < len(mine):
                             continue
@@ -861,7 +861,6 @@ def mend_prose(states):
                         # anything longer has swept in words from beside it
                         if best is None or len(span) < len(best):
                             best = span
-                        break
             if best is None:
                 continue
             new_core = " ".join(best)
