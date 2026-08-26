@@ -1025,9 +1025,21 @@ def window_groups(m):
                     # beside a file list is Obsidian standing behind Finder,
                     # not one window that is somehow both
                     e0 = {"rect": [0, 0] + size, "top": None}
-                    qn = name_of(e0, [q])
+                    # THE BROWSER IS A STRIP ABOVE, NOT A PROGRAM BESIDE.
+                    # Its chrome - the tab titles and the address bar - runs
+                    # across the TOP of the screen, so those words land in
+                    # the top of whatever pane happens to be leftmost. Taken
+                    # as that pane's program they split one maximised window
+                    # into two, and the half called "the browser" is never
+                    # drawn: at 00:04:40 the Obsidian window lost its whole
+                    # file-tree column that way, on a frame where the screen
+                    # drew no window edges to say otherwise.
+                    def _prog(pane_):
+                        n_ = name_of(e0, [pane_])
+                        return None if n_ == "The browser" else n_
+                    qn = _prog(q)
                     if qn:
-                        mine_ = [name_of(e0, [r]) for r in members]
+                        mine_ = [_prog(r) for r in members]
                         if any(n and n != qn for n in mine_):
                             continue
                     if any(touching(q["box"], r["box"], W) for r in members):
