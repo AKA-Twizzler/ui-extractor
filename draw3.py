@@ -792,6 +792,23 @@ def cut_glued(cell, parts_):
 MARKER = re.compile(r"^(\s*(?:[-*\u2022#>]+\s*)*)")
 
 
+def _hole(short, long_):
+    """The words left where a cover cut the line: what survived must be the
+    START of the first word put back, or the END of the last. "it" for "its
+    own folder and the daily log. It", "s" for "something outside its lane".
+    Without this a bullet is merged with the bullet beside it, and the note
+    is made to say a sentence it never said."""
+    if not short or not long_:
+        return False
+    def k(w):
+        return re.sub(r"[^a-z0-9]", "", w.lower())
+    a, b = k(short[0]), k(long_[0])
+    if a and b and b.startswith(a):
+        return True
+    a2, b2 = k(short[-1]), k(long_[-1])
+    return bool(a2 and b2 and b2.endswith(a2))
+
+
 def mend_prose(states):
     """A line of a note that something covered, filled from a reading of the
     SAME line taken when nothing did.
@@ -835,24 +852,34 @@ def mend_prose(states):
         equal = sum(i2 - i1 for tag, i1, i2, _j1, _j2 in ops if tag == "equal")
         if equal < 5 or equal < 0.4 * min(len(mine), len(other)):
             return None
-        out, seen_equal = [], False
-        for tag, i1, i2, j1, j2 in ops:
+        last_equal = max((k for k, o in enumerate(ops) if o[0] == "equal"),
+                         default=-1)
+        out, seen_equal, filled = [], False, False
+        for k, (tag, i1, i2, j1, j2) in enumerate(ops):
             if tag == "equal":
                 out.extend(mine[i1:i2])
                 seen_equal = True
-            elif tag == "delete":
+                continue
+            if tag == "delete":
                 out.extend(mine[i1:i2])
-            elif tag == "insert":
-                # words the other reading has where this one has none: they
-                # go in only after the two have agreed on something, so a
-                # reading that merely starts alike cannot prepend its own
-                out.extend(other[j1:j2] if seen_equal else [])
-            else:                      # replace: a hole faced by a run
-                if seen_equal and (i2 - i1) <= 3 and (j2 - j1) > (i2 - i1):
-                    out.extend(other[j1:j2])
-                else:
-                    out.extend(mine[i1:i2])
-        if out == mine or len(out) > 1.5 * len(mine):
+                continue
+            take = False
+            if seen_equal and k < last_equal:
+                if tag == "insert":
+                    # words the other reading has where this one has none,
+                    # standing BETWEEN two places the two agree
+                    take = True
+                elif (i2 - i1) <= 2 and (j2 - j1) > (i2 - i1):
+                    take = _hole(mine[i1:i2], other[j1:j2])
+            elif tag == "replace" and seen_equal and (i2 - i1) <= 2 and (j2 - j1) > (i2 - i1):
+                # the tail of the line, cut off where the cover began
+                take = _hole(mine[i1:i2], other[j1:j2])
+            if take:
+                out.extend(other[j1:j2])
+                filled = True
+            else:
+                out.extend(mine[i1:i2])
+        if not filled or out == mine or len(out) > 1.5 * len(mine):
             return None
         return out
 
