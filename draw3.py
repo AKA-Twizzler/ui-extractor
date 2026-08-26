@@ -4340,40 +4340,48 @@ def note(records_path, diary_text=None):
 
     _zoom = {}
 
-    def pane_scale(p_):
-        """How far the pane was zoomed when it was read.
+    def _here(path):
+        """A path written by the Windows side, read from this one."""
+        if len(path) > 2 and path[1] == ":":
+            return "/mnt/" + path[0].lower() + path[2:].replace("\\", "/")
+        return path
 
-        Readings are kept in the pixels of the picture that was READ, and
-        that is not always the picture the record names beside the pane -
-        one pane's own file is written at two, its readings at six. What
-        cannot be argued with is that a reading stands INSIDE the picture
-        it was read from: so the zoom is at least how far the readings
-        reach over the pane's own size, and a zoom is a whole number.
-        Taken from the named file instead, a note's writing came out three
-        times its size; guessed from the readings' reach in one direction
-        only, a browser tab landed a third of the way down the screen.
+    def pane_zooms(p_):
+        """The two zooms a pane's record can be written in.
+
+        A pane is cut from the frame and written enlarged, and the loose
+        readings are made on THAT picture - so its own width over the
+        pane's width is their zoom, and it is on disk to be measured. A
+        document's rows are not: the note reader enlarges again for itself
+        and answers in its own pixels, which is why one note's writing came
+        out three times its size. Nothing there is written down, but a row
+        cannot reach past the picture it was read from, and a zoom is a
+        whole number - so the rows' own reach gives it.
         """
-        d_ = p_.get("data") or {}
         key = id(p_)
         if key in _zoom:
             return _zoom[key]
+        d_ = p_.get("data") or {}
         wide = max(1, p_["box"][2] - p_["box"][0])
         high = max(1, p_["box"][3] - p_["box"][1])
+        shot = 0.0
+        pic = p_.get("image")
+        if pic:
+            try:
+                from PIL import Image as _Im
+                with _Im.open(_here(pic)) as im_:
+                    shot = im_.size[0] / float(wide)
+            except Exception:
+                shot = 0.0
+        if shot < 0.9:
+            shot = float(d_.get("scale") or 1) or 1.0
         far_x = far_y = 0
-        for r_ in (d_.get("readings") or []):
-            b_ = r_.get("box")
-            if b_:
-                far_x, far_y = max(far_x, b_[2]), max(far_y, b_[3])
         for row in (d_.get("rows") or []):
             far_x = max(far_x, row.get("x1") or 0)
             far_y = max(far_y, row.get("y1") or 0)
         seen = max(far_x / float(wide), far_y / float(high))
-        up = math.ceil(seen - 0.05) if seen > 1.05 else 1.0
-        if up < 1:
-            up = 1.0
-        if not far_x and not far_y:
-            up = float(d_.get("scale") or 1) or 1.0
-        _zoom[key] = float(up)
+        rows_up = math.ceil(seen - 0.05) if seen > 1.05 else 1.0
+        _zoom[key] = (float(shot), float(max(1.0, rows_up)))
         return _zoom[key]
 
     def screen_ink(s, taken):
@@ -4393,7 +4401,7 @@ def note(records_path, diary_text=None):
             bx = p_.get("box")
             if not bx:
                 continue
-            up = pane_scale(p_)
+            shot_up, rows_up = pane_zooms(p_)
             d_ = p_.get("data") or {}
             said = []
             for r_ in (d_.get("readings") or []):
@@ -4401,7 +4409,8 @@ def note(records_path, diary_text=None):
                 if b_ and t_:
                     # a reading carries the height of its own letters; the
                     # box around it can be taller than the type it holds
-                    said.append((b_, t_, r_.get("height") or (b_[3] - b_[1])))
+                    said.append((b_, t_, r_.get("height") or (b_[3] - b_[1]),
+                                 shot_up))
             line = float(d_.get("body_height") or 0)
             for row in (d_.get("rows") or []):
                 t_ = (row.get("text") or "").strip()
@@ -4413,8 +4422,8 @@ def note(records_path, diary_text=None):
                 # own measured line height is the size of its writing.
                 high = row["y1"] - row["y0"]
                 said.append(([row["x0"], row["y0"], row["x1"], row["y1"]],
-                             t_, line if line >= 1 else high))
-            for b_, t_, high in said:
+                             t_, line if line >= 1 else high, rows_up))
+            for b_, t_, high, up in said:
                 x0 = bx[0] + b_[0] / up
                 y0 = bx[1] + b_[1] / up
                 x1 = bx[0] + b_[2] / up
