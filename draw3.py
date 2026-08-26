@@ -4066,9 +4066,17 @@ def note(records_path, diary_text=None):
             # lists is not converted - it is the witness.
             if id(st_) in own:
                 continue
-            q = next((x for x in st_.parts if x["fam"] == "tree"), None)
-            if q is None or not getattr(q["model"], "lines", None):
-                continue
+            # EVERY tree part of the window, not the first. A window can
+            # show its own sidebar (a tree of Finder's fixed names, which no
+            # list will ever match) and a Finder list beside it that came
+            # back as a tree too - and asking only about the first left the
+            # second drawn with a level of nesting that was never there.
+            for q in [x for x in st_.parts if x["fam"] == "tree"
+                      and getattr(x["model"], "lines", None)]:
+                _convert_tree(st_, q, lists)
+
+    def _convert_tree(st_, q, lists):
+            if True:
             names = [row_name(t) for t, _h in q["model"].lines]
             keys = {fold(flat(n)) for n in names if n}
             if len(keys) < 4:
