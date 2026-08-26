@@ -1033,11 +1033,20 @@ class State:
             if k == "a list of columns":
                 tables = draw2.build_tables(p)
                 built = max(tables, key=lambda t: len(t[3])) if tables else None
-                if built and len(built[3]) < 6:
-                    # the reader's block was a sliver; the words' positions
-                    # may hold the whole list
-                    loose = draw2.table_from_loose(p)
-                    if loose and len(loose[3]) > len(built[3]):
+                # THE FULLER OF THE TWO READINGS OF THE SAME LIST. The
+                # reader's own blocks can stop short of the list while every
+                # name they dropped is still there in the pane's words:
+                # eight rows of sixteen at 00:00:10, the other eight sitting
+                # in the pane and drawn nowhere. The rebuild from the words'
+                # own positions is taken when it holds MORE rows and all but
+                # one of the names the blocks found are among them - more of
+                # the list, and nothing of the blocks lost.
+                loose = draw2.table_from_loose(p)
+                if loose and (not built or len(loose[3]) > len(built[3])):
+                    have = {norm(c[0]) for c, _i, _b in (built[3] if built else [])
+                            if c and c[0]}
+                    got = {norm(c[0]) for c, _i, _b in loose[3] if c and c[0]}
+                    if len(have - got) <= 1:
                         built = loose
                 if built:
                     part["model"].add(built)
