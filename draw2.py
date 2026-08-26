@@ -568,7 +568,14 @@ def table_from_items(items):
         in_list = [it for it in r if it["box"][2] > x_lo - rh and it["box"][0] <= x_end
                    and not (len(it["text"]) > 40 and it["text"].count(" ") >= 5)]
         if len(in_list) == 1 and not in_list[0]["ok"]:
-            continue              # a lone doubtful word is not a row
+            # A lone doubtful word is not a row - UNLESS it stands exactly
+            # where a row's first cell stands. A word aligned to the Name
+            # column, down in the body of the list, is a row the engines
+            # read only once: dropped, the list lost the very folder being
+            # opened and the row standing selected in it. Kept, it is
+            # marked unsure like every other one-engine reading here.
+            if abs(in_list[0]["box"][0] - x_lo) > 0.6 * rh:
+                continue
         left = [it for it in r if it["box"][2] <= x_lo - rh]
         side.extend(it for it in left if sidebar_word(it))
         if not in_list:
