@@ -238,7 +238,9 @@ def frame_regions(img, engine=None):
     top_edge = min([y0 for _, y0, _, _ in found] + [h])
     menu_h = int(min(0.03 * h, top_edge))
     if menu_h >= 8:
-        split(img[0:menu_h, :], 0, 0, menu_h)
+        # read WHOLE, never cut into columns: the gaps between its words are
+        # not pane boundaries, and a cut that lands mid-word loses the word
+        boxes.append((0, 0, w, menu_h))
 
     # The columns no window occupies at all are the desktop, and they are cut
     # the full height of the frame, exactly as they always were.
