@@ -4447,8 +4447,13 @@ def note(records_path, diary_text=None):
                 # the same window drawn as an outline never disagree, and a
                 # window is not drawn round whichever corner of it had words
                 # at that moment.
+                _tr = os.environ.get("SN_TRACE")
                 if s["t0"] in getattr(st, "measured", set()):
                     shape = s["rects"].get(id(st)) or st.rects.get(s["t0"])
+                    if _tr:
+                        print("TRACE %s measured shape %s (s-rects %s, st-rects %s)"
+                              % (s["t0"], shape, s["rects"].get(id(st)),
+                                 st.rects.get(s["t0"])), file=sys.stderr)
                 else:
                     # the frame's own rectangle round this window's panes
                     # comes first: it is measured on this very frame
@@ -4485,6 +4490,10 @@ def note(records_path, diary_text=None):
                     # as they like - what they may not do is reach past the
                     # screen, because nothing was shown there.
                     if hi_x - lo_x <= Wf:
+                        if _tr and (lo_x != shape[0] or hi_x != shape[2]):
+                            print("TRACE %s panes widen %s -> %s"
+                                  % (s["t0"], shape, [lo_x, shape[1], hi_x, shape[3]]),
+                                  file=sys.stderr)
                         shape = [lo_x, shape[1], hi_x, shape[3]]
                 sl.rect = shape
                 if sl.has_content() and shape:
@@ -4497,6 +4506,10 @@ def note(records_path, diary_text=None):
             # IS its edges. So every box is pulled onto the measured
             # rectangle it belongs to, which is what stops a window being
             # drawn round whichever corner of it happened to hold text.
+            if os.environ.get("SN_TRACE"):
+                for _stx, _sl, _sh in subjects:
+                    print("TRACE %s before snap %s -> after %s"
+                          % (s["t0"], _sh, snap_to_frame(_sh, s)), file=sys.stderr)
             subjects = [(stx, sl, snap_to_frame(shape, s)) for stx, sl, shape in subjects]
             for stx, sl, shape in subjects:
                 sl.rect = shape
