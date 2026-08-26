@@ -803,10 +803,12 @@ def _hole(short, long_):
     def k(w):
         return re.sub(r"[^a-z0-9]", "", w.lower())
     a, b = k(short[0]), k(long_[0])
-    if a and b and b.startswith(a):
+    # a STRICT extension: a word that is simply the same word says nothing
+    # about a hole, and "the" facing "the" would let any two lines merge
+    if a and b and b != a and b.startswith(a):
         return True
     a2, b2 = k(short[-1]), k(long_[-1])
-    return bool(a2 and b2 and b2.endswith(a2))
+    return bool(a2 and b2 and b2 != a2 and b2.endswith(a2))
 
 
 def mend_prose(states):
