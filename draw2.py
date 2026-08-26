@@ -866,7 +866,12 @@ def window_groups(m):
     window form one group of their own."""
     wins = m.get("windows") or []
     groups = []
-    for wi, e in enumerate(wins):
+    for pos, e in enumerate(wins):
+        # a window's entry carries its OWN number, and the list is written
+        # in screen order, not in that number's order. Counting positions
+        # here hands one window another window's panes the moment the two
+        # orders differ -- a window named for the program standing beside it.
+        wi = e.get("wi", pos)
         panes = [p for p in m["panes"] if p.get("wi") == wi]
         if not panes:
             continue
