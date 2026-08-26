@@ -3308,6 +3308,14 @@ def note(records_path, diary_text=None):
     # covered when the window was in front stayed half a line for good,
     # although a moment when the window stood behind had read it whole.
     # Its own readings belong to its own card: revealed, never invented.
+    if os.environ.get("UIX_FRAG"):
+        for st in all_states:
+            hit = any("daily log" in t for q in st.parts
+                      for t, _ in (getattr(q["model"], "lines", []) or []))
+            print("ST", st.name, st.title, st.times[:3], "in states",
+                  st in states, "frag", st in frags, "dailylog", hit,
+                  [(q["fam"], len(getattr(q["model"], "lines", []) or [])) for q in st.parts],
+                  file=sys.stderr)
     real_states = [st for st in states if is_real_window(st.name)]
     loose_states = [st for st in states
                     if not is_real_window(st.name) and st.has_content()]
