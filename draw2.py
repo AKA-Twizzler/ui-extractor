@@ -492,6 +492,22 @@ def table_from_loose(pane):
     return table_from_items(items_of(pane))
 
 
+def _bare(s):
+    return re.sub(r"[^a-z0-9]", "", str(s).lower())
+
+
+def _alike(a, b):
+    """Two readings of the same word: most of their letters in common."""
+    fa, fb = _bare(a), _bare(b)
+    if not fa or not fb:
+        return False
+    if fa == fb:
+        return True
+    if min(len(fa), len(fb)) < 5:
+        return False
+    return difflib.SequenceMatcher(None, fa, fb, autojunk=False).ratio() >= 0.7
+
+
 def table_from_items(items):
     if not items:
         return None
@@ -589,7 +605,15 @@ def table_from_items(items):
             cx = it["box"][0]
             ci = max((i for i in range(len(cols)) if cols[i][0] - rh <= cx), default=0)
             text = it["text"] if it["ok"] else f"*{it['text']}*"
-            cells[ci] = (cells[ci] + " " + text).strip()
+            # TWO READINGS OF ONE CELL ARE NOT TWO THINGS IN IT. Where the
+            # engines both put a word in the same column of the same row and
+            # the two read alike, the fuller of them stands; strung together
+            # the cell says the file was called both, one after the other.
+            if cells[ci] and _alike(cells[ci], text):
+                if len(_bare(text)) > len(_bare(cells[ci])):
+                    cells[ci] = text
+            else:
+                cells[ci] = (cells[ci] + " " + text).strip()
             icon = icon or it.get("icon")
             band = band or it.get("band")
         if any(cells):
