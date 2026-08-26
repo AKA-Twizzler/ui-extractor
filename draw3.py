@@ -854,30 +854,32 @@ def mend_prose(states):
         equal = sum(i2 - i1 for tag, i1, i2, _j1, _j2 in ops if tag == "equal")
         if equal < 5 or equal < 0.55 * min(len(mine), len(other)):
             return None
-        last_equal = max((k for k, o in enumerate(ops) if o[0] == "equal"),
-                         default=-1)
+        # TWO READINGS OF THE SAME LINE NEVER CONTRADICT EACH OTHER. They
+        # differ only by what one of them lost: a hole where something
+        # covered the words. So a place where the two say DIFFERENT words
+        # is proof that these are different lines - two bullets of one note
+        # share their shape and half their words, and merging those would
+        # make the note say a sentence it never said. The only kind of
+        # disagreement allowed is a cut word: what survived must be the
+        # start of the first word put back, or the end of the last.
         out, seen_equal, filled = [], False, False
-        for k, (tag, i1, i2, j1, j2) in enumerate(ops):
+        for tag, i1, i2, j1, j2 in ops:
             if tag == "equal":
                 out.extend(mine[i1:i2])
                 seen_equal = True
-                continue
-            if tag == "delete":
+            elif tag == "delete":
                 out.extend(mine[i1:i2])
-                continue
-            # ONLY A CUT WORD IS EVIDENCE OF A HOLE. Words the other
-            # reading simply has more of, between two words the two agree
-            # on, are not: two bullets of the same note share their shape
-            # and half their words, and taking those would merge one into
-            # the other and make the note say a sentence it never said.
-            take = (tag == "replace" and seen_equal
-                    and (i2 - i1) <= 2 and (j2 - j1) > (i2 - i1)
-                    and _hole(mine[i1:i2], other[j1:j2]))
-            if take:
+            elif tag == "insert":
+                if not seen_equal:
+                    return None       # its head, not ours: a different line
                 out.extend(other[j1:j2])
                 filled = True
             else:
-                out.extend(mine[i1:i2])
+                if not (seen_equal and (i2 - i1) <= 2 and (j2 - j1) > (i2 - i1)
+                        and _hole(mine[i1:i2], other[j1:j2])):
+                    return None       # they contradict: not the same line
+                out.extend(other[j1:j2])
+                filled = True
         if not filled or out == mine or len(out) > 1.5 * len(mine):
             return None
         return out
