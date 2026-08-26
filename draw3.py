@@ -796,27 +796,23 @@ def mend_prose(states):
     """A line of a note that something covered, filled from a reading of the
     SAME line taken when nothing did.
 
-    The camera sits over the bottom right of every frame, so a line of the
-    note running under it is read short - "it only knows it" where the note
-    said "it only knows its own folder and the daily log. It". The same
-    note, read at a moment when it stood behind the other windows, was read
-    whole in the gap between them. This is the puzzle-piece rule for prose:
-    the line's own head and its own tail must both be found in the other
-    reading, and what is put back is exactly what stood BETWEEN them there.
-    Nothing is spelt out that was never read off the screen.
+    The camera sits over one corner of every frame, so a line of the note
+    running under it is read short - "it only knows it" where the note said
+    "it only knows its own folder and the daily log. It". The same note,
+    read at a moment when it stood behind the other windows, was read whole
+    in the gaps between them.
+
+    The two readings are merged the only way that invents nothing: every
+    word of the result comes from one reading or the other. Where they
+    agree, the words stand; where one has words the other lacks between two
+    places they agree, those words go in; where a hole in one faces a run
+    in the other, the run fills the hole. A line is only merged with a line
+    it plainly IS - five words in common at least - and never grows by more
+    than half again, so a reading of some other line cannot walk in.
     """
     docs = [q["model"] for st in states for q in st.parts
             if q["fam"] == "doc" and getattr(q["model"], "lines", None)]
-    if os.environ.get("UIX_PROSE"):
-        for st in states:
-            for q in st.parts:
-                if q["fam"] != "doc" or not getattr(q["model"], "lines", None):
-                    continue
-                if not any("worker" in t for t, _ in q["model"].lines):
-                    continue
-                print("DOC", st.name, st.times[:3], file=sys.stderr)
-                for t, _h in q["model"].lines:
-                    print("   |", t[:100], file=sys.stderr)
+
     def bare(w):
         # the note's own emphasis marks are not part of the word, and a
         # word put back with them still on would show its asterisks
@@ -825,13 +821,41 @@ def mend_prose(states):
     def key(w):
         return re.sub(r"[^a-z0-9]", "", w.lower())
 
-    # each reading kept line by line: a drawn line is filled from a RUN of
-    # consecutive lines there, never from the whole note, so a splice
-    # cannot reach across the page and drag in a heading from further down
     pool = []
     for d in docs:
-        rows = [[bare(w) for w in MARKER.sub("", t).split()] for t, _h in d.lines]
-        pool.append((d, rows))
+        for t, _h in d.lines:
+            ws = [bare(w) for w in MARKER.sub("", t).split()]
+            if len(ws) >= 6:
+                pool.append((d, ws, [key(w) for w in ws]))
+
+    def merge_line(mine, mine_l, other, other_l):
+        """The two readings as one, or None where they are not the same line."""
+        sm = difflib.SequenceMatcher(None, mine_l, other_l, autojunk=False)
+        ops = sm.get_opcodes()
+        equal = sum(i2 - i1 for tag, i1, i2, _j1, _j2 in ops if tag == "equal")
+        if equal < 5 or equal < 0.4 * min(len(mine), len(other)):
+            return None
+        out, seen_equal = [], False
+        for tag, i1, i2, j1, j2 in ops:
+            if tag == "equal":
+                out.extend(mine[i1:i2])
+                seen_equal = True
+            elif tag == "delete":
+                out.extend(mine[i1:i2])
+            elif tag == "insert":
+                # words the other reading has where this one has none: they
+                # go in only after the two have agreed on something, so a
+                # reading that merely starts alike cannot prepend its own
+                out.extend(other[j1:j2] if seen_equal else [])
+            else:                      # replace: a hole faced by a run
+                if seen_equal and (i2 - i1) <= 3 and (j2 - j1) > (i2 - i1):
+                    out.extend(other[j1:j2])
+                else:
+                    out.extend(mine[i1:i2])
+        if out == mine or len(out) > 1.5 * len(mine):
+            return None
+        return out
+
     for d in docs:
         for i, (t, h) in enumerate(list(d.lines)):
             lead = MARKER.match(t).group(1)
@@ -839,49 +863,27 @@ def mend_prose(states):
             mine = [bare(w) for w in core.split()]
             if len(mine) < 6:
                 continue
-            mine_l = [key(w) for w in mine]
-            best = None
-            for od, rows in pool:
-                if od is d:
-                    continue
-                for a0 in range(len(rows)):
-                    ow = []
-                    for a1 in range(a0, min(a0 + 5, len(rows))):
-                        ow = ow + rows[a1]
-                        if len(ow) < len(mine):
-                            continue
-                        ow_l = [key(w) for w in ow]
-                        sm = difflib.SequenceMatcher(None, mine_l, ow_l,
-                                                     autojunk=False)
-                        blocks = [b for b in sm.get_matching_blocks() if b.size >= 3]
-                        if len(blocks) < 2:
-                            continue
-                        first, last = blocks[0], blocks[-1]
-                        # the line's own head and its own tail must BOTH be
-                        # found there, or this is a different line that
-                        # merely reads alike
-                        if first.a > 2 or last.a + last.size < len(mine) - 2:
-                            continue
-                        if sum(b.size for b in blocks) < 0.6 * len(mine):
-                            continue
-                        span = ow[first.b:last.b + last.size]
-                        if not (len(mine) < len(span) <= 1.8 * len(mine)):
-                            continue
-                        # the smallest reading that holds the whole line:
-                        # anything longer has swept in words from beside it
-                        if best is None or len(span) < len(best):
-                            best = span
-            if best is None:
+            grew = True
+            while grew:
+                grew = False
+                mine_l = [key(w) for w in mine]
+                for od, ow, ow_l in pool:
+                    if od is d:
+                        continue
+                    got = merge_line(mine, mine_l, ow, ow_l)
+                    if got:
+                        mine, mine_l, grew = got, [key(w) for w in got], True
+                        break
+            new_core = " ".join(mine)
+            if new_core == core:
                 continue
-            new_core = " ".join(best)
-            new_t = lead + new_core
             if esc(core) in h:
                 new_h = h.replace(esc(core), esc(new_core), 1)
             elif core in h:
                 new_h = h.replace(core, esc(new_core), 1)
             else:
                 continue          # formatting in the way: leave it be
-            d.lines[i] = (new_t, new_h)
+            d.lines[i] = (lead + new_core, new_h)
 
 
 def folder_marks(table):
