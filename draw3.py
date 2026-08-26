@@ -815,12 +815,13 @@ def mend_prose(states):
     def key(w):
         return re.sub(r"[^a-z0-9]", "", w.lower())
 
+    # each reading kept line by line: a drawn line is filled from a RUN of
+    # consecutive lines there, never from the whole note, so a splice
+    # cannot reach across the page and drag in a heading from further down
     pool = []
     for d in docs:
-        words = []
-        for t, _h in d.lines:
-            words.extend(bare(w) for w in MARKER.sub("", t).split())
-        pool.append((d, words, [key(w) for w in words]))
+        rows = [[bare(w) for w in MARKER.sub("", t).split()] for t, _h in d.lines]
+        pool.append((d, rows))
     for d in docs:
         for i, (t, h) in enumerate(list(d.lines)):
             lead = MARKER.match(t).group(1)
@@ -830,26 +831,37 @@ def mend_prose(states):
                 continue
             mine_l = [key(w) for w in mine]
             best = None
-            for od, ow, ow_l in pool:
-                if od is d or len(ow) < len(mine):
+            for od, rows in pool:
+                if od is d:
                     continue
-                sm = difflib.SequenceMatcher(None, mine_l, ow_l, autojunk=False)
-                blocks = [b for b in sm.get_matching_blocks() if b.size >= 3]
-                if len(blocks) < 2:
-                    continue
-                first, last = blocks[0], blocks[-1]
-                # the line's own head and tail must BOTH be found there, or
-                # this is a different line that merely reads alike
-                if first.a > 2 or last.a + last.size < len(mine) - 2:
-                    continue
-                matched = sum(b.size for b in blocks)
-                if matched < 0.6 * len(mine):
-                    continue
-                span = ow[first.b:last.b + last.size]
-                if not (len(mine) < len(span) <= 2.2 * len(mine)):
-                    continue
-                if best is None or len(span) > len(best):
-                    best = span
+                for a0 in range(len(rows)):
+                    ow = []
+                    for a1 in range(a0, min(a0 + 3, len(rows))):
+                        ow = ow + rows[a1]
+                        if len(ow) < len(mine):
+                            continue
+                        ow_l = [key(w) for w in ow]
+                        sm = difflib.SequenceMatcher(None, mine_l, ow_l,
+                                                     autojunk=False)
+                        blocks = [b for b in sm.get_matching_blocks() if b.size >= 3]
+                        if len(blocks) < 2:
+                            continue
+                        first, last = blocks[0], blocks[-1]
+                        # the line's own head and its own tail must BOTH be
+                        # found there, or this is a different line that
+                        # merely reads alike
+                        if first.a > 2 or last.a + last.size < len(mine) - 2:
+                            continue
+                        if sum(b.size for b in blocks) < 0.6 * len(mine):
+                            continue
+                        span = ow[first.b:last.b + last.size]
+                        if not (len(mine) < len(span) <= 1.8 * len(mine)):
+                            continue
+                        # the smallest reading that holds the whole line:
+                        # anything longer has swept in words from beside it
+                        if best is None or len(span) < len(best):
+                            best = span
+                        break
             if best is None:
                 continue
             new_core = " ".join(best)
