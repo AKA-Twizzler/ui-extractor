@@ -229,6 +229,17 @@ def frame_regions(img, engine=None):
     for x0, y0, x1, y1 in found:
         split(img[y0:y1, x0:x1], x0, y0, y1 - y0)
 
+    # THE MENU BAR IS ITS OWN BAND. It is the one strip that is always on
+    # the screen, always the same height, and always set in the smallest
+    # type there is. Left inside the tall band above the windows it is read
+    # at that band's zoom, and comes back empty: fifteen of eighteen
+    # pictures said the screen had no desktop bar at all when every frame
+    # plainly showed one.
+    top_edge = min([y0 for _, y0, _, _ in found] + [h])
+    menu_h = int(min(0.03 * h, top_edge))
+    if menu_h >= 8:
+        split(img[0:menu_h, :], 0, 0, menu_h)
+
     # The columns no window occupies at all are the desktop, and they are cut
     # the full height of the frame, exactly as they always were.
     least = max(1, int(MIN_PANE * scale))
@@ -265,10 +276,13 @@ def frame_regions(img, engine=None):
     # A band too short to hold a pane is not split into panes; it is read
     # whole, which is what the menu bar wants. Under eight pixels nothing
     # legible fits at all, and those are the sliver a rounded corner leaves.
-    edges = sorted({0, h} | {y for _, y0, _, y1 in found for y in (y0, y1)})
+    edges = sorted({0, h} | ({menu_h} if menu_h >= 8 else set())
+                   | {y for _, y0, _, y1 in found for y in (y0, y1)})
     for top, bottom in zip(edges, edges[1:]):
         if bottom - top < 8:
             continue
+        if top == 0 and menu_h >= 8:
+            continue          # the menu bar band, already cut as a strip
         held = np.zeros(w, bool)
         for x0, y0, x1, y1 in found:
             if y0 < bottom and y1 > top:
@@ -299,7 +313,14 @@ def write_box(img, box, path, target=1400):
                max(0, x0):min(img.shape[1], x1)]
     if crop.size == 0 or crop.shape[1] < 40:
         return None
-    scale = min(MAX_SCALE, max(1, int(target / crop.shape[1])))
+    if crop.shape[0] <= max(24, 0.035 * img.shape[0]):
+        # A STRIP IS ZOOMED BY ITS HEIGHT. The menu bar is 44 lines tall on
+        # a 2160-line screen and runs the full width of it, so a zoom chosen
+        # from the WIDTH leaves it at 1x - and the smallest type on the
+        # screen, read at 1x, comes back as nothing at all.
+        scale = min(MAX_SCALE, max(1, int(200 / max(1, crop.shape[0]))))
+    else:
+        scale = min(MAX_SCALE, max(1, int(target / crop.shape[1])))
     if scale > 1:
         crop = cv2.resize(crop, (crop.shape[1] * scale, crop.shape[0] * scale),
                           interpolation=cv2.INTER_LANCZOS4)
