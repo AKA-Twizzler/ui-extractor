@@ -752,7 +752,7 @@ def bar_crumbs(pane):
 
 
 GLUED_DATE = re.compile(
-    r"((?:Today|Yesterday|[A-Z][a-z]{2}\s?\d{1,2},?\s?\d{4})"
+    r"[a-z]?((?:Today|Yesterday|[A-Z][a-z]{2}\s?\d{1,2},?\s?\d{4})"
     r"\s?(?:at)?\s?\d{1,2}:\d{2}\s?[AaPp]\.?[Mm])")
 GLUED_SIZE = re.compile(r"(\d+(?:[.,]\d+)?\s?(?:bytes|byte|KB|MB|GB|TB))", re.I)
 
@@ -4087,8 +4087,6 @@ def note(records_path, diary_text=None):
                 if st not in shown:
                     continue
                 sl = state_slice(st, s["t0"], s["t1"]) or st
-                if os.environ.get("UIX_DBG") == s["t0"] and sl.main_table():
-                    print("SLICE", s["t0"], st.title, [r["cells"][0] for r in sl.main_table().rows][:6], file=sys.stderr)
                 if sl is not st:
                     # the desk's chrome stands all video; a stretch that did
                     # not re-read it still lives under it
@@ -4097,8 +4095,6 @@ def note(records_path, diary_text=None):
                     polish(sl, states)
                     drop_guessed([sl])
                     mend_cells(sl, st)
-                    if os.environ.get("UIX_DBG") == s["t0"] and sl.main_table():
-                        print("AFTER mend_cells", [r["cells"][0] for r in sl.main_table().rows][:6], file=sys.stderr)
                     strip_furniture(sl, strip_at)
                     drop_side_prefix(sl)
                     if bar_title(sl, s["size"][1]):
