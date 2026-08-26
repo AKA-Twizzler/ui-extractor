@@ -4422,13 +4422,22 @@ def note(records_path, diary_text=None):
                 # that drew a sentence across half the screen. The pane's
                 # own measured line height is the size of its writing.
                 high = row["y1"] - row["y0"]
-                # the row's PLACE is on the reader's threefold enlargement;
-                # the line height it measured is in the pane picture's own
-                # pixels. Dividing both by three drew the note's writing at
-                # a third of its size.
+                # THE BLOCK'S OWN SHAPE SAYS WHAT SIZE IT IS SET IN. The
+                # measured line height cannot be trusted here: it reaches
+                # the record through two different reader paths, in one of
+                # which it is measured on a threefold enlargement and in
+                # the other on the pane itself, and the same figure then
+                # draws one note's writing at a third of its size and
+                # another's at three times. A block of text has an area and
+                # a number of characters, and only one type size fills it:
+                # a line of type is about one and two fifths of its own em
+                # tall, and its letters about half an em wide.
+                wide_ = max(1.0, (row["x1"] - row["x0"]) / rows_up)
+                deep_ = max(1.0, (row["y1"] - row["y0"]) / rows_up)
+                chars = max(1, len(t_))
+                em = math.sqrt(wide_ * deep_ / (0.7 * chars))
                 said.append(([row["x0"], row["y0"], row["x1"], row["y1"]],
-                             t_, (line * rows_up / max(1.0, shot_up))
-                             if line >= 1 else high, rows_up))
+                             t_, em * 0.72 * rows_up, rows_up))
             for b_, t_, high, up in said:
                 x0 = bx[0] + b_[0] / up
                 y0 = bx[1] + b_[1] / up
