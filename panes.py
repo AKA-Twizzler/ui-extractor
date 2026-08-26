@@ -328,16 +328,7 @@ def write_box(img, box, path, target=1400):
                max(0, x0):min(img.shape[1], x1)]
     if crop.size == 0 or crop.shape[1] < 40:
         return None
-    if crop.shape[0] <= max(24, 0.035 * img.shape[0]):
-        # A STRIP IS ZOOMED BY ITS HEIGHT. The menu bar is 44 lines tall on
-        # a 2160-line screen and runs the full width of it, so a zoom chosen
-        # from the WIDTH leaves it at 1x - and the smallest type on the
-        # screen, read at 1x, comes back as nothing at all.
-        # a strip is a few thousand pixels of ONE line: it may be zoomed
-        # past the cap that keeps a full pane's cost down
-        scale = min(6, max(1, int(280 / max(1, crop.shape[0]))))
-    else:
-        scale = min(MAX_SCALE, max(1, int(target / crop.shape[1])))
+    scale = min(MAX_SCALE, max(1, int(target / crop.shape[1])))
     if scale > 1:
         crop = cv2.resize(crop, (crop.shape[1] * scale, crop.shape[0] * scale),
                           interpolation=cv2.INTER_LANCZOS4)
