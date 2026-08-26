@@ -96,7 +96,7 @@ def text_gaps(work, engine, min_gap=40):
     return gaps, spans
 
 
-def pane_columns(img, engine=None, least=MIN_PANE):
+def pane_columns(img, engine=None, least=MIN_PANE, tall=None):
     """The window's panes as (x0, x1) in working-size coordinates.
 
     `least` is the narrowest a pane may be, in those same coordinates. It has
@@ -117,7 +117,14 @@ def pane_columns(img, engine=None, least=MIN_PANE):
     if engine is None:
         from rapidocr_onnxruntime import RapidOCR
         engine = RapidOCR()
-    for x in text_gaps(work, engine)[0]:
+    # A DRAWN DIVIDER IS THE WINDOW'S OWN; A BLANK CORRIDOR IS THE SCREEN'S.
+    # The line between a sidebar and its list is drawn, and it is found in
+    # the window's own crop. A corridor is only a pane boundary if it holds
+    # clear over the WHOLE height of the frame - inside a window's own crop
+    # the gap between a table's Name and Date Modified columns runs clear
+    # from top to bottom too, and cutting there splits the list in half.
+    gaps_on = work if tall is None else screenness.to_working_size(tall)
+    for x in text_gaps(gaps_on, engine)[0]:
         cuts.add(x)
 
     edges = [0] + sorted(cuts) + [w]
@@ -227,21 +234,12 @@ def frame_regions(img, engine=None):
     scale = w / screenness.WORK_WIDTH
     boxes = []
 
-    def split(crop, x_at, y_at, height, judge=None):
-        # WHERE TO CUT IS JUDGED OVER THE WHOLE HEIGHT OF THE FRAME. A
-        # window's own crop stops at its own top and foot, and inside it the
-        # gap between a table's Name and Date Modified columns runs clear
-        # from one end to the other - so it reads as a pane boundary, the
-        # Finder list is split down the middle, and each half comes back as
-        # a table whose headings are a row of its data. Over the full height
-        # that same gap is broken by the menu bar and by whatever else
-        # stands at that x, while a real divider inside the window still
-        # runs clear. The panes emitted still stop at the window's own edges.
-        j = crop if judge is None else judge
-        back = j.shape[1] / screenness.WORK_WIDTH
+    def split(crop, x_at, y_at, height, tall=None):
+        back = crop.shape[1] / screenness.WORK_WIDTH
         # a pane is thin or wide in the FRAME's pixels, never in the window's
-        least = MIN_PANE * w / max(1, j.shape[1])
-        for a, b in pane_columns(j, engine=engine, least=least):
+        least = MIN_PANE * w / max(1, crop.shape[1])
+        for a, b in pane_columns(crop, engine=engine, least=least,
+                                 tall=tall):
             boxes.append((x_at + int(a * back), y_at,
                           x_at + int(b * back), y_at + height))
 
@@ -252,11 +250,21 @@ def frame_regions(img, engine=None):
     # frame where a window fills the screen and has no edges to measure -
     # is a panel drawn INSIDE that window. Cutting the frame around it put
     # the Obsidian sidebar in four pieces and left the tree in none of them.
+    # A LONE SMALL RECTANGLE DOES NOT RE-CUT THE FRAME. Window edges are
+    # used here for one purpose: to keep windows standing side by side from
+    # being read as one. With one rectangle there is nothing to keep apart,
+    # and a small one standing alone is far likelier to be a panel drawn
+    # INSIDE a window that fills the screen - or a card on a slide - than a
+    # window itself. Cutting around those put the Obsidian sidebar in four
+    # pieces and a slide in seventeen. A single rectangle that covers a
+    # third of the screen IS the screen's window, and keeps its panes.
     found = _measured_windows(img)
-    if len(found) < 2:
-        found = []
+    if len(found) == 1:
+        x0, y0, x1, y1 = found[0]
+        if (x1 - x0) * (y1 - y0) < 0.30 * w * h:
+            found = []
     for x0, y0, x1, y1 in found:
-        split(img[y0:y1, x0:x1], x0, y0, y1 - y0, judge=img[:, x0:x1])
+        split(img[y0:y1, x0:x1], x0, y0, y1 - y0, tall=img[:, x0:x1])
 
     # The columns no window occupies at all are the desktop, and they are cut
     # the full height of the frame, exactly as they always were.
