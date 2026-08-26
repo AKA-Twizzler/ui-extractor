@@ -4358,6 +4358,7 @@ def note(records_path, diary_text=None):
         last_T = None
         for s in spans:
             subjects = []
+            settled = set()   # states whose box the frame itself measured
             for st in s["states"]:
                 if st not in shown:
                     continue
@@ -4450,6 +4451,8 @@ def note(records_path, diary_text=None):
                 _tr = os.environ.get("SN_TRACE")
                 if s["t0"] in getattr(st, "measured", set()):
                     shape = s["rects"].get(id(st)) or st.rects.get(s["t0"])
+                    if shape:
+                        settled.add(id(st))
                     if _tr:
                         print("TRACE %s measured shape %s (s-rects %s, st-rects %s)"
                               % (s["t0"], shape, s["rects"].get(id(st)),
@@ -4470,12 +4473,13 @@ def note(records_path, diary_text=None):
                     by_rows = rect_over_panes(st, s)
                     if by_rows and by_rows[2] - by_rows[0] < 0.9 * Wf:
                         shape = by_rows
+                        settled.discard(id(st))
                 # A window holds the panes it was read from. Where a box
                 # worked out from readings comes out narrower than the
                 # panes themselves - a note window drawn as just its file
                 # tree - the panes widen it, because the reader cut them
                 # off THIS frame and they stood inside this window.
-                if shape:
+                if shape and id(st) not in settled:
                     lo_x, hi_x = shape[0], shape[2]
                     for m_, g_ in getattr(st, "pieces", ()):
                         if m_["ts"] not in s["ts"]:
@@ -4506,11 +4510,22 @@ def note(records_path, diary_text=None):
             # IS its edges. So every box is pulled onto the measured
             # rectangle it belongs to, which is what stops a window being
             # drawn round whichever corner of it happened to hold text.
+            # A BOX THE FRAME MEASURED IS FINISHED. The snap exists for a
+            # box worked out from where a window's words sat; run over a
+            # measured rectangle it pulls the window onto whichever other
+            # rectangle scores best - a panel inside it, a card, a variant
+            # of its own edges - and the window is then drawn up to 256
+            # pixels from where the screen had it. Measurement outranks
+            # inference, and that holds AFTER the box is chosen as much as
+            # before.
             if os.environ.get("SN_TRACE"):
                 for _stx, _sl, _sh in subjects:
-                    print("TRACE %s before snap %s -> after %s"
-                          % (s["t0"], _sh, snap_to_frame(_sh, s)), file=sys.stderr)
-            subjects = [(stx, sl, snap_to_frame(shape, s)) for stx, sl, shape in subjects]
+                    if id(_stx) not in settled:
+                        print("TRACE %s before snap %s -> after %s"
+                              % (s["t0"], _sh, snap_to_frame(_sh, s)), file=sys.stderr)
+            subjects = [(stx, sl, shape if id(stx) in settled
+                         else snap_to_frame(shape, s))
+                        for stx, sl, shape in subjects]
             for stx, sl, shape in subjects:
                 sl.rect = shape
                 # a box the frame itself drew: its edges are measured, and
