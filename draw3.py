@@ -3466,8 +3466,11 @@ def note(records_path, diary_text=None):
     head += " A word in italics was read by one engine only."
     head_at = len(parts)           # filled in once the windows are told apart
     parts += [head, "", "**The order of events**", ""]
-    for st in shown:
-        parts.append(f"- {span_of(st)} - {st.name[0].lower() + st.name[1:]}" + (f": {st.title}" if st.title else ""))
+    # filled in AFTER the titles are settled: a window whose name was read
+    # badly at one moment is spelt from the moment it was read well, and the
+    # list at the top must call a window what its own card calls it
+    order_at = len(parts)
+    parts += [""]
     parts += ["", "---", ""]
 
     # ------------------------------------------------ the screens, in order
@@ -4135,7 +4138,11 @@ def note(records_path, diary_text=None):
 
     list_not_tree(states)
     mend_prose(all_states)
+    title_from_bar(states)
     heal_titles(states)
+    parts[order_at] = "\n".join(
+        f"- {span_of(st)} - {st.name[0].lower() + st.name[1:]}"
+        + (f": {st.title}" if st.title else "") for st in shown)
     own_words = {id(st): {flat(w) for w in box_texts(st)[1] if len(flat(w)) >= 8}
                  for st in states}
     bar_seen = set()               # moments whose own top strip held readings
