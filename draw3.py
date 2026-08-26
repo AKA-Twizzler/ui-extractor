@@ -3759,6 +3759,12 @@ def note(records_path, diary_text=None):
         return out
 
     list_not_tree(states)
+    if os.environ.get("UIX_DEBUG_TITLES"):
+        for _s in states:
+            _t = _s.main_table()
+            print("STATE name=%r title=%r stamps=%s path=%s" % (
+                _s.name, _s.title, list(getattr(_s, "stamps", []) or [])[:4],
+                list(getattr(_t, "path", None) or [])), file=sys.stderr)
     title_from_bar(states)
     heal_titles(states)
     own_words = {id(st): {flat(w) for w in box_texts(st)[1] if len(flat(w)) >= 8}
