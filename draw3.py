@@ -2596,6 +2596,28 @@ def mend_slice_tree(sl, st):
     line: those passes judge a row on its own, and a row of a tree is only
     as good as the rows it hangs from."""
     mine, all_of = sl.tree(), st.tree()
+    if mine is None and all_of is not None:
+        # THIS STRETCH READ THE TREE AS A PLAIN COLUMN OF NAMES. Nothing in
+        # the pane said "tree", so the names went to a document part and the
+        # picture drew no tree at all - two of eighteen pictures showed the
+        # Obsidian window with its whole left column empty, although the
+        # names were read and are in the record. The window's own tree says
+        # what shape they stood in; only the rows THIS stretch read are
+        # kept, so nothing is drawn that was not on the screen.
+        for q in sl.parts:
+            if q["fam"] != "doc" or not getattr(q["model"], "lines", None):
+                continue
+            names = {fold(flat(row_name(t))) for t, _h in q["model"].lines}
+            names.discard("")
+            hit = [ln for ln in all_of.lines
+                   if fold(flat(row_name(ln[0]))) in names]
+            if len(hit) >= max(4, 0.5 * len(q["model"].lines)):
+                tree = Lines("a file tree")
+                tree.lines = list(hit)
+                q["fam"] = "tree"
+                q["model"] = tree
+                sl.parts.sort(key=lambda x: x["slot"])
+                return
     if mine is not None and all_of is not None and mine is not all_of:
         mine.lines = mend_tree(mine.lines, all_of.lines)
 
