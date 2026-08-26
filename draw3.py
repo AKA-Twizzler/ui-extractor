@@ -2394,7 +2394,12 @@ def settle_rects(state, W, H):
     it, or the picture fades. Where one moment's rectangle sits inside
     another's and three of its four sides agree, it is the same window seen
     short, so the fuller shape stands for both."""
-    tsx = [t for t in state.rects if t in state.measured]
+    # A MOMENT THE FRAME MEASURED KEEPS ITS OWN RECTANGLE. This rule is for
+    # a moment whose box was worked out from where words sat; run over a
+    # measured one it carries a neighbouring moment's shape onto a window
+    # the frame plainly drew smaller - one window came out 256 pixels wider
+    # than its own edge, with clear desktop beside it in the frame.
+    tsx = [t for t in state.rects if t not in state.measured]
     for t in tsx:
         r = state.rects[t]
         for u in tsx:
@@ -2425,8 +2430,8 @@ def settle_across(states, order, W, H):
         for ts in list(st.rects):
             r = st.rects[ts]
             i = at.get(ts)
-            if i is None:
-                continue
+            if i is None or ts in st.measured:
+                continue      # the frame measured this moment; it stands
             for other in states:
                 if other is st or other.name != st.name:
                     continue
