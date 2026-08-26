@@ -4375,12 +4375,13 @@ def note(records_path, diary_text=None):
                 shot = 0.0
         if shot < 0.9:
             shot = float(d_.get("scale") or 1) or 1.0
-        far_x = far_y = 0
-        for row in (d_.get("rows") or []):
-            far_x = max(far_x, row.get("x1") or 0)
-            far_y = max(far_y, row.get("y1") or 0)
-        seen = max(far_x / float(wide), far_y / float(high))
-        rows_up = math.ceil(seen - 0.05) if seen > 1.05 else 1.0
+        # A document's rows are measured on the note reader's own THREE
+        # TIMES enlargement of that same picture (note_reader enlarges by 3
+        # before it measures a stroke), so their zoom is the picture's own
+        # times three. Checked against the fixtures: on a pane written at
+        # one, the rows reach 2772 of 1381 x 3; on a pane written at two,
+        # 3089 of 672 x 6. Neither ever reaches past its own picture.
+        rows_up = shot * 3.0
         _zoom[key] = (float(shot), float(max(1.0, rows_up)))
         return _zoom[key]
 
