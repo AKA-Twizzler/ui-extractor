@@ -166,6 +166,16 @@ def _measured_windows(img):
     their two lists as one table with the wrong words in every row.
     """
     got = [tuple(int(round(v)) for v in r) for r in overlay.windows(img)]
+    if got:
+        # THE STRICT FINDER DECIDES WHERE IT FINDS ANYTHING. overlay wants
+        # four drawn sides, which is what a window has; shapes closes any
+        # rectangle it can, which on a slide of cards is every card and
+        # inside a maximised window is its panels. Adding those to a frame
+        # that already has real windows cut a slide into seventeen pieces
+        # and lost the card the reader was asked for. So shapes speaks only
+        # where overlay found nothing at all - which is exactly the case it
+        # was brought in for: a desktop whose windows draw no sides.
+        return got
     try:
         more = [tuple(int(round(v)) for v in r) for r in shapes.windows(img)]
     except Exception:
