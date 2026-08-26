@@ -705,6 +705,29 @@ def is_real_window(name):
     return name in NAMED.values()
 
 
+def bar_crumbs(pane):
+    """A window's path bar cut as a pane of its own: the disk, then the
+    folders down to what the window shows.
+
+    The bar sits at the foot of every Finder window, and where the window's
+    foot falls outside the rectangle the frame measured, the reader files it
+    as a pane of loose words. Read that way its crumbs become stray words of
+    the list, and the window loses the one thing that says which folder it
+    is showing. The chevrons between the crumbs are what marks it a bar,
+    whether the reading kept them in one word or several."""
+    parts = []
+    for it in draw2.items_of(pane):
+        t = str(it.get("text") or "")
+        bits = [q.strip() for q in re.split(r"[>\u203a]", t) if q.strip()]
+        if len(bits) >= 2:
+            parts.extend(bits)
+        elif parts:
+            break
+    if len(parts) >= 3 and norm(parts[0]) == norm("Macintosh HD"):
+        return parts
+    return []
+
+
 def folder_marks(table):
     """The crumbs that name the folder, the generic ones left out."""
     return {norm(c) for c in table.path if norm(c) not in GENERIC and len(norm(c)) >= 3}
@@ -760,6 +783,19 @@ class State:
 
     def absorb(self, group, m):
         self._absorb(group, m)
+        # the window's own path bar, where the reader cut it as a pane of
+        # its own instead of as the foot of the list
+        bar = []
+        for p in group.get("panes") or []:
+            c = bar_crumbs(p)
+            if len(c) > len(bar):
+                bar = c
+        if bar:
+            t_ = self.main_table()
+            if t_ is not None and len(bar) > len(getattr(t_, "path", None) or []):
+                t_.path = list(bar)
+                if bar not in t_.paths:
+                    t_.paths.append(list(bar))
         # where the window stood at this moment, measured from what it drew
         self.rects[m["ts"]] = content_rect(self, group, m)
 
@@ -3599,7 +3635,8 @@ def note(records_path, diary_text=None):
             rows = {fold(flat((r.get("cells") or [""])[0])) for r in t_.rows
                     if (r.get("cells") or [""])[0]}
             last = path[-1]
-            if fold(flat(last)) in rows and len(path) >= 2:
+            if len(path) >= 2 and (fold(flat(last)) in rows
+                                   or any(same_text(last, r) for r in rows)):
                 last = path[-2]
             if last and len(flat(last)) >= 2:
                 st_.title = last
