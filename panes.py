@@ -229,32 +229,6 @@ def frame_regions(img, engine=None):
     for x0, y0, x1, y1 in found:
         split(img[y0:y1, x0:x1], x0, y0, y1 - y0)
 
-    # THE MENU BAR IS ITS OWN BAND. It is the one strip that is always on
-    # the screen, always the same height, and always set in the smallest
-    # type there is. Left inside the tall band above the windows it is read
-    # at that band's zoom, and comes back empty: fifteen of eighteen
-    # pictures said the screen had no desktop bar at all when every frame
-    # plainly showed one.
-    top_edge = min([y0 for _, y0, _, _ in found] + [h])
-    menu_h = int(min(0.03 * h, top_edge))
-    if menu_h >= 8:
-        # Read in OVERLAPPING pieces, each about a thousand pixels wide.
-        # Read as one line the menus at the left and the status icons at
-        # the right run together and the whole bar comes back letter-soup;
-        # cut at the bar's own blank gaps it cannot be cut at all, because
-        # the bar is translucent and the wallpaper behind it is never
-        # blank. Each piece is one line of words, which is what the engines
-        # read best, and the overlap means a word cut by one boundary is
-        # whole inside its neighbour.
-        n_ = max(1, int(round(w / 1000.0)))
-        step = w / n_
-        over = int(0.08 * step)
-        for i_ in range(n_):
-            a_ = max(0, int(i_ * step) - over)
-            b_ = min(w, int((i_ + 1) * step) + over)
-            if b_ - a_ >= 40:
-                boxes.append((a_, 0, b_, menu_h))
-
     # The columns no window occupies at all are the desktop, and they are cut
     # the full height of the frame, exactly as they always were.
     least = max(1, int(MIN_PANE * scale))
@@ -291,13 +265,10 @@ def frame_regions(img, engine=None):
     # A band too short to hold a pane is not split into panes; it is read
     # whole, which is what the menu bar wants. Under eight pixels nothing
     # legible fits at all, and those are the sliver a rounded corner leaves.
-    edges = sorted({0, h} | ({menu_h} if menu_h >= 8 else set())
-                   | {y for _, y0, _, y1 in found for y in (y0, y1)})
+    edges = sorted({0, h} | {y for _, y0, _, y1 in found for y in (y0, y1)})
     for top, bottom in zip(edges, edges[1:]):
         if bottom - top < 8:
             continue
-        if top == 0 and menu_h >= 8:
-            continue          # the menu bar band, already cut as a strip
         held = np.zeros(w, bool)
         for x0, y0, x1, y1 in found:
             if y0 < bottom and y1 > top:
