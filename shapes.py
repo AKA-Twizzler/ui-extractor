@@ -440,14 +440,37 @@ def windows(path):
                 break
         else:
             kept.append(r)
+    # A RECTANGLE TOO SMALL TO BE A WINDOW IS FURNITURE INSIDE ONE. On a
+    # frame where a window fills the screen there is no window edge to
+    # measure, so a card drawn inside its sidebar is the only rectangle
+    # there is, and taken for a window it cuts the column it sits in into
+    # three - the reader then reads that window in seven pieces instead of
+    # five, and the pane the tree was in is no longer the pane the tree is
+    # in. Measured across this library: the false ones are a card at 1.9%
+    # of the frame and a shape found inside the camera picture at 1.5%; the
+    # smallest window anything relies on is 3.3%. The line sits between.
+    least = 0.025 * _frame_area(path, kept)
     out = []
     for r in kept:
+        if (r[2] - r[0]) * (r[3] - r[1]) < least:
+            continue
         if any(k is not r and within(r, k) > 0.92
                and (r[2]-r[0])*(r[3]-r[1]) < 0.75*(k[2]-k[0])*(k[3]-k[1])
                for k in kept):
             continue                       # a pane of another window
         out.append(r)
     return out
+
+
+def _frame_area(path, kept):
+    """The frame's own area, for judging what share of it a rectangle is."""
+    try:
+        a = _grey(path)
+        return float(a.shape[0]) * float(a.shape[1])
+    except Exception:
+        if not kept:
+            return 0.0
+        return max((r[2] - r[0]) * (r[3] - r[1]) for r in kept) / 0.5
 
 
 def camera_box(path):
