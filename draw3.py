@@ -807,20 +807,28 @@ def mend_prose(states):
     """
     docs = [q["model"] for st in states for q in st.parts
             if q["fam"] == "doc" and getattr(q["model"], "lines", None)]
+    def bare(w):
+        # the note's own emphasis marks are not part of the word, and a
+        # word put back with them still on would show its asterisks
+        return re.sub(r"^[*_]+|[*_]+$", "", w)
+
+    def key(w):
+        return re.sub(r"[^a-z0-9]", "", w.lower())
+
     pool = []
     for d in docs:
         words = []
         for t, _h in d.lines:
-            words.extend(MARKER.sub("", t).split())
-        pool.append((d, words, [w.lower() for w in words]))
+            words.extend(bare(w) for w in MARKER.sub("", t).split())
+        pool.append((d, words, [key(w) for w in words]))
     for d in docs:
         for i, (t, h) in enumerate(list(d.lines)):
             lead = MARKER.match(t).group(1)
             core = t[len(lead):]
-            mine = core.split()
+            mine = [bare(w) for w in core.split()]
             if len(mine) < 6:
                 continue
-            mine_l = [w.lower() for w in mine]
+            mine_l = [key(w) for w in mine]
             best = None
             for od, ow, ow_l in pool:
                 if od is d or len(ow) < len(mine):
