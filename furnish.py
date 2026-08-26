@@ -438,9 +438,20 @@ def scaled(html, rect, W, kz=1.0, cls="sn-slot", extra="", step=0.0):
     w_css = (CANVAS_W * wide / W) / k
     tall = w_css * (rect[3] - rect[1]) / wide
     html = re.sub(r'^(<div class="sn-window[^"]*")',
-                  r'\1 style="min-height:%dpx"' % max(0, round(tall)), html, count=1)
+                  r'\1 style="min-height:calc(%d * var(--sn-u, 1px))"'
+                  % max(0, round(tall)), html, count=1)
+    # THE WINDOW IS MEASURED AGAINST ITS OWN BOX, NOT AGAINST THE PAGE. The
+    # card is laid out at the width the rectangle really had, and one unit
+    # of that layout is the box's width over that width - so the whole
+    # window, type and padding and rows together, stands in the same
+    # proportion to its box whatever width the reading pane gives the
+    # picture. Drawn instead at a fixed pixel width and shrunk by a number
+    # worked out for a 960-pixel page, everything inside sat a third too
+    # large in a narrower pane, spilled past the window's edges and was cut
+    # off there - which is content the screen showed and the picture lost.
     return (f'<div class="{cls}" style="{extra}">'
-            f'<div class="sn-shot" style="width:{w_css:.0f}px;transform:scale({k:.4f})">{html}</div></div>')
+            f'<div class="sn-shot" style="--sn-u:calc(100cqw / {w_css:.0f})">'
+            f'{html}</div></div>')
 
 
 def _shares(a, b):
