@@ -3763,7 +3763,7 @@ def note(records_path, diary_text=None):
         for _s in states:
             _t = _s.main_table()
             print("STATE name=%r title=%r stamps=%s path=%s" % (
-                _s.name, _s.title, list(getattr(_s, "stamps", []) or [])[:4],
+                _s.name, _s.title, list(getattr(_s, "times", []) or []),
                 list(getattr(_t, "path", None) or [])), file=sys.stderr)
     title_from_bar(states)
     heal_titles(states)
