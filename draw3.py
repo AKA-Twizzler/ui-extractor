@@ -3354,21 +3354,29 @@ def note(records_path, diary_text=None):
         m0 = next((mm for mm in moments if mm["ts"] == t0), None)
         if not m0:
             return False
-        xs = []
+        seen = {}
         for p_ in m0.get("panes") or []:
             for it in draw2.items_of(p_):
                 b = it.get("box")
-                if not b or norm(it.get("text", "")) not in SIDE_FLAT:
+                t = norm(it.get("text", ""))
+                if not b or t not in SIDE_FLAT:
                     continue
                 if (r[0] - 4 <= b[0] and b[2] <= r[2] + 4
                         and r[1] - 4 <= b[1] and b[3] <= r[3] + 4):
-                    xs.append((b[0], b[2]))
-        if len(xs) < 3:
+                    seen.setdefault(t, (b[0], b[1], b[3]))
+        if len(seen) < 4:
             return False
         wide = max(1.0, r[2] - r[0])
-        x0 = min(a for a, _ in xs)
-        x1 = max(b for _, b in xs)
-        return (x1 - x0) >= 0.45 * wide and (x0 - r[0]) <= 0.25 * wide
+        tall = max(1.0, r[3] - r[1])
+        lefts = [x for x, _, _ in seen.values()]
+        tops = [y for _, y, _ in seen.values()]
+        bots = [y for _, _, y in seen.values()]
+        # they stand in a COLUMN - one left edge, not scattered across the
+        # window - near this rectangle's left edge, and run down a good
+        # part of its height. That is a sidebar; anything else is words
+        return (max(lefts) - min(lefts) <= 0.15 * wide
+                and (min(lefts) - r[0]) <= 0.30 * wide
+                and (max(bots) - min(tops)) >= 0.30 * tall)
 
     def rects_at(t0):
         """The rectangles the screen drew on one moment's frame."""
