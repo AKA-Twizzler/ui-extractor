@@ -3644,13 +3644,6 @@ def note(records_path, diary_text=None):
                 continue
             rows = {fold(flat((r.get("cells") or [""])[0])) for r in t_.rows
                     if (r.get("cells") or [""])[0]}
-            if os.environ.get("UIX_DEBUG_TITLES"):
-                print("BAR at=%s path=%s rows=%s top=%s tops=%s head=%s" % (
-                    list(getattr(st_, "times", []) or [])[:2], path, sorted(rows)[:10],
-                    list(getattr(t_, "top", None) or [])[:6],
-                    [t for t, *_ in (getattr(t_, "top_items", None) or [])][:8],
-                    list(getattr(t_, "header", None) or [])),
-                    file=sys.stderr)
             last = path[-1]
             if len(path) >= 2 and (fold(flat(last)) in rows
                                    or any(same_text(last, r) for r in rows)):
@@ -3831,14 +3824,6 @@ def note(records_path, diary_text=None):
         return out
 
     list_not_tree(states)
-    if os.environ.get("UIX_DEBUG_TITLES"):
-        for _s in states:
-            _t = _s.main_table()
-            print("STATE name=%r title=%r at=%s path=%s bottom=%s" % (
-                _s.name, _s.title, list(getattr(_s, "times", []) or []),
-                list(getattr(_t, "path", None) or []),
-                list(getattr(_t, "bottom", None) or [])[:8]), file=sys.stderr)
-    title_from_bar(states)
     heal_titles(states)
     own_words = {id(st): {flat(w) for w in box_texts(st)[1] if len(flat(w)) >= 8}
                  for st in states}
