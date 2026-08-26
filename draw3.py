@@ -16,6 +16,7 @@ outside its window except Jared's words and the fine print. The desktop
 the appendix.
 """
 import collections
+import math
 import difflib
 import html
 import os
@@ -4339,47 +4340,41 @@ def note(records_path, diary_text=None):
 
     _zoom = {}
 
-    def _here(path):
-        """A path written by the Windows side, read from this one."""
-        if len(path) > 2 and path[1] == ":":
-            return "/mnt/" + path[0].lower() + path[2:].replace("\\", "/")
-        return path
-
     def pane_scale(p_):
         """How far the pane was zoomed when it was read.
 
-        Readings are kept in the pane picture's own pixels. THE PICTURE'S
-        OWN WIDTH OVER THE PANE'S WIDTH IS THAT ZOOM - it is written on
-        disk beside the record and needs no guessing. Worked out instead
-        from how far the readings happened to reach, it came out 1 where it
-        was 3, and a browser tab's title was drawn three times its size, a
-        third of the way down a screen it sat at the top of.
+        Readings are kept in the pixels of the picture that was READ, and
+        that is not always the picture the record names beside the pane -
+        one pane's own file is written at two, its readings at six. What
+        cannot be argued with is that a reading stands INSIDE the picture
+        it was read from: so the zoom is at least how far the readings
+        reach over the pane's own size, and a zoom is a whole number.
+        Taken from the named file instead, a note's writing came out three
+        times its size; guessed from the readings' reach in one direction
+        only, a browser tab landed a third of the way down the screen.
         """
         d_ = p_.get("data") or {}
-        pic = p_.get("image")
+        key = id(p_)
+        if key in _zoom:
+            return _zoom[key]
         wide = max(1, p_["box"][2] - p_["box"][0])
-        if pic:
-            if pic not in _zoom:
-                try:
-                    from PIL import Image as _Im
-                    with _Im.open(_here(pic)) as im_:
-                        _zoom[pic] = im_.size[0] / float(wide)
-                except Exception:
-                    _zoom[pic] = 0.0
-            if _zoom[pic] >= 0.9:
-                return _zoom[pic]
-        up = float(d_.get("scale") or 0)
-        if up >= 1:
-            return up
         high = max(1, p_["box"][3] - p_["box"][1])
-        reach = 0
+        far_x = far_y = 0
         for r_ in (d_.get("readings") or []):
             b_ = r_.get("box")
             if b_:
-                reach = max(reach, b_[3])
+                far_x, far_y = max(far_x, b_[2]), max(far_y, b_[3])
         for row in (d_.get("rows") or []):
-            reach = max(reach, row.get("y1") or 0)
-        return max(1.0, round(reach / high)) if reach else 1.0
+            far_x = max(far_x, row.get("x1") or 0)
+            far_y = max(far_y, row.get("y1") or 0)
+        seen = max(far_x / float(wide), far_y / float(high))
+        up = math.ceil(seen - 0.05) if seen > 1.05 else 1.0
+        if up < 1:
+            up = 1.0
+        if not far_x and not far_y:
+            up = float(d_.get("scale") or 1) or 1.0
+        _zoom[key] = float(up)
+        return _zoom[key]
 
     def screen_ink(s, taken):
         """Every reading no filled window claims, back at its own place.
