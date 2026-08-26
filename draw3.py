@@ -3635,8 +3635,11 @@ def note(records_path, diary_text=None):
             rows = {fold(flat((r.get("cells") or [""])[0])) for r in t_.rows
                     if (r.get("cells") or [""])[0]}
             if os.environ.get("UIX_DEBUG_TITLES"):
-                print("BAR at=%s path=%s rows=%s" % (
-                    list(getattr(st_, "times", []) or [])[:2], path, sorted(rows)[:10]),
+                print("BAR at=%s path=%s rows=%s top=%s tops=%s head=%s" % (
+                    list(getattr(st_, "times", []) or [])[:2], path, sorted(rows)[:10],
+                    list(getattr(t_, "top", None) or [])[:6],
+                    [t for t, *_ in (getattr(t_, "top_items", None) or [])][:8],
+                    list(getattr(t_, "header", None) or [])),
                     file=sys.stderr)
             last = path[-1]
             if len(path) >= 2 and (fold(flat(last)) in rows
