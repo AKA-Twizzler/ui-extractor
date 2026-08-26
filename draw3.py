@@ -4422,8 +4422,13 @@ def note(records_path, diary_text=None):
                 # that drew a sentence across half the screen. The pane's
                 # own measured line height is the size of its writing.
                 high = row["y1"] - row["y0"]
+                # the row's PLACE is on the reader's threefold enlargement;
+                # the line height it measured is in the pane picture's own
+                # pixels. Dividing both by three drew the note's writing at
+                # a third of its size.
                 said.append(([row["x0"], row["y0"], row["x1"], row["y1"]],
-                             t_, line if line >= 1 else high, rows_up))
+                             t_, (line * rows_up / max(1.0, shot_up))
+                             if line >= 1 else high, rows_up))
             for b_, t_, high, up in said:
                 x0 = bx[0] + b_[0] / up
                 y0 = bx[1] + b_[1] / up
