@@ -1113,14 +1113,6 @@ class State:
                         built = loose
                 if built:
                     part["model"].add(built)
-                    # AND WHAT THIS WINDOW'S ROWS REALLY MEASURE, at this
-                    # moment, on its own words. Everything downstream worked
-                    # a pitch out from a share held per program; measured,
-                    # that put the vault-demo Finder at 81 frame pixels a
-                    # row where its own rows stand at 65.
-                    got = draw2.row_pitch_of(p)
-                    if got:
-                        self._pitch_at[m["ts"]] = got
                     if len(tables) > 1 and built[6]:
                         # this list's own span, not the pane's two windows
                         part["x0"], part["x1"] = built[6]
