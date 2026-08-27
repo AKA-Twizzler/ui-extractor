@@ -984,6 +984,7 @@ class State:
         self.pieces = []        # (moment, group) it was read from, in order
         self.rects = {}         # ts -> the window's rect at that moment
         self.measured = set()   # the moments the reader measured the window itself
+        self._pitch_at = {}     # ts -> how far apart this window's rows really stood
         self._stood = None      # where its words sat last, and the edges then
 
     # --------------------------------------------------------- content in
