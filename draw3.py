@@ -3679,6 +3679,18 @@ def note(records_path, diary_text=None):
     base_words = words_of.get(base_ts) or {}
     Wf, Hf = (moments[0].get("size") or [1920, 1080])[:2] if moments else (1920, 1080)
 
+    # The favorites sidebar is one macOS list -- Recents, Shared, Applications,
+    # ... -- the same in every Finder window that shows it. One window read it
+    # in full; another, standing behind, was re-read only now and then and its
+    # sidebar never came home. So the fullest reading of it across the whole
+    # video is the house sidebar, carried into a Finder window that PLAINLY
+    # showed one but a stretch missed -- told by its own favorites words
+    # standing inside its rectangle that stretch, so a window drawn against
+    # its own left edge (no room for a sidebar) is never given a false one.
+    house_side = max((furnish.side_words_of(st) for st in states
+                      if st.name == "The Finder window"), key=len, default=[])
+    house_keys = {fold(flat(w)) for w in house_side if len(flat(w)) >= 5}
+
     def med(vals):
         vals = sorted(vals)
         return vals[len(vals) // 2]
