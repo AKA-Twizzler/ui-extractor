@@ -41,17 +41,22 @@ def _discs(g, blur):
     return out
 
 
-def corners(img):
+def corners(img, camera=None):
     """Every window top-left the traffic-lights mark, as (x, y) in pixels.
 
-    Gated to drop the menu-bar icon row along the very top and the camera's
-    round features, and colour-gated to the buttons' own look: three greys
-    (an unfocused window) or the classic red / yellow / green."""
+    Gated to drop the menu-bar icon row along the very top, the dock, and the
+    camera (a face is a field of round features that mimic buttons), and
+    colour-gated to the buttons' own look: three greys (an unfocused window)
+    or the classic red / yellow / green."""
     H, W = img.shape[:2]
     g = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     blur = cv2.GaussianBlur(g, (0, 0), 3)
-    discs = [d for d in _discs(g, blur) if 0.03 * H < d[1] < 0.85 * H]
+
+    def in_cam(x, y):
+        return camera and camera[0] <= x <= camera[2] and camera[1] <= y <= camera[3]
+    discs = [d for d in _discs(g, blur)
+             if 0.03 * H < d[1] < 0.85 * H and not in_cam(d[0], d[1])]
     discs.sort(key=lambda d: d[0])
     found = []
     for i in range(len(discs)):
