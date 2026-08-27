@@ -5379,7 +5379,6 @@ def note(records_path, diary_text=None):
                 # windows first, then the backdrop ones behind them.
                 src = [(stx, sl) for stx, sl, _ in subjects] \
                     + [(own, own) for own in states if own not in sub_states]
-                browser_chrome = []
                 for stx, sl in src:
                     strip = behind_for(sl, dict(s, size=s["size"]), stx)
                     if strip:
@@ -5413,17 +5412,6 @@ def note(records_path, diary_text=None):
                                 if (b[3] - b[1]) >= 0.5 * Hf and b[1] <= sb[3]]
                         bb = min(tall, key=lambda b: b[1]) if tall else None
                         behinds.append(("the browser, behind", list(bb) if bb else sb))
-                        # its caught chrome, kept rather than thrown away: the
-                        # browser has no card of its own, so the desktop
-                        # picture is the only place its tabs and address bar
-                        # can live (Tristan's named exception).
-                        # AT THE BROWSER'S OWN TOP, not the frame's. The
-                        # strip's box runs from y=0 because that is as far
-                        # up as its words could possibly reach; drawn there
-                        # it lay across the desktop bar, which is a row the
-                        # browser is under, not over.
-                        cbx = [bb[0], bb[1], bb[2], sb[3]] if bb else sb
-                        browser_chrome = [(cbx, strip[0][2])]
                         break
             # A WINDOW DRAWN IN FULL MUST ITSELF BE A WINDOW. Its box has
             # to be one the frame drew, or - where the frame drew none,
@@ -5544,7 +5532,20 @@ def note(records_path, diary_text=None):
                 # (a browser strip) is drawn behind in the desktop view, but
                 # it is not poured onto the picture as loose words.
                 ink=(),
-                chrome=(browser_chrome if barred else ()),
+                # THE BROWSER'S CAUGHT CHROME IS NOT DRAWN YET, and this is
+                # a declared limit rather than a silent omission. Tristan's
+                # exception allows it -- a window that never stands clear
+                # anywhere has no card of its own, so the desktop picture is
+                # the only place its tabs and address bar can live -- and
+                # `screen_shot` takes them. Drawn as it stands it costs
+                # 0.03 of ink agreement at 00:00:00 and gains nothing, for
+                # three reasons that are each their own piece of work: it
+                # lands on the desktop bar's row instead of under it, its
+                # type comes out at the page's scale rather than the strip's
+                # own measured row height, and `furnish.browser_behind`
+                # recovers two of the five tabs. The box is measured; the
+                # chrome is not finished.
+                chrome=(),
                 ghosts=ghost_list(s, sub_states, carded),
                 camera=(cam, cam_pic) if cam else None,
                 sure=all(any(t in st.measured for t in s["ts"]) for st, _, _ in subjects),
