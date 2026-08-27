@@ -110,32 +110,28 @@ def _run_out(lines, pos, start, limit, blocks, across, tol, least):
     It stops because the window stops -- that is the window's corner. Or it
     stops because something stands in front of it, and then it has not
     ended at all: the trace steps over the cover and picks the same edge up
-    on the other side. Where the cover runs on to the frame's own boundary
-    there is nothing left that could end the window, so the boundary is the
-    answer -- which is what a person reading the screen concludes too."""
-    end = start
-    while True:
-        best = end
-        for p, a, b in lines:
-            if abs(p - pos) > tol:
-                continue
-            if a <= end + tol and b > best:
-                best = b
-        if best > end:
-            end = best
-        if end >= limit - tol:
-            return float(limit)
+    on the other side.
+
+    The step is only ever over a COVER. An edge is never joined to another
+    edge that merely lies along the same line: the two Finder windows have
+    their title bars within five working pixels of each other, so chaining
+    by nearness alone ran the left one's top across the right one and drew
+    it at twice its width."""
+    end = float(start)
+    while end < limit - max(tol, least):
         probe = (end + 3, pos) if across else (pos, end + 3)
         cov = _covered(probe[0], probe[1], blocks)
         if cov is None:
-            return float(end)
-        end = (cov[2] if across else cov[3])     # step over the cover
-        # WHAT IS LEFT MUST BE BIG ENOUGH TO SHOW AN EDGE. Past the cover
-        # there may be less frame left than the shortest run this instrument
-        # can see, and a strip that cannot hold an edge cannot show one
-        # either way. The boundary stands, because nothing else can.
-        if end >= limit - max(tol, least):
-            return float(limit)
+            return end                      # the side really ended here
+        far = float(cov[2] if across else cov[3])
+        resumed = [b for p, a, b in lines
+                   if abs(p - pos) <= tol and abs(a - far) <= max(tol, least)
+                   and b > far]
+        # Where the edge does not pick up again, the cover is still hiding
+        # it: carry on past the cover rather than calling the cover's own
+        # side the window's. What ends the search is running out of frame.
+        end = max(resumed) if resumed else far
+    return float(limit)
 
 
 def big_windows(path, least_frac=0.20, img=None):
@@ -154,12 +150,13 @@ def big_windows(path, least_frac=0.20, img=None):
     k = W / float(w)
     tol = max(4.0, 0.008 * w)
 
+    known = [r[:4] for r in shapes.windows(path)]
     blocks = []
     cam = shapes.camera_box(path)
     if cam:
         blocks.append(tuple(v / k for v in cam))
-    for r in shapes.windows(path):
-        blocks.append(tuple(v / k for v in r[:4]))
+    for r in known:
+        blocks.append(tuple(v / k for v in r))
 
     if img is None:
         img = cv2.imread(path) if isinstance(path, str) else path
@@ -183,6 +180,9 @@ def big_windows(path, least_frac=0.20, img=None):
             y1 = _run_out(verts, x, side_bot, h, blocks, False, tol, least_v)
             if x1 < w - tol and y1 < h - tol:
                 continue                    # not cut off: `shapes` owns it
+            if any(abs(r[0] / k - x) <= tol and abs(r[1] / k - y) <= tol
+                   for r in known):
+                continue                    # ONE HOME: `shapes` measured it
             if (x1 - x) < least_frac * w or (y1 - y) < least_frac * h:
                 continue
             box = (x * k, y * k, min(W, x1 * k), min(H, y1 * k))
