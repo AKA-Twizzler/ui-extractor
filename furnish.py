@@ -218,7 +218,7 @@ def finder(st):
     # where the frame has it. This pads nothing: the empty rows stay two,
     # and the space below the list stays empty, exactly as the rule says.
     main = ('<div class="sn-main" style="display:flex;flex-direction:column;'
-            'min-height:100%">' + toolbar
+            'flex:1 1 auto;min-height:0">' + toolbar
             + '<div style="flex:1 1 auto;min-height:0">' + body + '</div>'
             + foot + "</div>")
     cls = "sn-window sn-finder" + (" sn-dark" if st.theme == "dark" else "")
@@ -229,9 +229,12 @@ def finder(st):
         share = getattr(st, "side_share", None)
         cols = (f' style="grid-template-columns: {share * 100:.1f}% 1fr"'
                 if share else "")
-        return (f'<div class="{cls}"><div class="sn-cols sn-finder-cols"{cols}>'
+        grid = (cols[:-1] + ';flex:1 1 auto;min-height:0"') if cols else \
+            ' style="flex:1 1 auto;min-height:0"'
+        return (f'<div class="{cls}"{stretch}>'
+                f'<div class="sn-cols sn-finder-cols"{grid}>'
                 f'{side}{main}</div></div>')
-    return f'<div class="{cls}">{main}</div>'
+    return f'<div class="{cls}"{stretch}>{main}</div>'
 
 
 # -------------------------------------------------------------- Obsidian
