@@ -753,8 +753,23 @@ def bar_crumbs(pane):
             parts.extend(bits)
         elif parts:
             break
-    if len(parts) >= 3 and norm(parts[0]) == norm("Macintosh HD"):
-        return parts
+    if len(parts) >= 3:
+        if norm(parts[0]) == norm("Macintosh HD"):
+            return parts
+        # THE READER DROPS A CHEVRON AND GLUES THE DISK TO THE FOLDER AFTER
+        # IT. At 00:01:00 the bar came back as `Macintosh HD Users
+        # >jaredrhodenize>.claude projects>-Users-...-jarvis-dem`, so the
+        # first piece was `Macintosh HD Users`, this refused the whole bar,
+        # and the window lost its path - and with no path, no name, so it was
+        # titled `jaredrhodenizer` where the frame reads the long one. The
+        # disk's own name still says plainly where the bar begins, so it is
+        # cut off the front rather than the bar being thrown away. Only the
+        # disk is split off: a space inside any OTHER crumb may belong to the
+        # folder's name, and guessing there would invent a crumb.
+        head = re.match(r"\s*(Macintosh\s*HD)\b[\s\u203a>]*(.*)$", parts[0], re.I)
+        if head:
+            rest = head.group(2).strip()
+            return [head.group(1)] + ([rest] if rest else []) + parts[1:]
     return []
 
 
