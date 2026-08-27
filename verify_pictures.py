@@ -30,6 +30,7 @@ import os
 import re
 import sys
 
+import bigwin
 import shapes
 
 
@@ -68,6 +69,22 @@ def overlap(a, b):
     return inter / max(1e-9, min(sa, sb))
 
 
+def _iou(a, b):
+    """How much two boxes agree: shared area over the area they cover
+    between them. Unlike `overlap`, a small box sitting inside a big one
+    does NOT score high -- which is the whole point when the question is
+    whether the drawing put a window where the screen had it, at the size
+    the screen gave it."""
+    ix = max(0.0, min(a[2], b[2]) - max(a[0], b[0]))
+    iy = max(0.0, min(a[3], b[3]) - max(a[1], b[1]))
+    inter = ix * iy
+    union = ((a[2]-a[0])*(a[3]-a[1]) + (b[2]-b[0])*(b[3]-b[1]) - inter)
+    return inter / max(1e-9, union)
+
+
+AGREE = 0.5      # how much a drawn box and its window must agree
+
+
 PLACEHOLDERS = ("rest of the screen", "a window behind", "its name unread",
                 "some window", "unknown window")
 
@@ -95,8 +112,21 @@ def check_picture(stamp, stage, frame_path, fav_boxes=()):
         # the SAME definition, or it demands a filled box over every sidebar
         # and fails a picture that is right.
         least = 0.09 * W * H
-        fw = [r for r in shapes.windows(frame_path)
+        fw = [r[:4] for r in shapes.windows(frame_path)
               if (r[2] - r[0]) * (r[3] - r[1]) >= least]
+        # AND THE WINDOWS THE SCREEN CUTS OFF. `shapes` closes a window from
+        # two sides plus a top and a foot, and offers the frame's edge as a
+        # stand-in side but never as a stand-in FOOT -- so a window running
+        # off the bottom of the screen is never measured, and a gate that
+        # reads only `shapes` cannot fire on a window the reader never saw.
+        # That blindness is why a picture missing the two LARGEST windows on
+        # screen passed every gate; the browser and the Obsidian editor at
+        # 00:00:00 are both this shape. `bigwin` measures them.
+        for b in bigwin.big_windows(frame_path):
+            if (b[2] - b[0]) * (b[3] - b[1]) >= least and not any(
+                    _iou((b[0]/W, b[1]/H, b[2]/W, b[3]/H),
+                         (r[0]/W, r[1]/H, r[2]/W, r[3]/H)) > 0.7 for r in fw):
+                fw.append(tuple(b))
         fboxes = [(o[0]/W, o[1]/H, o[2]/W, o[3]/H) for o in fw]
         top = [not any(j != i and overlap(fboxes[i], fboxes[j]) > 0.5
                        for j in range(len(fw)))
