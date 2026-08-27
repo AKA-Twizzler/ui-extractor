@@ -1113,15 +1113,6 @@ class State:
                         built = loose
                 if built:
                     part["model"].add(built)
-                    # AND WHAT THIS WINDOW'S ROWS REALLY MEASURE at this
-                    # moment, taken on the rows that became the list. The
-                    # drawing otherwise works the spacing out from a share
-                    # held per program, which put the vault-demo Finder at
-                    # 81 frame pixels a row where its own rows stand at 65,
-                    # and the Finder cut off beside it at 81 where its rows
-                    # stand at 42.
-                    if len(built) > 8 and built[8]:
-                        self._pitch_at[m["ts"]] = built[8]
                     if len(tables) > 1 and built[6]:
                         # this list's own span, not the pane's two windows
                         part["x0"], part["x1"] = built[6]
@@ -5357,16 +5348,6 @@ def note(records_path, diary_text=None):
                 # pixels a row where the other stands at 81.
                 own = (getattr(sl, "_pitch_at", {}).get(s["t0"])
                        or getattr(stx, "_pitch_at", {}).get(s["t0"]))
-                # AND HOW MANY ROWS THE REAL WINDOW HAD ROOM FOR. Finder
-                # stripes the empty rows below the last file all the way to
-                # the path bar, and the card draws a fixed two of them -
-                # which looked right only while its rows were drawn about
-                # twice too tall. Drawn at the pitch the screen really had,
-                # two leave the bottom half of the window blank, and that is
-                # the frame's own ink the picture stops covering.
-                step_f = (own or (sl._row_step * Wf / furnish.CANVAS_W))
-                if step_f and step_f > 0 and shape:
-                    sl._rows_fit = int((shape[3] - shape[1]) / step_f)
                 if own:
                     sl._row_step = own * furnish.CANVAS_W / Wf
                     sl._step_sure = False      # and no median may replace it
