@@ -119,6 +119,21 @@ def check_picture(stamp, stage, frame_path):
             elif not covered and not hit_filled:
                 fails.append("WINDOW NOT FILLED: a top-layer window at %s is only outlined or swallowed by a screen-wide fill; a window nothing covers must be filled in its own right" % where)
 
+    # 1b) A FILLED WINDOW SHOWED ITS SIDEBAR, SO THE PICTURE MUST TOO. The
+    #     favorites sidebar (Recents, Shared, Applications, ...) is a Finder
+    #     window's own furniture; the reader reads it, the window's card shows
+    #     it, and a desktop-picture fill that drops it stretches the file list
+    #     across the whole window -- the "missing window" a reader's eye sees.
+    #     No plain window/fill check catches it, because the window IS drawn
+    #     and IS filled; what is missing is content INSIDE the fill. So where
+    #     the frame's own moment read a favorites sidebar (>= 2 of its fixed
+    #     names), the drawing must put a sidebar down somewhere.
+    if fav_boxes:
+        if len(fav_boxes) >= 2 and 'sn-side' not in stage:
+            fails.append("SIDEBAR DROPPED: the frame read a Finder favorites sidebar "
+                         "(%d of Recents/Shared/Applications/...) but the picture draws none; "
+                         "a filled window that showed its sidebar must draw it" % len(fav_boxes))
+
     # 2) NO PLACEHOLDER LABELS in a finished note.
     for tag in re.findall(r'sn-ghost-tag[^>]*>([^<]*)<', stage):
         if any(p in tag.lower() for p in PLACEHOLDERS):
