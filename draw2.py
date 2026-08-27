@@ -930,9 +930,19 @@ def _fold_split(m, groups):
         a["panes"] = a["panes"] + b["panes"]
         # the whole side carries the buttons; the FOLDER'S NAME sits in the
         # toolbar over the pane, so the title is whichever half has one
+        # NAMING IS NOT RE-RUN ON THE JOINED PANES, and that is the point of
+        # doing this here rather than after. A Finder's sidebar reads as a
+        # file tree and its list reads as text, so the two together read as
+        # a tree beside a note - the shape of Obsidian. Asked again, the
+        # window came back named for the wrong program, collided with the
+        # real Obsidian window and was dropped: at 00:00:10 the vault-demo
+        # Finder vanished from the picture and from the record's own count
+        # of how many windows the screen showed. Each half was already named
+        # while it still looked like what it is; the name to keep is the one
+        # from the half that carried the folder's name.
+        if b.get("title") and not a.get("title"):
+            a["name"] = b["name"]
         a["title"] = a.get("title") or b.get("title")
-        a["name"] = name_of({"rect": a["rect"], "top": a.get("title")},
-                            a["panes"]) or a["name"]
         b["folded"] = True
     return [g for g in groups if not g.get("folded")]
 
