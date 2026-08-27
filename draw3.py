@@ -4789,6 +4789,11 @@ def note(records_path, diary_text=None):
                                   file=sys.stderr)
                         shape = [lo_x, shape[1], hi_x, shape[3]]
                 sl.rect = shape
+                if os.environ.get("SN_DBG") == s["t0"]:
+                    print("   build %r: content=%s shape=%s promoted=%s"
+                          % (label_for(st), sl.has_content(),
+                             [round(v,1) for v in shape] if shape else None,
+                             st in extra), file=sys.stderr)
                 if sl.has_content() and shape:
                     subjects.append((st, sl, shape))
             if not subjects:
