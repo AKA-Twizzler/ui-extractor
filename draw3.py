@@ -4658,7 +4658,17 @@ def note(records_path, diary_text=None):
             return list(box)
         return out
 
+    def _OBS2(tag, states):
+        import sys as _s, re as _re
+        for st in states:
+            for q in st.parts:
+                ls = [t for t, _h in getattr(q["model"], "lines", [])]
+                if any("inbox" in _re.sub(r"[^a-z]", "", str(x).lower()) for x in ls[:4]):
+                    print("  %-24s times=%s first=%r" % (tag, getattr(st, "times", None), ls[:2]), file=_s.stderr)
+
+    _OBS2("before list_not_tree", states)
     list_not_tree(states)
+    _OBS2("after list_not_tree", states)
     mend_prose(all_states)
     title_from_bar(states)
     heal_titles(states)
