@@ -706,6 +706,29 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
         out.append(scaled(html, clip_box(rect, W, H, bar=barred), W, kz=kz,
                           extra=f'{slot_style(rect, W, H, bar=barred)};z-index:{3 + z}',
                           step=getattr(st, "_row_step", 0.0)))
+    # THE HELD-BACK INK, NOW THAT EVERY WINDOW IS PLACED. A reading is drawn
+    # only where it falls on bare desktop -- outside every filled window and
+    # every outline. Ink whose place a window covers is that window's own
+    # content: it belongs inside the window (its outline, or its card in
+    # view two), never loose on the desktop. This is what keeps the picture
+    # from becoming words scattered over a black backdrop.
+    placed_boxes = [b for b in shown] + [r for r in solid]
+    for x0, y0, x1, y1, text in ink or ():
+        if not text:
+            continue
+        cx, cy = (float(x0) + float(x1)) / 2.0, (float(y0) + float(y1)) / 2.0
+        if any(b[0] - 4 <= cx <= b[2] + 4 and b[1] - 4 <= cy <= b[3] + 4
+               for b in placed_boxes):
+            continue                      # a window covers this: its content
+        # what was MEASURED is the height of the ink; a font's ink stands
+        # about seven tenths of its own em, so the type is set a little
+        # taller than the ink measured
+        high = max(1.0, float(y1) - float(y0)) / 0.72
+        out.append(
+            '<div class="sn-ink" style="left:%.2f%%;top:%.2f%%;'
+            'font-size:calc(%.3fcqh)">%s</div>'
+            % (100.0 * float(x0) / W, 100.0 * float(y0) / H,
+               100.0 * high / H, esc(text)))
     if camera:
         cbox = camera[0] if isinstance(camera, (tuple, list)) else camera
         out.append(f'<div class="sn-camera" style="{slot_style(cbox, W, H, bar=barred)}">'
