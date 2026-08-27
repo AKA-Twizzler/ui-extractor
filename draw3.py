@@ -1113,6 +1113,15 @@ class State:
                         built = loose
                 if built:
                     part["model"].add(built)
+                    # AND WHAT THIS WINDOW'S ROWS REALLY MEASURE at this
+                    # moment, taken on the rows that became the list. The
+                    # drawing otherwise works the spacing out from a share
+                    # held per program, which put the vault-demo Finder at
+                    # 81 frame pixels a row where its own rows stand at 65,
+                    # and the Finder cut off beside it at 81 where its rows
+                    # stand at 42.
+                    if len(built) > 8 and built[8]:
+                        self._pitch_at[m["ts"]] = built[8]
                     if len(tables) > 1 and built[6]:
                         # this list's own span, not the pane's two windows
                         part["x0"], part["x1"] = built[6]
