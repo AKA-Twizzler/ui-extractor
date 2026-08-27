@@ -436,9 +436,19 @@ def _shares(a, b):
 
 
 def frame_of(m):
-    """The picture of the screen for this moment, if it is still on disk."""
+    """The picture of the screen for this moment, if it is still on disk.
+
+    The records store a Windows path (``G:\\Images\\...``). Read back under a
+    Linux/WSL Python it must be turned into ``/mnt/g/...``; read back under
+    Windows Python -- which is where the drawer runs, because measuring the
+    frame needs cv2 -- it must be left exactly as it stands. Converting it
+    there pointed every lookup at a ``/mnt`` path Windows cannot see, so
+    ``frame_of`` returned None for every moment and the frame's own measured
+    window rectangles never reached the picture: every stretch fell back to
+    placing windows by where their words sat, and a screen of two windows
+    side by side collapsed to one drawn full. The platform decides."""
     p = m.get("frame")
-    if p and "\\" in p:
+    if p and "\\" in p and os.name != "nt":
         p = "/mnt/" + p[0].lower() + p[2:].replace("\\", "/")
     return p if p and os.path.exists(p) else None
 
