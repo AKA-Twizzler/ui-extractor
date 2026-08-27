@@ -231,8 +231,16 @@ def _has_buttons(img, box):
     w, h = x1 - x0, y1 - y0
     if w < 120 or h < 60:
         return False
-    strip = img[max(0, y0):y0 + max(24, int(0.14 * h)),
-                max(0, x0):x0 + max(80, int(0.30 * w))]
+    # THE STRIP IS SIZED BY THE BUTTONS, NOT BY THE WINDOW. A title bar
+    # stands the same height whatever the window's width, so a share of the
+    # box is the wrong measure: on a window filling the screen that share is
+    # a slab holding the toolbar, the tab and the top of the tree, and its
+    # median is no longer the title bar's own ground. Measured, this said
+    # False for both the browser and the Obsidian editor at 00:00:00 while
+    # their buttons sat plainly in the corner.
+    k = img.shape[1] / 3840.0
+    strip = img[max(0, y0):y0 + max(24, int(130 * k)),
+                max(0, x0):x0 + max(80, int(420 * k))]
     if strip.size == 0 or strip.shape[0] < 8:
         return False
     g = cv2.cvtColor(strip, cv2.COLOR_BGR2GRAY)
@@ -250,27 +258,34 @@ def _has_buttons(img, box):
         if area < 0.45 * bw * bh:
             continue                      # a ring or a letter, not a disc
         blobs.append((mids[i][0], mids[i][1], (bw + bh) / 2.0))
-    blobs.sort()
-    for i in range(len(blobs) - 2):
-        a, b, c = blobs[i:i + 3]
-        # IN THE CORNER, not merely somewhere along the top. A page full of
-        # round status dots has three of them in a row too - that is how a
-        # table inside a web page came back as a window - and what makes
-        # these the window's buttons is that they sit against its own left
-        # edge, in the band its title bar occupies.
-        if a[0] > 0.16 * strip.shape[1] or a[1] > 0.75 * strip.shape[0]:
-            continue
-        sizes = [a[2], b[2], c[2]]
-        if max(sizes) > 1.5 * min(sizes):
-            continue
-        if max(abs(a[1] - b[1]), abs(b[1] - c[1])) > 0.6 * max(sizes):
-            continue                      # not in one row
-        one, two = b[0] - a[0], c[0] - b[0]
-        if one < max(sizes) or two < max(sizes):
-            continue                      # touching, so one shape not three
-        if abs(one - two) > 0.35 * max(one, two):
-            continue                      # not evenly spaced
-        return True
+    # THREE DISCS IN ONE ROW, and the row is picked out FIRST. A sliding
+    # triple over an x-sorted list is not the same question: a ribbon icon
+    # sitting a row below the buttons sorts BETWEEN them, so every triple
+    # holding it fails "in one row" and the buttons are never tested as a
+    # group at all.
+    for seed in list(blobs):
+        row = sorted(b for b in blobs
+                     if abs(b[1] - seed[1]) <= 0.6 * max(b[2], seed[2]))
+        for i in range(len(row) - 2):
+            a, b, c = row[i:i + 3]
+            # IN THE CORNER, not merely somewhere along the top. A page full
+            # of round status dots has three of them in a row too - that is
+            # how a table inside a web page came back as a window - and what
+            # makes these the window's buttons is that they sit against its
+            # own left edge, in the band its title bar occupies.
+            if a[0] > 0.30 * strip.shape[1] or a[1] > 0.75 * strip.shape[0]:
+                continue
+            sizes = [a[2], b[2], c[2]]
+            if max(sizes) > 1.5 * min(sizes):
+                continue
+            if max(abs(a[1] - b[1]), abs(b[1] - c[1])) > 0.6 * max(sizes):
+                continue                      # not in one row
+            one, two = b[0] - a[0], c[0] - b[0]
+            if one < max(sizes) or two < max(sizes):
+                continue                      # touching, so one shape not three
+            if abs(one - two) > 0.35 * max(one, two):
+                continue                      # not evenly spaced
+            return True
     return False
 
 
