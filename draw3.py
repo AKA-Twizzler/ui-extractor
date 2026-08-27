@@ -4549,6 +4549,10 @@ def note(records_path, diary_text=None):
     def _convert_tree(st_, q, lists):
         """One tree part put back as the list it really is."""
         names = [row_name(t) for t, _h in q["model"].lines]
+        import sys as _s
+        if any("inbox" in re.sub(r"[^a-z]", "", str(x).lower()) for x in names):
+            print("CONVERT model.lines=%r" % ([t for t, _h in q["model"].lines][:4],), file=_s.stderr)
+            print("CONVERT names      =%r" % (names[:4],), file=_s.stderr)
         keys = {fold(flat(n)) for n in names if n}
         if len(keys) < 4:
             return
