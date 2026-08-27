@@ -4216,7 +4216,13 @@ def note(records_path, diary_text=None):
                 continue
             for it in draw2.items_of(p):
                 if it["box"][1] <= 0.01 * Hf and it["box"][3] <= 0.03 * Hf and len(it["text"]) >= 3:
-                    n += 1
+                    # THE BAR IS COUNTED IN WORDS, NOT READINGS. One engine
+                    # reads the whole menu bar as a single line - "File Edit
+                    # View Go Window Help" - and counted as one reading it
+                    # fell under the two this asks for, so the first picture
+                    # of the video was drawn with no bar and the bar's own
+                    # words floating loose across the top.
+                    n += len([w for w in it["text"].split() if len(w) >= 2])
         if n >= 2:
             bar_seen.add(m["ts"])
     reach = {id(st): (min(st.times), max(st.times)) for st in states if st.times}
