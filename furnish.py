@@ -55,15 +55,17 @@ def side_words_of(st):
     filled from the window's whole reading. Factored out of `finder` so the
     drawing side can carry it into a stretch that missed it."""
     table = st.main_table()
-    if not table:
-        return []
-    side_words = list(table.side)
+    side_words = list(table.side) if table else []
     # a stretch that never read this window's sidebar, though the window
     # plainly showed one, carries the house favorites in (set on the state by
-    # the drawing side, which alone knows the favorites were on the screen)
+    # the drawing side, which alone knows the favorites were on the screen).
+    # This runs even with no list at all: a Finder window standing behind
+    # another shows only its sidebar, its file list hidden, so it has a
+    # sidebar and no table.
     if not side_words and getattr(st, "_carried_side", None):
         side_words = list(st._carried_side)
-    tpart = next((q for q in st.parts if q["fam"] == "table" and q["model"] is table), None)
+    tpart = (next((q for q in st.parts if q["fam"] == "table" and q["model"] is table), None)
+             if table else None)
     for q in st.parts:
         if q["fam"] == "words" and tpart and q["x1"] is not None and tpart["x0"] is not None \
                 and q["x1"] <= tpart["x0"] + 0.02 * (tpart["x1"] - tpart["x0"]) \
