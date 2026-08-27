@@ -4852,6 +4852,44 @@ def note(records_path, diary_text=None):
                     return 0.0
                 b = onto(T0, hb)
                 return furnish._within(r_, b) * furnish._within(b, r_)
+            def _known_words(st_):
+                """Every word this window remembers showing."""
+                out_ = set()
+                t_ = st_.main_table()
+                if t_:
+                    for h in t_.header or ():
+                        out_.add(norm(h))
+                    for row in t_.rows:
+                        for c in row["cells"]:
+                            if c:
+                                out_.add(norm(c))
+                    for c in t_.path or ():
+                        out_.add(norm(c))
+                    for w in getattr(t_, "side", None) or ():
+                        out_.add(norm(w))
+                return {w for w in out_ if len(w) >= 4}
+
+            def _contradicts(st_, r_):
+                """What the reader read inside this rectangle at this moment,
+                set against what this window remembers showing."""
+                m0_ = next((mm for mm in moments if mm["ts"] == s["t0"]), None)
+                if not m0_:
+                    return False
+                read_ = []
+                for p_ in m0_.get("panes") or []:
+                    if furnish._within(p_["box"], r_) < 0.8:
+                        continue
+                    read_ += [norm(it["text"]) for it in draw2.items_of(p_)
+                              if it["text"].strip()]
+                read_ = [w for w in read_ if len(w) >= 4]
+                # too little was read there to contradict anything
+                if len(read_) < 8:
+                    return False
+                mine = _known_words(st_)
+                hit = sum(1 for w in read_
+                          if any(w in k or k in w for k in mine))
+                return hit * 4 < len(read_)
+
             for r in fw_here:
                 if any(o is not r and furnish._within(r, o) > 0.5 for o in fw_here):
                     continue                    # this window stands behind another
@@ -4864,21 +4902,25 @@ def note(records_path, diary_text=None):
                     sc = _lands(own, r)
                     if sc > best:
                         pick, best = own, sc
-                # A WINDOW NOT READ IN THIS STRETCH IS NOT FILLED FROM
-                # MEMORY. The promotion above matches a rectangle to a
-                # window by the box that window carries, which says where it
-                # USED to stand, not what it shows now. At 00:03:00 a Finder
-                # stood cut off down the left edge of the screen showing
-                # nothing but its Size and Kind columns; the rectangle was
-                # handed to a remembered state of a Finder that had once
-                # shown the `.claude` folder, and the picture drew six file
-                # names the screen did not show. That is the background
-                # content Tristan saw. A window the reader did not read
-                # anywhere in this stretch keeps the note's own convention -
-                # outlined where it stands, its content in its card - and
-                # the fill stays what the law says it is: the moment's
-                # visible slice, never the window's whole gathered content.
-                if pick is not None and state_slice(pick, s["t0"], s["t1"]) is None:
+                # A WINDOW IS NOT FILLED FROM MEMORY OVER THE TOP OF A
+                # READING THAT SAYS OTHERWISE. The promotion above matches a
+                # rectangle to a window by the box that window carries, which
+                # says where it USED to stand and what it showed THEN. At
+                # 00:03:00 a Finder stood cut off down the left edge showing
+                # nothing but its Size and Kind columns - the reader read
+                # exactly that - and the rectangle went to a remembered state
+                # of a Finder that had once shown the `.claude` folder, so the
+                # picture drew six file names the screen did not show. That is
+                # the background content Tristan saw.
+                # REFUSING EVERY MEMORY IS THE WRONG CURE, and the gate says
+                # so: a window present all stretch and re-read only now and
+                # then is drawn from what it last showed, correctly, and
+                # blanking those failed four pictures on WINDOW NOT FILLED.
+                # What separates the two is the frame itself. Where the reader
+                # read enough inside that rectangle NOW and almost none of it
+                # is anything this window knows, the memory is about some
+                # other moment and the fill is refused.
+                if pick is not None and _contradicts(pick, r):
                     pick = None
                 if pick is not None:
                     extra.append(pick)
