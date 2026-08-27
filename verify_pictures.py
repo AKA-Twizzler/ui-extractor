@@ -30,7 +30,10 @@ import os
 import re
 import sys
 
+import cv2
+
 import bigwin
+import panes
 import shapes
 
 
@@ -114,6 +117,16 @@ def check_picture(stamp, stage, frame_path, fav_boxes=()):
         least = 0.09 * W * H
         fw = [r[:4] for r in shapes.windows(frame_path)
               if (r[2] - r[0]) * (r[3] - r[1]) >= least]
+        # AND ONE WINDOW THE FRAME CLOSED TWICE IS ONE WINDOW. A Finder cut
+        # at its own sidebar divider comes back as two rectangles standing
+        # side by side; holding the drawing to both demands two title bars
+        # and two sets of traffic lights where the screen had one. The gate
+        # measures the same ground the drawing does - `panes.fold_split_panes`
+        # - or the two disagree and whichever is right, the note is blamed.
+        if len(fw) > 1:
+            _im = cv2.imread(frame_path)
+            if _im is not None:
+                fw = [list(r) for r in panes.fold_split_panes(_im, fw)]
         # AND THE WINDOWS THE SCREEN CUTS OFF. `shapes` closes a window from
         # two sides plus a top and a foot, and offers the frame's edge as a
         # stand-in side but never as a stand-in FOOT -- so a window running
