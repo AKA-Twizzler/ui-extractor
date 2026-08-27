@@ -222,15 +222,25 @@ def main():
                 rows.append((name, line, None, None, "no frame at " + frame_path))
                 continue
             frame = Image.open(frame_path).convert("RGB").resize((PIC_W, PIC_H))
-            keep = ~camera_mask(stage)
-            D = ink_grid(drawn) & keep
-            F = ink_grid(frame) & keep
-            both = (D & F).sum()
-            real = both / max(1, D.sum())
-            covered = both / max(1, F.sum())
+            # `real` (is the drawn ink right?) is judged everywhere but under
+            # the camera. `covered` (did the drawing put down the frame's
+            # ink?) is judged only where the drawing is SUPPOSED to carry
+            # content -- not under the camera, and not in a behind-only region
+            # the rule says to leave an outline. Otherwise the correct
+            # picture, which omits behind content by design, scores as if it
+            # had lost it.
+            keep_real = ~camera_mask(stage)
+            keep_cov = keep_real & ~behind_only_mask(stage)
+            Dg = ink_grid(drawn)
+            Fg = ink_grid(frame)
+            D = Dg & keep_real
+            F = Fg & keep_real
+            real = (D & F).sum() / max(1, D.sum())
+            Dc, Fc = Dg & keep_cov, Fg & keep_cov
+            covered = (Dc & Fc).sum() / max(1, Fc.sum())
             worst = min(worst, real, covered)
             invented = blobs(D & ~F)
-            missing = blobs(F & ~D)
+            missing = blobs(Fc & ~Dc)
             rows.append((name, line, real, covered, "invented: %s | missing: %s" % ("; ".join(invented) or "-", "; ".join(missing) or "-")))
             cmp = Image.new("RGB", (PIC_W, PIC_H * 2 + 10), BG)
             cmp.paste(frame, (0, 0))
