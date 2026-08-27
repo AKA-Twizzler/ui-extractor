@@ -1172,10 +1172,14 @@ def window_groups(m):
             taken = set()
             for g in groups:
                 r = g["rect"]
-                if any(bar_crumbs_like(q) for q in g["panes"]):
-                    continue                      # it already has its bar
                 wide = max(1.0, r[2] - r[0])
                 gap = 0.06 * max(1.0, r[3] - r[1])
+                # already has a bar of its own, at its own foot: leave it be.
+                # Asked of EVERY pane instead, a window's file names read as
+                # crumbs and no window ever qualified.
+                if any(bar_crumbs_like(q)
+                       and -gap <= q["box"][1] - r[3] <= gap for q in g["panes"]):
+                    continue
                 band = [p for p in crumby if id(p) not in taken
                         and p["box"][0] >= r[0] - 0.06 * wide
                         and p["box"][2] <= r[2] + 0.06 * wide
