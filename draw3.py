@@ -1084,7 +1084,7 @@ class State:
         if bar:
             t_ = self.main_table()
             if t_ is not None and len(bar) > len(getattr(t_, "path", None) or []):
-                t_.path = list(bar)
+                t_.path = unglue(list(bar))
                 if bar not in t_.paths:
                     t_.paths.append(list(bar))
                     t_.path_at.append(m["ts"])
@@ -2409,6 +2409,10 @@ def harmonise(states):
                                     and flat(w).startswith(flat(c)[:3])):
                                 best_c = w
                     table.path[i] = best_c
+                # and the crumbs one engine ran together are separated here
+                # too: this path was chained and re-spelt after `Table.add`
+                # saw it, so a glue can be reassembled on the way through.
+                table.path = unglue(table.path)
                 # a date cell no engine read whole, whose digits are a clean
                 # date's digits, is that date; a kind cell read twice over
                 # keeps one telling of itself
