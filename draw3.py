@@ -5134,7 +5134,18 @@ def note(records_path, diary_text=None):
                 for stx, sl, _ in subjects:
                     strip = behind_for(sl, dict(s, size=s["size"]), stx)
                     if strip:
-                        behinds.append(("the browser, behind", strip[0][1]))
+                        sb = strip[0][1]
+                        # A WINDOW BEHIND THE STRIP BEGINS UNDER IT. The
+                        # browser's tabs and address bar run across the top
+                        # of the screen, and a window filling the screen
+                        # behind them begins where they end - drawn from
+                        # the desktop bar down, its outline stood over the
+                        # strip that was plainly in front of it.
+                        for k_, (tag_, box_) in enumerate(behinds):
+                            if (box_[2] - box_[0] >= 0.88 * Wf and box_[1] < sb[3] - 0.01 * Hf
+                                    and box_[3] > sb[3] + 0.2 * Hf):
+                                behinds[k_] = (tag_, [box_[0], float(sb[3]), box_[2], box_[3]])
+                        behinds.append(("the browser, behind", sb))
                         break
             # A WINDOW DRAWN IN FULL MUST ITSELF BE A WINDOW. Its box has
             # to be one the frame drew, or - where the frame drew none,
