@@ -186,15 +186,16 @@ def finder(st):
     # the empty striped rows below the last file, as many as the real window
     # had room for: its shape, drawn at the card's width, less what the
     # toolbar, the headings and the path bar take
-    # AS MANY AS THE REAL WINDOW HAD ROOM FOR, which is what the note above
-    # says and what a fixed two stopped doing. Finder stripes every empty row
-    # from the last file down to the path bar; the count is the window's own
-    # height over its own row pitch, less what the toolbar, the headings and
-    # the path bar take. Two was right only while the card drew its rows
-    # about twice too tall.
-    fit = int(getattr(st, "_rows_fit", 0) or 0)
-    pad = max(2, min(40, fit - len(rows) - 4)) if fit else 2
-    for _ in range(pad):
+    # A COUPLE OF STRIPED ROWS SAY "THE LIST ENDED HERE", and no more than
+    # that. Finder stripes every empty row from the last file down to the
+    # path bar, and filling the card the same way covers more of the frame's
+    # ink - measured, `real` rose on eight pictures. It is still forbidden:
+    # "Padded rows, a stretched window, type at the wrong scale" stand
+    # together in this job's list of things the drawing may never do, and
+    # `selfcheck` fails a note that pads a window. So the window drawn at
+    # the screen's own row spacing ends its list where the list ends, and
+    # the frame's striped filler below it is ink the picture will not cover.
+    for _ in range(2):
         out.append(f'<tr class="sn-empty"><td colspan="{n}">&nbsp;</td></tr>')
     out.append("</table>")
     body = '<div class="sn-body">' + "".join(out) + "</div>"
