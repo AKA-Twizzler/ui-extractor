@@ -4798,6 +4798,11 @@ def note(records_path, diary_text=None):
                                   % (s["t0"], shape, [lo_x, shape[1], hi_x, shape[3]]),
                                   file=sys.stderr)
                         shape = [lo_x, shape[1], hi_x, shape[3]]
+                if id(st) in pin:
+                    # measured off this very frame: it outranks any box worked
+                    # out from where the window's words happened to sit
+                    shape = list(pin[id(st)])
+                    settled.add(id(st))
                 sl.rect = shape
                 if os.environ.get("SN_DBG") == s["t0"]:
                     print("   build %r: content=%s shape=%s promoted=%s"
