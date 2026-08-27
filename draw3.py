@@ -1262,19 +1262,7 @@ class State:
         t = self.main_table()
         others = [q for q in self.parts if q["fam"] in ("tree", "doc", "term")]
         if not self.title and not t and not others:
-            # ...UNLESS THE FRAME MEASURED THE RECTANGLE IT STANDS IN. Words
-            # with no list and no note usually are a window behind showing
-            # through the gaps around the ones in front, and an outline is
-            # the honest answer for those. A window the SCREEN cuts off is
-            # words-only for a different reason: at 00:03:00 a Finder ran off
-            # the left edge with only its Size and Kind columns in view, and
-            # the reader read all 35 of them. Called a fragment, it was
-            # dropped from the windows, its rectangle was left unclaimed, and
-            # the promotion handed it to a remembered Finder that had once
-            # shown the `.claude` folder - six file names the screen never
-            # showed. A rectangle the reader MEASURED is a window; what shows
-            # through a gap has no rectangle of its own.
-            return not self.measured
+            return True           # words only: a window behind, showing through
         return bool(t) and not getattr(self, "title_sure", False) and len(t.rows) < 3 and not others
 
     def has_content(self):
@@ -4864,51 +4852,6 @@ def note(records_path, diary_text=None):
                     return 0.0
                 b = onto(T0, hb)
                 return furnish._within(r_, b) * furnish._within(b, r_)
-            def _known_words(st_):
-                """Every word this window remembers showing."""
-                out_ = set()
-                t_ = st_.main_table()
-                if t_:
-                    for h in t_.header or ():
-                        out_.add(norm(h))
-                    for row in t_.rows:
-                        for c in row["cells"]:
-                            if c:
-                                out_.add(norm(c))
-                    for c in t_.path or ():
-                        out_.add(norm(c))
-                    for w in getattr(t_, "side", None) or ():
-                        out_.add(norm(w))
-                return {w for w in out_ if len(w) >= 4}
-
-            def _contradicts(st_, r_):
-                """What the reader read inside this rectangle at this moment,
-                set against what this window remembers showing."""
-                m0_ = next((mm for mm in moments if mm["ts"] == s["t0"]), None)
-                if not m0_:
-                    return False
-                # BY THE WORD, NOT BY THE PANE. At 00:02:20 the same strip
-                # of screen was cut as one pane running the frame's whole
-                # height, so no pane stood inside the window's rectangle and
-                # nothing was found to contradict anything - the invented
-                # names stayed. A word's own box says where that word was.
-                read_ = []
-                for p_ in m0_.get("panes") or []:
-                    for it in draw2.items_of(p_):
-                        b = it.get("box")
-                        if not b or not it["text"].strip():
-                            continue
-                        if furnish._within(b, r_) >= 0.8:
-                            read_.append(norm(it["text"]))
-                read_ = [w for w in read_ if len(w) >= 4]
-                # too little was read there to contradict anything
-                if len(read_) < 8:
-                    return False
-                mine = _known_words(st_)
-                hit = sum(1 for w in read_
-                          if any(w in k or k in w for k in mine))
-                return hit * 4 < len(read_)
-
             for r in fw_here:
                 if any(o is not r and furnish._within(r, o) > 0.5 for o in fw_here):
                     continue                    # this window stands behind another
@@ -4921,26 +4864,6 @@ def note(records_path, diary_text=None):
                     sc = _lands(own, r)
                     if sc > best:
                         pick, best = own, sc
-                # A WINDOW IS NOT FILLED FROM MEMORY OVER THE TOP OF A
-                # READING THAT SAYS OTHERWISE. The promotion above matches a
-                # rectangle to a window by the box that window carries, which
-                # says where it USED to stand and what it showed THEN. At
-                # 00:03:00 a Finder stood cut off down the left edge showing
-                # nothing but its Size and Kind columns - the reader read
-                # exactly that - and the rectangle went to a remembered state
-                # of a Finder that had once shown the `.claude` folder, so the
-                # picture drew six file names the screen did not show. That is
-                # the background content Tristan saw.
-                # REFUSING EVERY MEMORY IS THE WRONG CURE, and the gate says
-                # so: a window present all stretch and re-read only now and
-                # then is drawn from what it last showed, correctly, and
-                # blanking those failed four pictures on WINDOW NOT FILLED.
-                # What separates the two is the frame itself. Where the reader
-                # read enough inside that rectangle NOW and almost none of it
-                # is anything this window knows, the memory is about some
-                # other moment and the fill is refused.
-                if pick is not None and _contradicts(pick, r):
-                    pick = None
                 if pick is not None:
                     extra.append(pick)
                     # The rectangle the frame MEASURED for this window is the
