@@ -3467,7 +3467,7 @@ def note(records_path, diary_text=None):
             longest = sm.find_longest_match(0, len(ct), 0, len(wt)).size
             frac = sum(b.size for b in sm.get_matching_blocks()) / max(1, len(ct))
             if longest >= 40 or (len(ct) >= 12 and frac >= 0.6):
-                c.name = w.name.replace("The ", "").replace(" window", "")
+                c.name = w.name
                 break
     states = [st for st in all_states if st.window_html() and not st.fragment()]
     frags = [st for st in all_states if st not in states and st.has_content() and st.rects]
