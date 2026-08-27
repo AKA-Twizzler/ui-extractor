@@ -217,8 +217,6 @@ class Table:
         self.span = None        # the list's x-span
         self.path = []
         self.paths = []         # every path bar read, latest last
-        self.now = None         # the moment being read, stamped by absorb
-        self.path_at = []       # the moment each entry in `paths` was read
         self.rh = 0.0           # a row's height in frame pixels
         self.spoiled = 0        # lines dropped: two columns misread at once
         self.bottom = []
@@ -418,7 +416,6 @@ class Table:
             self.path = best
         if best and best not in self.paths:
             self.paths.append(best)
-            self.path_at.append(self.now)
         self.tidy()
 
     def tidy(self):
@@ -1065,9 +1062,6 @@ class State:
         return part
 
     def absorb(self, group, m):
-        for q in self.parts:
-            if hasattr(q["model"], "now"):
-                q["model"].now = m["ts"]
         self._absorb(group, m)
         # the window's own path bar, where the reader cut it as a pane of
         # its own instead of as the foot of the list
@@ -1086,7 +1080,6 @@ class State:
                 t_.path = list(bar)
                 if bar not in t_.paths:
                     t_.paths.append(list(bar))
-                    t_.path_at.append(m["ts"])
                 # the name rule reads the path, and the path only just
                 # arrived: ask it again now the window has its bar
                 self._title_rule()
@@ -2329,23 +2322,10 @@ def harmonise(states):
                                 b = min(starts, key=lambda p: len(flat(p)))
                         if b:
                             path[i] = b
-                # the crumbs read at ONE moment chain into the one bar the
-                # window carried then (each partial read skipped what its
-                # engines missed: at 00:03:30 one engine gave `Macintosh HD |
-                # Users | Docum> | vault-c >` and another `jaredrh> | 02Con>`,
-                # halves of the same bar).
-                #
-                # ACROSS moments they must not chain. A window navigates: the
-                # same Finder stood in `.claude/projects` at 00:00:50 and in
-                # `vault-demo/02 Company A` at 00:03:00, and chaining welded
-                # the two into `Macintosh HD > Users > jared > .claude >
-                # prjects > Documents > vault-demo > 02 Company A` - a path
-                # that never existed. So chain within the LATEST moment that
-                # read a bar, and let that bar stand alone.
-                late = [p for p, t in zip(table.paths, table.path_at)
-                        if t is not None and t == max((x for x in table.path_at if x is not None),
-                                                      default=None)]
-                table.path = chain_paths(late if late else [table.path] + table.paths)
+                # the crumbs read at different moments chain into the one
+                # bar the window carried (each partial read skipped what
+                # its engines missed)
+                table.path = chain_paths([table.path] + table.paths)
                 # a date cell no engine read whole, whose digits are a clean
                 # date's digits, is that date; a kind cell read twice over
                 # keeps one telling of itself
