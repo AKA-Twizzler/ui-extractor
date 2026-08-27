@@ -553,19 +553,6 @@ def tree_depth(text):
 
 class Lines:
     """A tree or a document, as lines that grow when the pane scrolls."""
-    def __setattr__(self, k, v):
-        if k == "lines":
-            try:
-                old = getattr(self, "lines", [])
-                had = any("obsidian" in str(t).lower() for t, _h in old)
-                now = any("obsidian" in str(t).lower() for t, _h in v)
-                if had and not now:
-                    import sys as _s, traceback as _tb
-                    print("LOST .obsidian HERE:", file=_s.stderr)
-                    _tb.print_stack(file=_s.stderr)
-            except Exception:
-                pass
-        object.__setattr__(self, k, v)
     def __init__(self, kind):
         self.kind = kind
         self.lines = []         # (text, html)
