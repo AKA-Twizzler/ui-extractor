@@ -186,9 +186,15 @@ def finder(st):
     # the empty striped rows below the last file, as many as the real window
     # had room for: its shape, drawn at the card's width, less what the
     # toolbar, the headings and the path bar take
-    # a couple of striped rows say "the list ended here"; padding a short
-    # list out to the window's full height only makes the card long
-    for _ in range(2):
+    # AS MANY AS THE REAL WINDOW HAD ROOM FOR, which is what the note above
+    # says and what a fixed two stopped doing. Finder stripes every empty row
+    # from the last file down to the path bar; the count is the window's own
+    # height over its own row pitch, less what the toolbar, the headings and
+    # the path bar take. Two was right only while the card drew its rows
+    # about twice too tall.
+    fit = int(getattr(st, "_rows_fit", 0) or 0)
+    pad = max(2, min(40, fit - len(rows) - 4)) if fit else 2
+    for _ in range(pad):
         out.append(f'<tr class="sn-empty"><td colspan="{n}">&nbsp;</td></tr>')
     out.append("</table>")
     body = '<div class="sn-body">' + "".join(out) + "</div>"

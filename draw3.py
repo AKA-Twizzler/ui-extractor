@@ -5357,6 +5357,16 @@ def note(records_path, diary_text=None):
                 # pixels a row where the other stands at 81.
                 own = (getattr(sl, "_pitch_at", {}).get(s["t0"])
                        or getattr(stx, "_pitch_at", {}).get(s["t0"]))
+                # AND HOW MANY ROWS THE REAL WINDOW HAD ROOM FOR. Finder
+                # stripes the empty rows below the last file all the way to
+                # the path bar, and the card draws a fixed two of them -
+                # which looked right only while its rows were drawn about
+                # twice too tall. Drawn at the pitch the screen really had,
+                # two leave the bottom half of the window blank, and that is
+                # the frame's own ink the picture stops covering.
+                step_f = (own or (sl._row_step * Wf / furnish.CANVAS_W))
+                if step_f and step_f > 0 and shape:
+                    sl._rows_fit = int((shape[3] - shape[1]) / step_f)
                 if own:
                     sl._row_step = own * furnish.CANVAS_W / Wf
                     sl._step_sure = False      # and no median may replace it
