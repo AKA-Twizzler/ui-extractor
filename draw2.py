@@ -820,12 +820,12 @@ def _finder_sizes(pane):
     return n >= 3
 
 
-def relabel_cut_list(pane):
-    """A Finder list the SCREEN cut off down its own left edge is a list.
+def cut_list(pane):
+    """A Finder list the SCREEN cut off down its own left edge, rebuilt.
 
     Read with its Name column and the head of its headings off the side of
-    the frame, such a pane is not recognisable as a list of columns, so it
-    became loose words - and a window whose only content is loose words is
+    the frame, such a pane is not recognisable as a list of columns, so its
+    words stayed loose - and a window whose only content is loose words is
     taken for a window behind, showing through, and drawn as an outline. Its
     rectangle then stood unclaimed and the picture filled it from a
     remembered Finder that had once shown another folder: six file names the
@@ -835,11 +835,10 @@ def relabel_cut_list(pane):
     """
     if pane["kind"] in ("a list of columns", "a file tree", "an open document",
                         "a terminal", "a chat log"):
-        return
+        return None
     if not _finder_sizes(pane):
-        return
-    if table_from_loose(pane):
-        pane["kind"] = "a list of columns"
+        return None
+    return table_from_loose(pane)
 
 
 def block_of(pane, window_rect):
@@ -1032,8 +1031,6 @@ def _fold_split(m, groups):
 def window_groups(m):
     """The windows of a moment: (name, rect, panes). Panes on no found
     window form one group of their own."""
-    for _p in m.get("panes") or []:
-        relabel_cut_list(_p)
     wins = m.get("windows") or []
     groups = []
     for pos, e in enumerate(wins):
