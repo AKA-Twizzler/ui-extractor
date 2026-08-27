@@ -4863,8 +4863,11 @@ def note(records_path, diary_text=None):
                 # window, but in the desktop picture it stays a named outline
                 # until the reader learns to measure it. A moment where the
                 # frame DID measure it (settled) draws it full as any window.
-                if st.name == "The Obsidian window" and id(st) not in settled:
-                    pass
+                _obs_behind = (st.name == "The Obsidian window" and id(st) not in settled
+                               and any(o.name != "The Obsidian window" and o.has_content()
+                                       for o in base + extra))
+                if _obs_behind:
+                    pass                       # stands behind others -> outline, card holds its content
                 elif sl.has_content() and shape:
                     subjects.append((st, sl, shape))
             if not subjects:
