@@ -1019,6 +1019,23 @@ class State:
             c = bar_crumbs(p)
             if len(c) > len(bar):
                 bar = c
+        # AND A BAR CUT INTO PIECES IS STILL ONE BAR. The reader can cut the
+        # strip under a window into several panes - at 00:00:50 into four,
+        # `Maci` | `ntoshHD>` | `Users` | `jaredrhode` | `claude>` - and the
+        # longest of them holds two crumbs where the bar has five. Taken one
+        # pane at a time the window never got a path, and a Finder's title IS
+        # the folder its path ends at, so the window was drawn with no name.
+        # The pieces standing in ONE row are read left to right as the one
+        # bar they are.
+        H_ = (m.get("size") or [1920, 1080])[1]
+        found = [(p["box"][0], p["box"][1], bar_crumbs(p))
+                 for p in group.get("panes") or []]
+        found = [(x, y, c) for x, y, c in found if c]
+        for _, y_, _ in list(found):
+            row = sorted((x, c) for x, y, c in found if abs(y - y_) <= 0.02 * H_)
+            joined = [crumb for _, cs in row for crumb in cs]
+            if len(joined) > len(bar):
+                bar = joined
         if bar:
             t_ = self.main_table()
             if t_ is not None and len(bar) > len(getattr(t_, "path", None) or []):
