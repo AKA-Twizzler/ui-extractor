@@ -5385,7 +5385,7 @@ def note(records_path, diary_text=None):
             head = f"### {s['t0']}" + ("" if s["t0"] == s["t1"] else f" to {s['t1']}") + \
                    " - " + " \u00b7 ".join(label_for(st) for st, _, _ in subjects)
             parts += [head, ""]
-            for stx, sl, _ in subjects:
+            for stx, sl, shape in subjects:
                 sl._label = label_for(stx)
                 # the bar under a window in a picture says what the bar under
                 # that window's own card says: the stretch's own reading, with
@@ -5394,6 +5394,22 @@ def note(records_path, diary_text=None):
                 mine, whole = sl.main_table(), stx.main_table()
                 if mine and mine.path and whole and whole.path:
                     mine.path = mend_path(mine.path, [whole.path])
+                # the favorites sidebar, carried in when this Finder window
+                # showed one this stretch but the reading missed it: its own
+                # favorites words stand inside its rectangle NOW, so a sidebar
+                # was on the screen there and only the reader's eye slid past
+                if (stx.name == "The Finder window" and house_side and shape
+                        and not furnish.side_words_of(sl)):
+                    hits = 0
+                    for t in s["ts"]:
+                        for key, b in (words_of.get(t) or {}).items():
+                            cx, cy = (b[0] + b[2]) / 2, (b[1] + b[3]) / 2
+                            if shape[0] <= cx <= shape[2] and shape[1] <= cy <= shape[3] \
+                                    and any(hk in key or key in hk for hk in house_keys
+                                            if len(key) >= 5):
+                                hits += 1
+                    if hits >= 2:
+                        sl._carried_side = house_side
             parts.append(furnish.screen_shot(
                 {"t0": s["t0"], "t1": s["t1"]},
                 [(sl, shape) for _, sl, shape in subjects],
