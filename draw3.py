@@ -3812,8 +3812,24 @@ def note(records_path, diary_text=None):
         # such rectangle, standing over a Finder's sidebar, was drawn as a
         # second window named "Finder" on top of the Finder it was part of.
         least = 0.09 * Wf * Hf
-        _frame_wins[t0] = [[float(v) for v in r] for r in got
-                           if (r[2] - r[0]) * (r[3] - r[1]) >= least]
+        out = [[float(v) for v in r] for r in got
+               if (r[2] - r[0]) * (r[3] - r[1]) >= least]
+        # AND THE WINDOWS THE SCREEN CUTS OFF. ONE HOME for "what windows
+        # are on this frame", used by the reader, the drawing and the
+        # checker -- the law of run 4. `shapes` closes a window from two
+        # sides plus a top and a foot and offers the frame's edge as a
+        # stand-in SIDE but never as a stand-in FOOT, so a window running
+        # off the bottom is never in this list; the browser and the
+        # Obsidian editor are both that shape, which is why the largest
+        # windows on the screen were drawn as empty boxes.
+        for b in frame_bigwins(s):
+            if (b[2] - b[0]) * (b[3] - b[1]) < least:
+                continue
+            if any(furnish._within(b, r) > 0.7 and furnish._within(r, b) > 0.7
+                   for r in out):
+                continue                  # `shapes` already has this one
+            out.append([float(v) for v in b])
+        _frame_wins[t0] = out
         return _frame_wins[t0]
 
     SIDE_FLAT = {norm(n) for n in draw2.SIDE_NAMES}
