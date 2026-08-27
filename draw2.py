@@ -836,6 +836,15 @@ def cut_list(pane):
     if pane["kind"] in ("a list of columns", "a file tree", "an open document",
                         "a terminal", "a chat log"):
         return None
+    # AND THE SCREEN MUST ACTUALLY HAVE CUT IT. Without this the rebuild
+    # fired on any pane with three byte counts down it anywhere in the
+    # video, and it wrecked the pictures it had no business touching:
+    # 00:01:20 fell 0.61 to 0.16. The fault being cured is a window running
+    # off the LEFT edge of the frame with its Name column and the heads of
+    # its headings outside the screen, so the pane begins hard against that
+    # edge or this is some other pane.
+    if pane["box"][0] > 1:
+        return None
     if not _finder_sizes(pane):
         return None
     return table_from_loose(pane)
