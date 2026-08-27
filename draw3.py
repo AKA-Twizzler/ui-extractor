@@ -4874,10 +4874,6 @@ def note(records_path, diary_text=None):
                     # stand on.
                     pin[id(pick)] = [float(v) for v in r]
             for st in base + extra:
-                if s["t0"] in ("00:00:10",):
-                    sys.stderr.write("TRACE cand %-22s %-14s shown=%s\n"
-                                     % (str(st.name)[:22], str(getattr(st,'title','?'))[:14],
-                                        st in shown))
                 if st not in shown:
                     continue
                 sl = state_slice(st, s["t0"], s["t1"]) or st
@@ -5073,11 +5069,6 @@ def note(records_path, diary_text=None):
                     pass                       # stands behind others -> outline, card holds its content
                 elif sl.has_content() and shape:
                     subjects.append((st, sl, shape))
-                if s["t0"] in ("00:00:10",):
-                    sys.stderr.write("TRACE  end %-22s %-14s content=%s shape=%s obs_behind=%s\n"
-                                     % (str(st.name)[:22], str(getattr(st,'title','?'))[:14],
-                                        sl.has_content(), [round(v) for v in shape] if shape else None,
-                                        _obs_behind))
             if not subjects:
                 continue
             # The frame draws its windows as rectangles, and those rectangles
@@ -5127,12 +5118,6 @@ def note(records_path, diary_text=None):
                 ox, ol, osh = keep[clash]
                 if len(sl.said_html() or ()) > len(ol.said_html() or ()):
                     keep[clash] = (stx, sl, shape)
-            if s["t0"] in ("00:00:10",):
-                sys.stderr.write("TRACE fw_here %s\n" % [[round(v) for v in r] for r in fw_here])
-                for stx, sl, shape in keep:
-                    sys.stderr.write("TRACE keep %-22s %-14s shape=%s\n"
-                                     % (str(stx.name)[:22], str(getattr(stx,'title','?'))[:14],
-                                        [round(v) for v in shape] if shape else None))
             subjects = keep
             for stx, sl, shape in subjects:
                 sl.rect = shape
