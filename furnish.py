@@ -318,12 +318,15 @@ def obsidian(st, behind=True):
         # picture of the screen, where the text has to sit where it sat.
         # On the window's own card it is only a hole at the top: the card
         # is the window rebuilt to READ, so it starts at its first line.
-        pad = getattr(st, "_doc_pad", 0) if (not behind and getattr(st, "shape", None)) else 0
+        placed = (not behind and getattr(st, "shape", None))
+        pad = getattr(st, "_doc_pad", 0) if placed else 0
         wide = getattr(st, "_doc_wide", 0)
+        blocks = getattr(st, "_doc_blocks", None) if placed else None
         bits = ([f"padding-top:{pad}px"] if pad else []) + \
-               ([f"--sn-line:{wide}%"] if wide and wide < 98 else [])
+               ([f"--sn-line:{wide}%"] if wide and wide < 98 else []) + \
+               (["position:relative"] if blocks else [])
         sty_doc = f' style="{";".join(bits)}"' if bits else ""
-        cols.append(f'<div class="sn-doc"{sty_doc}>' + note_html(st, doc, title) + "</div>")
+        cols.append(f'<div class="sn-doc"{sty_doc}>' + note_html(st, doc, title, blocks) + "</div>")
     # THE PANES ARE AS WIDE AS THE SCREEN HAD THEM. The explorer and the
     # note share the window in the proportion the reader measured - the
     # tree's pane against the rest of the window - not a fixed 38 to 62,
@@ -341,10 +344,23 @@ def obsidian(st, behind=True):
     return f'<div class="{cls}">{strip}{toolbar}{body}</div>'
 
 
-def note_html(st, doc, title):
+def note_html(st, doc, title, blocks=None):
     """The note as Obsidian shows it: the tab's header line, the inline
-    title, the properties block, then the body in its measured sizes."""
+    title, the properties block, then the body in its measured sizes.
+
+    `blocks`, in a desktop picture only: the note's lines grouped by the
+    pane they were read from, each later group with the height its pane
+    stood at in the window's own unit. Those groups are placed THERE
+    rather than flowed, so the text under a window in front lands where
+    the screen had it and the room that window hid stays empty -- which is
+    what the screen showed, since the window in front is drawn over it."""
     out = []
+    at = {}
+    if blocks:
+        for bi, (top_u, texts) in enumerate(blocks):
+            for t in texts:
+                at.setdefault(plain_line_key(t), bi)
+    groups = {}
     if title:
         out.append(f'<div class="sn-crumb">‹ &nbsp;› &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{esc(title)}</div>')
     lines = [(t, h) for t, h in doc.lines if re.search(r"[A-Za-z0-9]", t) or t.startswith("---")]
@@ -371,10 +387,26 @@ def note_html(st, doc, title):
                        + ('<div class="sn-prop sn-addprop">+ Add property</div>' if add_property else "") + "</div>")
             props_done = True
             continue
-        out.append(bulleted(h))
+        piece = bulleted(h)
+        bi = at.get(plain_line_key(t), 0) if blocks else 0
+        top_u = blocks[bi][0] if (blocks and bi < len(blocks)) else None
+        if top_u is None:
+            out.append(piece)
+        else:
+            groups.setdefault(bi, []).append(piece)
+    for bi in sorted(groups):
+        out.append('<div class="sn-docblock" style="position:absolute;left:0;right:0;'
+                   'padding:0 calc(26 * var(--sn-u, 1px));top:calc(%d * var(--sn-u, 1px))">%s</div>'
+                   % (blocks[bi][0], "".join(groups[bi])))
     if st.covered:
         out.append('<span class="sn-covered">the camera picture covered this corner of the window</span>')
     return "".join(out)
+
+
+def plain_line_key(t):
+    """A line's text stripped of its markdown marks, for matching a drawn
+    line back to the pane it was read from."""
+    return re.sub(r"\s+", " ", t.strip().strip("#*>-\u2022 ").strip().lower())[:60]
 
 
 def bulleted(h):

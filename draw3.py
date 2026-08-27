@@ -552,6 +552,7 @@ class Lines:
         self.kind = kind
         self.lines = []         # (text, html)
         self.doubt = set()      # texts one engine alone read
+        self.blocks = []        # (pane top, pane foot, [texts]) - where each pane's lines SAT
 
     def add(self, pairs):
         pairs = list(pairs)
@@ -1106,6 +1107,15 @@ class State:
                 pairs, fine = doc_pairs(p)
                 part["model"].doubt |= doc_pairs.doubt
                 part["model"].add(pairs)
+                # WHERE THE PANE SAT, kept beside its lines. The lines flow
+                # into one model, and a note read in two panes -- the strip
+                # above a window in front and the region below it -- flows
+                # back out as one column with no room left for what the
+                # front window hid, so everything under it lands a quarter
+                # of the screen too high. The pane's own box says where its
+                # first line stood.
+                part["model"].blocks.append((float(p["box"][1]), float(p["box"][3]),
+                                             [t for t, _ in pairs]))
                 self.fine.extend(fine)
             elif k in ("a terminal", "a chat log"):
                 pairs = [(ln, esc(ln)) for ln in old.content_lines(p) if ln.strip()]
@@ -5136,6 +5146,21 @@ def note(records_path, diary_text=None):
             subjects = [(stx, sl, sl.rect) for stx, sl, _ in subjects]
             for stx, sl, shape in subjects:
                 sl._doc_pad = span_pad(stx, shape[1])
+                # EACH BLOCK OF THE NOTE AT THE HEIGHT IT SAT, in the
+                # window's own unit, so it lands there at any page width.
+                # The first block flows from the top pad as before; every
+                # later one is placed by its pane's measured top.
+                sl._doc_blocks = []
+                d_ = sl.main_doc()
+                if d_ is not None and len(getattr(d_, "blocks", ())) > 1 and shape:
+                    step_ = getattr(sl, "_row_step", 0)
+                    k_ = max(0.05, step_ / furnish.ROW_H) if step_ else S_now
+                    for i_, (top_, foot_, texts_) in enumerate(sorted(d_.blocks)):
+                        if i_ == 0:
+                            sl._doc_blocks.append((None, texts_))
+                            continue
+                        u_ = (top_ - shape[1]) * furnish.CANVAS_W / Wf / k_ - 60
+                        sl._doc_blocks.append((round(u_) if u_ > 0 else None, texts_))
                 # How tall a row stands here: this window's own share of
                 # its width, voted across every moment of it in the whole
                 # run, taken against the width it is drawn at NOW. One
