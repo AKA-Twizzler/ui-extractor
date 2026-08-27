@@ -3448,12 +3448,21 @@ def note(records_path, diary_text=None):
         if c.name != "The rest of the screen":
             continue
         ct = _doc_fold(c)
-        if len(ct) < 40:
+        if len(ct) < 12:
             continue
         for w, wt in _named:
-            run = difflib.SequenceMatcher(None, ct, wt).find_longest_match(
-                0, len(ct), 0, len(wt)).size
-            if run >= 40:
+            # autojunk=False is not optional here: on a natural-language
+            # string over 200 characters difflib otherwise treats every
+            # common letter as junk and the longest run collapses to three
+            # or four characters, so the same note read twice fails to match
+            # itself. The window's words carry no spaces (the reader glued
+            # them), so this is a character run, not a word overlap: a long
+            # shared run, or -- for a short fragment -- most of the fragment
+            # accounted for, says it is the same document.
+            sm = difflib.SequenceMatcher(None, ct, wt, autojunk=False)
+            longest = sm.find_longest_match(0, len(ct), 0, len(wt)).size
+            frac = sum(b.size for b in sm.get_matching_blocks()) / max(1, len(ct))
+            if longest >= 40 or (len(ct) >= 12 and frac >= 0.6):
                 c.name = w.name.replace("The ", "").replace(" window", "")
                 break
     states = [st for st in all_states if st.window_html() and not st.fragment()]
