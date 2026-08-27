@@ -4265,7 +4265,7 @@ def note(records_path, diary_text=None):
         for p in m.get("panes") or []:
             if p["box"][1] > 0.02 * Hf:
                 continue
-            for it in draw2.items_of(p):
+            for it in draw2.items_of(p) + doc_rows_as_items(p):
                 if it["box"][1] <= 0.01 * Hf and it["box"][3] <= 0.03 * Hf and len(it["text"]) >= 3:
                     # THE BAR IS COUNTED IN WORDS, NOT READINGS. One engine
                     # reads the whole menu bar as a single line - "File Edit
