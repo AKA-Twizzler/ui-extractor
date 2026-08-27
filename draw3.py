@@ -5067,6 +5067,11 @@ def note(records_path, diary_text=None):
                                and (frame_windows(s)
                                     or any(o.name != "The Obsidian window" and o.has_content()
                                            for o in base + extra)))
+                if s["t0"] in ("00:00:00",):
+                    sys.stderr.write("TRACE %-20s settled=%s would_skip=%s obs_behind=%s shape=%s\n"
+                                     % (str(st.name)[:20], id(st) in settled, bool(_would_skip),
+                                        bool(_obs_behind),
+                                        [round(v) for v in shape] if shape else None))
                 if _obs_behind:
                     pass                       # stands behind others -> outline, card holds its content
                 elif sl.has_content() and shape:
