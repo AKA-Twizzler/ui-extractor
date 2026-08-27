@@ -3791,8 +3791,7 @@ def note(records_path, diary_text=None):
                              % (t0, type(exc).__name__, exc))
             got = []
         _frame_big[t0] = [[float(v) for v in b] for b in got]
-        if os.environ.get("BIGWIN_TRACE"):
-            sys.stderr.write("frame_bigwins(%s) -> %s\n" % (t0, _frame_big[t0]))
+        sys.stderr.write("BIGWINTRACE frame_bigwins(%s) -> %s\n" % (t0, _frame_big[t0]))
         return _frame_big[t0]
 
     def frame_rects(s):
