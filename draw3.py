@@ -1303,6 +1303,11 @@ class State:
                     if ok and above <= 4 and not re.fullmatch(r"[0O]+", t) and len(t) >= 3 and t not in FINDER_WORDS]
             hit = None
             crumbs = [c for path in reversed(table.paths) for c in reversed(path)]
+            import sys as _s
+            if any("jarvis" in str(c).lower() for c in crumbs):
+                print("TOPS %r" % ([t for t, _ in tops][:8],), file=_s.stderr)
+                print("  top_items raw %r" % ([(t, ok, ab) for t, cx, ok, ab in table.top_items][:8],), file=_s.stderr)
+                print("  crumbs %r" % (crumbs[:5],), file=_s.stderr)
             for c in crumbs:
                 # ...AND THE OTHER WAY ROUND, WHICH IS THE COMMON ONE. Finder
                 # cuts a long folder name short IN ITS TITLE BAR, so the word
