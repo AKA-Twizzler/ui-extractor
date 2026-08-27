@@ -122,7 +122,7 @@ def finder(st):
         for i, h in enumerate(head):
             cells.append(f"<td>{esc(h)}" + (' <span class="sn-sort">˄</span>' if i == name_i and h else "") + "</td>")
         out.append('<tr class="sn-head">' + "".join(cells) + "</tr>")
-    for r in table.rows:
+    for r in rows:
         cells = list(r["cells"]) + [""] * (n - len(r["cells"]))
         it = list(r["italic"]) + [False] * (n - len(r["italic"]))
         kind = cells[kind_i] if kind_i is not None else ""
