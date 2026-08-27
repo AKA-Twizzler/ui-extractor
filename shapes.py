@@ -168,8 +168,61 @@ def _edge_of_head(shelf, pos, a, b, reach, way, reaches=None):
     return best
 
 
+def _reach(shelf, pos, a, b, slack, part):
+    """The line nearest `pos` that runs along most of a to b, as
+    (position, start, end), or None."""
+    lines, step = shelf
+    best = None
+    lo, hi = int(pos - slack) // step, int(pos + slack) // step
+    for shelf_no in range(lo, hi + 1):
+        for p, la, lb in lines.get(shelf_no, ()):
+            if abs(p - pos) > slack or min(b, lb) - max(a, la) < part * (b - a):
+                continue
+            if best is None or abs(p - pos) < abs(best[0] - pos):
+                best = (p, la, lb)
+    return best
+
+
+def _gap(hshelf, vshelf, r, w, h):
+    """How far a rectangle's edges fall short of its own corners, in
+    working pixels. A WINDOW'S EDGES REACH ITS CORNERS: its top and foot
+    begin and end at its sides, and its sides run from its top to its
+    foot, give or take a rounded corner. A rectangle built out of a side
+    that belongs to something else - the indent guide of a tree standing
+    beside a window - has an edge that never reaches that side, and this
+    is the measure of it. An edge running ON PAST a corner costs nothing:
+    a line may lie along something else on the screen. A side on the
+    screen's own edge needs no line at all."""
+    x0, y0, x1, y1 = r[:4]
+    slack_y = max(12, int(0.05 * (y1 - y0)))
+    slack_x = max(12, int(0.05 * (x1 - x0)))
+    gap = 0.0
+    for pos in (y0, y1):
+        ln = _reach(hshelf, pos, x0, x1, slack_y, ALONG)
+        if ln is None:
+            gap += (x1 - x0)
+        else:
+            gap += max(0.0, ln[1] - x0) + max(0.0, x1 - ln[2])
+    for pos in (x0, x1):
+        if pos <= 2 or pos >= w - 3:
+            continue
+        ln = _reach(vshelf, pos, y0, y1, slack_x, 0.55)
+        if ln is None:
+            gap += (y1 - y0)
+        else:
+            gap += max(0.0, ln[1] - y0) + max(0.0, y1 - ln[2])
+    return gap
+
+
 def find(path):
     """Every window on the frame, biggest first, in the frame's own pixels."""
+    return [r for r, _g in _find_full(path)]
+
+
+def _find_full(path):
+    """Every rectangle `find` returns, each with how far its edges fall
+    short of its corners (see `_gap`), so `windows` can tell a window from
+    a rectangle closed on a side that belongs to something else."""
     keyed = isinstance(path, str)
     if keyed and path in _CACHE:
         return _CACHE[path]
@@ -181,6 +234,7 @@ def find(path):
     verts, hors = _sides(g, least_v, least_h)
     verts, hors = _thin(verts), _thin(hors)
     shelf = _index(hors)
+    vshelf = _index(verts)
     min_w, min_h = MIN_W * w, MIN_H * h
     # A window pushed off the side of the screen has only ONE side of its
     # own; the screen's edge is where the rest of it went. Without the edge
