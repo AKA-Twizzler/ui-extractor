@@ -4866,7 +4866,12 @@ def note(records_path, diary_text=None):
                 _obs_behind = (st.name == "The Obsidian window" and id(st) not in settled
                                and (frame_windows(s)
                                     or any(o.name != "The Obsidian window" and o.has_content()
-                                           for o in base + extra)))
+                                           for o in base + extra))
+                               and not os.environ.get("SN_FILLOBS"))
+                if st.name == "The Obsidian window" and os.environ.get("SN_DBG") == s["t0"]:
+                    print("  OBS %s shape=%s settled=%s behind=%s"
+                          % (s["t0"], [round(v) for v in shape] if shape else None,
+                             id(st) in settled, _obs_behind), file=sys.stderr)
                 if _obs_behind:
                     pass                       # stands behind others -> outline, card holds its content
                 elif sl.has_content() and shape:
