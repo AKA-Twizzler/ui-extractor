@@ -4477,6 +4477,21 @@ def note(records_path, diary_text=None):
                     continue          # this window draws it properly itself
                 if x1 <= x0 or y1 <= y0:
                     continue
+                # THE BAR IS DRAWN ONCE. Where the picture draws the desktop
+                # bar, the bar's own readings - its menus and the clock -
+                # are not laid down again as loose words on top of it,
+                # which printed every menu twice at two sizes.
+                if barred_ and y1 <= 0.035 * H_:
+                    continue
+                # A SCRAP AGAINST A WINDOW'S EDGE IS THE CUT END OF A WORD,
+                # not a word: "Va" and "es" beside a Finder are what the
+                # Finder left of "Vault" and "Properties". The word stands
+                # behind the window and the window covers the rest of it;
+                # the scrap on its own says nothing true.
+                if len(re.sub(r"[^A-Za-z0-9]", "", t_)) < 3 and any(
+                        abs(x0 - r[2]) <= 0.015 * W_ or abs(x1 - r[0]) <= 0.015 * W_
+                        for r in taken):
+                    continue
                 tall_ = float(high) / up
                 # nothing on a screen is written a twentieth of the screen
                 # tall; a figure that says so is a block measured as a line
