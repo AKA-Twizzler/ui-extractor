@@ -181,16 +181,19 @@ def favorites_by_stamp(records):
     0..1 frame fractions. The reader's WORDS, checked against the DRAWING --
     a completeness test, not geometry graded against its own geometry."""
     import draw as old
+    import draw2
     import draw3
     hdr, moments, ftr = old.load(records)
     W, H = (moments[0].get("size") or [1, 1])[:2] if moments else (1, 1)
     out = {}
     for m in moments:
         favs = []
-        for key, b in (draw3.word_boxes(m) or {}).items():
-            k = key.replace(" ", "").lower()
-            if any(f in k for f in FAVORITES):
-                favs.append((b[0] / W, b[1] / H, b[2] / W, b[3] / H))
+        for p in m.get("panes") or []:
+            for it in draw2.items_of(p):
+                k = draw3.fold(draw3.flat(it["text"])).replace(" ", "").lower()
+                if len(k) >= 5 and any(f in k for f in FAVORITES):
+                    b = it["box"]
+                    favs.append((b[0] / W, b[1] / H, b[2] / W, b[3] / H))
         out[m["ts"]] = favs
     return out
 
