@@ -4966,6 +4966,8 @@ def note(records_path, diary_text=None):
                         if b_ and it["text"].strip() and furnish._within(b_, r_) >= 0.8:
                             read_.append(it["text"])
                 here = _telling(read_)
+                if s["t0"] in ("00:01:10",):
+                    sys.stderr.write("TRACECON here=%s\n" % sorted(here)[:10])
                 if len(here) < 2:
                     return False              # too little read to contradict
                 t_ = st_.main_table()
@@ -4988,6 +4990,10 @@ def note(records_path, diary_text=None):
                     sc = _lands(own, r)
                     if sc > best:
                         pick, best = own, sc
+                if s["t0"] in ("00:01:10",):
+                    sys.stderr.write("TRACEPICK rect=%s pick=%s\n"
+                                     % ([round(v) for v in r],
+                                        (str(pick.name)[:18], str(pick.title)[:14]) if pick else None))
                 if pick is not None and _contradicts(pick, r):
                     pick = None
                 if pick is not None:
