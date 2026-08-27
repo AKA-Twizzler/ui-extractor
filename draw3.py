@@ -1668,6 +1668,14 @@ def build_states(moments):
                 home.said.append((m["ts"], said))
     harmonise(states)
     retitle_by_rows(states)
+    # A title is a folder's name, and no folder here ends in a bare full
+    # stop. `memory.` is the reader's dot, picked up from the title bar of a
+    # moving frame; a name that BEGINS with one (`.claude`) is real and is
+    # left alone, as is any name whose last stop belongs to an extension
+    # (`Vault Index.md` ends in `d`).
+    for st in states:
+        if st.title and len(st.title) > 1 and st.title.endswith("."):
+            st.title = st.title.rstrip(".") or st.title
     drop_guessed(states)
     if moments:
         W, H = (moments[0].get("size") or [1920, 1080])[:2]
