@@ -492,6 +492,18 @@ def scaled(html, rect, W, kz=1.0, cls="sn-slot", extra="", step=0.0):
             f'{html}</div></div>')
 
 
+APPS = ("finder", "obsidian", "browser", "terminal", "chat")
+
+
+def _app_of(tag):
+    """The program a label names, or None where it names none."""
+    t = (tag or "").lower()
+    for a in APPS:
+        if a in t:
+            return a
+    return None
+
+
 def _shares(a, b):
     """How much of the smaller box the two have in common, nought to one."""
     w = min(a[2], b[2]) - max(a[0], b[0])
@@ -693,10 +705,15 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
             # much ground they share - a note standing behind a file list
             # is not the same window as the list. Only a tag that names no
             # program at all folds into one that does.
-            apps = ("Finder", "Obsidian", "The browser", "The terminal",
-                    "The chat")
-            named = [t.split(":")[0].strip() for t in (tag, other[1])]
-            if all(n in apps for n in named) and named[0] != named[1]:
+            # A LABEL NAMES ITS PROGRAM WHATEVER ELSE IT SAYS AROUND IT.
+            # Matching the whole label against a list of bare program names
+            # let "the browser, behind" match nothing, so the guard did not
+            # fire for it -- harmless while the browser was drawn as a thin
+            # strip and not once its real box was measured, because the
+            # browser and Obsidian then overlap by 0.94 and one would have
+            # swallowed the other.
+            named = [_app_of(t) for t in (tag, other[1])]
+            if all(named) and named[0] != named[1]:
                 continue
             share = max(_within(box, other[0]), _within(other[0], box))
             # `same` folds a stretch that could only say "Finder" into the
