@@ -1073,7 +1073,7 @@ class State:
                         tree_part["x0"] = min(tree_part["x0"], p["box"][0])
                         tree_part["x1"] = max(tree_part["x1"], p["box"][2])
                         continue
-            cut = draw2.cut_list(p)
+            cut = draw2.cut_list(p, m.get("size"))
             if cut:
                 sys.stderr.write("TRACECUT %s kind=%-18s box=%s head=%s rows=%d\n"
                                  % (m["ts"], p.get("kind"), [round(v) for v in p["box"]],

@@ -830,11 +830,30 @@ def _finder_sizes(pane):
     return n >= 3
 
 
-def cut_list(pane):
-    """A Finder list the SCREEN cut off down its own left edge, rebuilt."""
+def cut_list(pane, size=None):
+    """A Finder list the SCREEN cut off down its own left edge, rebuilt.
+
+    Read with its Name column and the heads of its headings outside the
+    frame, such a pane is not recognisable as a list of columns, so its
+    words stay loose - and a window whose only content is loose words is
+    taken for a window behind showing through and drawn as an outline. Its
+    rectangle then stands unclaimed and the picture fills it from whichever
+    remembered window's carried box lands there: at 00:03:00, six file names
+    of a folder the screen was not showing.
+    """
     if pane["kind"] in ("a list of columns", "a file tree", "an open document",
                         "a terminal", "a chat log"):
         return None
+    # A WINDOW HAS A TOP AND A FOOT INSIDE THE FRAME. A pane running the
+    # frame's whole height is the strip of desktop down the side of it, cut
+    # by the frame and not by any window, and it carries whatever shows
+    # through - at 00:02:50 the words of the note behind. Rebuilt as a list,
+    # it made a Finder window that held the note's own text, and the
+    # backdrop at 00:00:00 was then named for THAT window instead of
+    # Obsidian: the picture lost both Obsidian and the browser.
+    if size:
+        if pane["box"][1] <= 1 or pane["box"][3] >= size[1] - 1:
+            return None
     if not _finder_sizes(pane):
         return None
     # THE MEND BELONGS TO THIS PATH ONLY. Applied inside `table_from_items`
