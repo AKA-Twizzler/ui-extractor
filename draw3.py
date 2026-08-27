@@ -5417,7 +5417,13 @@ def note(records_path, diary_text=None):
                         # browser has no card of its own, so the desktop
                         # picture is the only place its tabs and address bar
                         # can live (Tristan's named exception).
-                        browser_chrome = [(sb, strip[0][2])]
+                        # AT THE BROWSER'S OWN TOP, not the frame's. The
+                        # strip's box runs from y=0 because that is as far
+                        # up as its words could possibly reach; drawn there
+                        # it lay across the desktop bar, which is a row the
+                        # browser is under, not over.
+                        cbx = [bb[0], bb[1], bb[2], sb[3]] if bb else sb
+                        browser_chrome = [(cbx, strip[0][2])]
                         break
             # A WINDOW DRAWN IN FULL MUST ITSELF BE A WINDOW. Its box has
             # to be one the frame drew, or - where the frame drew none,
