@@ -908,6 +908,35 @@ def touching(a, b, W):
     return side or stack
 
 
+def _fold_split(m, groups):
+    """Fold each window the frame closed twice back into one group."""
+    import cv2                     # only a desktop with two windows on it
+    import panes as _panes         # needs the frame's own pixels
+    try:
+        img = cv2.imread(shapes.frame_of(m))
+    except Exception:
+        img = None
+    if img is None:
+        return groups
+    try:
+        pairs = _panes.split_pairs(img, [g["rect"] for g in groups])
+    except Exception:
+        return groups
+    for i, j in pairs:
+        a, b = groups[i], groups[j]
+        r, o = a["rect"], b["rect"]
+        a["rect"] = [min(r[0], o[0]), min(r[1], o[1]),
+                     max(r[2], o[2]), max(r[3], o[3])]
+        a["panes"] = a["panes"] + b["panes"]
+        # the whole side carries the buttons; the FOLDER'S NAME sits in the
+        # toolbar over the pane, so the title is whichever half has one
+        a["title"] = a.get("title") or b.get("title")
+        a["name"] = name_of({"rect": a["rect"], "top": a.get("title")},
+                            a["panes"]) or a["name"]
+        b["folded"] = True
+    return [g for g in groups if not g.get("folded")]
+
+
 def window_groups(m):
     """The windows of a moment: (name, rect, panes). Panes on no found
     window form one group of their own."""
@@ -925,6 +954,15 @@ def window_groups(m):
         name = name_of(e, panes) or "A window"
         title = e.get("top")
         groups.append({"name": name, "title": title, "rect": e["rect"], "panes": panes, "where": e.get("where")})
+    # ONE WINDOW THE FRAME CLOSED TWICE - once whole, once at its own
+    # sidebar divider - is one window, and its panes are all its own. Left
+    # apart, the drawing gave each half a title bar and a set of traffic
+    # lights: at 00:00:10 the note showed two `vault-demo` windows where the
+    # screen had one, the sidebar in the first and the file list in the
+    # second. The two measurements that tell this from two windows genuinely
+    # standing side by side live in `panes.fold_split_panes`.
+    if len(groups) > 1:
+        groups = _fold_split(m, groups)
     rest = [p for p in m["panes"] if p.get("wi") is None or p.get("wi") >= len(wins)]
     # A window's path bar sits at its foot, and its foot can fall a little
     # below the rectangle the frame measured - on a frame caught mid-scroll
