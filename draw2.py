@@ -830,6 +830,22 @@ def _finder_sizes(pane):
     return n >= 3
 
 
+def row_pitch_of(pane, items=None):
+    """How far apart this pane's rows really stand, in frame pixels.
+
+    Measured on the pane's own words, at the moment they were read, so the
+    video's zoom is already in it. This is the thing the drawing needs and
+    was working out instead from a share held per program - which assumes
+    every window of one program spaces its rows alike. Finder does not: its
+    list density is a per-window setting, and on one frame here two Finders
+    stand at 65 pixels a row and at 42.
+    """
+    its = items if items is not None else items_of(pane)
+    tops = sorted({round(it["box"][1]) for it in its})
+    gaps = sorted(b - a for a, b in zip(tops, tops[1:]) if b - a > 8)
+    return float(gaps[len(gaps) // 2]) if len(gaps) >= 3 else None
+
+
 def cut_list(pane, size=None):
     """A Finder list the SCREEN cut off down its own left edge, rebuilt.
 
@@ -875,11 +891,9 @@ def cut_list(pane, size=None):
         # window's pitch from others of the same program, which drew this
         # one's rows at twice their true spacing and pushed its Kind column
         # off the card.
-        tops = sorted({round(it["box"][1]) for it in mended})
-        gaps = [b - a for a, b in zip(tops, tops[1:]) if b - a > 8]
-        if len(gaps) >= 3:
-            gaps.sort()
-            pane["_cut_pitch"] = float(gaps[len(gaps) // 2])
+        got = row_pitch_of(pane, mended)
+        if got:
+            pane["_cut_pitch"] = got
     return built
 
 

@@ -1080,7 +1080,7 @@ class State:
                 part["x1"] = p["box"][2] if part["x1"] is None else max(part["x1"], p["box"][2])
                 part["model"].add(cut)
                 if p.get("_cut_pitch"):
-                    self._own_pitch = p["_cut_pitch"]
+                    self._pitch_at[m["ts"]] = p["_cut_pitch"]
                 # AND THE SCREEN CUT THIS WINDOW'S LEFT EDGE. That is the
                 # whole gate `cut_list` passed, so it is known here and
                 # nowhere else: the window's own corner, its three round
@@ -1112,6 +1112,14 @@ class State:
                         built = loose
                 if built:
                     part["model"].add(built)
+                    # AND WHAT THIS WINDOW'S ROWS REALLY MEASURE, at this
+                    # moment, on its own words. Everything downstream worked
+                    # a pitch out from a share held per program; measured,
+                    # that put the vault-demo Finder at 81 frame pixels a
+                    # row where its own rows stand at 65.
+                    got = draw2.row_pitch_of(p)
+                    if got:
+                        self._pitch_at[m["ts"]] = got
                     if len(tables) > 1 and built[6]:
                         # this list's own span, not the pane's two windows
                         part["x0"], part["x1"] = built[6]
@@ -5345,7 +5353,8 @@ def note(records_path, diary_text=None):
                 # same. Finder does not: its list density is a per-window
                 # setting, and at 00:03:00 one Finder stands at 42 frame
                 # pixels a row where the other stands at 81.
-                own = getattr(sl, "_own_pitch", 0) or getattr(stx, "_own_pitch", 0)
+                own = (getattr(sl, "_pitch_at", {}).get(s["t0"])
+                       or getattr(stx, "_pitch_at", {}).get(s["t0"]))
                 if own:
                     sl._row_step = own * furnish.CANVAS_W / Wf
                     sl._step_sure = False      # and no median may replace it
