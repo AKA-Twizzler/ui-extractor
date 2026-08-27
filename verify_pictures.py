@@ -404,8 +404,7 @@ def prove(note, frames, fav, bar=None):
             ("desktop bar once",   lambda st: re.sub(
                 r'(<div class="sn-deskbar">.*?</div>)', r'\1\1', st, count=1),
              "DESKTOP BAR DOUBLED"),
-            ("desktop bar whole",  lambda st: re.sub(
-                r'(<div class="sn-deskbar">)<span>[^<]*</span>', r'\1', st, count=1),
+            ("desktop bar whole",  "drop-a-name",
              "DESKTOP BAR LOST A NAME")):
         state, why = "UNPROVED", "no picture in this note draws a desktop bar"
         for stamp, heading, stage in pics:
@@ -414,7 +413,20 @@ def prove(note, frames, fav, bar=None):
                 continue
             if any(marker in f for f in check_deskbar(stamp, stage, names)):
                 continue
-            broken = brk(stage)
+            if brk == "drop-a-name":
+                # A NAME THE READER READ, not merely the first span: the
+                # first span is the application's own name (Obsidian), which
+                # is not one of the fixed menu words, so dropping it loses
+                # nothing the check is looking for and proved nothing.
+                broken = stage
+                for n in sorted(names):
+                    hit = re.search(r'<span>(?:<i>)?%s(?:</i>)?</span>' % re.escape(n),
+                                    stage, re.I)
+                    if hit:
+                        broken = stage[:hit.start()] + stage[hit.end():]
+                        break
+            else:
+                broken = brk(stage)
             if broken == stage:
                 continue
             if any(marker in f for f in check_deskbar(stamp, broken, names)):
