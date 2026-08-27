@@ -54,22 +54,27 @@ def _corner_buttons(img, x0, y0):
         if area < 0.45 * bw * bh:
             continue                       # a ring or a letter, not a disc
         blobs.append((float(mids[i][0]), float(mids[i][1]), (bw + bh) / 2.0))
-    blobs.sort()
-    for i in range(len(blobs) - 2):
-        a, b, c = blobs[i:i + 3]
-        if a[0] > 0.30 * strip.shape[1] or a[1] > 0.75 * strip.shape[0]:
-            continue                       # not in the corner
-        sizes = [a[2], b[2], c[2]]
-        if max(sizes) > 1.5 * min(sizes):
-            continue
-        if max(abs(a[1] - b[1]), abs(b[1] - c[1])) > 0.6 * max(sizes):
-            continue                       # not in one row
-        one, two = b[0] - a[0], c[0] - b[0]
-        if one < max(sizes) or two < max(sizes):
-            continue                       # touching, so one shape not three
-        if abs(one - two) > 0.35 * max(one, two):
-            continue                       # not evenly spaced
-        return True
+    # THREE DISCS IN ONE ROW, and the row has to be picked out FIRST. A
+    # sliding triple over an x-sorted list is not the same question: the
+    # ribbon icon sitting a row below the buttons sorts BETWEEN them, so
+    # every triple that contains it fails "in one row" and the buttons are
+    # never tested as a group at all. Gather each blob's own row, then ask.
+    for seed in blobs:
+        row = sorted(b for b in blobs
+                     if abs(b[1] - seed[1]) <= 0.6 * max(b[2], seed[2]))
+        for i in range(len(row) - 2):
+            a, b, c = row[i:i + 3]
+            if a[0] > 0.30 * strip.shape[1] or a[1] > 0.75 * strip.shape[0]:
+                continue                   # not in the corner
+            sizes = [a[2], b[2], c[2]]
+            if max(sizes) > 1.5 * min(sizes):
+                continue
+            one, two = b[0] - a[0], c[0] - b[0]
+            if one < max(sizes) or two < max(sizes):
+                continue                   # touching, so one shape not three
+            if abs(one - two) > 0.35 * max(one, two):
+                continue                   # not evenly spaced
+            return True
     return False
 
 
