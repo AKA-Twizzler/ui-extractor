@@ -3920,7 +3920,7 @@ def note(records_path, diary_text=None):
         # `vault-demo` windows at 00:00:10, each with its own traffic lights
         # and title, where the screen had one. The law and the two
         # measurements it rests on live in `panes.fold_split_panes`.
-        if False and len(kept) > 1 and m0:
+        if len(kept) > 1 and m0:
             im = _frame_img(frame_of(m0))
             if im is not None:
                 kept = panes.fold_split_panes(im, kept)
@@ -5118,6 +5118,12 @@ def note(records_path, diary_text=None):
                 ox, ol, osh = keep[clash]
                 if len(sl.said_html() or ()) > len(ol.said_html() or ()):
                     keep[clash] = (stx, sl, shape)
+            if s["t0"] in ("00:00:10",):
+                sys.stderr.write("TRACE fw_here %s\n" % [[round(v) for v in r] for r in fw_here])
+                for stx, sl, shape in keep:
+                    sys.stderr.write("TRACE keep %-22s %-14s shape=%s\n"
+                                     % (str(stx.name)[:22], str(getattr(stx,'title','?'))[:14],
+                                        [round(v) for v in shape] if shape else None))
             subjects = keep
             for stx, sl, shape in subjects:
                 sl.rect = shape
