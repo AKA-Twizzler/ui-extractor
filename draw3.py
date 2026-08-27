@@ -4549,6 +4549,14 @@ def note(records_path, diary_text=None):
     def _convert_tree(st_, q, lists):
         """One tree part put back as the list it really is."""
         names = [row_name(t) for t, _h in q["model"].lines]
+        import sys as _s
+        if any("inbox" in re.sub(r"[^a-z]", "", str(x).lower()) for x in names):
+            print("STATE times=%r  parts:" % (getattr(st_, "times", None),), file=_s.stderr)
+            for _q in st_.parts:
+                _m = _q["model"]
+                _ls = [t for t, _h in getattr(_m, "lines", [])][:3] if hasattr(_m, "lines") else \
+                      [str((r.get("cells") or [""])[0]) for r in getattr(_m, "rows", [])][:3]
+                print("    %-6s slot=%s %r" % (_q["fam"], _q.get("slot"), _ls), file=_s.stderr)
         keys = {fold(flat(n)) for n in names if n}
         if len(keys) < 4:
             return
