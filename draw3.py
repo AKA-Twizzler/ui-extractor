@@ -1033,7 +1033,18 @@ class State:
         rect = group["rect"]
         if not any(mm is m for mm, _ in self.pieces):
             self.pieces.append((m, group))
-        for p in sorted(group["panes"], key=lambda p: (p["box"][0], p["box"][1])):
+        # READING ORDER: down a column, then across to the next. Sorting by
+        # x before y puts a pane a few pixels further right AFTER one below
+        # it, which is right for two panes standing side by side and wrong
+        # for two cut out of the same column -- measured, the note's own
+        # heading and its Properties row were read at the top of the pane
+        # and drawn at the BOTTOM of the note, because their slice sat a
+        # little further right than the prose below them. The window's own
+        # column bucket (`slot`, eighths of the screen) is what separates
+        # side-by-side from stacked, and it is already computed here.
+        def _read_order(q):
+            return (int(8 * q["box"][0] / max(1, W)), q["box"][1], q["box"][0])
+        for p in sorted(group["panes"], key=_read_order):
             if p.get("since") or p.get("same_as"):
                 continue
             k = p["kind"]
