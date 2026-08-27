@@ -1304,7 +1304,18 @@ class State:
             hit = None
             crumbs = [c for path in reversed(table.paths) for c in reversed(path)]
             for c in crumbs:
-                hit = next((t for t, _ in tops if same_text(t, c) or norm(t).startswith(norm(c))), None)
+                # ...AND THE OTHER WAY ROUND, WHICH IS THE COMMON ONE. Finder
+                # cuts a long folder name short IN ITS TITLE BAR, so the word
+                # read there OPENS the crumb rather than the crumb opening it:
+                # at 00:01:00 the bar reads `-Users-jaredrhodenizer-Documents-
+                # jarvis...` against the crumb `-Users-jaredrhodenizer-
+                # Documents-jarvis-demo`, and asking only whether the top word
+                # starts with the crumb found nothing, so the window fell back
+                # to the path's end and was titled `jaredrhodenizer`. Eight
+                # letters, so a short word cannot claim a long folder.
+                hit = next((t for t, _ in tops
+                            if same_text(t, c) or norm(t).startswith(norm(c))
+                            or (len(norm(t)) >= 8 and norm(c).startswith(norm(t)))), None)
                 if hit:
                     break
             if hit:
