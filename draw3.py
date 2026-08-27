@@ -5150,6 +5150,33 @@ def note(records_path, diary_text=None):
                 # window's own unit, so it lands there at any page width.
                 # The first block flows from the top pad as before; every
                 # later one is placed by its pane's measured top.
+                # WHERE THE WINDOW PUT ITS OWN COLUMNS, measured off this
+                # stretch's panes. The drawn window has two columns and the
+                # real one often has five, so taking only the TREE's share
+                # and giving the note everything left over overshoots: it
+                # made 00:04:10 worse, not better. What the frame states
+                # plainly is where the note's own pane BEGINS and how wide
+                # it is; the tree column runs up to that edge (tree plus the
+                # margin beside it, which is how it reads), and whatever
+                # lies beyond the note's pane is left blank, because the
+                # picture does not draw what stood there.
+                if shape and shape[2] > shape[0]:
+                    dl = dr = None
+                    for m_, g_ in getattr(stx, "pieces", ()):
+                        if m_["ts"] not in s["ts"]:
+                            continue
+                        for q_ in (g_.get("panes") or []):
+                            if q_.get("kind") != "an open document":
+                                continue
+                            b_ = q_.get("box")
+                            if not b_ or b_[2] - b_[0] < 0.25 * (shape[2] - shape[0]):
+                                continue      # a sliver, not the note's pane
+                            if dl is None or (b_[2] - b_[0]) > (dr - dl):
+                                dl, dr = b_[0], b_[2]
+                    if dl is not None and shape[0] <= dl < dr <= shape[2] + 4:
+                        w_ = float(shape[2] - shape[0])
+                        sl._doc_cols = (max(6, round(100.0 * (dl - shape[0]) / w_)),
+                                        max(10, round(100.0 * (dr - dl) / w_)))
                 sl._doc_blocks = []
                 d_ = sl.main_doc()
                 if d_ is not None and len(getattr(d_, "blocks", ())) > 1 and shape:
