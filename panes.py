@@ -566,15 +566,33 @@ def fold_split_panes(img, rects):
       the gutter    `_seam_drop`, above. 5.9 where one window was split; 14.1
                     to 31.2 at every real boundary in this video.
     """
-    out = sorted([float(v) for v in r[:4]] for r in rects)
-    h, w = img.shape[:2]
+    out = [[float(v) for v in r[:4]] for r in rects]
     keep = [True] * len(out)
-    for i, a in enumerate(out):
-        if not keep[i]:
+    for i, j in split_pairs(img, out):
+        a, b = out[i], out[j]
+        a[1], a[2], a[3] = min(a[1], b[1]), max(a[2], b[2]), max(a[3], b[3])
+        keep[j] = False
+    return [r for r, k in zip(out, keep) if k]
+
+
+def split_pairs(img, rects):
+    """Which of these rectangles are the two halves of ONE window.
+
+    Returns (whole, pane) index pairs against the list as given, so a caller
+    holding more than a rectangle - a window's panes, its name - can fold
+    what it holds the same way. The law is `fold_split_panes`, above; this
+    is where it is applied.
+    """
+    boxes = sorted(((i, [float(v) for v in r[:4]]) for i, r in enumerate(rects)),
+                   key=lambda ir: ir[1][0])
+    h, w = img.shape[:2]
+    gone, pairs = set(), []
+    for n, (i, a) in enumerate(boxes):
+        if i in gone:
             continue
-        for j in range(i + 1, len(out)):
-            b = out[j]
-            if not keep[j] or abs(b[0] - a[2]) > 0.01 * w:
+        a = list(a)
+        for j, b in boxes[n + 1:]:
+            if j in gone or abs(b[0] - a[2]) > 0.01 * w:
                 continue
             # A pane runs the window's own height: same top, same foot.
             if abs(b[1] - a[1]) > 0.03 * h or abs(b[3] - a[3]) > 0.05 * h:
@@ -586,5 +604,6 @@ def fold_split_panes(img, rects):
             if drop is None or drop >= SPLIT_GUTTER:
                 continue
             a[1], a[2], a[3] = min(a[1], b[1]), max(a[2], b[2]), max(a[3], b[3])
-            keep[j] = False
-    return [r for r, k in zip(out, keep) if k]
+            gone.add(j)
+            pairs.append((i, j))
+    return pairs
