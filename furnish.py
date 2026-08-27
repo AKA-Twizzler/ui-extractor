@@ -699,7 +699,7 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
             st_.shape = None
         thin = (box[2] - box[0] < 0.12 * W or box[3] - box[1] < 0.10 * H)
         if html and not thin:
-            out.append(scaled(html, box, W, kz=kz, cls="sn-slot sn-behind",
+            out.append(scaled(html, box, W, kz=kz, cls="sn-slot sn-back",
                               extra=f'{slot_style(box, W, H, bar=barred)};z-index:2',
                               step=getattr(st_, "_row_step", 0.0)))
             name_over(box, tag, cls)
