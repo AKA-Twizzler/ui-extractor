@@ -78,6 +78,24 @@ def _corner_buttons(img, x0, y0):
     return False
 
 
+def _whole_side(lines, pos, a, b, near=3.0):
+    """One drawn edge, gathered from every segment of itself.
+
+    An edge two or three pixels wide comes back as several runs at
+    neighbouring positions, and each run may be broken in a different
+    place. Asked about any one of them, "where does this side begin" gets
+    a different answer each time -- and the answer matters, because it is
+    what tells a window's own TOP-LEFT CORNER from a T-junction where its
+    furniture meets its left edge. A window's side stops at its top; the
+    browser's left edge runs on ABOVE the line under its tab strip, which
+    is how that divider came back as a second window."""
+    lo, hi = a, b
+    for p, la, lb in lines:
+        if abs(p - pos) <= near and min(lb, b) - max(la, a) > 0:
+            lo, hi = min(lo, la), max(hi, lb)
+    return lo, hi
+
+
 def _covered(x, y, blocks):
     for bx0, by0, bx1, by1 in blocks:
         if bx0 - 1 <= x <= bx1 + 1 and by0 - 1 <= y <= by1 + 1:
@@ -85,7 +103,7 @@ def _covered(x, y, blocks):
     return None
 
 
-def _run_out(lines, pos, start, limit, blocks, across, tol):
+def _run_out(lines, pos, start, limit, blocks, across, tol, least):
     """How far one drawn edge reaches, counting what merely COVERS it.
 
     An edge stops for two different reasons and they mean opposite things.
@@ -112,7 +130,11 @@ def _run_out(lines, pos, start, limit, blocks, across, tol):
         if cov is None:
             return float(end)
         end = (cov[2] if across else cov[3])     # step over the cover
-        if end >= limit - tol:
+        # WHAT IS LEFT MUST BE BIG ENOUGH TO SHOW AN EDGE. Past the cover
+        # there may be less frame left than the shortest run this instrument
+        # can see, and a strip that cannot hold an edge cannot show one
+        # either way. The boundary stands, because nothing else can.
+        if end >= limit - max(tol, least):
             return float(limit)
 
 
@@ -142,13 +164,23 @@ def big_windows(path, least_frac=0.20, img=None):
     if img is None:
         img = cv2.imread(path) if isinstance(path, str) else path
 
+    least_v, least_h = shapes.RUN * h, shapes.RUN * w
     out = []
     for x, ya, yb in verts:
+        side_top, side_bot = _whole_side(verts, x, ya, yb)
         for y, xa, xb in hors:
-            if abs(y - ya) > tol or abs(x - xa) > tol:
-                continue                    # the two edges do not meet
-            x1 = _run_out(hors, y, xb, w - 1, blocks, True, tol)
-            y1 = _run_out(verts, x, yb, h - 1, blocks, False, tol)
+            head_left, head_right = _whole_side(hors, y, xa, xb)
+            # A WINDOW'S TOP-LEFT CORNER IS WHERE ITS SIDE BEGINS, not
+            # merely somewhere its side is crossed. Asking only whether the
+            # two edges touch takes every divider inside the window too: the
+            # line under the browser's tab strip meets its left edge, and
+            # the browser's own back/forward/reload buttons sit three in a
+            # row under it, so it passed the corner-buttons test as well and
+            # came back as a second window inside the first.
+            if abs(y - side_top) > tol or abs(x - head_left) > tol:
+                continue
+            x1 = _run_out(hors, y, head_right, w, blocks, True, tol, least_h)
+            y1 = _run_out(verts, x, side_bot, h, blocks, False, tol, least_v)
             if x1 < w - tol and y1 < h - tol:
                 continue                    # not cut off: `shapes` owns it
             if (x1 - x) < least_frac * w or (y1 - y) < least_frac * h:
