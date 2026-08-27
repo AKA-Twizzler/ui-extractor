@@ -183,7 +183,8 @@ def main():
     if len(args) < 2:
         raise SystemExit(__doc__)
     note, frames = args[0], args[1]
-    out = args[2] if len(args) > 2 else os.path.join(os.path.dirname(os.path.abspath(__file__)), "_compare")
+    out = os.path.abspath(args[2] if len(args) > 2
+                          else os.path.join(os.path.dirname(os.path.abspath(__file__)), "_compare"))
     css = open(CSS_PATH, encoding="utf-8").read()
     for d in ("cmp", "png"):
         os.makedirs(os.path.join(out, d), exist_ok=True)
