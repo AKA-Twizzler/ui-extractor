@@ -3155,7 +3155,13 @@ def desktop_bar(moments):
                 strip = [it for it in strip if abs((it["box"][1] + it["box"][3]) / 2 - cy0) <= 0.6 * h0]
             here = words_at.setdefault(m["ts"], [])
             for it in sorted(strip, key=lambda it: it["box"][0]):
-                if old.CLOCK.match(it["text"]) or len(it["text"]) > 30:
+                if old.CLOCK.match(it["text"]):
+                    continue
+                # a long reading is a sentence, not a bar - unless it is
+                # the whole bar read as one line: several short words, the
+                # way one engine reads "File Edit View Go Window Help"
+                ws_ = [w for w in re.split(r"\s+", it["text"].strip()) if re.match(r"^[A-Za-z]", w)]
+                if len(it["text"]) > 30 and not (len(ws_) >= 3 and all(len(w) <= 12 for w in ws_)):
                     continue
                 # two menu names read as one run of letters are two menus
                 for w in re.split(r"\s+", it["text"].strip()):
