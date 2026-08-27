@@ -3811,25 +3811,17 @@ def note(records_path, diary_text=None):
         # frame closed is furniture inside a window: a sidebar, a card. One
         # such rectangle, standing over a Finder's sidebar, was drawn as a
         # second window named "Finder" on top of the Finder it was part of.
+        # THE WINDOWS THE SCREEN CUTS OFF ARE NOT FOLDED IN HERE, and that
+        # is deliberate. `frame_bigwins` is kept a separate list because
+        # this one decides several other things -- whether a stretch has any
+        # measured window at all, which governs how a maximised front window
+        # gets its box -- and adding to it silently changed all of them:
+        # measured, 00:04:00 fell 0.34 to 0.17 and two stretches lost their
+        # picture entirely. A window `bigwin` measures is used where it is
+        # asked for, by name.
         least = 0.09 * Wf * Hf
-        out = [[float(v) for v in r] for r in got
-               if (r[2] - r[0]) * (r[3] - r[1]) >= least]
-        # AND THE WINDOWS THE SCREEN CUTS OFF. ONE HOME for "what windows
-        # are on this frame", used by the reader, the drawing and the
-        # checker -- the law of run 4. `shapes` closes a window from two
-        # sides plus a top and a foot and offers the frame's edge as a
-        # stand-in SIDE but never as a stand-in FOOT, so a window running
-        # off the bottom is never in this list; the browser and the
-        # Obsidian editor are both that shape, which is why the largest
-        # windows on the screen were drawn as empty boxes.
-        for b in frame_bigwins(s):
-            if (b[2] - b[0]) * (b[3] - b[1]) < least:
-                continue
-            if any(furnish._within(b, r) > 0.7 and furnish._within(r, b) > 0.7
-                   for r in out):
-                continue                  # `shapes` already has this one
-            out.append([float(v) for v in b])
-        _frame_wins[t0] = out
+        _frame_wins[t0] = [[float(v) for v in r] for r in got
+                           if (r[2] - r[0]) * (r[3] - r[1]) >= least]
         return _frame_wins[t0]
 
     SIDE_FLAT = {norm(n) for n in draw2.SIDE_NAMES}
@@ -4921,7 +4913,11 @@ def note(records_path, diary_text=None):
                 # puts Obsidian's text on the screen instead of a label.
                 # Only a state whose OWN box is already big may claim one: a
                 # Finder standing inside a maximised window must not.
-                if (id(st) not in settled and shape
+                _would_skip = (st.name == "The Obsidian window" and id(st) not in settled
+                               and (frame_windows(s)
+                                    or any(o.name != "The Obsidian window" and o.has_content()
+                                           for o in base + extra)))
+                if (_would_skip and shape
                         and shape[2] - shape[0] >= 0.5 * Wf
                         and shape[3] - shape[1] >= 0.3 * Hf):
                     cands = [b for b in frame_bigwins(s)
