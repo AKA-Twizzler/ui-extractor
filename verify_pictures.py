@@ -157,6 +157,37 @@ def check_picture(stamp, stage, frame_path, fav_boxes=()):
             elif not covered and not hit_filled:
                 fails.append("WINDOW NOT FILLED: a top-layer window at %s is only outlined or swallowed by a screen-wide fill; a window nothing covers must be filled in its own right" % where)
 
+        # 1c) EVERY WINDOW ITS OWN BOX, AT ITS OWN SIZE. "Something is drawn
+        #     over this window" is a weaker question than it sounds: overlap
+        #     is scored against the SMALLER box, so a thin strip lying across
+        #     a window answers yes for it, and one box lying across two
+        #     windows answers yes for both. Measured on the delivered note:
+        #     the browser stands 97% of the screen tall and is drawn as a 6%
+        #     strip, and the check above passed it. So each measured window
+        #     is matched to a box of its OWN -- best agreement first, each
+        #     box spent once -- and that box has to be the window's size.
+        order = sorted(((_iou(fboxes[i], d), i, j)
+                        for i in range(len(fw)) for j, d in enumerate(drawn)),
+                       reverse=True)
+        took_w, took_d, best = set(), set(), {}
+        for score, i, j in order:
+            if i in took_w or j in took_d:
+                continue
+            took_w.add(i); took_d.add(j); best[i] = (score, drawn[j])
+        for i in range(len(fw)):
+            score, d = best.get(i, (0.0, None))
+            if score >= AGREE:
+                continue
+            box = fboxes[i]
+            where = "%.0f-%.0f%% across, %.0f-%.0f%% down" % (
+                box[0]*100, box[2]*100, box[1]*100, box[3]*100)
+            drawn_as = ("nothing of its own" if d is None else
+                        "%.0f-%.0f%% across, %.0f-%.0f%% down" % (
+                            d[0]*100, d[2]*100, d[1]*100, d[3]*100))
+            fails.append("BOX OFF ITS WINDOW: the frame's window at %s has no box "
+                         "of its own that agrees with it -- nearest is %s (%.2f)"
+                         % (where, drawn_as, score))
+
     # 1b) A FILLED WINDOW SHOWED ITS SIDEBAR, SO THE PICTURE MUST TOO. The
     #     favorites sidebar (Recents, Shared, Applications, ...) is a Finder
     #     window's own furniture; the reader reads it, the window's card shows
