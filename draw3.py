@@ -754,42 +754,6 @@ def bar_crumbs(pane):
     return []
 
 
-def bar_across(group, m):
-    """A path bar the reader cut into several panes, read back as one.
-
-    `bar_crumbs` asks ONE pane for the whole bar. At 00:00:50 the strip under
-    a Finder came back as four panes with the bar's own words cut across them
-    - `Maci` | `ntoshHD>` | `Users` | `jaredrhode` | `nizer>` - so no pane
-    held even two crumbs and the window got no path. The words of one ROW,
-    read left to right and run together, are that row's bar; a chevron the
-    reader dropped only glues two crumbs into one rather than losing them.
-
-    LEFT TO RIGHT AND NEVER BACKWARDS. Gathered from every pane at that
-    height, two panes' worth of the same bar ran together and the crumbs came
-    out doubled. A word that begins left of where the last one ended is a
-    second reading of ground already covered, not the next crumb along.
-    """
-    H = (m.get("size") or [1920, 1080])[1]
-    its = [it for p in group.get("panes") or [] for it in draw2.items_of(p)
-           if str(it.get("text") or "").strip()]
-    best = []
-    for seed in its:
-        row = sorted((it["box"][0], it["box"][2], str(it["text"]))
-                     for it in its
-                     if abs(it["box"][1] - seed["box"][1]) <= 0.01 * H)
-        kept, reach = [], None
-        for x0, x1, txt in row:
-            if reach is not None and x0 < reach - 8:
-                continue
-            kept.append(txt)
-            reach = x1
-        parts = [q.strip() for q in re.split(r"[>\u203a]", "".join(kept)) if q.strip()]
-        if len(parts) >= 3 and norm(parts[0]) == norm("Macintosh HD") \
-                and len(parts) > len(best):
-            best = parts
-    return best
-
-
 GLUED_DATE = re.compile(
     r"[a-z]?((?:Today|Yesterday|[A-Z][a-z]{2}\s?\d{1,2},?\s?\d{4})"
     r"\s?(?:at)?\s?\d{1,2}:\d{2}\s?[AaPp]\.?[Mm])")
@@ -1056,9 +1020,6 @@ class State:
             if len(c) > len(bar):
                 bar = c
 
-        across = bar_across(group, m)
-        if len(across) > len(bar):
-            bar = across
         if bar:
             t_ = self.main_table()
             if t_ is not None and len(bar) > len(getattr(t_, "path", None) or []):
@@ -1341,19 +1302,6 @@ class State:
         paths naming the same folder; a note is the same note by its
         title; a tree alone by its first rows; words by their likeness."""
         if self.name != other.name:
-            return False
-        # A TITLE READ OFF THE WINDOW'S OWN BAR OUTRANKS ONE WORKED OUT FROM
-        # THE PATH, and where the two disagree they are two different views,
-        # not one window. A Finder's path bar ends at the folder shown - but
-        # it also ends at the row SELECTED in it, and the two cases read the
-        # same. At 00:00:50 the window shows `.claude` with `projects`
-        # selected; at 00:01:10 it shows `projects` itself, and its own title
-        # bar says so. Both paths read `.claude > projects`, so these merged
-        # into one state and the picture at 00:01:10 drew `.claude` and its
-        # six files where the screen had one row of `projects`.
-        if self.title and other.title and not same_text(self.title, other.title) \
-                and (not getattr(self, "title_from_path", False)
-                     or not getattr(other, "title_from_path", False)):
             return False
         ta, tb = self.main_table(), other.main_table()
         if ta and tb:
@@ -4931,57 +4879,6 @@ def note(records_path, diary_text=None):
                     return 0.0
                 b = onto(T0, hb)
                 return furnish._within(r_, b) * furnish._within(b, r_)
-            def _telling(words):
-                """The words that say WHICH folder this is.
-
-                A Finder's headings and the words in its Kind column stand in
-                every Finder alike - Name, Date Modified, Size, Kind, Folder,
-                Document - so counting them as agreement let a remembered
-                window match a rectangle showing something else entirely.
-                What tells one folder from another is its own rows.
-                """
-                out_ = set()
-                for w in words:
-                    n_ = norm(w)
-                    if len(n_) < 4 or w in FINDER_WORDS:
-                        continue
-                    if re.match(r"^(folder|document|jsonl?|logfile|application)$", n_):
-                        continue
-                    if GLUED_DATE.search(w) or GLUED_SIZE.search(w):
-                        continue
-                    out_.add(n_)
-                return out_
-
-            def _contradicts(st_, r_):
-                """What the reader read inside this rectangle NOW, set against
-                what this window remembers showing.
-
-                A carried box says where a window USED to be and what it
-                showed THEN. At 00:01:10 the screen shows a Finder holding one
-                row of the `projects` folder, and the rectangle went to a
-                remembered state of the `.claude` folder, which drew six file
-                names the screen was not showing.
-                """
-                m0_ = next((mm for mm in moments if mm["ts"] == s["t0"]), None)
-                if not m0_:
-                    return False
-                read_ = []
-                for p_ in m0_.get("panes") or []:
-                    for it in draw2.items_of(p_):
-                        b_ = it.get("box")
-                        if b_ and it["text"].strip() and furnish._within(b_, r_) >= 0.8:
-                            read_.append(it["text"])
-                here = _telling(read_)
-                if len(here) < 3:
-                    return False              # too little read to contradict
-                t_ = st_.main_table()
-                mine = set()
-                if t_:
-                    mine |= _telling([c for row in t_.rows for c in row["cells"] if c])
-                    mine |= _telling(list(t_.header or ()) + list(t_.path or ()))
-                hit = sum(1 for w in here if any(w in k or k in w for k in mine))
-                return hit * 3 < len(here)
-
             for r in fw_here:
                 if any(o is not r and furnish._within(r, o) > 0.5 for o in fw_here):
                     continue                    # this window stands behind another
@@ -4994,8 +4891,6 @@ def note(records_path, diary_text=None):
                     sc = _lands(own, r)
                     if sc > best:
                         pick, best = own, sc
-                if pick is not None and _contradicts(pick, r):
-                    pick = None
                 if pick is not None:
                     extra.append(pick)
                     # The rectangle the frame MEASURED for this window is the
