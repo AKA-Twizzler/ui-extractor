@@ -680,9 +680,32 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
                 break
         else:
             merged.append([box, tag, cls, st_])
-    for box, tag, cls in merged:
+    behind_boxes = []          # boxes filled by a behind-window this pass
+    for box, tag, cls, st_ in merged:
         shown.append(box)
-        out.append(outline(box, tag, cls))
+        # A WINDOW SHOWN BEHIND IS DRAWN WITH ITS CAUGHT CONTENT, BEHIND -
+        # Tristan's rule, not an empty outline and not its text scattered
+        # loose. It is the same window as its card, drawn faint and low so
+        # the front windows sit over it and reveal only what the video
+        # revealed. A window with nothing drawable, or too small to hold a
+        # reading, stays an outline.
+        html = None
+        if st_ is not None and "sn-away" not in cls:
+            st_.shape = box
+            try:
+                html = window(st_, behind=True)
+            except Exception:
+                html = None
+            st_.shape = None
+        thin = (box[2] - box[0] < 0.12 * W or box[3] - box[1] < 0.10 * H)
+        if html and not thin:
+            out.append(scaled(html, box, W, kz=kz, cls="sn-slot sn-behind",
+                              extra=f'{slot_style(box, W, H, bar=barred)};z-index:2',
+                              step=getattr(st_, "_row_step", 0.0)))
+            name_over(box, tag, cls)
+            behind_boxes.append(box)
+        else:
+            out.append(outline(box, tag, cls))
 
     # the windows this stretch is about: the top layer, drawn with its real
     # content at a size that reads, cut off by the edges of the box it
