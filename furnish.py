@@ -590,7 +590,7 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
     # behind is drawn because it was SEEN, and whether it was seen depends
     # on what stood over it.
     shown = []
-    for tag, box in behind_cards:
+    for tag, box, _st in behind_cards:
         drawn.append(clip_box(box, W, H, bar=barred))
     fronts = []
     for st, rect in subjects:
