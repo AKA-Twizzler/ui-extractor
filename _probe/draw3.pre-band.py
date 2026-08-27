@@ -4581,20 +4581,7 @@ def note(records_path, diary_text=None):
                 cells[0] = src["cells"][0]
             tab.rows.append({"cells": cells,
                              "italic": [False] * len(cells),
-                             # NOT the band. A file's date and kind are the
-                             # same at every moment, so taking them from the
-                             # moment this window was read whole is sound -
-                             # but WHICH ROW IS SELECTED is the one thing
-                             # about a list that changes from moment to
-                             # moment. Carried across, it drew `03 Company B
-                             # (Landscape Company)` green at 00:01:20, where
-                             # the reader records no band at all; the band it
-                             # was wearing belongs to 00:02:20. The same
-                             # state-against-moment distinction as the path
-                             # bar, and no measure can catch this one, since
-                             # the green lands on rows the frame drew text
-                             # across.
-                             "band": None,
+                             "band": (src or {}).get("band"),
                              "icon": (src or {}).get("icon", "green")})
         q["fam"] = "table"
         q["model"] = tab
