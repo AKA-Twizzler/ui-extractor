@@ -508,9 +508,31 @@ def _alike(a, b):
     return difflib.SequenceMatcher(None, fa, fb, autojunk=False).ratio() >= 0.7
 
 
+def _mend_edge_head(items):
+    """A column heading the screen's own edge cut short.
+
+    A window running off the left of the screen shows its columns without
+    their first letters: at 00:03:00 "Size" came back as "ize", standing at
+    x=0. A fragment that is the tail of exactly one of Finder's headings AND
+    begins hard against the frame's edge is that heading. Nothing looser: a
+    word that merely reads like a tail, anywhere else on the pane, is left
+    alone, because a wrong heading invents a column.
+    """
+    out = []
+    for it in items:
+        t = str(it.get("text", "")).strip()
+        if it["box"][0] <= 1 and 2 <= len(t) <= 12:
+            hits = [h for h in FINDER_HEADS if h != t and h.endswith(t)]
+            if len(hits) == 1:
+                it = dict(it, text=hits[0])
+        out.append(it)
+    return out
+
+
 def table_from_items(items):
     if not items:
         return None
+    items = _mend_edge_head(items)
     rows = reading_order(items, lambda it: it["box"])
     head_row = None
     for r in rows:
@@ -798,22 +820,30 @@ def _finder_sizes(pane):
     return n >= 3
 
 
+def relabel_cut_list(pane):
+    """A Finder list the SCREEN cut off down its own left edge is a list.
+
+    Read with its Name column and the head of its headings off the side of
+    the frame, such a pane is not recognisable as a list of columns, so it
+    became loose words - and a window whose only content is loose words is
+    taken for a window behind, showing through, and drawn as an outline. Its
+    rectangle then stood unclaimed and the picture filled it from a
+    remembered Finder that had once shown another folder: six file names the
+    screen never showed. Two things must both hold before the label changes:
+    Finder's own Size column runs down it, and the words can actually be
+    rebuilt into a table from where they sit.
+    """
+    if pane["kind"] in ("a list of columns", "a file tree", "an open document",
+                        "a terminal", "a chat log"):
+        return
+    if not _finder_sizes(pane):
+        return
+    if table_from_loose(pane):
+        pane["kind"] = "a list of columns"
+
+
 def block_of(pane, window_rect):
     k = pane["kind"]
-    # A WINDOW RUNNING OFF THE EDGE OF THE SCREEN STILL SHOWS A LIST. At
-    # 00:03:00 a Finder stood cut off down the left edge with only its Size
-    # and Kind columns in view; the reader could not call that a list of
-    # columns, so it became loose words, the window group had no content at
-    # all, no state was built - and the picture filled the rectangle from a
-    # remembered Finder that had once shown the `.claude` folder. Six file
-    # names the screen never showed. A run of byte counts is Finder's Size
-    # column wherever it stands, which is the same test that NAMES the
-    # window Finder a few lines further down.
-    if k not in ("a list of columns", "a file tree", "an open document",
-                 "a terminal", "a chat log") and _finder_sizes(pane):
-        got = block_list(pane)
-        if got and got[0]:
-            return got
     if k == "a list of columns":
         return block_list(pane)
     if k == "a file tree":
@@ -1002,6 +1032,8 @@ def _fold_split(m, groups):
 def window_groups(m):
     """The windows of a moment: (name, rect, panes). Panes on no found
     window form one group of their own."""
+    for _p in m.get("panes") or []:
+        relabel_cut_list(_p)
     wins = m.get("windows") or []
     groups = []
     for pos, e in enumerate(wins):
