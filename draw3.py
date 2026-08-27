@@ -3091,6 +3091,35 @@ def bare(w):
     return w[3:-4] if w.startswith("<i>") else w
 
 
+def doc_rows_as_items(p):
+    """A document pane's rows as items, in frame pixels.
+
+    THE MENU BAR CAN LAND IN A DOCUMENT. When the strip along the top of
+    the screen is cut into one pane with the note below it, the note
+    reader takes the whole pane and the bar becomes the document's first
+    line - and a document's rows are not items, so the bar test and the
+    bar builder never saw the bar at all while the same words reached the
+    picture as loose ink. The rows are measured on the note reader's own
+    enlargement of the pane, a whole number of times the pane's width, so
+    the enlargement is read off how far the rows reach."""
+    d = p.get("data") or {}
+    rows = [r for r in (d.get("rows") or []) if r.get("x0") is not None and (r.get("text") or "").strip()]
+    if not rows or p.get("kind") != "an open document":
+        return []
+    ox, oy = p["box"][0], p["box"][1]
+    pw = max(1.0, float(p["box"][2] - ox))
+    reach = max(float(r["x1"]) for r in rows)
+    up = next((s for s in (1.0, 2.0, 3.0, 6.0, 9.0) if reach <= 1.05 * s * pw), 9.0)
+    out = []
+    for r in rows:
+        t = re.sub(r"\s+", " ", str(r.get("text") or "")).strip()
+        if not t:
+            continue
+        out.append({"text": t, "ok": True, "role": "line",
+                    "box": [ox + r["x0"] / up, oy + r["y0"] / up, ox + r["x1"] / up, oy + r["y1"] / up]})
+    return out
+
+
 def desktop_bar(moments):
     """The menu bar as it stood at each moment -- the program at the front
     changes it -- and the clock reading, which stands until it is read
