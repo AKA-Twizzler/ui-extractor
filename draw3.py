@@ -4901,9 +4901,31 @@ def note(records_path, diary_text=None):
                                 len(key) >= 12 and any(
                                     sk in key for sk in keys)):
                             long_hits.append(b)
-                for b in long_hits:
-                    box = [min(box[0], b[0]), min(box[1], b[1]),
-                           max(box[2], b[2]), max(box[3], b[3])]
+                if hb is None:
+                    # A WINDOW WITH NO PLACE OF ITS OWN THIS STRETCH IS STILL
+                    # ON THE SCREEN WHERE ITS OWN WORDS ARE. Obsidian stood
+                    # behind two Finder windows for the first four minutes
+                    # of a video, its tree down the left and its note down
+                    # the right, and because no moment had measured its
+                    # edges it was never drawn at all: the picture showed
+                    # two Finders floating on black with the note's words
+                    # scattered loose around them. Its words were read, and
+                    # they were read from one side of the screen to the
+                    # other - which is where a window that fills the screen
+                    # is. A window whose words reach across half the screen
+                    # both ways fills it; a smaller spread is the window's
+                    # own reach, and the frame's rectangles may tighten it.
+                    if len(long_hits) < 2:
+                        continue
+                    box = [min(b[0] for b in long_hits), min(b[1] for b in long_hits),
+                           max(b[2] for b in long_hits), max(b[3] for b in long_hits)]
+                    if box[2] - box[0] >= 0.5 * Wf and box[3] - box[1] >= 0.5 * Hf:
+                        box = [0.0, 0.0, float(Wf), float(Hf)]
+                else:
+                    box = onto(T, hb)
+                    for b in long_hits:
+                        box = [min(box[0], b[0]), min(box[1], b[1]),
+                               max(box[2], b[2]), max(box[3], b[3])]
                 vw = min(box[2], Wf) - max(box[0], 0.0)
                 vh = min(box[3], Hf) - max(box[1], 0.0)
                 if vw < 0.04 * Wf or vh < 0.04 * Hf:
