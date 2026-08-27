@@ -508,6 +508,11 @@ def _alike(a, b):
     return difflib.SequenceMatcher(None, fa, fb, autojunk=False).ratio() >= 0.7
 
 
+def _edge_head_mended(items):
+    """Whether a heading had to be recovered from the frame's own edge."""
+    return any(a["text"] != b["text"] for a, b in zip(items, _mend_edge_head(items)))
+
+
 def _mend_edge_head(items):
     """A column heading the screen's own edge cut short.
 
@@ -836,16 +841,16 @@ def cut_list(pane):
     if pane["kind"] in ("a list of columns", "a file tree", "an open document",
                         "a terminal", "a chat log"):
         return None
-    # AND THE SCREEN MUST ACTUALLY HAVE CUT IT. Without this the rebuild
-    # fired on any pane with three byte counts down it anywhere in the
-    # video, and it wrecked the pictures it had no business touching:
-    # 00:01:20 fell 0.61 to 0.16. The fault being cured is a window running
-    # off the LEFT edge of the frame with its Name column and the heads of
-    # its headings outside the screen, so the pane begins hard against that
-    # edge or this is some other pane.
-    if pane["box"][0] > 1:
-        return None
+    # AND THE SCREEN MUST ACTUALLY HAVE CUT IT. Standing at the frame's
+    # edge is not enough - a window filling the screen does that too, and
+    # rebuilding those wrecked the pictures it had no business touching
+    # (00:00:00 fell 0.58 to 0.20 on covered). The tell is narrower and it
+    # is the fault itself: a COLUMN HEADING that had to be recovered from
+    # the edge, because its first letters are outside the screen. Where
+    # nothing needed mending, nothing was cut.
     if not _finder_sizes(pane):
+        return None
+    if not _edge_head_mended(items_of(pane)):
         return None
     return table_from_loose(pane)
 
