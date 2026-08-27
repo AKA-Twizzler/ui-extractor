@@ -4880,9 +4880,12 @@ def note(records_path, diary_text=None):
                        if not any(furnish._within(r, c) > 0.6
                                   or furnish._within(c, r) > 0.6 for c in held)]
             for own in states:
-                if own in sub_states or id(own) in carded or T is None:
+                if own in sub_states or id(own) in carded:
                     continue
-                hb = home_at(own, s["t0"])
+                # a carried place needs the map between moments; a window
+                # placed by its own words this stretch does not, so a stretch
+                # with no map still draws what its own frame shows
+                hb = home_at(own, s["t0"]) if T is not None else None
                 # a long line of its own text read this stretch places the
                 # window more surely than any carried box
                 keys = own_words.get(id(own)) or set()
