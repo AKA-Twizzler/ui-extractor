@@ -592,6 +592,22 @@ def deskbar(bar_words, clock):
     return f'<div class="sn-deskbar">{left}{right}</div>'
 
 
+def _glue(parts):
+    """Pieces of one line put back together: a piece that begins mid-word is
+    the tail of the piece before it. The address bar comes back as "AskGod"
+    and "gle or type a URL" when the reader's cut falls inside a word."""
+    out = []
+    for t in parts:
+        t = t.strip()
+        if not t:
+            continue
+        if out and (t[:1].islower() or out[-1][-1:].islower() and len(t) < 4):
+            out[-1] = out[-1] + t
+        else:
+            out.append(t)
+    return " ".join(out)
+
+
 def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
                 ghosts=(), camera=None, sure=True, kz=1.0, ink=(), chrome=(),
                 chrome_step=0.0):
@@ -847,14 +863,21 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
             bits.append('<div class="sn-toolbar sn-address">'
                         '<span class="sn-btn">\u2039</span><span class="sn-btn">\u203a</span>'
                         '<span class="sn-btn">\u21bb</span>'
-                        + '<span class="sn-urlbar">' + esc(" ".join(addr_)) + "</span>"
+                        + '<span class="sn-urlbar">' + esc(_glue(addr_)) + "</span>"
                         + "".join('<span class="sn-btn sn-right">%s</span>' % esc(t)
                                   for t in right_ if "emini" not in t) + "</div>")
         bits.append("</div></div>")
         box = clip_box(cbox_, W, H, bar=barred)
+        # POSITION IT EXPLICITLY. `sn-slot` and `sn-ghost` are placed by the
+        # style sheet; `sn-behind` is a new class the sheet has never heard
+        # of, so left/top/width/height did nothing at all and the whole
+        # strip flowed to the top of the picture, across the desktop bar.
+        # A picture must not depend on a snippet that has not caught up.
         out.append(scaled("".join(bits), box, W, kz=kz, cls="sn-behind",
                           step=chrome_step,
-                          extra=f'{slot_style(box, W, H, bar=barred)};z-index:2'))
+                          extra=("position:absolute;overflow:hidden;"
+                                 + slot_style(box, W, H, bar=barred)
+                                 + ";z-index:2")))
     if camera:
         cbox = camera[0] if isinstance(camera, (tuple, list)) else camera
         out.append(f'<div class="sn-camera" style="{slot_style(cbox, W, H, bar=barred)}">'
