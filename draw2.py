@@ -787,8 +787,33 @@ def block_loose(pane, window_rect):
     return words_line(items), doubts
 
 
+def _finder_sizes(pane):
+    """A run of byte counts down one column: Finder's Size column, still
+    recognisable when the headings are off the side of the screen."""
+    n = 0
+    for it in items_of(pane):
+        t = str(it.get("text", "")).replace(" ", "")
+        if re.match(r"^\d+(\.\d+)?(bytes?|KB|MB|GB|TB)$", t, re.I):
+            n += 1
+    return n >= 3
+
+
 def block_of(pane, window_rect):
     k = pane["kind"]
+    # A WINDOW RUNNING OFF THE EDGE OF THE SCREEN STILL SHOWS A LIST. At
+    # 00:03:00 a Finder stood cut off down the left edge with only its Size
+    # and Kind columns in view; the reader could not call that a list of
+    # columns, so it became loose words, the window group had no content at
+    # all, no state was built - and the picture filled the rectangle from a
+    # remembered Finder that had once shown the `.claude` folder. Six file
+    # names the screen never showed. A run of byte counts is Finder's Size
+    # column wherever it stands, which is the same test that NAMES the
+    # window Finder a few lines further down.
+    if k not in ("a list of columns", "a file tree", "an open document",
+                 "a terminal", "a chat log") and _finder_sizes(pane):
+        got = block_list(pane)
+        if got and got[0]:
+            return got
     if k == "a list of columns":
         return block_list(pane)
     if k == "a file tree":
