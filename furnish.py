@@ -100,14 +100,34 @@ def finder(st):
     # nothing is invented: no dates, no sizes, no kinds, only what was read.
     # The favorites are kept out of it, since those are the sidebar.
     if not rows:
-        tr = st.tree()
-        names = []
-        for t_, _ in (tr.lines if tr else ()):
-            nm = t_.strip("\u2502 \u02c3\u02c5\u25b8\u25be").strip()
-            if nm and norm(nm) not in SIDE_FLAT:
-                names.append(nm)
-        if len(names) >= 3:
-            rows = [{"cells": [nm], "italic": [False]} for nm in names]
+        # NOT `st.tree()`, WHICH IS THE LARGEST AND CAN BE THE SIDEBAR. Here
+        # both panes came back as trees with ten lines each and the larger
+        # was the favorites, so the list drawn would have been Recents,
+        # Shared, Applications... The list is the tree whose lines are NOT
+        # the fixed favorites, and where two qualify it is the rightmost -
+        # a Finder's files stand to the right of its sidebar.
+        def _clean(model):
+            out = []
+            for t_, _ in (model.lines if model else ()):
+                nm = t_.strip("\u2502 \u02c3\u02c5\u25b8\u25be").strip()
+                if nm:
+                    out.append(nm)
+            return out
+        best, best_x = None, None
+        for q in st.parts:
+            if q["fam"] != "tree":
+                continue
+            got = _clean(q["model"])
+            if not got:
+                continue
+            side_like = sum(1 for nm in got if norm(nm) in SIDE_FLAT)
+            if side_like * 2 >= len(got):
+                continue                      # this one is the favorites
+            x0 = q["x0"] if q["x0"] is not None else -1
+            if best is None or x0 > best_x:
+                best, best_x = got, x0
+        if best and len(best) >= 3:
+            rows = [{"cells": [nm], "italic": [False]} for nm in best]
     # A Finder window is drawable with a list, OR with only its sidebar and
     # no list at all -- a window standing behind another shows just its
     # favorites down the left, its file area hidden. Without one of the two
