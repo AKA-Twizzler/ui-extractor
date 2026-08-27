@@ -656,7 +656,15 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
         """What is left of a window once the windows in front are over it.
         Covered whole, it was not on the screen, and drawing its outline
         would put back something the video never showed."""
-        return max((_within(box, r) for r in solid), default=0.0) < 0.85
+        if max((_within(box, r) for r in solid), default=0.0) < 0.85:
+            return True
+        # A WINDOW WHOSE OWN TOP STANDS ABOVE EVERY WINDOW IN FRONT OF IT IS
+        # STILL ON THE SCREEN -- the strip of it above them is exactly what
+        # shows. A browser standing behind a near-full-screen window is
+        # covered by 95% of itself and its tabs are plainly there; measured
+        # by share alone it counted as covered whole and its outline
+        # vanished from the picture the moment its real box was measured.
+        return bool(solid) and all(box[1] < r[1] - 0.005 * H for r in solid)
 
     # the windows standing behind, and the places words were read that no
     # window of this stretch owns

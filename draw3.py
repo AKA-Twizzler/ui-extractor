@@ -5438,11 +5438,28 @@ def note(records_path, diary_text=None):
             if not real_w and subjects:
                 big = max(subjects, key=lambda x: (x[2][2] - x[2][0]) * (x[2][3] - x[2][1])
                           if x[2] else 0)
-                top = 0.0
-                for tag_, b_ in behinds:
-                    if b_[2] - b_[0] >= 0.88 * Wf and b_[3] - b_[1] <= 0.20 * Hf:
-                        top = max(top, b_[3])
-                box0 = [0.0, top, float(Wf), float(Hf)]
+                # A MEASURED BOX BEATS THE FRAME'S OWN EDGES. `shapes` closed
+                # no rectangle here, but `bigwin` measures the windows the
+                # screen cuts off, and the front window is one of them: the
+                # topmost that some window behind has not already claimed.
+                # Without this the front window was drawn from the desktop
+                # bar down to the foot, less whatever SHORT strip stood
+                # across the top -- and the moment the browser's outline
+                # became its real box instead of its chrome strip, that
+                # strip stopped being short, the subtraction stopped
+                # happening, and this window was drawn 6% of the screen
+                # taller than it stood.
+                used = [b_ for _, b_ in behinds]
+                free = [b for b in frame_bigwins(s)
+                        if not any(furnish._close(b, u) for u in used)]
+                if free:
+                    box0 = list(min(free, key=lambda b: b[1]))
+                else:
+                    top = 0.0
+                    for tag_, b_ in behinds:
+                        if b_[2] - b_[0] >= 0.88 * Wf and b_[3] - b_[1] <= 0.20 * Hf:
+                            top = max(top, b_[3])
+                    box0 = [0.0, top, float(Wf), float(Hf)]
                 big[1].rect = box0
                 subjects = [(x[0], x[1], box0 if x is big else x[2])
                             for x in subjects]
