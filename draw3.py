@@ -3616,15 +3616,6 @@ def span_of(st):
     return f"{st.times[0]} to {st.times[-1]}"
 
 
-def _OBS3(tag, states):
-    import sys as _s, re as _re
-    for st in states:
-        for q in st.parts:
-            ls = [t for t, _h in getattr(q["model"], "lines", [])]
-            if any("inbox" in _re.sub(r"[^a-z]", "", str(x).lower()) for x in ls[:4]):
-                print("  %-26s times=%s first=%r" % (tag, getattr(st, "times", None), ls[:2]), file=_s.stderr)
-
-
 def note(records_path, diary_text=None):
     header, moments, footer = old.load(records_path)
     title = header.get("title") or os.path.basename(os.path.dirname(records_path))
