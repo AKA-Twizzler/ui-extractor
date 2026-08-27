@@ -411,7 +411,8 @@ def _find_full(path):
                 break
     kept = [r for r in kept if id(r) not in drop]
     k = W / float(w)
-    out = [[r[0] * k, r[1] * k, r[2] * k, r[3] * k] for r in kept]
+    out = [([r[0] * k, r[1] * k, r[2] * k, r[3] * k], _gap(shelf, vshelf, r, w, h) * k)
+           for r in kept]
     if keyed:
         _CACHE[path] = out
     return out
