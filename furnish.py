@@ -110,8 +110,8 @@ def finder(st):
                + '<span class="sn-btn">⇪</span><span class="sn-btn">◇</span><span class="sn-btn">···</span>'
                + '<span class="sn-btn">⌕</span></div>')
     # the list
-    head = list(table.header)
-    n = max([len(head)] + [len(r["cells"]) for r in table.rows])
+    head = list(table.header) if table else []
+    n = max([len(head)] + [len(r["cells"]) for r in rows] + [1])
     head = head + [""] * (n - len(head))
     name_i = next((i for i, h in enumerate(head) if h == "Name"), 0)
     size_i = next((i for i, h in enumerate(head) if h == "Size"), None)
