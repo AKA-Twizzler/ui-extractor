@@ -599,6 +599,7 @@ def table_from_items(items):
     def sidebar_word(it):
         t = it["text"]
         return len(t) <= 18 and t.count(" ") <= 1 and not t.endswith((".", ",")) and ".md" not in t
+    body_ys = []
     for ri, r in enumerate(rows):
         if r is head_row:
             side.extend(it for it in r if it["box"][2] <= x_lo - rh and sidebar_word(it))   # "Recents", level with "Name"
@@ -652,11 +653,21 @@ def table_from_items(items):
             band = band or it.get("band")
         if any(cells):
             body.append((cells, icon, band))
+            body_ys.append(cy)
     if len(body) < (4 if lone else 2):
         return None
     head = [name for name, _, _ in heads]
     span = [min([x_lo] + [it["box"][0] for it in side]), cols[-1][1]]
-    return top, side, head, body, bottom, [], span, rh
+    # HOW FAR APART THIS LIST'S OWN ROWS STAND, in frame pixels, measured on
+    # the rows that became the list and nothing else. Taken instead over
+    # every word a pane holds it reads the toolbar above, the path bar below
+    # and the sidebar beside as rows too: on one frame that gave 102 where
+    # the list stands at 65. The drawing needs this because it otherwise
+    # works a window's row spacing out from a share held PER PROGRAM, and
+    # Finder's list density is a per-window setting.
+    gaps = sorted(b - a for a, b in zip(body_ys, body_ys[1:]) if b - a > 1)
+    pitch = float(gaps[len(gaps) // 2]) if len(gaps) >= 3 else None
+    return top, side, head, body, bottom, [], span, rh, pitch
 
 
 def split_heads(text):
@@ -830,22 +841,6 @@ def _finder_sizes(pane):
     return n >= 3
 
 
-def row_pitch_of(pane, items=None):
-    """How far apart this pane's rows really stand, in frame pixels.
-
-    Measured on the pane's own words, at the moment they were read, so the
-    video's zoom is already in it. This is the thing the drawing needs and
-    was working out instead from a share held per program - which assumes
-    every window of one program spaces its rows alike. Finder does not: its
-    list density is a per-window setting, and on one frame here two Finders
-    stand at 65 pixels a row and at 42.
-    """
-    its = items if items is not None else items_of(pane)
-    tops = sorted({round(it["box"][1]) for it in its})
-    gaps = sorted(b - a for a, b in zip(tops, tops[1:]) if b - a > 8)
-    return float(gaps[len(gaps) // 2]) if len(gaps) >= 3 else None
-
-
 def cut_list(pane, size=None):
     """A Finder list the SCREEN cut off down its own left edge, rebuilt.
 
@@ -891,9 +886,8 @@ def cut_list(pane, size=None):
         # window's pitch from others of the same program, which drew this
         # one's rows at twice their true spacing and pushed its Kind column
         # off the card.
-        got = row_pitch_of(pane, mended)
-        if got:
-            pane["_cut_pitch"] = got
+        if len(built) > 8 and built[8]:
+            pane["_cut_pitch"] = built[8]
     return built
 
 
