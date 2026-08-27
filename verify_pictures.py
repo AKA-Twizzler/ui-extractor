@@ -68,8 +68,12 @@ PLACEHOLDERS = ("rest of the screen", "a window behind", "its name unread",
                 "some window", "unknown window")
 
 
-def check_picture(stamp, stage, frame_path):
-    """Machine checks for one picture. Returns a list of failure strings."""
+def check_picture(stamp, stage, frame_path, fav_boxes=()):
+    """Machine checks for one picture. Returns a list of failure strings.
+
+    `fav_boxes` is the favorites-sidebar word boxes the reader read on this
+    moment (empty when the records were not supplied); it drives the
+    sidebar-completeness check, which is skipped without them."""
     fails = []
     filled = boxes(stage, r'sn-slot(?: sn-\w+)*')
     outline = boxes(stage, r'sn-ghost(?: sn-\w+)*')
