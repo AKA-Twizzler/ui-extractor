@@ -758,6 +758,27 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
             'font-size:calc(%.3fcqh)">%s</div>'
             % (100.0 * float(x0) / W, 100.0 * float(y0) / H,
                100.0 * high / H, esc(text)))
+    # THE HELD-BACK INK, now that every window is placed. A reading is laid
+    # down only where NO drawn window carries it - not inside a filled front
+    # window, not inside a behind-window that drew its own content. What is
+    # left is the screen's true orphan text: a browser strip caught along the
+    # top, a stray word on the desktop. It sits under everything (z-index 1).
+    covered = [r for r in solid] + [b for b in behind_boxes]
+    for x0, y0, x1, y1, text in ink or ():
+        if not text:
+            continue
+        cx, cy = (float(x0) + float(x1)) / 2.0, (float(y0) + float(y1)) / 2.0
+        if any(b[0] - 4 <= cx <= b[2] + 4 and b[1] - 4 <= cy <= b[3] + 4
+               for b in covered):
+            continue
+        # a font's ink stands about seven tenths of its own em, so the type
+        # is set a little taller than the ink measured
+        high = max(1.0, float(y1) - float(y0)) / 0.72
+        out.append(
+            '<div class="sn-ink" style="left:%.2f%%;top:%.2f%%;'
+            'font-size:calc(%.3fcqh)">%s</div>'
+            % (100.0 * float(x0) / W, 100.0 * float(y0) / H,
+               100.0 * high / H, esc(text)))
     if camera:
         cbox = camera[0] if isinstance(camera, (tuple, list)) else camera
         out.append(f'<div class="sn-camera" style="{slot_style(cbox, W, H, bar=barred)}">'
