@@ -1079,6 +1079,8 @@ class State:
                 part["x0"] = p["box"][0] if part["x0"] is None else min(part["x0"], p["box"][0])
                 part["x1"] = p["box"][2] if part["x1"] is None else max(part["x1"], p["box"][2])
                 part["model"].add(cut)
+                if p.get("_cut_pitch"):
+                    self._own_pitch = p["_cut_pitch"]
                 continue
             part = self.part_for(k, slot)
             part["x0"] = p["box"][0] if part["x0"] is None else min(part["x0"], p["box"][0])
@@ -5329,6 +5331,18 @@ def note(records_path, diary_text=None):
                     span_now = share * wide
                 sl._row_step = span_now * furnish.CANVAS_W / Wf
                 sl._step_sure = not (cut_x or cut_y)
+                # A PITCH MEASURED ON THIS WINDOW'S OWN ROWS OUTRANKS A
+                # SHARE CARRIED FROM ANOTHER WINDOW. Everything above works
+                # a window's pitch out from a share held per program, which
+                # assumes every window of that program sets its rows the
+                # same. Finder does not: its list density is a per-window
+                # setting, and at 00:03:00 one Finder stands at 42 frame
+                # pixels a row where the other stands at 81.
+                own = getattr(sl, "_own_pitch", 0) or getattr(stx, "_own_pitch", 0)
+                if own:
+                    sl._row_step = own * furnish.CANVAS_W / Wf
+                    sl._step_sure = False      # and no median may replace it
+                    sl._pitch_measured = True
                 if s["t0"] in ("00:03:00", "00:01:20"):
                     sys.stderr.write("TRACESTEP %s %-20s share=%.5f wide=%.0f span_now=%.1f step=%.2f cut_x=%s cut_y=%s\n"
                                      % (s["t0"], str(stx.name)[:20], share, shape[2]-shape[0],
@@ -5346,7 +5360,7 @@ def note(records_path, diary_text=None):
                     sure.setdefault(stx.name, []).append(sl._row_step)
             for stx, sl, _ in subjects:
                 had = sure.get(stx.name)
-                if had:
+                if had and not getattr(sl, "_pitch_measured", False):
                     sl._row_step = med(sorted(had))
 
             # which windows behind were read through or around the front ones

@@ -866,7 +866,21 @@ def cut_list(pane, size=None):
     mended = _mend_edge_head(items)
     if not any(a["text"] != b["text"] for a, b in zip(items, mended)):
         return None
-    return table_from_items(mended)
+    built = table_from_items(mended)
+    if built:
+        # AND ITS OWN ROW PITCH, measured here where the rows are still in
+        # hand. Finder's list rows are a per-window setting, so two Finder
+        # windows on one screen need not share a pitch - at 00:03:00 one
+        # stands at 42 frame pixels and the other at 81. The drawing takes a
+        # window's pitch from others of the same program, which drew this
+        # one's rows at twice their true spacing and pushed its Kind column
+        # off the card.
+        tops = sorted({round(it["box"][1]) for it in mended})
+        gaps = [b - a for a, b in zip(tops, tops[1:]) if b - a > 8]
+        if len(gaps) >= 3:
+            gaps.sort()
+            pane["_cut_pitch"] = float(gaps[len(gaps) // 2])
+    return built
 
 
 def block_of(pane, window_rect):
