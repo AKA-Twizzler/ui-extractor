@@ -144,14 +144,32 @@ def camera_mask(stage_html):
 
 
 def blobs(grid, top=3):
-    """The largest patches of a boolean grid, as percent boxes of the screen."""
-    n, labels, stats, _ = cv2.connectedComponentsWithStats(grid.astype(np.uint8), connectivity=8)
+    """The largest patches of a boolean grid, as percent boxes of the screen.
+    Patches are found by a plain flood fill over the coarse grid, which is
+    54 by 96 cells and needs no library for it."""
+    seen = np.zeros(grid.shape, dtype=bool)
     out = []
-    for k in range(1, n):
-        x, y, w, h, area = stats[k]
-        out.append((area, "%.0f-%.0f%% across, %.0f-%.0f%% down" % (
-            100.0 * x / grid.shape[1], 100.0 * (x + w) / grid.shape[1],
-            100.0 * y / grid.shape[0], 100.0 * (y + h) / grid.shape[0])))
+    H, W = grid.shape
+    for y0 in range(H):
+        for x0 in range(W):
+            if not grid[y0, x0] or seen[y0, x0]:
+                continue
+            stack, cells = [(y0, x0)], []
+            seen[y0, x0] = True
+            while stack:
+                y, x = stack.pop()
+                cells.append((y, x))
+                for dy in (-1, 0, 1):
+                    for dx in (-1, 0, 1):
+                        ny, nx = y + dy, x + dx
+                        if 0 <= ny < H and 0 <= nx < W and grid[ny, nx] and not seen[ny, nx]:
+                            seen[ny, nx] = True
+                            stack.append((ny, nx))
+            ys = [c[0] for c in cells]
+            xs = [c[1] for c in cells]
+            out.append((len(cells), "%.0f-%.0f%% across, %.0f-%.0f%% down" % (
+                100.0 * min(xs) / W, 100.0 * (max(xs) + 1) / W,
+                100.0 * min(ys) / H, 100.0 * (max(ys) + 1) / H)))
     out.sort(reverse=True)
     return [b for _, b in out[:top]]
 
