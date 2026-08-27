@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """The STRUCTURAL gate: catch the faults the ink-overlap gate cannot.
 
-    python3 verify_pictures.py <note.md> <frames-dir>
+    python3 verify_pictures.py <note.md> <frames-dir> [<records.jsonl>]
+
+Pass the records as a third argument to enable the sidebar-completeness
+check (a filled window that showed its favorites sidebar must draw it);
+without them that one check is skipped and says so.
 
 `compare.py` renders each picture and scores its ink against the frame. It
 answers "does the ink land right", and it is blind to four things Tristan
