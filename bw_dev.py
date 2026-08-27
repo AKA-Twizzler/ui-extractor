@@ -211,6 +211,17 @@ def big_windows(path, least_frac=0.20, img=None):
                 continue
             x1 = _run_out(hors, y, head_right, w, blocks, True, tol, least_h)
             y1 = _run_out(verts, x, side_bot, h, blocks, False, tol, least_v)
+            # THE REMIT IS THE WINDOW THE SCREEN CUTS OFF -- the one case
+            # `shapes` structurally cannot close, because it offers the
+            # frame's left and right edges as stand-in sides and offers no
+            # such stand-in for its foot. A window whose four edges are all
+            # on the screen belongs to `shapes`, and letting this finder
+            # answer for it too puts two answers on one window: measured on
+            # a desktop shrunk into the middle of the frame, it returned
+            # three boxes where there are two, mixing one window's left
+            # edge with another's top.
+            if x1 < w - tol and y1 < h - tol:
+                continue
             if any(abs(r[0] / k - x) <= tol and abs(r[1] / k - y) <= tol
                    for r in known):
                 continue                    # ONE HOME: `shapes` measured it
