@@ -1075,10 +1075,6 @@ class State:
                         continue
             cut = draw2.cut_list(p, m.get("size"))
             if cut:
-                sys.stderr.write("TRACECUT %s kind=%-18s box=%s head=%s rows=%d\n"
-                                 % (m["ts"], p.get("kind"), [round(v) for v in p["box"]],
-                                    cut[2], len(cut[3])))
-            if cut:
                 part = self.part_for("a list of columns", slot)
                 part["x0"] = p["box"][0] if part["x0"] is None else min(part["x0"], p["box"][0])
                 part["x1"] = p["box"][2] if part["x1"] is None else max(part["x1"], p["box"][2])
@@ -3504,11 +3500,6 @@ def note(records_path, diary_text=None):
             if longest >= 40 or (len(ct) >= 12 and frac >= 0.6):
                 c.name = w.name
                 break
-    for _s in all_states:
-        if any(mm["ts"] == "00:00:00" for mm, _g in _s.pieces):
-            sys.stderr.write("TRACEST %-22s title=%-12s html=%s frag=%s rect=%s\n"
-                             % (str(_s.name)[:22], str(_s.title)[:12], bool(_s.window_html()),
-                                _s.fragment(), [round(v) for v in _s.rects.get("00:00:00", [])]))
     states = [st for st in all_states if st.window_html() and not st.fragment()]
     frags = [st for st in all_states if st not in states and st.has_content() and st.rects]
     # a note's big heading is read as large loose words, never as a doc
@@ -5083,11 +5074,6 @@ def note(records_path, diary_text=None):
                                and (frame_windows(s)
                                     or any(o.name != "The Obsidian window" and o.has_content()
                                            for o in base + extra)))
-                if s["t0"] in ("00:00:00",):
-                    sys.stderr.write("TRACE %-20s settled=%s would_skip=%s obs_behind=%s shape=%s\n"
-                                     % (str(st.name)[:20], id(st) in settled, bool(_would_skip),
-                                        bool(_obs_behind),
-                                        [round(v) for v in shape] if shape else None))
                 if _obs_behind:
                     pass                       # stands behind others -> outline, card holds its content
                 elif sl.has_content() and shape:
