@@ -3472,6 +3472,14 @@ def strip_furniture(st, strip_at):
         f = fold(flat(text))
         if len(f) < 8:
             return False
+        # A NAME IS NOT THE MENU BAR JUST BECAUSE THE APPLICATION IS. `flat`
+        # drops the leading dot, so the FOLDER `.obsidian` folds to the same
+        # key as the menu bar's own `Obsidian`, and this rule deleted that row
+        # from the `vault-demo` list in three pictures. No menu bar and no tab
+        # row carries a name beginning with a dot, so a dotted name is never
+        # the desk's furniture.
+        if text.strip().startswith("."):
+            return False
         # a partial strip reading loses its left end, so it survives as the
         # line's tail; a mere substring inside a longer sentence does not count
         return any(f in w or f == w or f.endswith(w) for w in tops)
