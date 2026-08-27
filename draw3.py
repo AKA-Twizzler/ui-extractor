@@ -4855,7 +4855,17 @@ def note(records_path, diary_text=None):
                     shape = list(pin[id(st)])
                     settled.add(id(st))
                 sl.rect = shape
-                if sl.has_content() and shape:
+                # A large window the frame never measured -- Obsidian's editor,
+                # maximised, with no rectangle to close -- cannot be FILLED
+                # honestly: drawn at a box worked out from where its words sat
+                # it lands maximised at the wrong place and misses the frame.
+                # It gets a card (its content, view two) by being a real
+                # window, but in the desktop picture it stays a named outline
+                # until the reader learns to measure it. A moment where the
+                # frame DID measure it (settled) draws it full as any window.
+                if st.name == "The Obsidian window" and id(st) not in settled:
+                    pass
+                elif sl.has_content() and shape:
                     subjects.append((st, sl, shape))
             if not subjects:
                 continue
