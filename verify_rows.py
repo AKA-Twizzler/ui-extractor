@@ -36,6 +36,16 @@ import unicodedata
 
 SLACK = 2          # letters two engines may disagree on in one name
 
+# A DATE IS NOT A ROW NAME. Where the reader missed a list's headings, a
+# block can come back with its Date column first, and every date in it then
+# reads as a missing "row". Names are what this gate is for; a date cell
+# drawn or not drawn is `compare.py`'s business.
+DATEY = re.compile(
+    r"(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s*\d"
+    r"|today|yesterday|yoctard"
+    r"|^\d+\s*(bytes|byte|kb|mb|gb|tb)$"
+    r"|^\d{1,2}[:.]\d{2}\s*[ap]m$", re.I)
+
 
 def norm(s):
     return re.sub(r"[^a-z0-9]", "", unicodedata.normalize("NFKD", str(s)).lower())
@@ -74,7 +84,7 @@ def panes_of(records):
                     nm = l.strip("\u2502 \u02c3\u02c5\u25b8\u25be>").strip()
                     if nm and len(nm) < 60:
                         names.append(nm)
-            names = [n for n in names if norm(n)]
+            names = [n for n in names if norm(n) and not DATEY.search(n)]
             if len(names) >= 3:
                 got.append(names)
         out[ts] = got
