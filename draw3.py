@@ -4852,14 +4852,48 @@ def note(records_path, diary_text=None):
                     return 0.0
                 b = onto(T0, hb)
                 return furnish._within(r_, b) * furnish._within(b, r_)
+            def _read_here(r_):
+                """The window the READER actually read inside this rectangle
+                at this moment.
+
+                A carried box says where a window USED to be; a reading taken
+                now says what is standing there. At 00:03:00 a Finder stood
+                cut off down the left edge of the screen, showing nothing but
+                its Size and Kind columns - the reader read exactly that - and
+                the match by carried box handed the rectangle to an older
+                state of a Finder that had once shown the `.claude` folder.
+                The picture drew five file names the screen did not show.
+                That is the background content Tristan saw. Evidence taken at
+                this moment outranks a box remembered from another one.
+                """
+                found, most = None, 0.5
+                for own in states:
+                    if not own.has_content():
+                        continue
+                    for mm, g in own.pieces:
+                        if mm["ts"] != s["t0"]:
+                            continue
+                        b = g.get("rect")
+                        if not b:
+                            continue
+                        v = furnish._within(b, r_) * furnish._within(r_, b)
+                        if v > most:
+                            found, most = own, v
+                return found
             for r in fw_here:
                 if any(o is not r and furnish._within(r, o) > 0.5 for o in fw_here):
                     continue                    # this window stands behind another
-                if any(_lands(bst, r) > 0.25 for bst in base):
+                seen_here = _read_here(r)
+                if seen_here is None and any(_lands(bst, r) > 0.25 for bst in base):
                     continue                    # a focus window already fills it
+                if seen_here is not None and seen_here in base:
+                    continue                    # the window read here is already drawn
                 pick, best = None, 0.2
+                if seen_here is not None and seen_here not in extra:
+                    pick = seen_here
                 for own in states:
-                    if own in base or own in extra or not own.has_content():
+                    if pick is not None or own in base or own in extra \
+                            or not own.has_content():
                         continue
                     sc = _lands(own, r)
                     if sc > best:
