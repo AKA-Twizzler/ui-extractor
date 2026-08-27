@@ -249,8 +249,21 @@ def finder(st):
     # the path bar
     foot = ""
     if table and table.path:
+        # A PATH NEVER PASSES THROUGH THE SAME FOLDER TWICE. A window's path
+        # is gathered across the moments it was read, and where the same bar
+        # was read more than once the crumbs come back one after another:
+        # the drawn bar read `... > .claude > projects > Usersjaredrhodenizer
+        # > jaredrhodenizer > .claude > projects > ...`, three times round.
+        # It ends at the first crumb it has already passed.
+        seen_p, path_ = set(), []
+        for c in table.path:
+            n_ = re.sub(r"[^a-z0-9]+", "", str(c).lower())
+            if n_ in seen_p:
+                break
+            seen_p.add(n_)
+            path_.append(c)
         crumbs = []
-        for k, c in enumerate(table.path):
+        for k, c in enumerate(path_):
             g = '<span class="sn-g">⊟</span>' if k == 0 and c.lower().startswith("macintosh") else ico("")
             crumbs.append(f"<span>{g}{esc(c)}</span>")
         foot = '<div class="sn-pathbar">' + '<span class="sn-sep">›</span>'.join(crumbs) + "</div>"
