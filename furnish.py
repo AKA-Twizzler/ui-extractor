@@ -79,9 +79,14 @@ def side_words_of(st):
 
 def finder(st):
     table = st.main_table()
-    if not table or not table.rows:
-        return None
     side_words = side_words_of(st)
+    rows = table.rows if (table and table.rows) else []
+    # A Finder window is drawable with a list, OR with only its sidebar and
+    # no list at all -- a window standing behind another shows just its
+    # favorites down the left, its file area hidden. Without one of the two
+    # there is nothing of a Finder to draw, and the plain window stands.
+    if not rows and not side_words:
+        return None
     # the sidebar: lights at its top, then the items with their icons and
     # the section labels where they were read
     side = ""
