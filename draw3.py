@@ -3176,8 +3176,12 @@ def desktop_bar(moments):
                 ws_ = [w for w in re.split(r"\s+", it["text"].strip()) if re.match(r"^[A-Za-z]", w)]
                 if len(it["text"]) > 30 and not (len(ws_) >= 3 and all(len(w) <= 12 for w in ws_)):
                     continue
-                # two menu names read as one run of letters are two menus
-                for w in re.split(r"\s+", it["text"].strip()):
+                # two menu names read as one run of letters are two menus --
+                # and one engine glues them with a full stop, "File.Edit",
+                # which a letters-only test then throws away whole. macOS
+                # menu names are each a single word, so a full stop between
+                # letters is a join to cut, not part of a name.
+                for w in re.split(r"[\s.]+", it["text"].strip()):
                     w = w.strip(" .,:;·|")
                     if not w or not re.match(r"^[A-Za-z][A-Za-z&'-]*$", w):
                         continue
