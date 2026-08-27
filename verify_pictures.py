@@ -274,14 +274,149 @@ def favorites_by_stamp(records):
     return out
 
 
+# ---------------------------------------------------------------- proving
+
+# A CHECK NEVER SEEN TO FAIL IS NOT A CHECK. Three times on this build a
+# gate reported a fault that was its own bookkeeping, and twice a gate waved
+# through the very thing it existed to catch -- a screen-wide box answering
+# "filled" for every window at once. So every check here carries a crafted
+# break beside it: a real picture from the note, damaged in exactly the way
+# that check exists to catch, which the check must reject. `--prove` runs
+# them all and says which checks have been seen to fail. A check that cannot
+# be proved is reported as UNPROVED and is worth nothing until it is.
+
+
+def _break_missing(stage):
+    return re.sub(r'class="sn-(?:slot|ghost)', 'class="sn-was', stage)
+
+
+def _break_unfilled(stage):
+    return stage.replace('class="sn-slot', 'class="sn-ghost')
+
+
+def _break_collapse(stage):
+    return re.sub(r'(class="sn-slot[^"]*" style=")[^"]*"',
+                  r'\1left:0.00%;top:0.00%;width:100.00%;height:100.00%"', stage)
+
+
+def _break_placeholder(stage):
+    return re.sub(r'(sn-ghost-tag[^>]*>)[^<]*<', r'\1rest of the screen<',
+                  stage, count=1)
+
+
+def _break_crumbs_glued(stage):
+    def one(m):
+        return '<div class="sn-pathbar">' + re.sub(
+            r'<span class="sn-sep">[^<]*</span>', '', m.group(1)) + '</div>'
+    return re.sub(r'<div class="sn-pathbar">(.*?)</div>', one, stage, count=1)
+
+
+def _break_crumb_mangled(stage):
+    return re.sub(r'(<div class="sn-pathbar"><span>(?:<span[^>]*>[^<]*</span>)?)[^<]+',
+                  r'\1MacintoshHD>Users>jaredrhodenizer>.claude>projects', stage, count=1)
+
+
+def _break_sidebar(stage):
+    return stage.replace('sn-side', 'sn-wasside')
+
+
+BREAKS = [
+    ("window presence",        _break_missing,        "MISSING WINDOW"),
+    ("top-layer fill",         _break_unfilled,       "WINDOW NOT FILLED"),
+    ("maximised collapse",     _break_collapse,       "WINDOW NOT FILLED"),
+    ("box agrees with window", _break_collapse,       "BOX OFF ITS WINDOW"),
+    ("placeholder label",      _break_placeholder,    "PLACEHOLDER LABEL"),
+    ("breadcrumb segmented",   _break_crumbs_glued,   "BREADCRUMB RUN-TOGETHER"),
+    ("breadcrumb crumb whole", _break_crumb_mangled,  "BREADCRUMB CRUMB MANGLED"),
+    ("sidebar completeness",   _break_sidebar,        "SIDEBAR DROPPED"),
+]
+
+
+def prove(note, frames, fav):
+    """Each check, set against a picture broken exactly the way it guards."""
+    pics = pictures(note)
+    rows = []
+    for name, brk, marker in BREAKS:
+        state, why = "UNPROVED", "no picture in this note could carry the break"
+        for stamp, heading, stage in pics:
+            frame = os.path.join(frames, stamp.replace(":", "-") + ".png")
+            if not os.path.exists(frame):
+                continue
+            favs = fav.get(stamp, ())
+            base = check_picture(stamp, stage, frame, favs)
+            if any(marker in f for f in base):
+                continue                  # already failing: proves nothing
+            broken = brk(stage)
+            if broken == stage:
+                continue                  # the break did not apply here
+            got = check_picture(stamp, broken, frame, favs)
+            if any(marker in f for f in got):
+                state, why = "PROVED", "crafted at %s, rejected" % stamp
+                break
+            why = "crafted at %s and the check still passed it" % stamp
+            state = "NOT PROVED"
+        rows.append((name, state, why))
+
+    # the note-level check, broken the same way
+    text = open(note, encoding="utf-8").read()
+    m = re.search(r"> \[!quote\][^\n]*\n> [^\n]+", text)
+    if m:
+        doubled = text[:m.end()] + "\n\n" + m.group(0) + text[m.end():]
+        tmp = note + ".prove-tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(doubled)
+        try:
+            hit = any("DUPLICATE QUOTE BLOCK" in f for f in note_level(tmp))
+        finally:
+            os.remove(tmp)
+        rows.append(("no duplicated block", "PROVED" if hit else "NOT PROVED",
+                     "a quote block doubled, rejected" if hit
+                     else "a quote block doubled and the check passed it"))
+    else:
+        rows.append(("no duplicated block", "UNPROVED", "the note holds no quote block"))
+
+    # THE GATE ITSELF: a run that examined nothing must not report a pass.
+    # Measured: pointed at a note carrying no pictures at all, this gate
+    # printed "All structural checks pass" -- the run-5 lesson that a
+    # skipped stage is not a passing one, reappearing in the drawing gate.
+    empty = note + ".prove-empty"
+    with open(empty, "w", encoding="utf-8") as f:
+        f.write("# a note with no pictures in it\n")
+    try:
+        hit = not pictures(empty)
+    finally:
+        os.remove(empty)
+    rows.append(("a gate that saw nothing does not pass",
+                 "PROVED" if hit else "NOT PROVED",
+                 "a note with no pictures is refused" if hit
+                 else "a note with no pictures was read as having some"))
+
+    bad = 0
+    for name, state, why in rows:
+        print("%-9s %-38s %s" % (state, name, why))
+        bad += state != "PROVED"
+    print("\n%d of %d checks have been SEEN TO FAIL." % (len(rows) - bad, len(rows)))
+    return 1 if bad else 0
+
+
 def main():
-    if len(sys.argv) < 3:
+    argv = [a for a in sys.argv[1:] if a != "--prove"]
+    if len(argv) < 2:
         raise SystemExit(__doc__)
-    note, frames = sys.argv[1], sys.argv[2]
-    records = sys.argv[3] if len(sys.argv) > 3 else None
+    note, frames = argv[0], argv[1]
+    records = argv[2] if len(argv) > 2 else None
     fav = favorites_by_stamp(records) if records else {}
+    if "--prove" in sys.argv:
+        return prove(note, frames, fav)
     total = 0
-    for stamp, heading, stage in pictures(note):
+    pics = pictures(note)
+    # A GATE THAT EXAMINED NOTHING HAS NOT PASSED ANYTHING. Pointed at a
+    # note carrying no pictures, this printed "All structural checks pass".
+    if not pics:
+        print("FAIL note-level\n     NO PICTURES: %s carries no desktop picture, "
+              "so nothing here was checked at all" % os.path.basename(note))
+        return 1
+    for stamp, heading, stage in pics:
         frame = os.path.join(frames, stamp.replace(":", "-") + ".png")
         fails = check_picture(stamp, stage, frame, fav.get(stamp, ()))
         if fails:
