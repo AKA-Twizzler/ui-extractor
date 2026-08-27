@@ -3782,9 +3782,17 @@ def note(records_path, diary_text=None):
             path = frame_of(m0) if m0 else None
             if path:
                 got = bigwin.big_windows(path)
-        except Exception:
+        except Exception as exc:
+            # NEVER SWALLOW THIS SILENTLY. A blanket except here would leave
+            # the browser drawn as its chrome strip for ever with nothing
+            # anywhere saying why -- which is exactly how the frame-window
+            # measurement sat switched off for a whole run.
+            sys.stderr.write("frame_bigwins(%s): %s: %s\n"
+                             % (t0, type(exc).__name__, exc))
             got = []
         _frame_big[t0] = [[float(v) for v in b] for b in got]
+        if os.environ.get("BIGWIN_TRACE"):
+            sys.stderr.write("frame_bigwins(%s) -> %s\n" % (t0, _frame_big[t0]))
         return _frame_big[t0]
 
     def frame_rects(s):
