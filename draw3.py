@@ -4851,14 +4851,6 @@ def note(records_path, diary_text=None):
                 b = onto(T0, hb)
                 return furnish._within(r_, b) * furnish._within(b, r_)
             for r in fw_here:
-                if s["t0"] in ("00:00:10",):
-                    sys.stderr.write("TRACE rect %s\n" % ([round(v) for v in r],))
-                    for own in states:
-                        sc = _lands(own, r)
-                        if sc > 0.02:
-                            sys.stderr.write("   cand %-28s score %.3f base=%s content=%s\n"
-                                             % (str(getattr(own, 'title', '?'))[:28], sc,
-                                                own in base, own.has_content()))
                 if any(o is not r and furnish._within(r, o) > 0.5 for o in fw_here):
                     continue                    # this window stands behind another
                 if any(_lands(bst, r) > 0.25 for bst in base):
@@ -5126,18 +5118,6 @@ def note(records_path, diary_text=None):
                 ox, ol, osh = keep[clash]
                 if len(sl.said_html() or ()) > len(ol.said_html() or ()):
                     keep[clash] = (stx, sl, shape)
-            if s["t0"] in ("00:00:10",):
-                for stx, sl, shape in subjects:
-                    sys.stderr.write("TRACE sub %-12s %-22s shape=%s said=%d\n"
-                                     % (str(stx.name)[:12], str(getattr(stx,'title','?'))[:22],
-                                        [round(v) for v in shape] if shape else None,
-                                        len(sl.said_html() or ())))
-                sys.stderr.write("TRACE --- kept ---\n")
-                for stx, sl, shape in keep:
-                    sys.stderr.write("TRACE keep %-12s %-22s shape=%s said=%d\n"
-                                     % (str(stx.name)[:12], str(getattr(stx,'title','?'))[:22],
-                                        [round(v) for v in shape] if shape else None,
-                                        len(sl.said_html() or ())))
             subjects = keep
             for stx, sl, shape in subjects:
                 sl.rect = shape
