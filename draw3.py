@@ -1086,13 +1086,6 @@ class State:
             if len(c) > len(bar):
                 bar = c
 
-        import sys as _s
-        if m["ts"] == "00:01:00":
-            print("ABSORB 00:01:00 group panes=%r" % ([[round(v) for v in (pp.get("box") or [])] for pp in (group.get("panes") or [])],), file=_s.stderr)
-            for pp in (group.get("panes") or []):
-                print("    crumbs from %s -> %r" % ([round(v) for v in (pp.get("box") or [])], bar_crumbs(pp)[:7]), file=_s.stderr)
-            print("    best bar=%r" % (bar[:7],), file=_s.stderr)
-
         across = bar_across(group, m)
         if len(across) > len(bar):
             bar = across
