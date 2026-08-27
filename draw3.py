@@ -4973,6 +4973,32 @@ def note(records_path, diary_text=None):
             subjects = [(stx, sl, shape if id(stx) in settled
                          else snap_to_frame(shape, s))
                         for stx, sl, shape in subjects]
+            # ONE PLACE, ONE WINDOW, and that holds for a window drawn FULL
+            # as much as for an outline. The screen has one Obsidian window
+            # at 00:00:00 and the reader recorded two states of it -- one
+            # holding the note, one holding the strip along the top -- so
+            # once both could be pinned to a measured box the picture drew
+            # two Obsidian windows, one over the other, each with its own
+            # title bar. Two windows of the same program that do NOT overlap
+            # are two windows (the two Finders), and are left alone.
+            keep = []
+            for stx, sl, shape in subjects:
+                clash = None
+                for i, (ox, ol, osh) in enumerate(keep):
+                    if ox.name == stx.name and shape and osh and \
+                            max(furnish._within(shape, osh),
+                                furnish._within(osh, shape)) > 0.7:
+                        clash = i
+                        break
+                if clash is None:
+                    keep.append((stx, sl, shape))
+                    continue
+                # the one that says more about the window is the one drawn:
+                # more of its own readings placed inside its own box
+                ox, ol, osh = keep[clash]
+                if len(sl.said_html() or ()) > len(ol.said_html() or ()):
+                    keep[clash] = (stx, sl, shape)
+            subjects = keep
             for stx, sl, shape in subjects:
                 sl.rect = shape
                 # A box the frame itself drew: its edges are measured, and
