@@ -5296,7 +5296,19 @@ def note(records_path, diary_text=None):
                 s["size"][0], s["size"][1],
                 bar_words if barred else None, clock if barred else "",
                 behind_cards=behinds,
-                ink=screen_ink(s, [sh for _st, _sl, sh in subjects if sh]),
+                # ONLY THE TOP LAYER GETS FULL CONTENT; EVERYTHING BEHIND IS
+                # AN OUTLINE. Tristan's ruling, found in the record on
+                # 2026-08-24: "those outlined screens NEED content within the
+                # TOP most SHOWN with FULL READABILITY windows...only the top
+                # layer gets full content, everything behind is an outline."
+                # The desktop bar is the one exception, and it is drawn
+                # separately. So the desktop picture lays down NO loose text
+                # behind the front windows -- a window behind is its outline,
+                # and its content lives in its own card below (view two).
+                # `screen_ink` stays built for the day a never-carded window
+                # (a browser strip) is drawn behind in the desktop view, but
+                # it is not poured onto the picture as loose words.
+                ink=(),
                 ghosts=ghost_list(s, sub_states, carded),
                 camera=(cam, cam_pic) if cam else None,
                 sure=all(any(t in st.measured for t in s["ts"]) for st, _, _ in subjects),
