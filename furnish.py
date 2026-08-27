@@ -609,11 +609,11 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
     # the biggest first, so a window's older place - the same window before
     # it was navigated, still carried in the record - does not get a second
     # outline inside the one that is really showing
-    marks = []          # [box, tag, class] - gathered first, then merged
-    for tag, box in behind_cards:
+    marks = []          # [box, tag, class, state] - gathered first, then merged
+    for tag, box, st_ in behind_cards:
         box = clip_box(box, W, H, bar=barred)
         if in_view(box):
-            marks.append([box, tag, "sn-ghost"])
+            marks.append([box, tag, "sn-ghost", st_])
     for box, tag, kind in ghosts:
         if not box:
             continue
@@ -623,7 +623,7 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
         if any(_close(box, d) for d in drawn):
             continue
         drawn.append(box)
-        marks.append([box, tag, "sn-ghost sn-away" if kind == "away" else "sn-ghost"])
+        marks.append([box, tag, "sn-ghost sn-away" if kind == "away" else "sn-ghost", None])
 
     # One place, one window. Two outlines over the same ground are the same
     # window twice - a window's older place still carried in the record, or a
