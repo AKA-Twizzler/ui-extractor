@@ -5126,6 +5126,18 @@ def note(records_path, diary_text=None):
                 ox, ol, osh = keep[clash]
                 if len(sl.said_html() or ()) > len(ol.said_html() or ()):
                     keep[clash] = (stx, sl, shape)
+            if s["t0"] in ("00:00:10",):
+                for stx, sl, shape in subjects:
+                    sys.stderr.write("TRACE sub %-12s %-22s shape=%s said=%d\n"
+                                     % (str(stx.name)[:12], str(getattr(stx,'title','?'))[:22],
+                                        [round(v) for v in shape] if shape else None,
+                                        len(sl.said_html() or ())))
+                sys.stderr.write("TRACE --- kept ---\n")
+                for stx, sl, shape in keep:
+                    sys.stderr.write("TRACE keep %-12s %-22s shape=%s said=%d\n"
+                                     % (str(stx.name)[:12], str(getattr(stx,'title','?'))[:22],
+                                        [round(v) for v in shape] if shape else None,
+                                        len(sl.said_html() or ())))
             subjects = keep
             for stx, sl, shape in subjects:
                 sl.rect = shape
