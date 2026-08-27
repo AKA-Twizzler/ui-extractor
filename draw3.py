@@ -5410,6 +5410,11 @@ def note(records_path, diary_text=None):
                                 hits += 1
                     if hits >= 2:
                         sl._carried_side = house_side
+                    if os.environ.get("SN_DBG") == s["t0"]:
+                        print("  CARRY? %r shape=%s side=%d hits=%d -> %s"
+                              % (label_for(stx), [round(v) for v in shape],
+                                 len(furnish.side_words_of(sl)), hits,
+                                 bool(getattr(sl, "_carried_side", None))), file=sys.stderr)
             parts.append(furnish.screen_shot(
                 {"t0": s["t0"], "t1": s["t1"]},
                 [(sl, shape) for _, sl, shape in subjects],
