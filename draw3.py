@@ -1255,11 +1255,24 @@ class State:
         ta, tb = self.main_table(), other.main_table()
         if ta and tb:
             a, b = set(ta.names()), set(tb.names())
-            # a fragment of a window already drawn: the same folder name
-            if self.title and other.title and same_text(self.title, other.title) and min(len(a), len(b)) < 3 \
-                    and not (getattr(self, "title_from_path", False) or getattr(other, "title_from_path", False)):
-                # a title taken off a cut path bar names a folder the path
-                # passes through, not the folder on show; it cannot merge
+            # THE SAME FOLDER NAME, READ FROM THE WINDOW ITSELF, IS THE SAME
+            # FOLDER. A fragment of it shares the name and little else; the
+            # whole list scrolled far enough shares the name and no row at
+            # all. Both are the same window - Tristan's rule that a folder
+            # scrolled to new content is the same screen extended, not a new
+            # one. Measured: the memory folder read at 00:01:20 (its top) and
+            # 00:01:30 (scrolled down to the project_ and feedback_ files)
+            # share no row name, so row-overlap split them into two cards of
+            # one window. The clock keeps two windows showing the SAME folder
+            # at the SAME moment apart - those are two windows, and this only
+            # merges states that never stood together. A title read off a cut
+            # path bar names a folder the path passes THROUGH, not the one on
+            # show, so it can never merge.
+            titles_match = (self.title and other.title and same_text(self.title, other.title)
+                            and not (getattr(self, "title_from_path", False)
+                                     or getattr(other, "title_from_path", False)))
+            if titles_match and (min(len(a), len(b)) < 3
+                                 or not (set(self.times) & set(other.times))):
                 return True
             if not a or not b:
                 # a reading with the names out of view: the same list when
