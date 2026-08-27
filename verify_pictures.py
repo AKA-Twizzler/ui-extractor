@@ -471,7 +471,12 @@ def main():
         print("     " + f)
         total += 1
     side_note = "" if fav else " (sidebar-completeness skipped: pass the records path as a 3rd arg to enable it)"
-    print("\nMACHINE-CHECKED: window presence, top-layer fill, placeholder labels, breadcrumb segmentation, duplicate quote blocks, sidebar completeness%s." % side_note)
+    print("\nMACHINE-CHECKED over %d picture(s): window presence, top-layer fill, "
+          "each window a box of its own that agrees with it, placeholder labels, "
+          "breadcrumb segmentation, duplicated text blocks, duplicate quote blocks, "
+          "sidebar completeness%s." % (len(pics), side_note))
+    print("Every one of these has been SEEN TO FAIL on a crafted break; run "
+          "`--prove` to re-run those proofs after any change.")
     print("NOT machine-checked (declared, not passed): relative type scale against the frame, and subjective legibility of rendered text. These need a rendered-pixel measure against the frame's own text heights; compare.py renders but does not yet measure type size.")
     if total:
         print("\n%d structural failure(s)." % total)
