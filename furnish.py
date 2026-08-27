@@ -207,7 +207,19 @@ def finder(st):
             g = '<span class="sn-g">⊟</span>' if k == 0 and c.lower().startswith("macintosh") else ico("")
             crumbs.append(f"<span>{g}{esc(c)}</span>")
         foot = '<div class="sn-pathbar">' + '<span class="sn-sep">›</span>'.join(crumbs) + "</div>"
-    main = '<div class="sn-main">' + toolbar + body + foot + "</div>"
+    # THE PATH BAR SITS AT THE WINDOW'S FOOT, because that is where Finder
+    # puts it. Drawn straight under the last file it rides up the window
+    # whenever the list is short, and once the rows are drawn at the
+    # screen's own spacing instead of about twice it, every list is short.
+    # Measured, that left one band wrong in every picture holding a Finder:
+    # "16-91% across, 67-80% down" missing, which is the window's whole
+    # lower edge, its bar included. The list takes the slack instead. This
+    # pads nothing - the empty rows stay two and the space below the list
+    # stays empty, which is what the rule requires.
+    main = ('<div class="sn-main" style="display:flex;flex-direction:column;'
+            'flex:1 1 auto;min-height:0">' + toolbar
+            + '<div style="flex:1 1 auto;min-height:0">' + body + '</div>'
+            + foot + "</div>")
     cls = "sn-window sn-finder" + (" sn-dark" if st.theme == "dark" else "")
     if side:
         # a sidebar the frame MEASURED is drawn at the width it was; the
@@ -215,7 +227,9 @@ def finder(st):
         share = getattr(st, "side_share", None)
         cols = (f' style="grid-template-columns: {share * 100:.1f}% 1fr"'
                 if share else "")
-        return (f'<div class="{cls}"><div class="sn-cols sn-finder-cols"{cols}>'
+        grid = (cols[:-1] + ';flex:1 1 auto;min-height:0"') if cols else \
+            ' style="flex:1 1 auto;min-height:0"'
+        return (f'<div class="{cls}"><div class="sn-cols sn-finder-cols"{grid}>'
                 f'{side}{main}</div></div>')
     return f'<div class="{cls}">{main}</div>'
 
@@ -561,9 +575,16 @@ def scaled(html, rect, W, kz=1.0, cls="sn-slot", extra="", step=0.0):
         k = max(0.05, kz * (UI_TXT / CSS_TXT))
     w_css = (CANVAS_W * wide / W) / k
     tall = w_css * (rect[3] - rect[1]) / wide
+    # ONE STYLE ATTRIBUTE, NOT TWO. This injects the window's height into
+    # the card's own opening tag, so anything the card wants to say about
+    # its layout has to be said HERE or it lands in a second `style` the
+    # browser ignores. A Finder is laid out as a column, which is what lets
+    # its path bar stand at the window's foot the way Finder puts it, rather
+    # than riding up under the last file whenever the list is short.
+    lay = ";display:flex;flex-direction:column" if "sn-finder" in html[:120] else ""
     html = re.sub(r'^(<div class="sn-window[^"]*")',
-                  r'\1 style="min-height:calc(%d * var(--sn-u, 1px))"'
-                  % max(0, round(tall)), html, count=1)
+                  r'\1 style="min-height:calc(%d * var(--sn-u, 1px))%s"'
+                  % (max(0, round(tall)), lay), html, count=1)
     # THE WINDOW IS MEASURED AGAINST ITS OWN BOX, NOT AGAINST THE PAGE. The
     # card is laid out at the width the rectangle really had, and one unit
     # of that layout is the box's width over that width - so the whole
