@@ -3143,7 +3143,7 @@ def desktop_bar(moments):
             # left the bar saying "Obsidian File Edit" where it really said
             # eight menus, so they are kept and marked the way every other
             # one-engine reading in this note is marked.
-            strip = [it for it in draw2.items_of(p)
+            strip = [it for it in draw2.items_of(p) + doc_rows_as_items(p)
                      if it["box"][1] <= 0.015 * H and it["box"][3] <= 0.035 * H]
             for it in strip:
                 if it["ok"] and len(it["text"]) >= 8:
