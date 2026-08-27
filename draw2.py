@@ -353,6 +353,17 @@ def _build_table(items, spill=None):
         return out, icon, band
     head_cells = by_column(header)[0] if header else [""] * len(cols)
     body_rows = [by_column(r) for r in body]
+    # HOW FAR APART THIS LIST'S OWN ROWS STAND, in frame pixels, measured on
+    # the rows that became the list and nothing else. Taken instead over
+    # every word a pane holds, it reads the toolbar above, the path bar
+    # below and the sidebar beside as rows too: on one frame that gives 102
+    # where the list itself stands at 65. The drawing needs this because it
+    # otherwise works a window's row spacing out from a share held PER
+    # PROGRAM, and Finder's list density is a per-window setting - on that
+    # same frame two Finders stand at 65 and at 42.
+    _ys = sorted(min(it["box"][1] for it in r) for r in body if r)
+    _gaps = sorted(b - a for a, b in zip(_ys, _ys[1:]) if b - a > 1)
+    pitch = float(_gaps[len(_gaps) // 2]) if len(_gaps) >= 3 else None
     # the reader takes the first file for the header when the real headings
     # sit above its block: a header with none of Finder's words and a
     # file-like first cell is a row
@@ -475,7 +486,7 @@ def _build_table(items, spill=None):
     span = [min(c[0] for c in cols), max(c[1] for c in cols)] if cols else None
     if side:
         span[0] = min(span[0], min(it["box"][0] for it in side))
-    return top, side, head_cells, body_rows, bottom, doubts, span, rh
+    return top, side, head_cells, body_rows, bottom, doubts, span, rh, pitch
 
 
 SIDEBAR_HEADS = {"Recents", "Shared", "Favorites", "Locations", "Tags", "iCloud", "AirDrop"}
