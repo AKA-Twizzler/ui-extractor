@@ -78,8 +78,17 @@ def check_picture(stamp, stage, frame_path):
     # 1) EVERY WINDOW THE FRAME HAS IS IN THE DRAWING, and a TOP-LAYER window
     #    (one no other window covers) is FILLED, not merely outlined.
     if os.path.exists(frame_path):
-        fw = shapes.windows(frame_path)
         W, H = shapes._frame_size(frame_path)
+        # A WINDOW IS SOMETHING A PERSON WORKS IN, AND THAT HAS A SIZE: the
+        # reader's own law, a tenth of the screen. `shapes.windows` also
+        # closes furniture -- a sidebar, a card, a pane inside a window --
+        # and the drawer filters those out by this same law before it treats
+        # a rectangle as a window to fill. The gate must hold the drawing to
+        # the SAME definition, or it demands a filled box over every sidebar
+        # and fails a picture that is right.
+        least = 0.09 * W * H
+        fw = [r for r in shapes.windows(frame_path)
+              if (r[2] - r[0]) * (r[3] - r[1]) >= least]
         for r in fw:
             box = (r[0] / W, r[1] / H, r[2] / W, r[3] / H)
             # is this window covered by ANOTHER frame window (i.e. behind)?
