@@ -5449,12 +5449,18 @@ def note(records_path, diary_text=None):
                 # strip stopped being short, the subtraction stopped
                 # happening, and this window was drawn 6% of the screen
                 # taller than it stood.
-                sys.stderr.write("TRACE %s real_w=%d behinds=%s bigw=%s\n" % (
-                    s["t0"], len(real_w), [(t_, [round(v) for v in b_]) for t_, b_ in behinds],
-                    [[round(v) for v in b] for b in frame_bigwins(s)]))
+                # THE SAME BOX, not merely a box of a like shape. Two
+                # near-full-screen windows agree on three of their four
+                # edges, so `furnish._close` -- which measures its slack as
+                # a share of the smaller box -- calls them one window and
+                # dropped the front one: 131 pixels apart at the top, on a
+                # slack of 295. The question here is identity, so the
+                # tolerance is a share of the FRAME.
                 used = [b_ for _, b_ in behinds]
                 free = [b for b in frame_bigwins(s)
-                        if not any(furnish._close(b, u) for u in used)]
+                        if not any(abs(b[0] - u[0]) <= 0.01 * Wf
+                                   and abs(b[1] - u[1]) <= 0.01 * Hf
+                                   for u in used)]
                 if free:
                     box0 = list(min(free, key=lambda b: b[1]))
                 else:
