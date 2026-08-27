@@ -135,7 +135,7 @@ def _ink_extent(g, blur, x0, y0, W, H):
     return [float(x0i), float(y0i), float(min(W, right)), float(min(H, bottom))]
 
 
-def big_windows(img, least_frac=0.20):
+def big_windows(img, least_frac=0.20, camera=None):
     """Maximised / near-full-screen windows: (x0, y0, x1, y1) in pixels.
 
     Only boxes at least `least_frac` of the screen either way are kept -- the
@@ -147,7 +147,7 @@ def big_windows(img, least_frac=0.20):
     g = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     blur = cv2.GaussianBlur(g, (0, 0), 3)
     out = []
-    for cx, cy in corners(img):
+    for cx, cy in corners(img, camera):
         box = _ink_extent(g, blur, cx, cy, W, H)
         if (box[2] - box[0]) >= least_frac * W and (box[3] - box[1]) >= least_frac * H:
             out.append(tuple(box))
