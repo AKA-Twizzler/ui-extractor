@@ -4441,6 +4441,20 @@ def note(records_path, diary_text=None):
                     own_h = med_
                 said.append((b_, t_, own_h * 0.95 * 0.72, shot_up))
             line = float(d_.get("body_height") or 0)
+            # the same one-size rule for a document's rows: the em each
+            # block's shape gives is noisy - a wrapped paragraph and a
+            # one-line row of the same type come out a third apart - so
+            # the body rows of one pane take the middle of their ems and
+            # only a row far larger (a heading) keeps its own
+            rows_em = []
+            for row in (d_.get("rows") or []):
+                t_ = (row.get("text") or "").strip()
+                if not t_ or row.get("x0") is None:
+                    continue
+                wide_ = max(1.0, (row["x1"] - row["x0"]) / rows_up)
+                deep_ = max(1.0, (row["y1"] - row["y0"]) / rows_up)
+                rows_em.append(math.sqrt(wide_ * deep_ / (0.7 * max(1, len(t_)))))
+            body_em = sorted(rows_em)[len(rows_em) // 2] if rows_em else 0.0
             for row in (d_.get("rows") or []):
                 t_ = (row.get("text") or "").strip()
                 if not t_ or row.get("x0") is None:
