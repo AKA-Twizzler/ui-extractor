@@ -58,6 +58,11 @@ def side_words_of(st):
     if not table:
         return []
     side_words = list(table.side)
+    # a stretch that never read this window's sidebar, though the window
+    # plainly showed one, carries the house favorites in (set on the state by
+    # the drawing side, which alone knows the favorites were on the screen)
+    if not side_words and getattr(st, "_carried_side", None):
+        side_words = list(st._carried_side)
     tpart = next((q for q in st.parts if q["fam"] == "table" and q["model"] is table), None)
     for q in st.parts:
         if q["fam"] == "words" and tpart and q["x1"] is not None and tpart["x0"] is not None \
