@@ -4864,6 +4864,22 @@ def note(records_path, diary_text=None):
                     sc = _lands(own, r)
                     if sc > best:
                         pick, best = own, sc
+                # A WINDOW NOT READ IN THIS STRETCH IS NOT FILLED FROM
+                # MEMORY. The promotion above matches a rectangle to a
+                # window by the box that window carries, which says where it
+                # USED to stand, not what it shows now. At 00:03:00 a Finder
+                # stood cut off down the left edge of the screen showing
+                # nothing but its Size and Kind columns; the rectangle was
+                # handed to a remembered state of a Finder that had once
+                # shown the `.claude` folder, and the picture drew six file
+                # names the screen did not show. That is the background
+                # content Tristan saw. A window the reader did not read
+                # anywhere in this stretch keeps the note's own convention -
+                # outlined where it stands, its content in its card - and
+                # the fill stays what the law says it is: the moment's
+                # visible slice, never the window's whole gathered content.
+                if pick is not None and state_slice(pick, s["t0"], s["t1"]) is None:
+                    pick = None
                 if pick is not None:
                     extra.append(pick)
                     # The rectangle the frame MEASURED for this window is the
@@ -5071,14 +5087,6 @@ def note(records_path, diary_text=None):
                     pass                       # stands behind others -> outline, card holds its content
                 elif sl.has_content() and shape:
                     subjects.append((st, sl, shape))
-                if s["t0"] in ("00:03:00",):
-                    _t = sl.main_table()
-                    _names = [(r["cells"][0] if r["cells"] else "") for r in (_t.rows if _t else [])][:6]
-                    sys.stderr.write("TRACE %-20s %-12s base=%s sliced=%s shape=%s\n        head=%s rows=%s\n"
-                                     % (str(st.name)[:20], str(getattr(st,'title','?'))[:12],
-                                        st in base, sl is not st,
-                                        [round(v) for v in shape] if shape else None,
-                                        (_t.header if _t else None), _names))
             if not subjects:
                 continue
             # The frame draws its windows as rectangles, and those rectangles
