@@ -35,9 +35,12 @@ import re
 import subprocess
 import sys
 
-import cv2
 import numpy as np
-from PIL import Image, ImageChops
+from PIL import Image, ImageChops, ImageFilter
+
+# No cv2 on purpose: the reader runs on the Windows Python, which has it,
+# but this gate drives Edge by its WSL path and runs on the WSL Python,
+# which does not. PIL and numpy carry everything it needs.
 
 EDGE = "/mnt/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe"
 CSS_PATH = "/mnt/nas/obsidian-vault/.obsidian/snippets/screen-notes.css"
