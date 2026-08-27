@@ -351,6 +351,31 @@ def _break_collapse(stage):
                   r'\1left:0.00%;top:0.00%;width:100.00%;height:100.00%"', stage)
 
 
+def _break_split(stage):
+    """One drawn window cut in two down the middle, each half a window.
+
+    The fault this guards is the one the frame itself invites: a Finder cut
+    at its sidebar divider is closed as two rectangles, and a drawing that
+    believes both puts two title bars and two sets of traffic lights where
+    the screen had one. Neither half then agrees with the window the frame
+    actually shows, which is what the box check must say.
+    """
+    m = re.search(r'<div class="sn-slot[^"]*" style="left:([\d.]+)%;top:([\d.]+)%;'
+                  r'width:([\d.]+)%;height:([\d.]+)%([^"]*)"', stage)
+    if not m:
+        return stage
+    left, top, wide, tall, rest = (float(m.group(i)) for i in range(1, 5)), m.group(5)
+    left, top, wide, tall = left
+    if wide < 8.0:
+        return stage
+    half = wide / 2.0
+    one = ('<div class="sn-slot" style="left:%.2f%%;top:%.2f%%;width:%.2f%%;'
+           'height:%.2f%%%s"' % (left, top, half, tall, rest))
+    two = ('<div class="sn-slot" style="left:%.2f%%;top:%.2f%%;width:%.2f%%;'
+           'height:%.2f%%%s"' % (left + half, top, half, tall, rest))
+    return stage[:m.start()] + one + stage[m.end():] + two + "</div>"
+
+
 def _break_placeholder(stage):
     return re.sub(r'(sn-ghost-tag[^>]*>)[^<]*<', r'\1rest of the screen<',
                   stage, count=1)
@@ -381,6 +406,7 @@ BREAKS = [
     ("breadcrumb segmented",   _break_crumbs_glued,   "BREADCRUMB RUN-TOGETHER"),
     ("breadcrumb crumb whole", _break_crumb_mangled,  "BREADCRUMB CRUMB MANGLED"),
     ("sidebar completeness",   _break_sidebar,        "SIDEBAR DROPPED"),
+    ("one window not two",     _break_split,          "BOX OFF ITS WINDOW"),
 ]
 
 
