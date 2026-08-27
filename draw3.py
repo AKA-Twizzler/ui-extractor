@@ -4978,8 +4978,17 @@ def note(records_path, diary_text=None):
                 mine = set()
                 if t_:
                     mine |= _telling([c for row in t_.rows for c in row["cells"] if c])
+                # NOTHING AT ALL, not a small share. Everything read inside
+                # the rectangle lands in `here` - the window's sidebar, and
+                # whatever of its neighbour reaches in - so a share test on a
+                # long list refuses a window that is plainly the right one:
+                # at 00:01:20 seven of the vault-demo folders matched and the
+                # window was still refused, drawn as an outline, and the gate
+                # said so. A window that recognises NONE of what the screen
+                # is showing where it is being asked to stand is the wrong
+                # window; one word of agreement is enough to keep it.
                 hit = sum(1 for w in here if any(w in k or k in w for k in mine))
-                return hit * 3 < len(here)
+                return hit == 0
 
             for r in fw_here:
                 if any(o is not r and furnish._within(r, o) > 0.5 for o in fw_here):
@@ -4993,7 +5002,7 @@ def note(records_path, diary_text=None):
                     sc = _lands(own, r)
                     if sc > best:
                         pick, best = own, sc
-                if False and pick is not None and _contradicts(pick, r):
+                if pick is not None and _contradicts(pick, r):
                     pick = None
                 if pick is not None:
                     extra.append(pick)
