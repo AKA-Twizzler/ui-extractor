@@ -754,6 +754,35 @@ def bar_crumbs(pane):
     return []
 
 
+def bar_across(group, m):
+    """A path bar the reader cut into several panes, read back as one.
+
+    `bar_crumbs` asks ONE pane for the whole bar. At 00:00:50 the strip under
+    a Finder came back as four panes and the bar's own words were cut across
+    them - `Maci` | `ntoshHD>` | `Users` | `jaredrhode` | `nizer>` - so no
+    pane held even two crumbs, the window never got a path, and since a
+    Finder's title IS the folder its path ends at, the window was drawn with
+    no name at all. The words of one ROW, read left to right and run
+    together, are that row's bar; the chevrons still mark the crumbs, and a
+    chevron the reader dropped only glues two crumbs into one rather than
+    losing them.
+    """
+    H = (m.get("size") or [1920, 1080])[1]
+    its = [it for p in group.get("panes") or [] for it in draw2.items_of(p)
+           if str(it.get("text") or "").strip()]
+    best = []
+    for seed in its:
+        row = sorted((it["box"][0], str(it["text"]))
+                     for it in its
+                     if abs(it["box"][1] - seed["box"][1]) <= 0.01 * H)
+        joined = "".join(t for _, t in row)
+        parts = [q.strip() for q in re.split(r"[>\u203a]", joined) if q.strip()]
+        if len(parts) >= 3 and norm(parts[0]) == norm("Macintosh HD") \
+                and len(parts) > len(best):
+            best = parts
+    return best
+
+
 GLUED_DATE = re.compile(
     r"[a-z]?((?:Today|Yesterday|[A-Z][a-z]{2}\s?\d{1,2},?\s?\d{4})"
     r"\s?(?:at)?\s?\d{1,2}:\d{2}\s?[AaPp]\.?[Mm])")
@@ -1019,23 +1048,9 @@ class State:
             c = bar_crumbs(p)
             if len(c) > len(bar):
                 bar = c
-        # AND A BAR CUT INTO PIECES IS STILL ONE BAR. The reader can cut the
-        # strip under a window into several panes - at 00:00:50 into four,
-        # `Maci` | `ntoshHD>` | `Users` | `jaredrhode` | `claude>` - and the
-        # longest of them holds two crumbs where the bar has five. Taken one
-        # pane at a time the window never got a path, and a Finder's title IS
-        # the folder its path ends at, so the window was drawn with no name.
-        # The pieces standing in ONE row are read left to right as the one
-        # bar they are.
-        H_ = (m.get("size") or [1920, 1080])[1]
-        found = [(p["box"][0], p["box"][1], bar_crumbs(p))
-                 for p in group.get("panes") or []]
-        found = [(x, y, c) for x, y, c in found if c]
-        for _, y_, _ in list(found):
-            row = sorted((x, c) for x, y, c in found if abs(y - y_) <= 0.02 * H_)
-            joined = [crumb for _, cs in row for crumb in cs]
-            if len(joined) > len(bar):
-                bar = joined
+        across = bar_across(group, m)
+        if len(across) > len(bar):
+            bar = across
         if bar:
             t_ = self.main_table()
             if t_ is not None and len(bar) > len(getattr(t_, "path", None) or []):
