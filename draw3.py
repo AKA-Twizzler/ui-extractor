@@ -5708,18 +5708,8 @@ def note(records_path, diary_text=None):
                                 if (b[3] - b[1]) >= 0.5 * Hf and b[1] <= sb[3]]
                         bb = min(tall, key=lambda b: b[1]) if tall else None
                         behinds.append(("the browser, behind", list(bb) if bb else sb))
-                        # AND WHERE NO WINDOW WAS MEASURED, THE STRIP ITSELF
-                        # IS THE BOX. At 00:04:00 the video is panned so the
-                        # browser's own top-left corner sits off the top of
-                        # the frame - black to its left, its tab row cut by
-                        # the frame's edge - so `bigwin` closes nothing for
-                        # it and the picture drew no tabs and no address bar
-                        # where the screen has both across the whole top.
-                        # The strip is measured either way, and the chrome
-                        # is exactly what stands inside it, so gathering
-                        # from the strip invents no geometry: it draws the
-                        # words the reader read, where the frame has them.
-                        browser_bits = browser_chrome(s, bb or sb, sb[3])
+                        if bb:
+                            browser_bits = browser_chrome(s, bb, sb[3])
                         break
             # A WINDOW DRAWN IN FULL MUST ITSELF BE A WINDOW. Its box has
             # to be one the frame drew, or - where the frame drew none,
