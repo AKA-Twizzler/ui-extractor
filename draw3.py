@@ -4841,6 +4841,15 @@ def note(records_path, diary_text=None):
             # focus state already fills, is pulled in by the window whose own
             # carried place sits on it, and drawn full like any other subject.
             T0 = span_T.get(s["t0"])
+            if s["t0"] in ("00:03:00",):
+                sys.stderr.write("TRACE stretch %s..%s\n" % (s["t0"], s["t1"]))
+                for own in states:
+                    pcs = [mm["ts"] for mm, _ in own.pieces]
+                    if s["t0"] in pcs:
+                        sys.stderr.write("   has piece here: %-20s %-12s content=%s in-states=%s\n"
+                                         % (str(own.name)[:20], str(getattr(own,'title','?'))[:12],
+                                            own.has_content(), own in s["states"]))
+                sys.stderr.write("   s[states]: %s\n" % [str(o.name)[:18] for o in s["states"]])
             fw_here = frame_windows(s)
             base = list(s["states"])
             extra = []
