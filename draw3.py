@@ -3920,7 +3920,7 @@ def note(records_path, diary_text=None):
         # `vault-demo` windows at 00:00:10, each with its own traffic lights
         # and title, where the screen had one. The law and the two
         # measurements it rests on live in `panes.fold_split_panes`.
-        if len(kept) > 1 and m0:
+        if False and len(kept) > 1 and m0:
             im = _frame_img(frame_of(m0))
             if im is not None:
                 kept = panes.fold_split_panes(im, kept)
