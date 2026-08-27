@@ -172,14 +172,39 @@ def note_level(note):
     return fails
 
 
+FAVORITES = ("recents", "shared", "applications", "pictures", "movies",
+             "desktop", "documents", "downloads", "icloud")
+
+
+def favorites_by_stamp(records):
+    """For each moment, the favorites-sidebar word boxes the reader read, in
+    0..1 frame fractions. The reader's WORDS, checked against the DRAWING --
+    a completeness test, not geometry graded against its own geometry."""
+    import draw as old
+    import draw3
+    hdr, moments, ftr = old.load(records)
+    W, H = (moments[0].get("size") or [1, 1])[:2] if moments else (1, 1)
+    out = {}
+    for m in moments:
+        favs = []
+        for key, b in (draw3.word_boxes(m) or {}).items():
+            k = key.replace(" ", "").lower()
+            if any(f in k for f in FAVORITES):
+                favs.append((b[0] / W, b[1] / H, b[2] / W, b[3] / H))
+        out[m["ts"]] = favs
+    return out
+
+
 def main():
     if len(sys.argv) < 3:
         raise SystemExit(__doc__)
     note, frames = sys.argv[1], sys.argv[2]
+    records = sys.argv[3] if len(sys.argv) > 3 else None
+    fav = favorites_by_stamp(records) if records else {}
     total = 0
     for stamp, heading, stage in pictures(note):
         frame = os.path.join(frames, stamp.replace(":", "-") + ".png")
-        fails = check_picture(stamp, stage, frame)
+        fails = check_picture(stamp, stage, frame, fav.get(stamp, ()))
         if fails:
             print("FAIL %s" % stamp)
             for f in fails:
@@ -189,7 +214,8 @@ def main():
         print("FAIL note-level")
         print("     " + f)
         total += 1
-    print("\nMACHINE-CHECKED: window presence, top-layer fill, placeholder labels, breadcrumb segmentation, duplicate quote blocks.")
+    side_note = "" if fav else " (sidebar-completeness skipped: pass the records path as a 3rd arg to enable it)"
+    print("\nMACHINE-CHECKED: window presence, top-layer fill, placeholder labels, breadcrumb segmentation, duplicate quote blocks, sidebar completeness%s." % side_note)
     print("NOT machine-checked (declared, not passed): relative type scale against the frame, and subjective legibility of rendered text. These need a rendered-pixel measure against the frame's own text heights; compare.py renders but does not yet measure type size.")
     if total:
         print("\n%d structural failure(s)." % total)
