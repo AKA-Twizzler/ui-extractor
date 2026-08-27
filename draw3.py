@@ -5449,6 +5449,9 @@ def note(records_path, diary_text=None):
                 # strip stopped being short, the subtraction stopped
                 # happening, and this window was drawn 6% of the screen
                 # taller than it stood.
+                sys.stderr.write("TRACE %s real_w=%d behinds=%s bigw=%s\n" % (
+                    s["t0"], len(real_w), [(t_, [round(v) for v in b_]) for t_, b_ in behinds],
+                    [[round(v) for v in b] for b in frame_bigwins(s)]))
                 used = [b_ for _, b_ in behinds]
                 free = [b for b in frame_bigwins(s)
                         if not any(furnish._close(b, u) for u in used)]
