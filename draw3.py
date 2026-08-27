@@ -3814,6 +3814,61 @@ def note(records_path, diary_text=None):
         _frame_big[t0] = [[float(v) for v in b] for b in got]
         return _frame_big[t0]
 
+    def browser_chrome(s, bb, foot):
+        """The browser's own tabs and address bar, gathered off the FRAME.
+
+        `furnish.browser_behind` reads one window state's top words, and
+        the strip's readings are scattered across several panes filed under
+        several windows -- so it recovered two tabs of five. The strip is
+        not any one window's property: it is a band of the frame, between
+        the menu bar's foot and the address row's, inside the browser's own
+        box. Gathered that way every tab is there, in the order they sit."""
+        got = []
+        for t in s["ts"]:
+            m_ = next((mm for mm in moments if mm["ts"] == t), None)
+            if not m_:
+                continue
+            for q_ in (m_.get("panes") or []):
+                for it in draw2.items_of(q_):
+                    b_ = it["box"]
+                    cy = (b_[1] + b_[3]) / 2.0
+                    if not (bb[1] <= cy <= foot):
+                        continue
+                    if not (bb[0] - 4 <= b_[0] and b_[2] <= bb[2] + 4):
+                        continue
+                    got.append((round(cy), b_[0], b_[2], it["text"]))
+            if got:
+                break
+        if not got:
+            return []
+        got.sort(key=lambda g: (g[0], g[1]))
+        # the band holds two rows: the tabs, then the address bar. They are
+        # told apart by their own heights, not by a number chosen here.
+        ys = sorted({g[0] for g in got})
+        cut = ys[0]
+        for a_, b2_ in zip(ys, ys[1:]):
+            if b2_ - a_ > 0.012 * Hf:
+                cut = a_
+                break
+        else:
+            cut = ys[-1]
+        tabs, addr, right = [], [], []
+        for cy, x0, x1, txt in got:
+            if x0 > 0.86 * Wf:
+                right.append(txt)
+            elif cy <= cut:
+                tabs.append((x0, txt))
+            else:
+                addr.append((x0, txt))
+        # a piece that begins mid-word is the tail of the tab before it
+        joined = []
+        for x0, t_ in tabs:
+            if joined and (t_[:1].islower() or t_[:1] in "-\u2013\u2014"):
+                joined[-1] = (joined[-1][0], joined[-1][1] + t_)
+            else:
+                joined.append((x0, t_))
+        return [(list(bb[:3]) + [foot], joined, [t_ for _, t_ in sorted(addr)], right)]
+
     def frame_rects(s):
         """The rectangles drawn on this stretch's own frame, near-duplicates
         folded together. These are window edges as the screen drew them, not
@@ -5550,6 +5605,7 @@ def note(records_path, diary_text=None):
                 # windows first, then the backdrop ones behind them.
                 src = [(stx, sl) for stx, sl, _ in subjects] \
                     + [(own, own) for own in states if own not in sub_states]
+                browser_bits = []
                 for stx, sl in src:
                     strip = behind_for(sl, dict(s, size=s["size"]), stx)
                     if strip:
@@ -5583,6 +5639,8 @@ def note(records_path, diary_text=None):
                                 if (b[3] - b[1]) >= 0.5 * Hf and b[1] <= sb[3]]
                         bb = min(tall, key=lambda b: b[1]) if tall else None
                         behinds.append(("the browser, behind", list(bb) if bb else sb))
+                        if bb:
+                            browser_bits = browser_chrome(s, bb, sb[3])
                         break
             # A WINDOW DRAWN IN FULL MUST ITSELF BE A WINDOW. Its box has
             # to be one the frame drew, or - where the frame drew none,
@@ -5716,7 +5774,10 @@ def note(records_path, diary_text=None):
                 # own measured row height, and `furnish.browser_behind`
                 # recovers two of the five tabs. The box is measured; the
                 # chrome is not finished.
-                chrome=(),
+                chrome=(browser_bits if barred else ()),
+                chrome_step=next((getattr(sl_, "_row_step", 0)
+                                  for _, sl_, _ in subjects
+                                  if getattr(sl_, "_row_step", 0)), 0.0),
                 ghosts=ghost_list(s, sub_states, carded),
                 camera=(cam, cam_pic) if cam else None,
                 sure=all(any(t in st.measured for t in s["ts"]) for st, _, _ in subjects),
