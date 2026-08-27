@@ -3860,6 +3860,10 @@ def note(records_path, diary_text=None):
                 tabs.append((x0, txt))
             else:
                 addr.append((x0, txt))
+        # ACROSS THE ROW, NOT DOWN IT. The readings in one row differ by a
+        # pixel or two in height, so sorting the band by y before x put the
+        # third tab first. Within a row the only order is left to right.
+        tabs.sort()
         # a piece that begins mid-word is the tail of the tab before it
         joined = []
         for x0, t_ in tabs:
