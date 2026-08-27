@@ -529,6 +529,28 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
 
     placed = []
 
+    def name_over(box, tag, cls):
+        """A window's name, drawn last and over everything, so a window
+        filled in on top of this one can never hide it. Used by an outline
+        and by a filled behind-window alike."""
+        if not tag:
+            return
+        # two windows whose top-left corners nearly meet would print their
+        # names over each other, so each later one steps down
+        l = 100.0 * box[0] / max(1, W)
+        t = 100.0 * box[1] / max(1, H)
+        step = sum(1 for pl, pt in placed if abs(pl - l) < 14 and abs(pt - t) < 5)
+        placed.append((l, t))
+        off = f'top:{5 + step * 15}px;' if step else ""
+        mod = " sn-away" if "sn-away" in cls else (" sn-subject" if "sn-subject" in cls else "")
+        # the placing is written into the tag itself, not left to the style
+        # sheet: a name box is a NEW class, and a picture must not fall apart
+        # on a reader whose snippet has not caught up
+        names.append(f'<div class="sn-ghost-name{mod}" style="position:absolute;'
+                     f'{slot_style(box, W, H, bar=barred)};z-index:40;'
+                     f'border:0;background:none;pointer-events:none">'
+                     f'<span class="sn-ghost-tag" style="{off}">{esc(tag)}</span></div>')
+
     def outline(box, tag, cls="sn-ghost", extra=""):
         lab = ""
         # When the desktop bar is in view the picture holds the whole screen,
@@ -538,25 +560,7 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
         # exactly what was there.
         if barred and off_screen(box, W, H) > 0.25 and "sn-away" not in cls:
             cls += " sn-away"
-        if tag:
-            # two windows whose top-left corners nearly meet would print
-            # their names over each other, so each later one steps down
-            l = 100.0 * box[0] / max(1, W)
-            t = 100.0 * box[1] / max(1, H)
-            step = sum(1 for pl, pt in placed if abs(pl - l) < 14 and abs(pt - t) < 5)
-            placed.append((l, t))
-            off = f'top:{5 + step * 15}px;' if step else ""
-            # the name is drawn last and over everything, because a window
-            # filled in on top of this one would otherwise hide it and the
-            # outline would stand there unnamed
-            mod = " sn-away" if "sn-away" in cls else (" sn-subject" if "sn-subject" in cls else "")
-            # the placing is written into the tag itself, not left to the
-            # style sheet: a name box is a NEW class, and a picture must
-            # not fall apart on a reader whose snippet has not caught up
-            names.append(f'<div class="sn-ghost-name{mod}" style="position:absolute;'
-                         f'{slot_style(box, W, H, bar=barred)};z-index:40;'
-                         f'border:0;background:none;pointer-events:none">'
-                         f'<span class="sn-ghost-tag" style="{off}">{esc(tag)}</span></div>')
+        name_over(box, tag, cls)
         return (f'<div class="{cls}" style="{slot_style(box, W, H, bar=barred)}{extra}">'
                 + lab + "</div>")
 
