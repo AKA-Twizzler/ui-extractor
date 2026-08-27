@@ -1325,6 +1325,8 @@ class State:
                     break
             if hit:
                 self.title, self.title_sure, self.title_from_path = hit, True, False
+                if "jarvis" in str(hit).lower():
+                    import sys as _s; print("RULE SET %r" % hit, file=_s.stderr)
                 return
             if self.title:
                 return                # keep what an earlier moment gave
@@ -1779,6 +1781,10 @@ def retitle_by_rows(states):
         named_elsewhere = st.title and any(crumb_same(st.title, v[1]) for v in parent.values()) \
             and not any(crumb_same(parent[fold(n)][1], st.title) for n in t.names() if fold(n) in parent)
         if not st.title or weak or named_elsewhere:
+            if "jarvis" in str(st.title).lower():
+                import sys as _s
+                print("RETITLE OVERWROTE %r -> %r  votes=%r weak=%s named_elsewhere=%s"
+                      % (st.title, best, votes, weak, named_elsewhere), file=_s.stderr)
             st.title = best
 
 
