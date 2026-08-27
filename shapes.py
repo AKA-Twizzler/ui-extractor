@@ -500,25 +500,37 @@ def windows(path):
     # two readings of one edge do not flap, small enough that a side taken
     # from the next window along (60-odd pixels of gap on a 4K frame) loses
     margin = 0.005 * sum(_frame_size(path))
-    kept = []
+    # The rectangles closing one window are gathered first, each with the
+    # biggest of them as the ground they share; then one is chosen for
+    # the whole group. AMONG THOSE WHOSE EDGES REACH THEIR CORNERS ABOUT
+    # AS WELL, THE TIGHTEST IS THE WINDOW: a rectangle wider than the
+    # window has borrowed a side from something beside it - the next
+    # window's shadow, a tree's indent guide - and the true window is
+    # the smallest rectangle whose edges are all its own. Preferring the
+    # biggest, as this used to, drew a Finder over its neighbour's sidebar.
+    groups = []
     for r, gp in got:
-        for i, (k, kg) in enumerate(kept):
+        for g in groups:
+            k = g[0][0]
             ix = max(0.0, min(r[2], k[2]) - max(r[0], k[0]))
             iy = max(0.0, min(r[3], k[3]) - max(r[1], k[1]))
             inter = ix * iy
             both = ((r[2]-r[0])*(r[3]-r[1]) + (k[2]-k[0])*(k[3]-k[1]) - inter)
             wide = max(r[2] - r[0], k[2] - k[0])
             tall = max(r[3] - r[1], k[3] - k[1])
-            same = inter / max(1e-6, both) > 0.8 or (
-                abs(r[0]-k[0]) < 0.012*wide and abs(r[2]-k[2]) < 0.012*wide
-                and abs(r[1]-k[1]) < 0.012*tall and abs(r[3]-k[3]) < 0.012*tall)
-            if same:
-                if gp + margin < kg:
-                    kept[i] = (r, gp)
+            if inter / max(1e-6, both) > 0.8 or (
+                    abs(r[0]-k[0]) < 0.012*wide and abs(r[2]-k[2]) < 0.012*wide
+                    and abs(r[1]-k[1]) < 0.012*tall and abs(r[3]-k[3]) < 0.012*tall):
+                g.append((r, gp))
                 break
         else:
-            kept.append((r, gp))
-    kept = [r for r, _gp in kept]
+            groups.append([(r, gp)])
+    kept = []
+    for g in groups:
+        best = min(gp for _r, gp in g)
+        close = [r for r, gp in g if gp <= best + margin]
+        kept.append(min(close, key=lambda r: (r[2] - r[0]) * (r[3] - r[1])))
+    kept.sort(key=lambda r: -(r[2] - r[0]) * (r[3] - r[1]))
     # A RECTANGLE TOO SMALL TO BE A WINDOW IS FURNITURE INSIDE ONE. On a
     # frame where a window fills the screen there is no window edge to
     # measure, so a card drawn inside its sidebar is the only rectangle
