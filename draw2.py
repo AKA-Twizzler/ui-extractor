@@ -509,13 +509,34 @@ def _alike(a, b):
 
 
 def _mend_edge_head(items):
-    """A column heading the screen's own edge cut short."""
+    """A column heading the screen's own edge cut short.
+
+    A window running off the left of the frame shows its columns without
+    their first letters: at 00:03:00 "Size" came back as `ize`, standing at
+    x=0. Three things must hold together before a word is read as a heading,
+    and the third is the one that matters: the word begins hard against the
+    frame's edge, it is the tail of exactly one of Finder's headings, AND
+    ANOTHER OF THOSE HEADINGS STANDS IN ITS OWN ROW. Without the last, any
+    word at the edge that happens to end like a heading is promoted into
+    one - and at 00:00:00 that turned the Obsidian window into a Finder
+    running the whole width of the screen, so the picture lost both Obsidian
+    and the browser. A heading never stands alone: it has the other columns
+    beside it.
+    """
+    rows = reading_order(items, lambda it: it["box"])
+    edge_rows = {}
+    for r in rows:
+        for it in r:
+            edge_rows[id(it)] = r
     out = []
     for it in items:
         t = str(it.get("text", "")).strip()
         if it["box"][0] <= 1 and 2 <= len(t) <= 12:
             hits = [h for h in FINDER_HEADS if h != t and h.endswith(t)]
-            if len(hits) == 1:
+            row = edge_rows.get(id(it)) or ()
+            beside = any(str(o.get("text", "")).strip() in FINDER_HEADS
+                         for o in row if o is not it)
+            if len(hits) == 1 and beside:
                 it = dict(it, text=hits[0])
         out.append(it)
     return out
