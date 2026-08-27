@@ -5324,7 +5324,16 @@ def note(records_path, diary_text=None):
                 behinds = fresh
             behinds.sort(key=lambda hb: -(hb[1][2] - hb[1][0]) * (hb[1][3] - hb[1][1]))
             if barred:
-                for stx, sl, _ in subjects:
+                # the browser's tab strip runs along the very top of the
+                # screen, above whatever window it stands behind. It is read
+                # on the top rows of the window that spans that strip -- often
+                # the full-screen backdrop, not a front window -- so a picture
+                # where no front window reaches the top still has a browser to
+                # draw: every state this stretch shows is asked for it, front
+                # windows first, then the backdrop ones behind them.
+                src = [(stx, sl) for stx, sl, _ in subjects] \
+                    + [(own, own) for own in states if own not in sub_states]
+                for stx, sl in src:
                     strip = behind_for(sl, dict(s, size=s["size"]), stx)
                     if strip:
                         sb = strip[0][1]
