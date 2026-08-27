@@ -207,8 +207,22 @@ def finder(st):
             g = '<span class="sn-g">⊟</span>' if k == 0 and c.lower().startswith("macintosh") else ico("")
             crumbs.append(f"<span>{g}{esc(c)}</span>")
         foot = '<div class="sn-pathbar">' + '<span class="sn-sep">›</span>'.join(crumbs) + "</div>"
-    main = '<div class="sn-main">' + toolbar + body + foot + "</div>"
+    # THE PATH BAR SITS AT THE WINDOW'S FOOT, because that is where Finder
+    # puts it. Drawn straight under the last file it rides up the window
+    # whenever the list is short - and once the rows were drawn at the
+    # screen's own spacing instead of about twice it, every list became
+    # short. Measured, that left one band wrong in every picture with a
+    # Finder in it: "16-91% across, 67-80% down" missing, which is the
+    # window's whole lower edge, its bar included. The card is laid out as a
+    # column and the list takes the slack, so the bar stands at the foot
+    # where the frame has it. This pads nothing: the empty rows stay two,
+    # and the space below the list stays empty, exactly as the rule says.
+    main = ('<div class="sn-main" style="display:flex;flex-direction:column;'
+            'min-height:100%">' + toolbar
+            + '<div style="flex:1 1 auto;min-height:0">' + body + '</div>'
+            + foot + "</div>")
     cls = "sn-window sn-finder" + (" sn-dark" if st.theme == "dark" else "")
+    stretch = ' style="display:flex;flex-direction:column"'
     if side:
         # a sidebar the frame MEASURED is drawn at the width it was; the
         # card's fixed one stands for every Finder that was never measured
