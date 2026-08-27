@@ -122,8 +122,9 @@ def trim(im):
 
 def ink_grid(im):
     """Where an eye sees ink: local contrast, on a coarse grid."""
-    g = np.asarray(im.convert("L").resize((PIC_W, PIC_H)), dtype=np.float32)
-    blur = cv2.GaussianBlur(g, (0, 0), 3)
+    small = im.convert("L").resize((PIC_W, PIC_H))
+    g = np.asarray(small, dtype=np.float32)
+    blur = np.asarray(small.filter(ImageFilter.GaussianBlur(3)), dtype=np.float32)
     m = (np.abs(g - blur) > 16).astype(np.float32)
     cells = m.reshape(PIC_H // CELL_GRID, CELL_GRID, PIC_W // CELL_GRID, CELL_GRID).mean(axis=(1, 3))
     return cells > 0.03
