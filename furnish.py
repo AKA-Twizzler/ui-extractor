@@ -419,8 +419,14 @@ def note_html(st, doc, title, blocks=None, wide=0):
     # text at all. A block placed at its own height must carry the width and
     # the centring itself: once it is a block of its own, `--sn-line` no
     # longer reaches the lines inside it.
-    span = ("max-width:%d%%;margin-left:auto;margin-right:auto;" % wide
-            if wide and wide < 98 else "")
+    # LEFT-ALIGNED, MEASURED. Centring the column was tried: Obsidian does
+    # centre a note, but the drawn doc column is not the frame's pane, so
+    # centring inside it put the note at 0.605-0.807 of the screen where the
+    # frame has it at 0.448-0.714. Left-aligned it lands at 0.426, which is
+    # the closest of the four placements measured. What is still short is
+    # the column's WIDTH -- 0.203 of the screen against the frame's 0.266 --
+    # and that comes from `_doc_wide` being borrowed from another moment.
+    span = ("max-width:%d%%;" % wide if wide and wide < 98 else "")
     for bi in sorted(groups):
         out.append('<div class="sn-docblock" style="position:absolute;left:0;right:0;'
                    'padding:0 calc(26 * var(--sn-u, 1px));%s'
