@@ -3726,6 +3726,11 @@ def note(records_path, diary_text=None):
         least = 0.09 * Wf * Hf
         _frame_wins[t0] = [[float(v) for v in r] for r in got
                            if (r[2] - r[0]) * (r[3] - r[1]) >= least]
+        if os.environ.get("SN_DBG") == t0:
+            print("FW %s: frame=%r got=%s Wf,Hf=%s least=%.0f kept=%s"
+                  % (t0, frame_of(m0), [[round(v) for v in r] for r in got],
+                     (Wf, Hf), least, [[round(v) for v in r] for r in _frame_wins[t0]]),
+                  file=sys.stderr)
         return _frame_wins[t0]
 
     SIDE_FLAT = {norm(n) for n in draw2.SIDE_NAMES}
