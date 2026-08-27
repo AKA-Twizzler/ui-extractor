@@ -338,6 +338,11 @@ def obsidian(st, behind=True):
     if tree and doc and tp and rect and rect[2] > tp["x1"] > tp["x0"] >= rect[0] - 4:
         tree_fr = max(8, round(100.0 * (tp["x1"] - tp["x0"]) / max(1.0, rect[2] - rect[0])))
         doc_fr = 100 - tree_fr
+    elif tree and doc and getattr(st, "_tree_fr", 0):
+        # measured off this stretch's own tree pane, for a window whose
+        # tree part carries no x-range of its own
+        tree_fr = st._tree_fr
+        doc_fr = 100 - tree_fr
     grid = "30px " + (f"minmax(120px, {tree_fr}fr) " if tree else "") + (f"{doc_fr}fr" if doc else "")
     body = f'<div class="sn-cols sn-obsidian-cols" style="grid-template-columns: {grid.strip()}">' + "".join(cols) + "</div>"
     cls = "sn-window sn-obsidian" + (" sn-dark" if st.theme == "dark" else "")

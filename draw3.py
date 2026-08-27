@@ -5150,6 +5150,29 @@ def note(records_path, diary_text=None):
                 # window's own unit, so it lands there at any page width.
                 # The first block flows from the top pad as before; every
                 # later one is placed by its pane's measured top.
+                # HOW THE WINDOW SPLIT ITS OWN WIDTH, from this stretch's
+                # own panes. `furnish` measures the tree's share off the
+                # tree PART's x-range, which is unset on a window the
+                # reader never measured -- so it fell back to a fixed 38/62
+                # and drew Obsidian's file tree at four times the width the
+                # screen gave it, pushing the note's column right and
+                # squeezing it.
+                if shape and shape[2] > shape[0]:
+                    tx0 = tx1 = None
+                    for m_, g_ in getattr(stx, "pieces", ()):
+                        if m_["ts"] not in s["ts"]:
+                            continue
+                        for q_ in (g_.get("panes") or []):
+                            if q_.get("kind") != "a file tree":
+                                continue
+                            b_ = q_.get("box")
+                            if not b_ or not (shape[0] - 4 <= b_[0] and b_[2] <= shape[2]):
+                                continue
+                            tx0 = b_[0] if tx0 is None else min(tx0, b_[0])
+                            tx1 = b_[2] if tx1 is None else max(tx1, b_[2])
+                    if tx0 is not None and tx1 > tx0:
+                        sl._tree_fr = max(6, round(100.0 * (tx1 - shape[0])
+                                                   / (shape[2] - shape[0])))
                 sl._doc_blocks = []
                 d_ = sl.main_doc()
                 if d_ is not None and len(getattr(d_, "blocks", ())) > 1 and shape:
