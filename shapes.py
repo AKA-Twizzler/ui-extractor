@@ -496,7 +496,10 @@ def windows(path):
     # the Finder's sidebar. The edges say which is which: the true window's
     # top begins at its own side, and the wide one's top begins 236 pixels
     # in from the side it claims.
-    margin = 0.01 * (_a := _frame_size(path))[0] + 0.01 * _a[1]
+    # half a percent of the frame's width and height together: enough that
+    # two readings of one edge do not flap, small enough that a side taken
+    # from the next window along (60-odd pixels of gap on a 4K frame) loses
+    margin = 0.005 * sum(_frame_size(path))
     kept = []
     for r, gp in got:
         for i, (k, kg) in enumerate(kept):
