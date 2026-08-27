@@ -1198,13 +1198,7 @@ class State:
                         part["x0"], part["x1"] = built[6]
             elif k == "a file tree":
                 pairs, fine = tree_pairs(p)
-                import sys as _s
-                if any("inbox" in re.sub(r"[^a-z]", "", str(t).lower()) for t, _h in pairs):
-                    print("ABSORB ts=%s pairs[:3]=%r" % (m["ts"], [t for t, _h in pairs][:3]), file=_s.stderr)
-                    print("       pane lines[:3]=%r" % ([str(x) for x in (p.get("lines") or [])][:3],), file=_s.stderr)
                 part["model"].add(pairs)
-                if any("inbox" in re.sub(r"[^a-z]", "", str(t).lower()) for t, _h in pairs):
-                    print("       model now  =%r" % ([t for t, _h in part["model"].lines][:3],), file=_s.stderr)
                 self.fine.extend(fine)
                 for r in (p.get("data") or {}).get("remainder") or []:
                     if r.get("where") == "above" and r.get("text"):
@@ -1681,8 +1675,11 @@ def build_states(moments):
             if touched:
                 home = max(touched, key=lambda s: (s.rect[2] - s.rect[0]) * (s.rect[3] - s.rect[1]))
                 home.said.append((m["ts"], said))
+    _OBS("before harmonise", states)
     harmonise(states)
+    _OBS("after harmonise", states)
     retitle_by_rows(states)
+    _OBS("after retitle", states)
     # A title is a folder's name, and no folder here ends in a bare full
     # stop. `memory.` is the reader's dot, picked up from the title bar of a
     # moving frame; a name that BEGINS with one (`.claude`) is real and is
@@ -1692,13 +1689,25 @@ def build_states(moments):
         if st.title and len(st.title) > 1 and st.title.endswith("."):
             st.title = st.title.rstrip(".") or st.title
     drop_guessed(states)
+    _OBS("after drop_guessed", states)
     if moments:
         W, H = (moments[0].get("size") or [1920, 1080])[:2]
         for st in states:
             settle_rects(st, W, H)
         settle_across(states, [m["ts"] for m in moments], W, H)
+    _OBS("end of build_states", states)
     return states
 
+
+
+def _OBS(tag, states):
+    import sys as _s
+    for st in states:
+        for q in st.parts:
+            m = q["model"]
+            ls = [t for t, _h in getattr(m, "lines", [])]
+            if any("inbox" in __import__("re").sub(r"[^a-z]", "", str(x).lower()) for x in ls[:4]):
+                print("  %-22s times=%s first=%r" % (tag, getattr(st, "times", None), ls[:2]), file=_s.stderr)
 
 def retitle_by_rows(states):
     """A list window is named by what it lists. The settled path bars say
