@@ -130,10 +130,11 @@ def ink_grid(im):
     return cells > 0.03
 
 
-def camera_mask(stage_html):
-    """Cells under the camera's box, which the drawing outlines and never draws."""
+def region_mask(stage_html, class_pat):
+    """Cells covered by the boxes whose class matches `class_pat`, read from
+    their left/top/width/height percentages."""
     mask = np.zeros((PIC_H // CELL_GRID, PIC_W // CELL_GRID), dtype=bool)
-    for m in re.finditer(r'class="sn-camera[^"]*" style="([^"]*)"', stage_html):
+    for m in re.finditer(r'class="' + class_pat + r'" style="([^"]*)"', stage_html):
         st = dict(re.findall(r"(left|top|width|height):([\d.]+)%", m.group(1)))
         if len(st) == 4:
             l, t, w, h = (float(st[k]) for k in ("left", "top", "width", "height"))
@@ -141,6 +142,24 @@ def camera_mask(stage_html):
             x0, x1 = int(l / 100 * mask.shape[1]), int(np.ceil((l + w) / 100 * mask.shape[1]))
             mask[max(0, y0):y1, max(0, x0):x1] = True
     return mask
+
+
+def camera_mask(stage_html):
+    """Cells under the camera's box, which the drawing outlines and never draws."""
+    return region_mask(stage_html, r'sn-camera[^"]*')
+
+
+def behind_only_mask(stage_html):
+    """Cells that are BEHIND-ONLY: covered by an outline (a window drawn
+    behind) and by no filled window on top. Tristan's rule is that only the
+    top layer gets full content and everything behind is an outline, so the
+    frame's ink in a behind-only region is content the drawing is SUPPOSED
+    to omit -- it must not count against coverage, any more than the camera
+    does. A behind window that a front window is drawn over is not excluded:
+    that ground is the front window's, and its content is scored normally."""
+    outline = region_mask(stage_html, r'sn-ghost(?: sn-\w+)*')
+    filled = region_mask(stage_html, r'sn-slot(?: sn-\w+)*')
+    return outline & ~filled
 
 
 def blobs(grid, top=3):
