@@ -3655,7 +3655,14 @@ def note(records_path, diary_text=None):
             return _frame_wins[t0]
         m0 = next((mm for mm in moments if mm["ts"] == t0), None)
         got = shapes.windows(frame_of(m0)) if m0 else []
-        _frame_wins[t0] = [[float(v) for v in r] for r in got]
+        # A WINDOW IS SOMETHING A PERSON WORKS IN, AND THAT HAS A SIZE - the
+        # reader's own law, a tenth of the screen. A smaller rectangle the
+        # frame closed is furniture inside a window: a sidebar, a card. One
+        # such rectangle, standing over a Finder's sidebar, was drawn as a
+        # second window named "Finder" on top of the Finder it was part of.
+        least = 0.09 * Wf * Hf
+        _frame_wins[t0] = [[float(v) for v in r] for r in got
+                           if (r[2] - r[0]) * (r[3] - r[1]) >= least]
         return _frame_wins[t0]
 
     SIDE_FLAT = {norm(n) for n in draw2.SIDE_NAMES}
