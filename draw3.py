@@ -4966,15 +4966,18 @@ def note(records_path, diary_text=None):
                         if b_ and it["text"].strip() and furnish._within(b_, r_) >= 0.8:
                             read_.append(it["text"])
                 here = _telling(read_)
-                if s["t0"] in ("00:01:10",):
-                    sys.stderr.write("TRACECON here=%s\n" % sorted(here)[:10])
                 if len(here) < 2:
                     return False              # too little read to contradict
+                # ITS ROWS, NOT ITS PATH. A window's path bar says where it
+                # SITS, not what it shows, and it ends at the row selected in
+                # it as readily as at the folder on display. The `.claude`
+                # state's path ends `.claude > projects`, so the one word that
+                # told 00:01:10 apart - `projects` - matched the remembered
+                # window and cancelled the very contradiction it was.
                 t_ = st_.main_table()
                 mine = set()
                 if t_:
                     mine |= _telling([c for row in t_.rows for c in row["cells"] if c])
-                    mine |= _telling(list(t_.header or ()) + list(t_.path or ()))
                 hit = sum(1 for w in here if any(w in k or k in w for k in mine))
                 return hit * 3 < len(here)
 
@@ -4990,10 +4993,6 @@ def note(records_path, diary_text=None):
                     sc = _lands(own, r)
                     if sc > best:
                         pick, best = own, sc
-                if s["t0"] in ("00:01:10",):
-                    sys.stderr.write("TRACEPICK rect=%s pick=%s\n"
-                                     % ([round(v) for v in r],
-                                        (str(pick.name)[:18], str(pick.title)[:14]) if pick else None))
                 if pick is not None and _contradicts(pick, r):
                     pick = None
                 if pick is not None:
