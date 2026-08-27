@@ -3761,6 +3761,32 @@ def note(records_path, diary_text=None):
 
     _frame_wins = {}
 
+    _frame_big = {}
+
+    def frame_bigwins(s):
+        """The windows the SCREEN CUT OFF on this stretch's frame.
+
+        `shapes` closes a window from two sides plus a top and a foot, and
+        lets the frame's edge stand in for a missing SIDE but never for a
+        missing FOOT -- so a window running off the bottom of the screen is
+        never measured, which is why the browser and the Obsidian editor
+        were read and never placed. These are measured the other way round,
+        from the corner their two drawn edges make."""
+        t0 = s["t0"]
+        if t0 in _frame_big:
+            return _frame_big[t0]
+        got = []
+        try:
+            import bigwin
+            m0 = next((mm for mm in moments if mm["ts"] == t0), None)
+            path = frame_of(m0) if m0 else None
+            if path:
+                got = bigwin.big_windows(path)
+        except Exception:
+            got = []
+        _frame_big[t0] = [[float(v) for v in b] for b in got]
+        return _frame_big[t0]
+
     def frame_rects(s):
         """The rectangles drawn on this stretch's own frame, near-duplicates
         folded together. These are window edges as the screen drew them, not
@@ -5361,7 +5387,20 @@ def note(records_path, diary_text=None):
                             if (box_[2] - box_[0] >= 0.88 * Wf and box_[1] < sb[3] - 0.01 * Hf
                                     and box_[3] > sb[3] + 0.2 * Hf):
                                 behinds[k_] = (tag_, [box_[0], float(sb[3]), box_[2], box_[3]])
-                        behinds.append(("the browser, behind", sb))
+                        # THE BROWSER'S BOX IS THE BROWSER, NOT ITS CHROME.
+                        # `sb` is the extent of the tab strip and address
+                        # bar -- the only part of the browser standing clear
+                        # of Obsidian -- and outlining THAT said the browser
+                        # was a band 6% of the screen tall where it stood
+                        # 97% tall. Its own rectangle can now be measured;
+                        # the strip is only where its top edge is.
+                        bb = None
+                        for b in frame_bigwins(s):
+                            if abs(b[1] - sb[1]) <= 0.03 * Hf and \
+                                    (b[3] - b[1]) >= 0.5 * Hf:
+                                bb = list(b)
+                                break
+                        behinds.append(("the browser, behind", bb or sb))
                         break
             # A WINDOW DRAWN IN FULL MUST ITSELF BE A WINDOW. Its box has
             # to be one the frame drew, or - where the frame drew none,
