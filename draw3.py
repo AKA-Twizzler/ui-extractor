@@ -4426,6 +4426,27 @@ def note(records_path, diary_text=None):
             st._doc_wide = round(100 * med(sorted(wide)))
             st._doc_wide_at = at
 
+    # A NOTE'S LINE LENGTH BELONGS TO THE PROGRAM, NOT TO ONE READING OF IT.
+    # A note is set to a readable line length and that does not change from
+    # moment to moment; what changes is whether this stretch happened to
+    # read enough of the pane to measure it. Where a stretch measured none,
+    # the same window's own measurement from a moment that DID is the honest
+    # width -- the puzzle-piece rule the note already sanctions for a fill,
+    # applied to the shape of the text instead of to its words. Without it
+    # the backdrop Obsidian at 00:00:00 had no width at all and its note was
+    # drawn across the whole pane, where the screen ran it in a column about
+    # half that: lines landing where the frame has none.
+    _wide_home = {}
+    for st in states:
+        w_ = getattr(st, "_doc_wide", 0)
+        if w_:
+            _wide_home.setdefault(st.name, []).append(w_)
+    _wide_home = {k: round(med(sorted(v))) for k, v in _wide_home.items()}
+    for st in states:
+        if not getattr(st, "_doc_wide", 0) and _wide_home.get(st.name):
+            st._doc_wide = _wide_home[st.name]
+            st._doc_wide_borrowed = True
+
     for st in states:
         for t_, b_ in getattr(st, "_h1_read", ()):
             s_ = next((x for x in spans if t_ in x["ts"]), None)
