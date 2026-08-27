@@ -4918,6 +4918,57 @@ def note(records_path, diary_text=None):
                     return 0.0
                 b = onto(T0, hb)
                 return furnish._within(r_, b) * furnish._within(b, r_)
+            def _telling(words):
+                """The words that say WHICH folder this is.
+
+                A Finder's headings and the words in its Kind column stand in
+                every Finder alike - Name, Date Modified, Size, Kind, Folder,
+                Document - so counting them as agreement let a remembered
+                window match a rectangle showing something else entirely.
+                What tells one folder from another is its own rows.
+                """
+                out_ = set()
+                for w in words:
+                    n_ = norm(w)
+                    if len(n_) < 4 or w in FINDER_WORDS:
+                        continue
+                    if re.match(r"^(folder|document|jsonl?|logfile|application)$", n_):
+                        continue
+                    if GLUED_DATE.search(w) or GLUED_SIZE.search(w):
+                        continue
+                    out_.add(n_)
+                return out_
+
+            def _contradicts(st_, r_):
+                """What the reader read inside this rectangle NOW, set against
+                what this window remembers showing.
+
+                A carried box says where a window USED to be and what it
+                showed THEN. At 00:01:10 the screen shows a Finder holding one
+                row of the `projects` folder, and the rectangle went to a
+                remembered state of the `.claude` folder, which drew six file
+                names the screen was not showing.
+                """
+                m0_ = next((mm for mm in moments if mm["ts"] == s["t0"]), None)
+                if not m0_:
+                    return False
+                read_ = []
+                for p_ in m0_.get("panes") or []:
+                    for it in draw2.items_of(p_):
+                        b_ = it.get("box")
+                        if b_ and it["text"].strip() and furnish._within(b_, r_) >= 0.8:
+                            read_.append(it["text"])
+                here = _telling(read_)
+                if len(here) < 3:
+                    return False              # too little read to contradict
+                t_ = st_.main_table()
+                mine = set()
+                if t_:
+                    mine |= _telling([c for row in t_.rows for c in row["cells"] if c])
+                    mine |= _telling(list(t_.header or ()) + list(t_.path or ()))
+                hit = sum(1 for w in here if any(w in k or k in w for k in mine))
+                return hit * 3 < len(here)
+
             for r in fw_here:
                 if any(o is not r and furnish._within(r, o) > 0.5 for o in fw_here):
                     continue                    # this window stands behind another
@@ -4930,6 +4981,8 @@ def note(records_path, diary_text=None):
                     sc = _lands(own, r)
                     if sc > best:
                         pick, best = own, sc
+                if pick is not None and _contradicts(pick, r):
+                    pick = None
                 if pick is not None:
                     extra.append(pick)
                     # The rectangle the frame MEASURED for this window is the
