@@ -4606,7 +4606,44 @@ def note(records_path, diary_text=None):
         for s in spans:
             subjects = []
             settled = set()   # states whose box the frame itself measured
-            for st in s["states"]:
+            # A WINDOW THE FRAME DREW IN FULL, THAT NO FOCUS WINDOW COVERS,
+            # IS A TOP-LAYER WINDOW AND MUST BE FILLED, not merely outlined.
+            # Two Finders standing side by side are both plainly in view;
+            # drawing one filled and the other a bare box says the screen
+            # showed only one. The stretch is built from the windows the
+            # reader followed, so a window nobody followed - present the whole
+            # stretch, re-read only now and then - never joins the focus set
+            # and falls through to the outline machinery. So before the
+            # subjects are built, every measured frame window this stretch
+            # shows, that no other frame window stands over (behind) and no
+            # focus state already fills, is pulled in by the window whose own
+            # carried place sits on it, and drawn full like any other subject.
+            T0 = span_T.get(s["t0"])
+            fw_here = frame_windows(s)
+            base = list(s["states"])
+            extra = []
+
+            def _lands(st_, r_):
+                hb = home_at(st_, s["t0"])
+                if not hb or not T0:
+                    return 0.0
+                b = onto(T0, hb)
+                return furnish._within(r_, b) * furnish._within(b, r_)
+            for r in fw_here:
+                if any(o is not r and furnish._within(r, o) > 0.5 for o in fw_here):
+                    continue                    # this window stands behind another
+                if any(_lands(bst, r) > 0.25 for bst in base):
+                    continue                    # a focus window already fills it
+                pick, best = None, 0.2
+                for own in states:
+                    if own in base or own in extra or not own.has_content():
+                        continue
+                    sc = _lands(own, r)
+                    if sc > best:
+                        pick, best = own, sc
+                if pick is not None:
+                    extra.append(pick)
+            for st in base + extra:
                 if st not in shown:
                     continue
                 sl = state_slice(st, s["t0"], s["t1"]) or st
