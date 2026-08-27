@@ -5071,6 +5071,14 @@ def note(records_path, diary_text=None):
                     pass                       # stands behind others -> outline, card holds its content
                 elif sl.has_content() and shape:
                     subjects.append((st, sl, shape))
+                if s["t0"] in ("00:03:00",):
+                    _t = sl.main_table()
+                    _names = [(r["cells"][0] if r["cells"] else "") for r in (_t.rows if _t else [])][:6]
+                    sys.stderr.write("TRACE %-20s %-12s base=%s sliced=%s shape=%s\n        head=%s rows=%s\n"
+                                     % (str(st.name)[:20], str(getattr(st,'title','?'))[:12],
+                                        st in base, sl is not st,
+                                        [round(v) for v in shape] if shape else None,
+                                        (_t.header if _t else None), _names))
             if not subjects:
                 continue
             # The frame draws its windows as rectangles, and those rectangles
