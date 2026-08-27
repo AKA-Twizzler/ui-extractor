@@ -740,12 +740,6 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
         thin = (rect[2] - rect[0] < 0.15 * W or rect[3] - rect[1] < 0.12 * H)
         st.shape = rect
         html = None if thin else (window(st, behind=False) or st.plain_window_html())
-        import os as _os
-        if _os.environ.get("SN_DBG") == span.get("t0"):
-            import sys as _sys
-            print("  SLOT %s %r side_words=%s finder_has_recents=%s"
-                  % (span.get("t0"), st.name, side_words_of(st) if st.name == "The Finder window" else "-",
-                     bool(html and "Recents" in html)), file=_sys.stderr)
         st.shape = None
         if not html:
             out.append(outline(rect, getattr(st, "_label", "") or "",
