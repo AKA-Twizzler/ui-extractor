@@ -693,7 +693,12 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
         if st_ is not None and "sn-away" not in cls:
             st_.shape = box
             try:
-                html = window(st_, behind=True)
+                # a named window draws in its program's own chrome; a window
+                # the reader never named but that carries content -- Obsidian
+                # standing behind, read as a tree and a note but named only
+                # "the rest of the screen" -- draws in a plain frame, which
+                # is still its content inside a window rather than loose text
+                html = window(st_, behind=True) or st_.plain_window_html()
             except Exception:
                 html = None
             st_.shape = None
