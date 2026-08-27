@@ -183,8 +183,9 @@ def big_windows(path, least_frac=0.20, img=None):
     known = [r[:4] for r in shapes.windows(path)]
     blocks = []
     cam = shapes.camera_box(path)
-    if cam:
-        blocks.append(tuple(v / k for v in cam))
+    cam_w = tuple(v / k for v in cam) if cam else None
+    if cam_w:
+        blocks.append(cam_w)
     for r in known:
         blocks.append(tuple(v / k for v in r))
 
@@ -208,6 +209,14 @@ def big_windows(path, least_frac=0.20, img=None):
             # row under it, so it passed the corner-buttons test as well and
             # came back as a second window inside the first.
             if abs(y - side_top) > tol or abs(x - head_left) > tol:
+                continue
+            # A CAMERA IS NOT A WINDOW, and a face passes every test a
+            # window's corner passes. The hat brim and the chair back make
+            # a corner of two straight edges, and three round features on
+            # the face sit in a row inside it -- measured at 00:05:50, that
+            # drew a window over the person's head. The camera's own box is
+            # already measured; a corner inside it is not a window's.
+            if cam_w and cam_w[0] <= x <= cam_w[2] and cam_w[1] <= y <= cam_w[3]:
                 continue
             x1 = _run_out(hors, y, head_right, w, blocks, True, tol, least_h)
             y1 = _run_out(verts, x, side_bot, h, blocks, False, tol, least_v)
