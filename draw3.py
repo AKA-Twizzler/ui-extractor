@@ -420,6 +420,13 @@ class Table:
         if best and best not in self.paths:
             self.paths.append(best)
             self.path_at.append(self.now)
+        _n = [str((r.get("cells") or [""])[0]).lower() for r in self.rows]
+        if any("inbox" in x for x in _n) and not any("obsidian" in x for x in _n):
+            import sys as _s, traceback as _tb
+            if not getattr(Table, "_told", 0):
+                Table._told = 1
+                print("LOST .obsidian; table now: %r" % (_n[:4],), file=_s.stderr)
+                _tb.print_stack(file=_s.stderr)
         self.tidy()
 
     def tidy(self):
