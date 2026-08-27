@@ -631,7 +631,7 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
     # two become one: the name that says something, over the box the words
     # themselves reach to.
     merged = []
-    for box, tag, cls in marks:
+    for box, tag, cls, st_ in marks:
         for other in merged:
             a = (box[2] - box[0]) * (box[3] - box[1])
             b = (other[0][2] - other[0][0]) * (other[0][3] - other[0][1])
