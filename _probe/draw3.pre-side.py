@@ -6053,18 +6053,6 @@ def note(records_path, diary_text=None):
                                             if len(key) >= 5):
                                 hits += 1
                     if hits >= 2:
-                        import sys as _s
-                        _t = sl.main_table()
-                        _tp = next((q for q in sl.parts if q["fam"] == "table" and q["model"] is _t), None)
-                        print("CARRY %s label=%r shape=%s list_x0=%s hits=%d"
-                              % (s["t0"], getattr(sl, "_label", None), [round(v) for v in shape],
-                                 (_tp or {}).get("x0"), hits), file=_s.stderr)
-                        for t in s["ts"]:
-                            for key, b in (words_of.get(t) or {}).items():
-                                cx = (b[0] + b[2]) / 2
-                                if shape[0] <= cx <= shape[2] and any(hk in key or key in hk for hk in house_keys if len(key) >= 5):
-                                    print("      house word %-14r at x=%d" % (key[:14], round(cx)), file=_s.stderr)
-                            break
                         sl._carried_side = house_side
             parts.append(furnish.screen_shot(
                 {"t0": s["t0"], "t1": s["t1"]},
