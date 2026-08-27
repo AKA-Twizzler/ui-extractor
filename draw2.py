@@ -542,14 +542,9 @@ def _mend_edge_head(items):
     return out
 
 
-def _edge_head_mended(items):
-    return any(a["text"] != b["text"] for a, b in zip(items, _mend_edge_head(items)))
-
-
 def table_from_items(items):
     if not items:
         return None
-    items = _mend_edge_head(items)
     rows = reading_order(items, lambda it: it["box"])
     head_row = None
     for r in rows:
@@ -842,9 +837,17 @@ def cut_list(pane):
         return None
     if not _finder_sizes(pane):
         return None
-    if not _edge_head_mended(items_of(pane)):
+    # THE MEND BELONGS TO THIS PATH ONLY. Applied inside `table_from_items`
+    # it reached every list the note builds, and a word standing at x=0 that
+    # happens to end like one of Finder's headings was promoted into one:
+    # at 00:00:00 that renamed a full-width window and the picture lost both
+    # Obsidian and the browser. Nothing outside a window the screen cut off
+    # asks for a heading to be recovered.
+    items = items_of(pane)
+    mended = _mend_edge_head(items)
+    if not any(a["text"] != b["text"] for a, b in zip(items, mended)):
         return None
-    return table_from_loose(pane)
+    return table_from_items(mended)
 
 
 def block_of(pane, window_rect):
