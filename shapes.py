@@ -203,6 +203,12 @@ def _gap(hshelf, vshelf, r, w, h):
             gap += (x1 - x0)
         else:
             gap += max(0.0, ln[1] - x0) + max(0.0, x1 - ln[2])
+    # A SIDE RUNS FROM THE TOP TO THE FOOT AND NO FURTHER. A top or a foot
+    # may lie along a bar that crosses the whole screen, but a side that
+    # carries on well past the window's foot is the edge of something
+    # taller standing beside it - the next window along - and pairing
+    # with it stretched a Finder window over its neighbour's sidebar.
+    over = max(4.0, 0.02 * (y1 - y0))
     for pos in (x0, x1):
         if pos <= 2 or pos >= w - 3:
             continue
@@ -211,6 +217,7 @@ def _gap(hshelf, vshelf, r, w, h):
             gap += (y1 - y0)
         else:
             gap += max(0.0, ln[1] - y0) + max(0.0, y1 - ln[2])
+            gap += max(0.0, (y0 - ln[1]) - over) + max(0.0, (ln[2] - y1) - over)
     return gap
 
 
