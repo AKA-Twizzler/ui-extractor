@@ -5312,6 +5312,13 @@ def note(records_path, diary_text=None):
                 fine.append((stx, sl, shape))
             if fine:
                 subjects = fine
+            if os.environ.get("SN_DBG") == s["t0"]:
+                print("DBG %s subjects:" % s["t0"], file=sys.stderr)
+                for _st, _sl, _sh in subjects:
+                    print("   subj %r rect %s content=%s" % (label_for(_st), [round(v,1) for v in _sh] if _sh else None, _sl.has_content()), file=sys.stderr)
+                print("   behinds:", [(t, [round(v,1) for v in b]) for t, b in behinds], file=sys.stderr)
+                print("   real_w:", [[round(v,1) for v in r] for r in real_w], file=sys.stderr)
+                print("   extra promoted:", [label_for(e) for e in extra], file=sys.stderr)
             m_t0 = next((mm for mm in moments if mm["ts"] == s["t0"]), None)
             cam = shapes.camera_box(frame_of(m_t0)) if m_t0 else None
             cam_pic = None   # a camera picture is never pasted in; it is outlined
