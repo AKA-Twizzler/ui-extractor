@@ -271,6 +271,7 @@ def finder(st):
                     if keys[i:i + ln] == keys[i + ln:i + 2 * ln]:
                         del path_[i + ln:i + 2 * ln]
                         del keys[i + ln:i + 2 * ln]
+                        import sys as _s; print("COLLAPSE FIRED", file=_s.stderr)
                         again = True
                         break
                 if again:
