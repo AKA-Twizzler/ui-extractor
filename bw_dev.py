@@ -115,14 +115,15 @@ def _sharpest(grey, lo, hi, a, b, down):
     that is on the screen, so this is a measurement and not a nudge."""
     lo, hi = max(1, int(lo)), min((grey.shape[1] if down else grey.shape[0]) - 2, int(hi))
     if hi <= lo:
-        return float(lo)
+        return float(lo), 0.0
     a, b = int(max(0, a)), int(min((grey.shape[0] if down else grey.shape[1]) - 1, b))
     if b - a < 8:
-        return float(lo)
+        return float(lo), 0.0
     step = max(1, (b - a) // 200)
     band = grey[a:b:step, lo - 1:hi + 2] if down else grey[lo - 1:hi + 2, a:b:step].T
-    d = np.abs(band[:, 2:].astype(np.int32) - band[:, :-2].astype(np.int32))
-    return float(lo + int(np.argmax(d.mean(axis=0))))
+    d = np.abs(band[:, 2:].astype(np.int32) - band[:, :-2].astype(np.int32)).mean(axis=0)
+    i = int(np.argmax(d))
+    return float(lo + i), float(d[i])
 
 
 def _covered(x, y, blocks):
@@ -217,20 +218,35 @@ def big_windows(path, least_frac=0.20, img=None):
                 continue                    # ONE HOME: `shapes` measured it
             if (x1 - x) < least_frac * w or (y1 - y) < least_frac * h:
                 continue
-            x_edge = _sharpest(grey, side_lo * k, (side_hi + 1) * k,
-                               side_top * k, side_bot * k, True)
-            y_edge = _sharpest(grey, head_lo * k, (head_hi + 1) * k,
-                               head_left * k, head_right * k, False)
-            box = (x_edge, y_edge, min(W, x1 * k), min(H, y1 * k))
-            if not _corner_buttons(img, box[0], box[1]):
+            x_edge, x_lit = _sharpest(grey, side_lo * k, (side_hi + 1) * k,
+                                      side_top * k, side_bot * k, True)
+            y_edge, y_lit = _sharpest(grey, head_lo * k, (head_hi + 1) * k,
+                                      head_left * k, head_right * k, False)
+            if not _corner_buttons(img, x_edge, y_edge):
                 continue
-            out.append(box)
+            out.append((x_edge, x_lit, y_edge, y_lit,
+                        min(W, x1 * k), min(H, y1 * k)))
+    # ONE WINDOW, MANY READINGS OF ITS CORNER, and the sharpest wins. A
+    # soft edge comes back as several lines, and each pairing refines to a
+    # slightly different place: 75, 77 and 80 for one window's left, 186,
+    # 196 and 216 for its top. Counting the readings takes the commonest,
+    # which here is the browser toolbar's soft under-edge ten pixels above
+    # the line Obsidian actually drew. The STRONGEST step is the drawn one.
+    near = tol * k
+    groups = []
+    for c in out:
+        for gp in groups:
+            if abs(c[0] - gp[0][0]) <= near and abs(c[2] - gp[0][2]) <= near:
+                gp.append(c)
+                break
+        else:
+            groups.append([c])
     kept = []
-    for b in sorted(out, key=lambda b: -(b[2] - b[0]) * (b[3] - b[1])):
-        if any(abs(b[0] - u[0]) < 0.02 * W and abs(b[1] - u[1]) < 0.02 * H
-               for u in kept):
-            continue
-        kept.append(b)
+    for gp in groups:
+        x0 = max(gp, key=lambda c: c[1])[0]
+        y0 = max(gp, key=lambda c: c[3])[2]
+        kept.append((x0, y0, max(c[4] for c in gp), max(c[5] for c in gp)))
+    kept.sort(key=lambda b: -(b[2] - b[0]) * (b[3] - b[1]))
     return kept
 
 
