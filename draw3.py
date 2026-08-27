@@ -3425,6 +3425,37 @@ def note(records_path, diary_text=None):
             strip_furniture(st, strip_at)
             if bar_title(st, H0):
                 st.title = None
+    # THE BACKDROP HAS A NAME. For the first minutes of a video a window can
+    # stand behind others the whole time and never show enough of its own
+    # furniture at once to be named: its panes fall into the "rest of the
+    # screen" catch-all, and the picture outlines it with a scaffolding
+    # label. But its document is the SAME document a named window shows
+    # plainly later -- the note read behind two Finders is the note Obsidian
+    # opens in full at 04:00 -- so the backdrop takes the name of the window
+    # whose text it carries. The bare program name is used, never "The ...
+    # window": it must READ as that program in the outline, yet stay a
+    # window nobody measured, so it is never pulled up into the filled top
+    # layer where the governing rule says only the front window belongs.
+    def _doc_fold(st):
+        d = st.main_doc()
+        if not d or not d.lines:
+            return ""
+        return fold("".join(flat(t) for t, _ in d.lines))
+    _named = [(st, _doc_fold(st)) for st in all_states
+              if is_real_window(st.name)]
+    _named = [(st, t) for st, t in _named if len(t) >= 40]
+    for c in all_states:
+        if c.name != "The rest of the screen":
+            continue
+        ct = _doc_fold(c)
+        if len(ct) < 40:
+            continue
+        for w, wt in _named:
+            run = difflib.SequenceMatcher(None, ct, wt).find_longest_match(
+                0, len(ct), 0, len(wt)).size
+            if run >= 40:
+                c.name = w.name.replace("The ", "").replace(" window", "")
+                break
     states = [st for st in all_states if st.window_html() and not st.fragment()]
     frags = [st for st in all_states if st not in states and st.has_content() and st.rects]
     # a note's big heading is read as large loose words, never as a doc
