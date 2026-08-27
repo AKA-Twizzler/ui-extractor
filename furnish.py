@@ -297,7 +297,18 @@ def obsidian(st, behind=True):
                ([f"--sn-line:{wide}%"] if wide and wide < 98 else [])
         sty_doc = f' style="{";".join(bits)}"' if bits else ""
         cols.append(f'<div class="sn-doc"{sty_doc}>' + note_html(st, doc, title) + "</div>")
-    grid = "30px " + ("minmax(180px, 38fr) " if tree else "") + ("62fr" if doc else "")
+    # THE PANES ARE AS WIDE AS THE SCREEN HAD THEM. The explorer and the
+    # note share the window in the proportion the reader measured - the
+    # tree's pane against the rest of the window - not a fixed 38 to 62,
+    # which drew the explorer two and a half times too wide and squeezed
+    # the note into a column a third of its real width.
+    tree_fr, doc_fr = 38, 62
+    tp = next((q for q in getattr(st, "parts", []) if q.get("fam") == "tree" and q.get("x0") is not None), None)
+    rect = getattr(st, "shape", None) or getattr(st, "rect", None)
+    if tree and doc and tp and rect and rect[2] > tp["x1"] > tp["x0"] >= rect[0] - 4:
+        tree_fr = max(8, round(100.0 * (tp["x1"] - tp["x0"]) / max(1.0, rect[2] - rect[0])))
+        doc_fr = 100 - tree_fr
+    grid = "30px " + (f"minmax(120px, {tree_fr}fr) " if tree else "") + (f"{doc_fr}fr" if doc else "")
     body = f'<div class="sn-cols sn-obsidian-cols" style="grid-template-columns: {grid.strip()}">' + "".join(cols) + "</div>"
     cls = "sn-window sn-obsidian" + (" sn-dark" if st.theme == "dark" else "")
     return f'<div class="{cls}">{strip}{toolbar}{body}</div>'
