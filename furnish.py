@@ -593,7 +593,8 @@ def deskbar(bar_words, clock):
 
 
 def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
-                ghosts=(), camera=None, sure=True, kz=1.0, ink=(), chrome=()):
+                ghosts=(), camera=None, sure=True, kz=1.0, ink=(), chrome=(),
+                chrome_step=0.0):
     """The layout of the screen over one stretch of time: the desktop bar
     with its own words, the window this stretch is about filled in with
     what it really said, and every other window standing where it stood,
@@ -829,11 +830,30 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
     # strip of it that WAS in view is drawn where it stood, above the
     # outlines and under the windows in front, which is the order the screen
     # had. Everything else behind stays an outline.
-    for cbox_, chtml in chrome or ():
-        if not chtml:
+    for cbox_, tabs_, addr_, right_ in chrome or ():
+        if not (tabs_ or addr_):
             continue
+        bits = ['<div class="sn-window sn-dark"><div class="sn-browser">']
+        if tabs_:
+            bits.append('<div class="sn-tabs">' + "".join(
+                '<span class="sn-tab%s">%s</span>'
+                % (" active" if re.sub(r"\W", "", t).lower() in ("newtab", "tab") else "",
+                   esc(re.sub(r"\s*[xX\u00d7]$", "", t).strip()))
+                for _, t in tabs_)
+                + '<span class="sn-plus">+</span>'
+                + "".join('<span class="sn-right">%s</span>' % esc(t)
+                          for t in right_ if "emini" in t) + "</div>")
+        if addr_:
+            bits.append('<div class="sn-toolbar sn-address">'
+                        '<span class="sn-btn">\u2039</span><span class="sn-btn">\u203a</span>'
+                        '<span class="sn-btn">\u21bb</span>'
+                        + '<span class="sn-urlbar">' + esc(" ".join(addr_)) + "</span>"
+                        + "".join('<span class="sn-btn sn-right">%s</span>' % esc(t)
+                                  for t in right_ if "emini" not in t) + "</div>")
+        bits.append("</div></div>")
         box = clip_box(cbox_, W, H, bar=barred)
-        out.append(scaled(chtml, box, W, kz=kz, cls="sn-behind",
+        out.append(scaled("".join(bits), box, W, kz=kz, cls="sn-behind",
+                          step=chrome_step,
                           extra=f'{slot_style(box, W, H, bar=barred)};z-index:2'))
     if camera:
         cbox = camera[0] if isinstance(camera, (tuple, list)) else camera
