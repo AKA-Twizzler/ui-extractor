@@ -785,6 +785,20 @@ def bar_across(group, m):
             kept.append(txt)
             reach = x1
         parts = [q.strip() for q in re.split(r"[>\u203a]", "".join(kept)) if q.strip()]
+        # A PATH NEVER PASSES THROUGH THE SAME FOLDER TWICE. Where the row
+        # holds the bar read over again - a second pane covering ground the
+        # first already had, at a height the no-overlap rule could not tell
+        # apart - the crumbs come back doubled, and the drawn bar read
+        # `... > .claude > projects > Usersjaredrhodenizer > ... > .claude`.
+        # It ends at the first crumb it has already seen.
+        seen_, cut_ = set(), []
+        for c in parts:
+            n_ = norm(c)
+            if n_ in seen_:
+                break
+            seen_.add(n_)
+            cut_.append(c)
+        parts = cut_
         if len(parts) >= 3 and norm(parts[0]) == norm("Macintosh HD") \
                 and len(parts) > len(best):
             best = parts
