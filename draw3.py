@@ -1342,6 +1342,19 @@ class State:
         title; a tree alone by its first rows; words by their likeness."""
         if self.name != other.name:
             return False
+        # A TITLE READ OFF THE WINDOW'S OWN BAR OUTRANKS ONE WORKED OUT FROM
+        # THE PATH, and where the two disagree they are two different views,
+        # not one window. A Finder's path bar ends at the folder shown - but
+        # it also ends at the row SELECTED in it, and the two cases read the
+        # same. At 00:00:50 the window shows `.claude` with `projects`
+        # selected; at 00:01:10 it shows `projects` itself, and its own title
+        # bar says so. Both paths read `.claude > projects`, so these merged
+        # into one state and the picture at 00:01:10 drew `.claude` and its
+        # six files where the screen had one row of `projects`.
+        if self.title and other.title and not same_text(self.title, other.title) \
+                and (not getattr(self, "title_from_path", False)
+                     or not getattr(other, "title_from_path", False)):
+            return False
         ta, tb = self.main_table(), other.main_table()
         if ta and tb:
             a, b = set(ta.names()), set(tb.names())
