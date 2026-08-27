@@ -508,9 +508,27 @@ def _alike(a, b):
     return difflib.SequenceMatcher(None, fa, fb, autojunk=False).ratio() >= 0.7
 
 
+def _mend_edge_head(items):
+    """A column heading the screen's own edge cut short."""
+    out = []
+    for it in items:
+        t = str(it.get("text", "")).strip()
+        if it["box"][0] <= 1 and 2 <= len(t) <= 12:
+            hits = [h for h in FINDER_HEADS if h != t and h.endswith(t)]
+            if len(hits) == 1:
+                it = dict(it, text=hits[0])
+        out.append(it)
+    return out
+
+
+def _edge_head_mended(items):
+    return any(a["text"] != b["text"] for a, b in zip(items, _mend_edge_head(items)))
+
+
 def table_from_items(items):
     if not items:
         return None
+    items = _mend_edge_head(items)
     rows = reading_order(items, lambda it: it["box"])
     head_row = None
     for r in rows:
@@ -785,6 +803,27 @@ def block_loose(pane, window_rect):
     if h < 0.12 * H and y0 < window_rect[1] + 0.1 * H:
         return ["**Toolbar:** " + " · ".join(texts_in_order)], doubts
     return words_line(items), doubts
+
+
+def _finder_sizes(pane):
+    n = 0
+    for it in items_of(pane):
+        t = str(it.get("text", "")).replace(" ", "")
+        if re.match(r"^\d+(\.\d+)?(bytes?|KB|MB|GB|TB)$", t, re.I):
+            n += 1
+    return n >= 3
+
+
+def cut_list(pane):
+    """A Finder list the SCREEN cut off down its own left edge, rebuilt."""
+    if pane["kind"] in ("a list of columns", "a file tree", "an open document",
+                        "a terminal", "a chat log"):
+        return None
+    if not _finder_sizes(pane):
+        return None
+    if not _edge_head_mended(items_of(pane)):
+        return None
+    return table_from_loose(pane)
 
 
 def block_of(pane, window_rect):

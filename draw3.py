@@ -1073,6 +1073,13 @@ class State:
                         tree_part["x0"] = min(tree_part["x0"], p["box"][0])
                         tree_part["x1"] = max(tree_part["x1"], p["box"][2])
                         continue
+            cut = draw2.cut_list(p)
+            if cut:
+                part = self.part_for("a list of columns", slot)
+                part["x0"] = p["box"][0] if part["x0"] is None else min(part["x0"], p["box"][0])
+                part["x1"] = p["box"][2] if part["x1"] is None else max(part["x1"], p["box"][2])
+                part["model"].add(cut)
+                continue
             part = self.part_for(k, slot)
             part["x0"] = p["box"][0] if part["x0"] is None else min(part["x0"], p["box"][0])
             part["x1"] = p["box"][2] if part["x1"] is None else max(part["x1"], p["box"][2])
