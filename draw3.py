@@ -5401,13 +5401,18 @@ def note(records_path, diary_text=None):
                         # was a band 6% of the screen tall where it stood
                         # 97% tall. Its own rectangle can now be measured;
                         # the strip is only where its top edge is.
-                        bb = None
-                        for b in frame_bigwins(s):
-                            if abs(b[1] - sb[1]) <= 0.03 * Hf and \
-                                    (b[3] - b[1]) >= 0.5 * Hf:
-                                bb = list(b)
-                                break
-                        behinds.append(("the browser, behind", bb or sb))
+                        # The strip's own box runs from the top of the frame
+                        # down to where its words end, so its TOP says
+                        # nothing; what identifies the browser among the
+                        # measured windows is that it is the one standing
+                        # HIGHEST, with the strip inside its own top. A
+                        # window that begins below the strip is something
+                        # the strip is drawn over, not the window it
+                        # belongs to.
+                        tall = [b for b in frame_bigwins(s)
+                                if (b[3] - b[1]) >= 0.5 * Hf and b[1] <= sb[3]]
+                        bb = min(tall, key=lambda b: b[1]) if tall else None
+                        behinds.append(("the browser, behind", list(bb) if bb else sb))
                         break
             # A WINDOW DRAWN IN FULL MUST ITSELF BE A WINDOW. Its box has
             # to be one the frame drew, or - where the frame drew none,
