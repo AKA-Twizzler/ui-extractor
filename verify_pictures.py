@@ -285,6 +285,11 @@ def note_level(note):
 FAVORITES = ("recents", "shared", "applications", "pictures", "movies",
              "desktop", "documents", "downloads", "icloud")
 
+# The names macOS puts on the bar across the very top of the screen. They are
+# the same words in every application; what changes is which of them are there.
+MENUS = ("file", "edit", "view", "go", "window", "help", "format", "insert",
+         "shortcuts", "bookmarks", "history", "profiles", "tab", "develop")
+
 
 def favorites_by_stamp(records):
     """For each moment, the favorites-sidebar word boxes the reader read, in
@@ -366,9 +371,10 @@ BREAKS = [
 ]
 
 
-def prove(note, frames, fav):
+def prove(note, frames, fav, bar=None):
     """Each check, set against a picture broken exactly the way it guards."""
     pics = pictures(note)
+    bar = bar or {}
     rows = []
     for name, brk, marker in BREAKS:
         state, why = "UNPROVED", "no picture in this note could carry the break"
@@ -390,6 +396,32 @@ def prove(note, frames, fav):
             why = "crafted at %s and the check still passed it" % stamp
             state = "NOT PROVED"
         rows.append((name, state, why))
+
+    # the desktop bar, broken three ways
+    for label, brk, marker in (
+            ("desktop bar drawn",  lambda st: st.replace('sn-deskbar', 'sn-wasbar'),
+             "DESKTOP BAR MISSING"),
+            ("desktop bar once",   lambda st: re.sub(
+                r'(<div class="sn-deskbar">.*?</div>)', r'\1\1', st, count=1),
+             "DESKTOP BAR DOUBLED"),
+            ("desktop bar whole",  lambda st: re.sub(
+                r'(<div class="sn-deskbar">)<span>[^<]*</span>', r'\1', st, count=1),
+             "DESKTOP BAR LOST A NAME")):
+        state, why = "UNPROVED", "no picture in this note draws a desktop bar"
+        for stamp, heading, stage in pics:
+            names = bar.get(stamp, set())
+            if not names or 'sn-deskbar' not in stage:
+                continue
+            if any(marker in f for f in check_deskbar(stamp, stage, names)):
+                continue
+            broken = brk(stage)
+            if broken == stage:
+                continue
+            if any(marker in f for f in check_deskbar(stamp, broken, names)):
+                state, why = "PROVED", "crafted at %s, rejected" % stamp
+                break
+            state, why = "NOT PROVED", "crafted at %s and the check passed it" % stamp
+        rows.append((label, state, why))
 
     # the note-level check, broken the same way: a paragraph drawn twice
     # inside one picture, which is the shape the duplication fault took.
@@ -441,6 +473,62 @@ def prove(note, frames, fav):
     return 1 if bad else 0
 
 
+def deskbar_by_stamp(records):
+    """For each moment, the menu names the reader read across the very top of
+    the frame. A frame that shows the bar must have it drawn; one that does
+    not -- every zoomed stretch of this video -- must not, or the picture
+    invents a bar the screen never showed at that magnification."""
+    import draw as old
+    import draw2
+    import draw3
+    hdr, moments, ftr = old.load(records)
+    W, H = (moments[0].get("size") or [1, 1])[:2] if moments else (1, 1)
+    out = {}
+    for m in moments:
+        names = set()
+        for p in m.get("panes") or []:
+            for it in draw2.items_of(p):
+                b = it["box"]
+                if b[1] / H > 0.04:
+                    continue                  # not on the top strip
+                for w in draw3.flat(it["text"]).replace(".", " ").split():
+                    if w.strip(" .").lower() in MENUS:
+                        names.add(w.strip(" .").lower())
+        out[m["ts"]] = names
+    return out
+
+
+def check_deskbar(stamp, stage, names):
+    """The desktop bar: drawn where the frame showed one, once, and keeping
+    every name the reader read on it.
+
+    Three faults, all seen: the bar missing from every picture (Tristan, by
+    eye: "none of the desktops header things are even in there at all"); the
+    bar drawn twice, because one engine reads the whole strip as one line and
+    the counter wanted two readings; and names lost from it, because one
+    engine glued two of them with a full stop ("File.Edit") and a
+    letters-only test then threw the pair away whole."""
+    fails = []
+    drawn = re.findall(r'<div class="sn-deskbar">(.*?)</div>', stage)
+    if names and not drawn:
+        fails.append("DESKTOP BAR MISSING: the frame reads %s across its top "
+                     "and the picture draws no bar" % ", ".join(sorted(names)))
+    if len(drawn) > 1:
+        fails.append("DESKTOP BAR DOUBLED: %d bars drawn where the screen has one"
+                     % len(drawn))
+    if names and drawn:
+        said = set()
+        for w in re.findall(r">([^<>]+)<", drawn[0]):
+            for part in w.replace(".", " ").split():
+                said.add(part.strip(" .").lower())
+        lost = sorted(names - said)
+        if lost:
+            fails.append("DESKTOP BAR LOST A NAME: the reader read %s on the bar "
+                         "and the picture does not carry %s"
+                         % (", ".join(sorted(names)), ", ".join(lost)))
+    return fails
+
+
 def main():
     argv = [a for a in sys.argv[1:] if a != "--prove"]
     if len(argv) < 2:
@@ -448,8 +536,9 @@ def main():
     note, frames = argv[0], argv[1]
     records = argv[2] if len(argv) > 2 else None
     fav = favorites_by_stamp(records) if records else {}
+    bar = deskbar_by_stamp(records) if records else {}
     if "--prove" in sys.argv:
-        return prove(note, frames, fav)
+        return prove(note, frames, fav, bar)
     total = 0
     pics = pictures(note)
     # A GATE THAT EXAMINED NOTHING HAS NOT PASSED ANYTHING. Pointed at a
@@ -461,6 +550,7 @@ def main():
     for stamp, heading, stage in pics:
         frame = os.path.join(frames, stamp.replace(":", "-") + ".png")
         fails = check_picture(stamp, stage, frame, fav.get(stamp, ()))
+        fails += check_deskbar(stamp, stage, bar.get(stamp, set()))
         if fails:
             print("FAIL %s" % stamp)
             for f in fails:
@@ -474,7 +564,9 @@ def main():
     print("\nMACHINE-CHECKED over %d picture(s): window presence, top-layer fill, "
           "each window a box of its own that agrees with it, placeholder labels, "
           "breadcrumb segmentation, duplicated text blocks, duplicate quote blocks, "
-          "sidebar completeness%s." % (len(pics), side_note))
+          "sidebar completeness, and the desktop bar (drawn where the frame "
+          "shows one, once, keeping every name the reader read on it)%s."
+          % (len(pics), side_note))
     print("Every one of these has been SEEN TO FAIL on a crafted break; run "
           "`--prove` to re-run those proofs after any change.")
     print("NOT machine-checked (declared, not passed): relative type scale against the frame, and subjective legibility of rendered text. These need a rendered-pixel measure against the frame's own text heights; compare.py renders but does not yet measure type size.")
