@@ -4478,6 +4478,8 @@ def note(records_path, diary_text=None):
                 deep_ = max(1.0, (row["y1"] - row["y0"]) / rows_up)
                 chars = max(1, len(t_))
                 em = math.sqrt(wide_ * deep_ / (0.7 * chars))
+                if body_em and 0.6 * body_em <= em <= 1.5 * body_em:
+                    em = body_em
                 said.append(([row["x0"], row["y0"], row["x1"], row["y1"]],
                              t_, em * 0.72 * rows_up, rows_up))
             for b_, t_, high, up in said:
