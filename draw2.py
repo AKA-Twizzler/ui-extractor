@@ -508,36 +508,9 @@ def _alike(a, b):
     return difflib.SequenceMatcher(None, fa, fb, autojunk=False).ratio() >= 0.7
 
 
-def _edge_head_mended(items):
-    """Whether a heading had to be recovered from the frame's own edge."""
-    return any(a["text"] != b["text"] for a, b in zip(items, _mend_edge_head(items)))
-
-
-def _mend_edge_head(items):
-    """A column heading the screen's own edge cut short.
-
-    A window running off the left of the screen shows its columns without
-    their first letters: at 00:03:00 "Size" came back as "ize", standing at
-    x=0. A fragment that is the tail of exactly one of Finder's headings AND
-    begins hard against the frame's edge is that heading. Nothing looser: a
-    word that merely reads like a tail, anywhere else on the pane, is left
-    alone, because a wrong heading invents a column.
-    """
-    out = []
-    for it in items:
-        t = str(it.get("text", "")).strip()
-        if it["box"][0] <= 1 and 2 <= len(t) <= 12:
-            hits = [h for h in FINDER_HEADS if h != t and h.endswith(t)]
-            if len(hits) == 1:
-                it = dict(it, text=hits[0])
-        out.append(it)
-    return out
-
-
 def table_from_items(items):
     if not items:
         return None
-    items = _mend_edge_head(items)
     rows = reading_order(items, lambda it: it["box"])
     head_row = None
     for r in rows:
@@ -812,47 +785,6 @@ def block_loose(pane, window_rect):
     if h < 0.12 * H and y0 < window_rect[1] + 0.1 * H:
         return ["**Toolbar:** " + " · ".join(texts_in_order)], doubts
     return words_line(items), doubts
-
-
-def _finder_sizes(pane):
-    """A run of byte counts down one column: Finder's Size column, still
-    recognisable when the headings are off the side of the screen."""
-    n = 0
-    for it in items_of(pane):
-        t = str(it.get("text", "")).replace(" ", "")
-        if re.match(r"^\d+(\.\d+)?(bytes?|KB|MB|GB|TB)$", t, re.I):
-            n += 1
-    return n >= 3
-
-
-def cut_list(pane):
-    """A Finder list the SCREEN cut off down its own left edge, rebuilt.
-
-    Read with its Name column and the head of its headings off the side of
-    the frame, such a pane is not recognisable as a list of columns, so its
-    words stayed loose - and a window whose only content is loose words is
-    taken for a window behind, showing through, and drawn as an outline. Its
-    rectangle then stood unclaimed and the picture filled it from a
-    remembered Finder that had once shown another folder: six file names the
-    screen never showed. Two things must both hold before the label changes:
-    Finder's own Size column runs down it, and the words can actually be
-    rebuilt into a table from where they sit.
-    """
-    if pane["kind"] in ("a list of columns", "a file tree", "an open document",
-                        "a terminal", "a chat log"):
-        return None
-    # AND THE SCREEN MUST ACTUALLY HAVE CUT IT. Standing at the frame's
-    # edge is not enough - a window filling the screen does that too, and
-    # rebuilding those wrecked the pictures it had no business touching
-    # (00:00:00 fell 0.58 to 0.20 on covered). The tell is narrower and it
-    # is the fault itself: a COLUMN HEADING that had to be recovered from
-    # the edge, because its first letters are outside the screen. Where
-    # nothing needed mending, nothing was cut.
-    if not _finder_sizes(pane):
-        return None
-    if not _edge_head_mended(items_of(pane)):
-        return None
-    return table_from_loose(pane)
 
 
 def block_of(pane, window_rect):
