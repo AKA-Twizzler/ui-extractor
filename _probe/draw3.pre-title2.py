@@ -1721,12 +1721,6 @@ def retitle_by_rows(states):
             if hit:
                 votes[hit[1]] = votes.get(hit[1], 0) + 1
         if not votes:
-            import sys as _s
-            _n = [str((r.get("cells") or [""])[0]) for r in t.rows][:3]
-            if any("memory" == str(x).lower() for x in _n):
-                print("NO VOTES for %r rows=%r" % (st.title, _n), file=_s.stderr)
-                print("   parent map has 'memory': %r" % (parent.get(fold("memory")),), file=_s.stderr)
-                print("   sample map: %r" % (list(parent.items())[:6],), file=_s.stderr)
             continue
         best = max(votes, key=lambda v: votes[v])
         # ONE ROW IS NOT "ITS ROWS". This rule renames a window when the rows
