@@ -5295,8 +5295,7 @@ def note(records_path, diary_text=None):
                 [(sl, shape) for _, sl, shape in subjects],
                 s["size"][0], s["size"][1],
                 bar_words if barred else None, clock if barred else "",
-                behind_cards=[(t, b, behind_state.get(i))
-                              for i, (t, b) in enumerate(behinds)],
+                behind_cards=behinds,
                 ink=screen_ink(s, [sh for _st, _sl, sh in subjects if sh]),
                 ghosts=ghost_list(s, sub_states, carded),
                 camera=(cam, cam_pic) if cam else None,
