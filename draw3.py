@@ -229,13 +229,6 @@ class Table:
 
     def add(self, built):
         top, side, head, rows, bottom = built[:5]
-        import sys as _s
-        if any(c and "Marketing" in str(c) for cs, _i, _b in rows for c in cs):
-            print("ADD head=%r" % (list(head or []),), file=_s.stderr)
-            for cs, _i, _b in rows:
-                if cs and any(x in str(cs[0]) for x in ("Dev", "Marketing", "Archive")):
-                    print("     in : %r" % (cs,), file=_s.stderr)
-            self._trace = True
         head = list(head or [])
         # the reader takes the first file for the header when the real
         # headings scrolled off; a header with none of Finder's words and a
@@ -427,13 +420,6 @@ class Table:
         if best and best not in self.paths:
             self.paths.append(best)
             self.path_at.append(self.now)
-        if getattr(self, "_trace", False):
-            import sys as _s
-            print("  AFTER header=%r" % (self.header,), file=_s.stderr)
-            for r in self.rows:
-                if r["cells"] and any(x in str(r["cells"][0]) for x in ("Dev", "Marketing", "Archive")):
-                    print("     now: %r" % (r["cells"],), file=_s.stderr)
-            self._trace = False
         self.tidy()
 
     def tidy(self):
@@ -857,7 +843,15 @@ def cut_glued(cell, parts_):
         out["Kind"] = rest
     elif rest:
         name_ = (name_ + " " + rest).strip()
-    out[parts_[0]] = name_
+    # `parts_[0]` is the NAME column only when the glued heading BEGINS with
+    # the name. Where the reader ran `Date Modified` and `Size` together with
+    # no name in front of them, `parts_[0]` IS `Date Modified`, and this line
+    # then overwrote the date it had just cut out of the cell with whatever
+    # stood before it - nothing. Every row of three pictures lost its date to
+    # that one assignment, and only rows the same window drew again at another
+    # moment, through a cleanly-read heading, kept theirs.
+    if not out.get(parts_[0]):
+        out[parts_[0]] = name_
     return [out[q] for q in parts_]
 
 
