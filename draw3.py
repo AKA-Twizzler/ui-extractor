@@ -5167,10 +5167,6 @@ def note(records_path, diary_text=None):
                     span_now = share * wide
                 sl._row_step = span_now * furnish.CANVAS_W / Wf
                 sl._step_sure = not (cut_x or cut_y)
-                sys.stderr.write("PITCH %s %-24s id=%s title=%r shape=%s cutx=%s step=%.2f\n" % (
-                    s["t0"], stx.name, id(stx) % 100000,
-                    "wide=%s pad=%s" % (getattr(sl, "_doc_wide", None), getattr(sl, "_doc_pad", None)),
-                    [round(v) for v in shape], cut_x, sl._row_step))
 
             # Two windows of the same program standing on one screen set
             # their rows at the SAME pitch: the pitch belongs to the screen,
