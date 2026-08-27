@@ -361,8 +361,11 @@ def _build_table(items, spill=None):
     # otherwise works a window's row spacing out from a share held PER
     # PROGRAM, and Finder's list density is a per-window setting - on that
     # same frame two Finders stand at 65 and at 42.
+    # A GAP SMALLER THAN A ROW IS NOT A GAP BETWEEN ROWS. Two readings of
+    # one row sit a few pixels apart, and counting those as spacing dragged
+    # the median down until whole windows drew their lists at half size.
     _ys = sorted(min(it["box"][1] for it in r) for r in body if r)
-    _gaps = sorted(b - a for a, b in zip(_ys, _ys[1:]) if b - a > 1)
+    _gaps = sorted(b - a for a, b in zip(_ys, _ys[1:]) if b - a > 0.6 * rh)
     pitch = float(_gaps[len(_gaps) // 2]) if len(_gaps) >= 3 else None
     # the reader takes the first file for the header when the real headings
     # sit above its block: a header with none of Finder's words and a
