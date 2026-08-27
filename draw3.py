@@ -4979,6 +4979,9 @@ def note(records_path, diary_text=None):
                 if t_:
                     mine |= _telling([c for row in t_.rows for c in row["cells"] if c])
                 hit = sum(1 for w in here if any(w in k or k in w for k in mine))
+                if s["t0"] in ("00:01:20",):
+                    sys.stderr.write("TRACEC %-16s here=%s\n   mine=%s hit=%d\n"
+                                     % (str(st_.title)[:16], sorted(here)[:8], sorted(mine)[:8], hit))
                 return hit * 3 < len(here)
 
             for r in fw_here:
