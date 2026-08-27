@@ -338,14 +338,20 @@ def obsidian(st, behind=True):
     if tree and doc and tp and rect and rect[2] > tp["x1"] > tp["x0"] >= rect[0] - 4:
         tree_fr = max(8, round(100.0 * (tp["x1"] - tp["x0"]) / max(1.0, rect[2] - rect[0])))
         doc_fr = 100 - tree_fr
-    cols_measured = getattr(st, "_doc_cols", None) if (not behind and getattr(st, "shape", None)) else None
-    if cols_measured and tree and doc:
-        tree_fr, doc_fr = cols_measured
-        rest = max(0, 100 - tree_fr - doc_fr)
-        grid = ("30px " + f"minmax(0, {tree_fr}fr) " + f"{doc_fr}fr"
-                + (f" {rest}fr" if rest >= 3 else ""))
-        if rest >= 3:
-            cols.append('<div class="sn-blank"></div>')
+    # THE TREE NARROWS; NOTHING ELSE MOVES. Setting the note's column from
+    # its own measured pane as well was tried and cost all three filled
+    # pictures a fifth of their agreement: the drawn window has two columns
+    # where the real one has five, so any width given to the note is width
+    # its text spreads into, away from the narrow column the screen ran it
+    # in. What the frame states plainly is how wide the TREE was, and the
+    # room it does not use goes to a blank column between them -- so the
+    # note's column stays exactly where it already lands and only the tree
+    # stops being drawn four times too wide.
+    measured_tree = getattr(st, "_tree_fr", 0) if (not behind and getattr(st, "shape", None)) else 0
+    if measured_tree and tree and doc and measured_tree < tree_fr:
+        gap = tree_fr - measured_tree
+        grid = f"30px minmax(0, {measured_tree}fr) {gap}fr {doc_fr}fr"
+        cols.insert(len(cols) - 1, '<div class="sn-blank"></div>')
     else:
         grid = "30px " + (f"minmax(120px, {tree_fr}fr) " if tree else "") + (f"{doc_fr}fr" if doc else "")
     body = f'<div class="sn-cols sn-obsidian-cols" style="grid-template-columns: {grid.strip()}">' + "".join(cols) + "</div>"
