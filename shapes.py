@@ -531,16 +531,22 @@ def windows(path):
     return out
 
 
+def _frame_size(path):
+    """The frame's own width and height, or (0, 0) where it cannot be read."""
+    try:
+        _a, w, h = _grey(path)
+        return float(w), float(h)
+    except Exception:
+        return 0.0, 0.0
+
+
 def _frame_area(path, kept):
     """The frame's own area, for judging what share of it a rectangle is.
 
     Where the frame cannot be measured, nothing is dropped: a rule that
     cannot see what it is judging says nothing rather than guessing."""
-    try:
-        _a, w, h = _grey(path)
-        return float(w) * float(h)
-    except Exception:
-        return 0.0
+    w, h = _frame_size(path)
+    return w * h
 
 
 def camera_box(path):
