@@ -1629,6 +1629,7 @@ def _bigwin_measured():
     screen. These numbers are the frame's own pixels, measured by hand off
     00:00:00 before the finder was written."""
     import bigwin
+    import shapes
     path = frame("memfiles", "00:00:00")
     got = bigwin.big_windows(path)
     want = {"the browser": (22, 65), "Obsidian": (77, 196)}
@@ -1656,6 +1657,7 @@ def _bigwin_stops():
     windows plainly END above the foot and left of the right edge, a finder
     that runs to the boundary anyway is measuring the screen, not a window."""
     import bigwin
+    import shapes
     im = cv2.imread(frame("memfiles", "00:00:00"))
     H, W = im.shape[:2]
     out = os.path.join(os.path.dirname(frame("memfiles", "00:00:00")), "_check-bigwin")
@@ -1691,6 +1693,7 @@ def _bigwin_refuses():
     edges with three round dots in its corner is a card, while a panel drawn
     inside a window is furniture. Each of these was a false window once."""
     import bigwin
+    import shapes
     im = cv2.imread(frame("memfiles", "00:00:00"))
     H, W = im.shape[:2]
     out = os.path.join(os.path.dirname(frame("memfiles", "00:00:00")), "_check-bigwin")
