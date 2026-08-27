@@ -187,16 +187,26 @@ def check(path, frames=None):
             if p:
                 named[tuple(round(v, 1) for v in p)] = m.group(2).split(":")[0].strip()
 
-        def app_of(box):
-            return named.get(tuple(round(v, 1) for v in box))
+        # ONE HOME for "which program does this label name". This rule and
+        # the drawer's own outline merge ask the identical question, and
+        # both used to answer it by matching the whole label against a list
+        # of bare program names -- so "the browser, behind" matched nothing
+        # and neither guard fired for it. Harmless while the browser was
+        # drawn as a thin strip; the moment its real box was measured, the
+        # browser and Obsidian agree by 0.92 and this rule called them one
+        # window drawn twice. Two windows of DIFFERENT programs are two
+        # windows however much ground they share.
+        import furnish
 
-        APPS = ("Finder", "Obsidian", "The browser", "The terminal", "The chat")
+        def app_of(box):
+            return furnish._app_of(named.get(tuple(round(v, 1) for v in box)))
+
         for a in range(len(ghosts)):
             for b in range(len(ghosts)):
                 if a == b:
                     continue
                 pa, pb = app_of(ghosts[a][0]), app_of(ghosts[b][0])
-                if pa in APPS and pb in APPS and pa != pb:
+                if pa and pb and pa != pb:
                     continue
                 aa = ghosts[a][0][2] * ghosts[a][0][3]
                 bb = ghosts[b][0][2] * ghosts[b][0][3]
