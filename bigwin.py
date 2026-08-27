@@ -128,6 +128,16 @@ def _sharpest(grey, lo, hi, a, b, down):
     return float(lo + i), float(d[i])
 
 
+def _within(a, b):
+    """How much of box a lies inside box b. Which way round matters: a
+    panel sits inside its window, and the window is barely touched."""
+    w = min(a[2], b[2]) - max(a[0], b[0])
+    h = min(a[3], b[3]) - max(a[1], b[1])
+    if w <= 0 or h <= 0:
+        return 0.0
+    return (w * h) / max(1.0, (a[2] - a[0]) * (a[3] - a[1]))
+
+
 def _covered(x, y, blocks):
     for bx0, by0, bx1, by1 in blocks:
         if bx0 - 1 <= x <= bx1 + 1 and by0 - 1 <= y <= by1 + 1:
@@ -242,6 +252,18 @@ def big_windows(path, least_frac=0.20, img=None):
             if any(abs(r[0] / k - x) <= tol and abs(r[1] / k - y) <= tol
                    for r in known):
                 continue                    # ONE HOME: `shapes` measured it
+            # A PANEL IS INSIDE ITS WINDOW; THE SECOND WINDOW ON A DESKTOP
+            # IS NOT. The law of run 5, which this finder had never applied.
+            # A page's own content reaches the foot of the screen and closes
+            # a corner just as a window does, and a fake terminal drawn
+            # INSIDE a web page carries three round red-yellow-green dots at
+            # its top-left -- so on a desktop of two browsers this returned
+            # five "windows", every one of them page content or a panel
+            # standing inside a window `shapes` had already closed, and none
+            # of them a window. Measured on the same frame afterwards: none.
+            if any(_within((x * k, y * k, x1 * k, y1 * k), r) > 0.7
+                   for r in known):
+                continue
             if (x1 - x) < least_frac * w or (y1 - y) < least_frac * h:
                 continue
             x_edge, x_lit = _sharpest(grey, side_lo * k, (side_hi + 1) * k,
