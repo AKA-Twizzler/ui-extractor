@@ -512,3 +512,79 @@ if __name__ == "__main__":
     img = cv2.imread(sys.argv[1])
     for i, (a, b) in enumerate(pane_columns(img)):
         print(f"  pane {i}: x {a}-{b}  ({b-a} wide at working size)")
+
+
+# A seam this shallow is a line drawn INSIDE a window; anything deeper is the
+# gap between two of them. Measured across this video: 5.9 at the one split
+# window, 14.1 at the nearest real boundary, 31.2 at the furthest.
+SPLIT_GUTTER = 10.0
+
+
+def _seam_drop(img, x, y0, y1):
+    """How much darker the seam runs than the interiors on either side of it.
+
+    Between two windows the desktop, or the front window's shadow, shows
+    through the gap, so the seam is darker than both. A divider drawn inside
+    one window is ink on the window and has nowhere darker to go.
+    """
+    g = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY).astype(np.float64) \
+        if img.ndim == 3 else img.astype(np.float64)
+    h, w = g.shape[:2]
+    y0, y1 = max(0, int(y0)), min(h, int(y1))
+    if y1 - y0 < 20:
+        return None
+    k = max(6, int(w / 240))                 # a seam is a few pixels at 4K
+    a, b = max(0, int(x) - 3 * k), min(w, int(x) + 3 * k)
+    band = g[y0:y1, a:b].mean(axis=0)
+    if band.size < 5:
+        return None
+    half = band.size // 2
+    left, right = band[:max(1, half - 2)], band[min(band.size - 1, half + 3):]
+    if not left.size or not right.size:
+        return None
+    return min(left.mean(), right.mean()) - band.min()
+
+
+def fold_split_panes(img, rects):
+    """One window the frame closed TWICE: once whole, once at its divider.
+
+    A Finder cut at its sidebar divider comes back as two rectangles standing
+    side by side, and the drawing gave each of them a title bar of its own:
+    at 00:00:10 the note showed two `vault-demo` windows, with two sets of
+    traffic lights, where the screen had one. Abutting alone cannot say which
+    case this is - two windows tiled side by side abut too, and at 00:00:30
+    two of them did. Two measurements say it, and BOTH are needed, because
+    either one alone reads a real desktop wrong:
+
+      the buttons   a window's three round buttons sit at its TOP-LEFT, so
+                    the piece carrying them is that window's leftmost piece,
+                    and any pane split off it lies to its RIGHT. Where the
+                    buttons are on the right of the pair instead, the left
+                    rectangle is a different window standing behind - that is
+                    00:03:00, a Finder showing its file sizes down the left
+                    of the screen, which folding would have erased.
+      the gutter    `_seam_drop`, above. 5.9 where one window was split; 14.1
+                    to 31.2 at every real boundary in this video.
+    """
+    out = sorted([float(v) for v in r[:4]] for r in rects)
+    h, w = img.shape[:2]
+    keep = [True] * len(out)
+    for i, a in enumerate(out):
+        if not keep[i]:
+            continue
+        for j in range(i + 1, len(out)):
+            b = out[j]
+            if not keep[j] or abs(b[0] - a[2]) > 0.01 * w:
+                continue
+            # A pane runs the window's own height: same top, same foot.
+            if abs(b[1] - a[1]) > 0.03 * h or abs(b[3] - a[3]) > 0.05 * h:
+                continue
+            if not _has_buttons(img, a) or _has_buttons(img, b):
+                continue
+            drop = _seam_drop(img, (a[2] + b[0]) / 2,
+                              max(a[1], b[1]), min(a[3], b[3]))
+            if drop is None or drop >= SPLIT_GUTTER:
+                continue
+            a[1], a[2], a[3] = min(a[1], b[1]), max(a[2], b[2]), max(a[3], b[3])
+            keep[j] = False
+    return [r for r, k in zip(out, keep) if k]
