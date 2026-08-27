@@ -1122,6 +1122,37 @@ def window_groups(m):
                     break
             else:
                 still.append(p)
+        # ...AND A BAR CUT INTO PIECES IS STILL THAT WINDOW'S BAR. The rule
+        # above asks a leftover pane to stand at the window's own width,
+        # which a path bar read in fragments never does: at 00:00:50 the bar
+        # under a Finder came back as four narrow panes - "Maci",
+        # "ntoshHD>", "Users", "jaredrhode", "claude>" - and not one of them
+        # was claimed, so the window never got its path. A Finder's title IS
+        # the folder its path bar ends at, and without the bar the window
+        # was drawn with no name at all. A narrow leftover pane at a
+        # window's foot, holding CRUMBS and standing within its width, is a
+        # piece of that window's bar. The crumbs are what keep the note
+        # showing through below from being swept in with them.
+        still2 = []
+        for p in still:
+            b = p["box"]
+            words = [it["text"] for it in items_of(p) if it["text"].strip()]
+            crumbs = [w for w in words if crumb_like(w) or w.rstrip().endswith(">")]
+            if not words or len(crumbs) * 2 < len(words):
+                still2.append(p)
+                continue
+            for g in groups:
+                r = g["rect"]
+                gap = 0.06 * max(1.0, r[3] - r[1])
+                if b[0] < r[0] - 0.06 * (r[2] - r[0]) or b[2] > r[2] + 0.06 * (r[2] - r[0]):
+                    continue
+                if -gap <= b[1] - r[3] <= gap or -gap <= r[1] - b[3] <= gap:
+                    g["panes"].append(p)
+                    g["grew"] = True
+                    break
+            else:
+                still2.append(p)
+        still = still2
         rest = still
         # named again, now the window has all of its furniture: the bar it
         # just gained is the one thing that says beyond doubt what program
