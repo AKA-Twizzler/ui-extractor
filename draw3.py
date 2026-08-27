@@ -2346,21 +2346,22 @@ def harmonise(states):
                         if t is not None and t == max((x for x in table.path_at if x is not None),
                                                       default=None)]
                 table.path = chain_paths(late if late else [table.path] + table.paths)
-                # The latest bar is spelt the way this window's fullest
-                # reading spells the same folders. Splitting by moment can
-                # leave the last moment holding a cut-short read - `Docur`,
-                # `02 Con` - where an earlier moment read the same folder
-                # whole. Correcting a spelling adds no crumb and drops none;
+                # The latest bar is spelt the way this window's own reads
+                # spell the same folders. Splitting by moment can leave the
+                # last moment holding a cut-short read - `Docur`, `02 Con` -
+                # where another moment read that folder whole. `align_crumbs`
+                # will not do it: it only corrects a crumb it finds ABSENT
+                # from the other bar, and `Docur` already matches `Documents`
+                # there. Correcting a spelling adds no crumb and drops none;
                 # a folder does not rename itself between two frames.
-                if table.path and table.paths:
-                    full = max(table.paths, key=len)
-                    if full is not table.path and len(full) >= len(table.path):
-                        _was = list(table.path)
-                        table.path = align_crumbs(table.path, full)
-                        if _was != table.path:
-                            import sys as _s; print("ALIGN FIRED:", _was, "->", table.path, file=_s.stderr)
-                        else:
-                            import sys as _s; print("align idle:", _was, "| full:", full, file=_s.stderr)
+                for i, c in enumerate(table.path):
+                    best_c = c
+                    for other in table.paths:
+                        for w in other:
+                            if (crumb_same(c, w) and len(flat(w)) > len(flat(best_c))
+                                    and flat(w).startswith(flat(c)[:3])):
+                                best_c = w
+                    table.path[i] = best_c
                 # a date cell no engine read whole, whose digits are a clean
                 # date's digits, is that date; a kind cell read twice over
                 # keeps one telling of itself
