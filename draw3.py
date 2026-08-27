@@ -1073,24 +1073,6 @@ class State:
                         tree_part["x0"] = min(tree_part["x0"], p["box"][0])
                         tree_part["x1"] = max(tree_part["x1"], p["box"][2])
                         continue
-            # A FINDER LIST THE SCREEN CUT OFF IS STILL A LIST. Read with
-            # its Name column and the head of its headings off the side of
-            # the frame, the pane is not recognisable as a list, so its words
-            # stay loose - and a window whose only content is loose words is
-            # taken for a window behind showing through and drawn as an
-            # outline. Its rectangle then stands unclaimed, and the picture
-            # fills it from whichever remembered window's carried box lands
-            # there: at 00:03:00 six file names of a folder the screen was
-            # not showing. `draw2.cut_list` rebuilds the list from where the
-            # words sit, and only where Finder's own Size column runs down
-            # the pane.
-            cut = draw2.cut_list(p)
-            if cut:
-                part = self.part_for("a list of columns", slot)
-                part["x0"] = p["box"][0] if part["x0"] is None else min(part["x0"], p["box"][0])
-                part["x1"] = p["box"][2] if part["x1"] is None else max(part["x1"], p["box"][2])
-                part["model"].add(cut)
-                continue
             part = self.part_for(k, slot)
             part["x0"] = p["box"][0] if part["x0"] is None else min(part["x0"], p["box"][0])
             part["x1"] = p["box"][2] if part["x1"] is None else max(part["x1"], p["box"][2])
