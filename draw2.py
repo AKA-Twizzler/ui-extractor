@@ -953,6 +953,15 @@ def _fold_split(m, groups):
         if a["name"] == GENERIC and b["name"] != GENERIC:
             a["name"] = b["name"]
         a["title"] = a.get("title") or b.get("title")
+        # AND THE RECORD'S OWN ENTRIES MOVE WITH IT. The box a window is
+        # drawn at is looked up later from the reader's entry for it, by the
+        # number its panes carry - so leaving the entries at their halves
+        # drew the joined window at the width of its sidebar alone. Both
+        # entries take the joined rectangle, so whichever number the panes
+        # answer with, the box is the same one.
+        for e_ in m.get("windows") or []:
+            if e_.get("wi") in (a.get("wi"), b.get("wi")):
+                e_["rect"] = list(a["rect"])
         b["folded"] = True
     return [g for g in groups if not g.get("folded")]
 
@@ -973,7 +982,8 @@ def window_groups(m):
             continue
         name = name_of(e, panes) or GENERIC
         title = e.get("top")
-        groups.append({"name": name, "title": title, "rect": e["rect"], "panes": panes, "where": e.get("where")})
+        groups.append({"name": name, "title": title, "rect": e["rect"], "panes": panes,
+                       "where": e.get("where"), "wi": wi})
     # ONE WINDOW THE FRAME CLOSED TWICE - once whole, once at its own
     # sidebar divider - is one window, and its panes are all its own. Left
     # apart, the drawing gave each half a title bar and a set of traffic
