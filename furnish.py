@@ -855,7 +855,7 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
                 '<span class="sn-tab%s">%s</span>'
                 % (" active" if re.sub(r"\W", "", t).lower() in ("newtab", "tab") else "",
                    esc(re.sub(r"\s*[xX\u00d7]$", "", t).strip()))
-                for _, t in tabs_)
+                for _, t in tabs_ if t.strip())
                 + '<span class="sn-plus">+</span>'
                 + "".join('<span class="sn-right">%s</span>' % esc(t)
                           for t in right_ if "emini" in t) + "</div>")
