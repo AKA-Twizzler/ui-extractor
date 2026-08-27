@@ -542,41 +542,34 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
     pasted in -- where the camera lay, an outline says so."""
     barred = bar_words is not None
     out = [f'<div class="sn-screen" style="aspect-ratio:{W} / {H}">']
-    # The screen's own ink -- a reading no filled window claims -- is held
-    # and laid down LAST, once every window and outline is placed, so it
-    # can be kept only where it falls on bare desktop and never scattered
-    # over a window it belongs to. Content standing outside its window on
-    # the desktop picture is exactly the "black mass with the content
-    # outside and under it" Tristan rejected: a window's content belongs
-    # inside that window's outline or in its own card, never loose here.
+    # THE SCREEN'S OWN INK, WHERE IT STOOD. A window the frame drew no
+    # rectangle around - a browser filling the screen, a note behind
+    # everything - was read and then thrown away, because only what stood
+    # inside a measured rectangle was ever drawn. The picture then showed
+    # two windows floating on black where the screen was full of words. So
+    # every reading no filled window claims is laid back down at its own
+    # place, in type the height it was measured at. It sits under
+    # everything: an outline, a filled window and the bar all cover it, the
+    # way they covered it on the screen.
+    for x0, y0, x1, y1, text in ink or ():
+        if not text:
+            continue
+        # what was MEASURED is the height of the ink; what CSS is told is
+        # the size of the type, and a font's ink stands about seven tenths
+        # of its own em. Setting the one as the other drew every word a
+        # third small.
+        high = max(1.0, float(y1) - float(y0)) / 0.72
+        out.append(
+            '<div class="sn-ink" style="left:%.2f%%;top:%.2f%%;'
+            'font-size:calc(%.3fcqh)">%s</div>'
+            % (100.0 * float(x0) / W, 100.0 * float(y0) / H,
+               100.0 * high / H, esc(text)))
     if barred:
         out.append(deskbar(bar_words, clock))
     drawn = []
     names = []          # every outline's name, drawn last so none is hidden
 
     placed = []
-
-    def name_over(box, tag, cls):
-        """A window's name, drawn last and over everything, so a window
-        filled in on top of this one can never hide it. Used by an outline
-        and by a filled behind-window alike."""
-        if not tag:
-            return
-        # two windows whose top-left corners nearly meet would print their
-        # names over each other, so each later one steps down
-        l = 100.0 * box[0] / max(1, W)
-        t = 100.0 * box[1] / max(1, H)
-        step = sum(1 for pl, pt in placed if abs(pl - l) < 14 and abs(pt - t) < 5)
-        placed.append((l, t))
-        off = f'top:{5 + step * 15}px;' if step else ""
-        mod = " sn-away" if "sn-away" in cls else (" sn-subject" if "sn-subject" in cls else "")
-        # the placing is written into the tag itself, not left to the style
-        # sheet: a name box is a NEW class, and a picture must not fall apart
-        # on a reader whose snippet has not caught up
-        names.append(f'<div class="sn-ghost-name{mod}" style="position:absolute;'
-                     f'{slot_style(box, W, H, bar=barred)};z-index:40;'
-                     f'border:0;background:none;pointer-events:none">'
-                     f'<span class="sn-ghost-tag" style="{off}">{esc(tag)}</span></div>')
 
     def outline(box, tag, cls="sn-ghost", extra=""):
         lab = ""
@@ -587,7 +580,25 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
         # exactly what was there.
         if barred and off_screen(box, W, H) > 0.25 and "sn-away" not in cls:
             cls += " sn-away"
-        name_over(box, tag, cls)
+        if tag:
+            # two windows whose top-left corners nearly meet would print
+            # their names over each other, so each later one steps down
+            l = 100.0 * box[0] / max(1, W)
+            t = 100.0 * box[1] / max(1, H)
+            step = sum(1 for pl, pt in placed if abs(pl - l) < 14 and abs(pt - t) < 5)
+            placed.append((l, t))
+            off = f'top:{5 + step * 15}px;' if step else ""
+            # the name is drawn last and over everything, because a window
+            # filled in on top of this one would otherwise hide it and the
+            # outline would stand there unnamed
+            mod = " sn-away" if "sn-away" in cls else (" sn-subject" if "sn-subject" in cls else "")
+            # the placing is written into the tag itself, not left to the
+            # style sheet: a name box is a NEW class, and a picture must
+            # not fall apart on a reader whose snippet has not caught up
+            names.append(f'<div class="sn-ghost-name{mod}" style="position:absolute;'
+                         f'{slot_style(box, W, H, bar=barred)};z-index:40;'
+                         f'border:0;background:none;pointer-events:none">'
+                         f'<span class="sn-ghost-tag" style="{off}">{esc(tag)}</span></div>')
         return (f'<div class="{cls}" style="{slot_style(box, W, H, bar=barred)}{extra}">'
                 + lab + "</div>")
 
@@ -621,7 +632,7 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
     # behind is drawn because it was SEEN, and whether it was seen depends
     # on what stood over it.
     shown = []
-    for tag, box, _st in behind_cards:
+    for tag, box in behind_cards:
         drawn.append(clip_box(box, W, H, bar=barred))
     fronts = []
     for st, rect in subjects:
@@ -640,11 +651,11 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
     # the biggest first, so a window's older place - the same window before
     # it was navigated, still carried in the record - does not get a second
     # outline inside the one that is really showing
-    marks = []          # [box, tag, class, state] - gathered first, then merged
-    for tag, box, st_ in behind_cards:
+    marks = []          # [box, tag, class] - gathered first, then merged
+    for tag, box in behind_cards:
         box = clip_box(box, W, H, bar=barred)
         if in_view(box):
-            marks.append([box, tag, "sn-ghost", st_])
+            marks.append([box, tag, "sn-ghost"])
     for box, tag, kind in ghosts:
         if not box:
             continue
@@ -654,7 +665,7 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
         if any(_close(box, d) for d in drawn):
             continue
         drawn.append(box)
-        marks.append([box, tag, "sn-ghost sn-away" if kind == "away" else "sn-ghost", None])
+        marks.append([box, tag, "sn-ghost sn-away" if kind == "away" else "sn-ghost"])
 
     # One place, one window. Two outlines over the same ground are the same
     # window twice - a window's older place still carried in the record, or a
@@ -662,7 +673,7 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
     # two become one: the name that says something, over the box the words
     # themselves reach to.
     merged = []
-    for box, tag, cls, st_ in marks:
+    for box, tag, cls in marks:
         for other in merged:
             a = (box[2] - box[0]) * (box[3] - box[1])
             b = (other[0][2] - other[0][0]) * (other[0][3] - other[0][1])
@@ -702,42 +713,12 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
                     other[1] = tag
                 if "sn-away" not in cls:
                     other[2] = cls
-                if other[3] is None and st_ is not None:
-                    other[3] = st_          # keep the state that can be drawn
                 break
         else:
-            merged.append([box, tag, cls, st_])
-    behind_boxes = []          # boxes filled by a behind-window this pass
-    for box, tag, cls, st_ in merged:
+            merged.append([box, tag, cls])
+    for box, tag, cls in merged:
         shown.append(box)
-        # A WINDOW SHOWN BEHIND IS DRAWN WITH ITS CAUGHT CONTENT, BEHIND -
-        # Tristan's rule, not an empty outline and not its text scattered
-        # loose. It is the same window as its card, drawn faint and low so
-        # the front windows sit over it and reveal only what the video
-        # revealed. A window with nothing drawable, or too small to hold a
-        # reading, stays an outline.
-        html = None
-        if st_ is not None and "sn-away" not in cls:
-            st_.shape = box
-            try:
-                # a named window draws in its program's own chrome; a window
-                # the reader never named but that carries content -- Obsidian
-                # standing behind, read as a tree and a note but named only
-                # "the rest of the screen" -- draws in a plain frame, which
-                # is still its content inside a window rather than loose text
-                html = window(st_, behind=True) or st_.plain_window_html()
-            except Exception:
-                html = None
-            st_.shape = None
-        thin = (box[2] - box[0] < 0.12 * W or box[3] - box[1] < 0.10 * H)
-        if html and not thin:
-            out.append(scaled(html, box, W, kz=kz, cls="sn-slot sn-back",
-                              extra=f'{slot_style(box, W, H, bar=barred)};z-index:2',
-                              step=getattr(st_, "_row_step", 0.0)))
-            name_over(box, tag, cls)
-            behind_boxes.append(box)
-        else:
-            out.append(outline(box, tag, cls))
+        out.append(outline(box, tag, cls))
 
     # the windows this stretch is about: the top layer, drawn with its real
     # content at a size that reads, cut off by the edges of the box it
@@ -767,50 +748,6 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
         out.append(scaled(html, clip_box(rect, W, H, bar=barred), W, kz=kz,
                           extra=f'{slot_style(rect, W, H, bar=barred)};z-index:{3 + z}',
                           step=getattr(st, "_row_step", 0.0)))
-    # THE HELD-BACK INK, NOW THAT EVERY WINDOW IS PLACED. A reading is drawn
-    # only where it falls on bare desktop -- outside every filled window and
-    # every outline. Ink whose place a window covers is that window's own
-    # content: it belongs inside the window (its outline, or its card in
-    # view two), never loose on the desktop. This is what keeps the picture
-    # from becoming words scattered over a black backdrop.
-    placed_boxes = [b for b in shown] + [r for r in solid]
-    for x0, y0, x1, y1, text in ink or ():
-        if not text:
-            continue
-        cx, cy = (float(x0) + float(x1)) / 2.0, (float(y0) + float(y1)) / 2.0
-        if any(b[0] - 4 <= cx <= b[2] + 4 and b[1] - 4 <= cy <= b[3] + 4
-               for b in placed_boxes):
-            continue                      # a window covers this: its content
-        # what was MEASURED is the height of the ink; a font's ink stands
-        # about seven tenths of its own em, so the type is set a little
-        # taller than the ink measured
-        high = max(1.0, float(y1) - float(y0)) / 0.72
-        out.append(
-            '<div class="sn-ink" style="left:%.2f%%;top:%.2f%%;'
-            'font-size:calc(%.3fcqh)">%s</div>'
-            % (100.0 * float(x0) / W, 100.0 * float(y0) / H,
-               100.0 * high / H, esc(text)))
-    # THE HELD-BACK INK, now that every window is placed. A reading is laid
-    # down only where NO drawn window carries it - not inside a filled front
-    # window, not inside a behind-window that drew its own content. What is
-    # left is the screen's true orphan text: a browser strip caught along the
-    # top, a stray word on the desktop. It sits under everything (z-index 1).
-    covered = [r for r in solid] + [b for b in behind_boxes]
-    for x0, y0, x1, y1, text in ink or ():
-        if not text:
-            continue
-        cx, cy = (float(x0) + float(x1)) / 2.0, (float(y0) + float(y1)) / 2.0
-        if any(b[0] - 4 <= cx <= b[2] + 4 and b[1] - 4 <= cy <= b[3] + 4
-               for b in covered):
-            continue
-        # a font's ink stands about seven tenths of its own em, so the type
-        # is set a little taller than the ink measured
-        high = max(1.0, float(y1) - float(y0)) / 0.72
-        out.append(
-            '<div class="sn-ink" style="left:%.2f%%;top:%.2f%%;'
-            'font-size:calc(%.3fcqh)">%s</div>'
-            % (100.0 * float(x0) / W, 100.0 * float(y0) / H,
-               100.0 * high / H, esc(text)))
     if camera:
         cbox = camera[0] if isinstance(camera, (tuple, list)) else camera
         out.append(f'<div class="sn-camera" style="{slot_style(cbox, W, H, bar=barred)}">'
