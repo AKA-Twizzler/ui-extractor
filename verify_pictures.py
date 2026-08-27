@@ -232,6 +232,16 @@ def check_picture(stamp, stage, frame_path, fav_boxes=()):
     return fails
 
 
+def _runs_of_text(html, least=40):
+    """Every text run of some length drawn inside one picture."""
+    out = []
+    for t in re.findall(r">([^<>]+)<", html):
+        t = " ".join(t.split())
+        if len(t) >= least:
+            out.append(t)
+    return out
+
+
 def note_level(note):
     """Checks over the whole note, not one picture."""
     fails = []
@@ -245,6 +255,21 @@ def note_level(note):
     for k, n in seen.items():
         if n > 1:
             fails.append('DUPLICATE QUOTE BLOCK (%dx): "%s..."' % (n, k[:50]))
+    # AND A DUPLICATED TEXT BLOCK IN A PICTURE, which is the same fault in
+    # the form it actually took: a paragraph drawn twice inside ONE window.
+    # The quote-callout test above cannot see it -- this note carries no
+    # quote callouts at all, so that check has never once been able to fire,
+    # and a check that cannot fire is protecting nothing. Across the note a
+    # repeat is legitimate (the desktop picture and the window's own card
+    # both show the same words); inside one picture it is not.
+    for stamp, heading, stage in pictures(note):
+        seen = {}
+        for t in _runs_of_text(stage):
+            seen[t] = seen.get(t, 0) + 1
+        for t, n in seen.items():
+            if n > 1:
+                fails.append('DUPLICATE TEXT BLOCK at %s (%dx): "%s..."'
+                             % (stamp, n, t[:50]))
     return fails
 
 
@@ -357,23 +382,31 @@ def prove(note, frames, fav):
             state = "NOT PROVED"
         rows.append((name, state, why))
 
-    # the note-level check, broken the same way
+    # the note-level check, broken the same way: a paragraph drawn twice
+    # inside one picture, which is the shape the duplication fault took.
     text = open(note, encoding="utf-8").read()
-    m = re.search(r"> \[!quote\][^\n]*\n> [^\n]+", text)
+    m = None
+    for stamp, heading, stage in pics:
+        runs = _runs_of_text(stage)
+        if runs:
+            m = (stage, runs[0])
+            break
     if m:
-        doubled = text[:m.end()] + "\n\n" + m.group(0) + text[m.end():]
+        stage, run = m
+        doubled = text.replace(stage, stage.replace(
+            ">" + run + "<", ">" + run + "<span>" + run + "</span><", 1), 1)
         tmp = note + ".prove-tmp"
         with open(tmp, "w", encoding="utf-8") as f:
             f.write(doubled)
         try:
-            hit = any("DUPLICATE QUOTE BLOCK" in f for f in note_level(tmp))
+            hit = any("DUPLICATE" in f for f in note_level(tmp))
         finally:
             os.remove(tmp)
         rows.append(("no duplicated block", "PROVED" if hit else "NOT PROVED",
-                     "a quote block doubled, rejected" if hit
-                     else "a quote block doubled and the check passed it"))
+                     "a paragraph drawn twice in one picture, rejected" if hit
+                     else "a paragraph drawn twice and the check passed it"))
     else:
-        rows.append(("no duplicated block", "UNPROVED", "the note holds no quote block"))
+        rows.append(("no duplicated block", "UNPROVED", "the note draws no text"))
 
     # THE GATE ITSELF: a run that examined nothing must not report a pass.
     # Measured: pointed at a note carrying no pictures at all, this gate
