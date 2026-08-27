@@ -44,6 +44,14 @@ def ico(kind):
 
 # ---------------------------------------------------------------- Finder
 
+SIDE_FLAT = {re.sub(r"[^a-z0-9]+", "", n.lower()) for n in draw2.SIDE_NAMES} \
+    | {re.sub(r"[^a-z0-9]+", "", n.lower()) for n in SECTIONS}
+
+
+def norm(s):
+    return re.sub(r"[^a-z0-9]+", "", str(s).lower())
+
+
 def side_words_of(st):
     """A Finder window's fixed favorites sidebar, as its list of names.
 
@@ -81,6 +89,25 @@ def finder(st):
     table = st.main_table()
     side_words = side_words_of(st)
     rows = table.rows if (table and table.rows) else []
+    # A FINDER'S LIST READ AS A TREE IS STILL ITS LIST. With only its Name
+    # column in view, a file list comes back as a plain column of names and
+    # the reader files it as a file tree. At 00:00:30 the vault-demo window's
+    # two panes both came back that way - its favorites and its files - so
+    # the state carried no table at all, and the card drew the window with
+    # its sidebar, its title and an EMPTY list where the screen showed ten
+    # rows. The names are all there in the reading. This window is a Finder
+    # by its own title bar, so its names are drawn as the list they are, and
+    # nothing is invented: no dates, no sizes, no kinds, only what was read.
+    # The favorites are kept out of it, since those are the sidebar.
+    if not rows:
+        tr = st.tree()
+        names = []
+        for t_, _ in (tr.lines if tr else ()):
+            nm = t_.strip("\u2502 \u02c3\u02c5\u25b8\u25be").strip()
+            if nm and norm(nm) not in SIDE_FLAT:
+                names.append(nm)
+        if len(names) >= 3:
+            rows = [{"cells": [nm], "italic": [False]} for nm in names]
     # A Finder window is drawable with a list, OR with only its sidebar and
     # no list at all -- a window standing behind another shows just its
     # favorites down the left, its file area hidden. Without one of the two
