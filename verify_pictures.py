@@ -132,11 +132,22 @@ def check_picture(stamp, stage, frame_path, fav_boxes=()):
     #     and IS filled; what is missing is content INSIDE the fill. So where
     #     the frame's own moment read a favorites sidebar (>= 2 of its fixed
     #     names), the drawing must put a sidebar down somewhere.
-    if fav_boxes:
-        if len(fav_boxes) >= 2 and 'sn-side' not in stage:
-            fails.append("SIDEBAR DROPPED: the frame read a Finder favorites sidebar "
-                         "(%d of Recents/Shared/Applications/...) but the picture draws none; "
-                         "a filled window that showed its sidebar must draw it" % len(fav_boxes))
+    if fav_boxes and 'sn-side' not in stage:
+        # only a FILLED window owes a sidebar: favorites standing inside a
+        # window that is drawn as an outline are a behind window's, and the
+        # rule outlines those without content. So the sidebar is required
+        # only where the favorites words sit inside a filled slot.
+        def inside(pt, box):
+            return box[0] <= pt[0] <= box[2] and box[1] <= pt[1] <= box[3]
+        for d in filled:
+            n = sum(1 for f in fav_boxes
+                    if inside(((f[0] + f[2]) / 2, (f[1] + f[3]) / 2), d))
+            if n >= 2:
+                fails.append("SIDEBAR DROPPED: a filled window at %.0f-%.0f%% across, "
+                             "%.0f-%.0f%% down stands over %d favorites-sidebar names the "
+                             "frame read, but the fill draws no sidebar" % (
+                                 d[0]*100, d[2]*100, d[1]*100, d[3]*100, n))
+                break
 
     # 2) NO PLACEHOLDER LABELS in a finished note.
     for tag in re.findall(r'sn-ghost-tag[^>]*>([^<]*)<', stage):
