@@ -1092,6 +1092,13 @@ def _fold_split(m, groups):
     return [g for g in groups if not g.get("folded")]
 
 
+def bar_crumbs_like(pane):
+    """Whether this pane already carries a run of a path bar's crumbs."""
+    words = [it["text"] for it in items_of(pane) if it["text"].strip()]
+    hits = [w for w in words if crumb_like(w) or w.rstrip().endswith(">")]
+    return len(hits) >= 2
+
+
 def window_groups(m):
     """The windows of a moment: (name, rect, panes). Panes on no found
     window form one group of their own."""
@@ -1144,6 +1151,44 @@ def window_groups(m):
                     break
             else:
                 still.append(p)
+        # ...AND A BAR CUT INTO PIECES IS STILL ONE BAR. The rule above asks
+        # a leftover pane to stand at the window's own width, which a path
+        # bar read in fragments never does: at 00:00:50 the bar under a
+        # Finder came back as four narrow panes and none was claimed, so the
+        # window never got a path - and a Finder's title IS the folder its
+        # path ends at, so it was drawn with no name at all. The pieces are
+        # claimed together: panes standing in ONE row, holding mostly
+        # crumbs, inside the window's own width and against its foot. A
+        # window that already has a crumb-bearing pane AT ITS FOOT is left
+        # alone, so this can only supply a bar that is missing - asked of
+        # every pane instead, a window's own file names read as crumbs and
+        # no window ever qualified.
+        crumby = []
+        for p in still:
+            words = [it["text"] for it in items_of(p) if it["text"].strip()]
+            hits = [w for w in words if crumb_like(w) or w.rstrip().endswith(">")]
+            if words and len(hits) * 2 >= len(words):
+                crumby.append(p)
+        if crumby:
+            taken = set()
+            for g in groups:
+                r = g["rect"]
+                wide = max(1.0, r[2] - r[0])
+                gap = 0.06 * max(1.0, r[3] - r[1])
+                if any(bar_crumbs_like(q) and -gap <= q["box"][1] - r[3] <= gap
+                       for q in g["panes"]):
+                    continue
+                band = [p for p in crumby if id(p) not in taken
+                        and p["box"][0] >= r[0] - 0.06 * wide
+                        and p["box"][2] <= r[2] + 0.06 * wide
+                        and -gap <= p["box"][1] - r[3] <= gap]
+                if len(band) < 2:
+                    continue
+                for p in band:
+                    g["panes"].append(p)
+                    taken.add(id(p))
+                g["grew"] = True
+            still = [p for p in still if id(p) not in taken]
         rest = still
         # named again, now the window has all of its furniture: the bar it
         # just gained is the one thing that says beyond doubt what program
