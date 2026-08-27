@@ -6044,27 +6044,32 @@ def note(records_path, diary_text=None):
                 # was on the screen there and only the reader's eye slid past
                 if (stx.name == "The Finder window" and house_side and shape
                         and not furnish.side_words_of(sl)):
+                    # ...AND THEY MUST STAND IN THE WINDOW'S LEFT MARGIN, which
+                    # is where a sidebar is. Counted anywhere inside the
+                    # rectangle, this found two "favorites" in the window at
+                    # 00:01:00 that were nothing of the kind: the path bar's
+                    # `Macintosh HD` and `Users` at x=1188 and x=888, and the
+                    # Kind column's `Document` at x=2098 matching the favorite
+                    # `Documents` by substring. That window was then drawn with
+                    # a favorites sidebar it never showed - the one belonging to
+                    # its neighbour, so the screen carried the same sidebar
+                    # twice. The band between the window's own left edge and
+                    # the left edge of its list is the only place a sidebar
+                    # can be, and the neighbour's favorites at 00:01:00 sit
+                    # far outside it.
+                    _tp = next((q for q in sl.parts if q["fam"] == "table"
+                                and q["model"] is sl.main_table()), None)
+                    left = (_tp or {}).get("x0")
+                    edge = left if left is not None else shape[2]
                     hits = 0
                     for t in s["ts"]:
                         for key, b in (words_of.get(t) or {}).items():
                             cx, cy = (b[0] + b[2]) / 2, (b[1] + b[3]) / 2
-                            if shape[0] <= cx <= shape[2] and shape[1] <= cy <= shape[3] \
+                            if shape[0] <= cx <= min(edge, shape[2]) and shape[1] <= cy <= shape[3] \
                                     and any(hk in key or key in hk for hk in house_keys
                                             if len(key) >= 5):
                                 hits += 1
                     if hits >= 2:
-                        import sys as _s
-                        _t = sl.main_table()
-                        _tp = next((q for q in sl.parts if q["fam"] == "table" and q["model"] is _t), None)
-                        print("CARRY %s label=%r shape=%s list_x0=%s hits=%d"
-                              % (s["t0"], getattr(sl, "_label", None), [round(v) for v in shape],
-                                 (_tp or {}).get("x0"), hits), file=_s.stderr)
-                        for t in s["ts"]:
-                            for key, b in (words_of.get(t) or {}).items():
-                                cx = (b[0] + b[2]) / 2
-                                if shape[0] <= cx <= shape[2] and any(hk in key or key in hk for hk in house_keys if len(key) >= 5):
-                                    print("      house word %-14r at x=%d" % (key[:14], round(cx)), file=_s.stderr)
-                            break
                         sl._carried_side = house_side
             parts.append(furnish.screen_shot(
                 {"t0": s["t0"], "t1": s["t1"]},
