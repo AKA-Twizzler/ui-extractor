@@ -44,13 +44,20 @@ def ico(kind):
 
 # ---------------------------------------------------------------- Finder
 
-def finder(st):
+def side_words_of(st):
+    """A Finder window's fixed favorites sidebar, as its list of names.
+
+    Two sources, in order: the list's own sidebar column (`table.side`), and
+    a strip of short words the reader filed to the LEFT of the list -- the
+    favorites (Recents, Shared, Applications, ...) read as a pane of their
+    own. The sidebar is fixed furniture: a window that showed it one moment
+    showed it the next, so a stretch that read only part of it, or none, is
+    filled from the window's whole reading. Factored out of `finder` so the
+    drawing side can carry it into a stretch that missed it."""
     table = st.main_table()
-    if not table or not table.rows:
-        return None
+    if not table:
+        return []
     side_words = list(table.side)
-    # a strip of short words to the left of the list is its sidebar too;
-    # what it holds that the list's own sidebar lacks goes in at its place
     tpart = next((q for q in st.parts if q["fam"] == "table" and q["model"] is table), None)
     for q in st.parts:
         if q["fam"] == "words" and tpart and q["x1"] is not None and tpart["x0"] is not None \
@@ -60,6 +67,14 @@ def finder(st):
             import draw3
             side_words = draw3.stitch(side_words, strip, key=lambda w: w) if side_words else strip
             break
+    return side_words
+
+
+def finder(st):
+    table = st.main_table()
+    if not table or not table.rows:
+        return None
+    side_words = side_words_of(st)
     # the sidebar: lights at its top, then the items with their icons and
     # the section labels where they were read
     side = ""
