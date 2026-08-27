@@ -617,7 +617,14 @@ class Lines:
                 kept.append((t, h))
             self.lines = kept
         else:
+            _had = any("obsidian" in str(t).lower() for t, _h in self.lines) or \
+                   any("obsidian" in str(t).lower() for t, _h in pairs)
             self.lines = stitch(self.lines, pairs, key=lambda p: p[0], same=same_text)
+            if _had and not any("obsidian" in str(t).lower() for t, _h in self.lines):
+                import sys as _s
+                print("STITCH DROPPED IT", file=_s.stderr)
+                print("   was  : %r" % ([t for t, _h in self.lines][:3],), file=_s.stderr)
+                print("   pairs: %r" % ([t for t, _h in pairs][:3],), file=_s.stderr)
         if self.kind == "a file tree":
             # a folder with rows under it deeper than itself is open
             fixed = []
