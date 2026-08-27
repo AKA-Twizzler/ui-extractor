@@ -1262,7 +1262,19 @@ class State:
         t = self.main_table()
         others = [q for q in self.parts if q["fam"] in ("tree", "doc", "term")]
         if not self.title and not t and not others:
-            return True           # words only: a window behind, showing through
+            # ...UNLESS THE FRAME MEASURED THE RECTANGLE IT STANDS IN. Words
+            # with no list and no note usually are a window behind showing
+            # through the gaps around the ones in front, and an outline is
+            # the honest answer for those. A window the SCREEN cuts off is
+            # words-only for a different reason: at 00:03:00 a Finder ran off
+            # the left edge with only its Size and Kind columns in view, and
+            # the reader read all 35 of them. Called a fragment, it was
+            # dropped from the windows, its rectangle was left unclaimed, and
+            # the promotion handed it to a remembered Finder that had once
+            # shown the `.claude` folder - six file names the screen never
+            # showed. A rectangle the reader MEASURED is a window; what shows
+            # through a gap has no rectangle of its own.
+            return not self.measured
         return bool(t) and not getattr(self, "title_sure", False) and len(t.rows) < 3 and not others
 
     def has_content(self):
@@ -1586,12 +1598,6 @@ def build_states(moments):
         for st in states:
             settle_rects(st, W, H)
         settle_across(states, [m["ts"] for m in moments], W, H)
-    for _st in states:
-        for _mm, _g in _st.pieces:
-            if _mm["ts"] == "00:03:00":
-                sys.stderr.write("TRACE built %-18s %-14s rect=%s content=%s\n"
-                                 % (str(_st.name)[:18], str(_st.title)[:14],
-                                    [round(v) for v in _g["rect"]], _st.has_content()))
     return states
 
 
