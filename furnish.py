@@ -324,10 +324,10 @@ def obsidian(st, behind=True):
         blocks = getattr(st, "_doc_blocks", None) if placed else None
         bits = ([f"padding-top:{pad}px"] if pad else []) + \
                ([f"--sn-line:{wide}%"] if wide and wide < 98 else []) + \
-               (["--sn-lead:auto"] if wide and wide < 98 else []) + \
                (["position:relative"] if blocks else [])
         sty_doc = f' style="{";".join(bits)}"' if bits else ""
-        cols.append(f'<div class="sn-doc"{sty_doc}>' + note_html(st, doc, title, blocks) + "</div>")
+        cols.append(f'<div class="sn-doc"{sty_doc}>'
+                    + note_html(st, doc, title, blocks, wide) + "</div>")
     # THE PANES ARE AS WIDE AS THE SCREEN HAD THEM. The explorer and the
     # note share the window in the proportion the reader measured - the
     # tree's pane against the rest of the window - not a fixed 38 to 62,
@@ -360,7 +360,7 @@ def obsidian(st, behind=True):
     return f'<div class="{cls}">{strip}{toolbar}{body}</div>'
 
 
-def note_html(st, doc, title, blocks=None):
+def note_html(st, doc, title, blocks=None, wide=0):
     """The note as Obsidian shows it: the tab's header line, the inline
     title, the properties block, then the body in its measured sizes.
 
@@ -410,10 +410,22 @@ def note_html(st, doc, title, blocks=None):
             out.append(piece)
         else:
             groups.setdefault(bi, []).append(piece)
+    # A NOTE SITS IN THE MIDDLE OF ITS PANE. Obsidian sets a note to a
+    # readable line length and CENTRES that column; the style sheet's
+    # `--sn-line` is a max-width, which left-aligns it. Measured on
+    # 00:00:00, the frame runs the note from 0.448 to 0.714 of the screen
+    # and the drawing ran it from 0.426 -- its lines reaching left into the
+    # seam between the two Finder windows, a patch of screen that showed no
+    # text at all. A block placed at its own height must carry the width and
+    # the centring itself: once it is a block of its own, `--sn-line` no
+    # longer reaches the lines inside it.
+    span = ("max-width:%d%%;margin-left:auto;margin-right:auto;" % wide
+            if wide and wide < 98 else "")
     for bi in sorted(groups):
         out.append('<div class="sn-docblock" style="position:absolute;left:0;right:0;'
-                   'padding:0 calc(26 * var(--sn-u, 1px));top:calc(%d * var(--sn-u, 1px))">%s</div>'
-                   % (blocks[bi][0], "".join(groups[bi])))
+                   'padding:0 calc(26 * var(--sn-u, 1px));%s'
+                   'top:calc(%d * var(--sn-u, 1px))">%s</div>'
+                   % (span, blocks[bi][0], "".join(groups[bi])))
     if st.covered:
         out.append('<span class="sn-covered">the camera picture covered this corner of the window</span>')
     return "".join(out)
