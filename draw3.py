@@ -414,6 +414,7 @@ class Table:
             for it in row[len(run):]:
                 if it["ok"] and it["text"] not in self.bottom:
                     self.bottom.append(it["text"])
+        best = unglue(best)
         if len(best) >= len(self.path):
             self.path = best
         if best and best not in self.paths:
@@ -1990,6 +1991,27 @@ def mend_path(mine, others):
                 i += len(keep) + 1
             else:
                 i += 1
+    return out
+
+
+def unglue(path):
+    """A crumb that ENDS with the crumb after it is two crumbs run together.
+
+    One engine reads `Users` and `jaredrhodenizer` as a single word and the
+    other reads the second of them on its own, so the bar comes out
+    `Macintosh HD > Usersjaredrhodenizer > jaredrhodenizer` where the screen
+    shows `Macintosh HD > Users > jaredrhodenizer`. The pair proves itself:
+    nothing else explains a crumb whose tail is, letter for letter, the whole
+    of its own child. Only the head is kept, and only when a head of real
+    length is left over."""
+    out = []
+    for i, c in enumerate(path):
+        nxt = path[i + 1] if i + 1 < len(path) else None
+        if nxt and len(c) > len(nxt) + 2 and c.lower().endswith(nxt.lower()):
+            head = c[:len(c) - len(nxt)].strip(" -/>")
+            if len(head) >= 3:
+                c = head
+        out.append(c)
     return out
 
 
