@@ -1074,7 +1074,7 @@ class State:
                         tree_part["x1"] = max(tree_part["x1"], p["box"][2])
                         continue
             cut = draw2.cut_list(p)
-            if cut and m["ts"] in ("00:00:00",):
+            if cut:
                 sys.stderr.write("TRACECUT %s kind=%-18s box=%s head=%s rows=%d\n"
                                  % (m["ts"], p.get("kind"), [round(v) for v in p["box"]],
                                     cut[2], len(cut[3])))
