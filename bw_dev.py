@@ -211,8 +211,6 @@ def big_windows(path, least_frac=0.20, img=None):
                 continue
             x1 = _run_out(hors, y, head_right, w, blocks, True, tol, least_h)
             y1 = _run_out(verts, x, side_bot, h, blocks, False, tol, least_v)
-            if x1 < w - tol and y1 < h - tol:
-                continue                    # not cut off: `shapes` owns it
             if any(abs(r[0] / k - x) <= tol and abs(r[1] / k - y) <= tol
                    for r in known):
                 continue                    # ONE HOME: `shapes` measured it
