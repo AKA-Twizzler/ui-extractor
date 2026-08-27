@@ -5376,42 +5376,38 @@ def note(records_path, diary_text=None):
     parts[head_at] = re.sub(r"(\w+ windows) \((\d+) states\)",
                             r"\1 (\2 states between them)", parts[head_at])
 
-    for w, sts in [(w, g) for w in windows
-                   for g in split_windows([st for st in shown if st.name == w])]:
-        # one window's path bar, read whole at one moment and in pieces at
-        # another: the pieces are filled in from the moment it stood clear
-        tables = [t for st in sts for t in [st.main_table()] if t and t.path]
-        for t in tables:
-            t.path = mend_path(t.path, [o.path for o in tables if o is not t])
-        latest = max(sts, key=lambda st: st.times[-1])     # the last one on screen
-        earlier = [st for st in sts if st is not latest]
-        parts.append(f"## {w} - as at {span_of(latest)}" + (f", {latest.title}" if latest.title else ""))
-        parts.append("")
-        parts.append(latest.window_html())
-        parts.append("")
-        for ln in latest.said_html():
-            parts.append(ln)
+    for w in windows:
+        groups = split_windows([st for st in shown if st.name == w])
+        # one physical window's path bar, read whole at one moment and in
+        # pieces at another: the pieces are filled in from the moment it
+        # stood clear. This is mended within the physical window, across its
+        # folder-views, because the path is the one thing they share.
+        for sts in groups:
+            tables = [t for st in sts for t in [st.main_table()] if t and t.path]
+            for t in tables:
+                t.path = mend_path(t.path, [o.path for o in tables if o is not t])
+        # EACH FOLDER VIEW IS ITS OWN CARD. Tristan's rule: a new folder
+        # opening in the same Finder window is a new window, not a state of
+        # an old one - "two windows of the same app don't count as one
+        # window, but two...same with if a one window changes to very
+        # different content (new folder opens in same finder window)." So
+        # every folder-view is a top-level card in the order it first
+        # showed, never nested under a physical window as an "earlier
+        # state" - which was the opposite of the rule, naming the physical
+        # window as the thing and the folders as its history.
+        for st in sorted((s for g in groups for s in g), key=lambda s: s.times[0]):
+            parts.append(f"## {w} - as at {span_of(st)}" + (f", {st.title}" if st.title else ""))
             parts.append("")
-        if latest.fine_html():
-            parts.append(latest.fine_html())
+            parts.append(st.window_html())
             parts.append("")
-        if earlier:
-            parts.append("Earlier states of this same window: " + " · ".join(
-                f"{e.times[0]} {state_label(e)}" for e in earlier) + " (each drawn the same way below)")
-            parts.append("")
-            for e in earlier:
-                parts.append(f"### as at {span_of(e)}" + (f", {e.title}" if e.title else ""))
+            for ln in st.said_html():
+                parts.append(ln)
                 parts.append("")
-                parts.append(e.window_html())
+            if st.fine_html():
+                parts.append(st.fine_html())
                 parts.append("")
-                for ln in e.said_html():
-                    parts.append(ln)
-                    parts.append("")
-                if e.fine_html():
-                    parts.append(e.fine_html())
-                    parts.append("")
-        parts.append("---")
-        parts.append("")
+            parts.append("---")
+            parts.append("")
     # the desktop bar stands in the screen pictures themselves; saying it
     # again at the end is the same fact twice
 
