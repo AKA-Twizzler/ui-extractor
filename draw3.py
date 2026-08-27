@@ -4572,9 +4572,6 @@ def note(records_path, diary_text=None):
         tab.side = list(best.side)
         by = {fold(flat((r.get("cells") or [""])[0])): r for r in best.rows
               if (r.get("cells") or [""])[0]}
-        import sys as _s
-        if any("inbox" in re.sub(r"[^a-z]", "", str(x).lower()) for x in names):
-            print("FILL names=%r" % (list(names)[:4],), file=_s.stderr)
         for n in names:
             if not n:
                 return
