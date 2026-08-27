@@ -78,6 +78,15 @@ def _corner_buttons(img, x0, y0):
     return False
 
 
+def _band(lines, pos, a, b, near=3.0):
+    """How wide the soft band this edge came back as is, across the line."""
+    lo = hi = pos
+    for p, la, lb in lines:
+        if abs(p - pos) <= near and min(lb, b) - max(la, a) > 0:
+            lo, hi = min(lo, p), max(hi, p)
+    return lo, hi
+
+
 def _whole_side(lines, pos, a, b, near=3.0):
     """One drawn edge, gathered from every segment of itself.
 
@@ -94,6 +103,26 @@ def _whole_side(lines, pos, a, b, near=3.0):
         if abs(p - pos) <= near and min(lb, b) - max(la, a) > 0:
             lo, hi = min(lo, la), max(hi, lb)
     return lo, hi
+
+
+def _sharpest(grey, lo, hi, a, b, down):
+    """Where inside a soft edge the line the screen actually DREW sits.
+
+    A window's side comes with a shadow spread over a dozen pixels, and the
+    line finder answers with the whole soft band -- so a box taken from the
+    band's outer lip stands a shadow's width outside the window. The window
+    is the SHARPEST step in that band, measured along the part of the side
+    that is on the screen, so this is a measurement and not a nudge."""
+    lo, hi = max(1, int(lo)), min((grey.shape[1] if down else grey.shape[0]) - 2, int(hi))
+    if hi <= lo:
+        return float(lo)
+    a, b = int(max(0, a)), int(min((grey.shape[0] if down else grey.shape[1]) - 1, b))
+    if b - a < 8:
+        return float(lo)
+    step = max(1, (b - a) // 200)
+    band = grey[a:b:step, lo - 1:hi + 2] if down else grey[lo - 1:hi + 2, a:b:step].T
+    d = np.abs(band[:, 2:].astype(np.int32) - band[:, :-2].astype(np.int32))
+    return float(lo + int(np.argmax(d.mean(axis=0))))
 
 
 def _covered(x, y, blocks):
@@ -162,11 +191,14 @@ def big_windows(path, least_frac=0.20, img=None):
         img = cv2.imread(path) if isinstance(path, str) else path
 
     least_v, least_h = shapes.RUN * h, shapes.RUN * w
+    grey = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     out = []
     for x, ya, yb in verts:
         side_top, side_bot = _whole_side(verts, x, ya, yb)
+        side_lo, side_hi = _band(verts, x, ya, yb)
         for y, xa, xb in hors:
             head_left, head_right = _whole_side(hors, y, xa, xb)
+            head_lo, head_hi = _band(hors, y, xa, xb)
             # A WINDOW'S TOP-LEFT CORNER IS WHERE ITS SIDE BEGINS, not
             # merely somewhere its side is crossed. Asking only whether the
             # two edges touch takes every divider inside the window too: the
@@ -185,7 +217,11 @@ def big_windows(path, least_frac=0.20, img=None):
                 continue                    # ONE HOME: `shapes` measured it
             if (x1 - x) < least_frac * w or (y1 - y) < least_frac * h:
                 continue
-            box = (x * k, y * k, min(W, x1 * k), min(H, y1 * k))
+            x_edge = _sharpest(grey, side_lo * k, (side_hi + 1) * k,
+                               side_top * k, side_bot * k, True)
+            y_edge = _sharpest(grey, head_lo * k, (head_hi + 1) * k,
+                               head_left * k, head_right * k, False)
+            box = (x_edge, y_edge, min(W, x1 * k), min(H, y1 * k))
             if not _corner_buttons(img, box[0], box[1]):
                 continue
             out.append(box)
