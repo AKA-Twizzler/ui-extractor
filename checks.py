@@ -1617,6 +1617,110 @@ def _style():
                   f"{fam} type; {look['theme']} look")
 
 
+# -------------------------------------------- the windows the screen cuts off
+
+@check("big windows: the two the screen cuts off are measured")
+def _bigwin_measured():
+    """`shapes` closes a window from two sides plus a top and a foot, and
+    offers the frame's edge as a stand-in SIDE but never as a stand-in FOOT.
+    So the browser and the Obsidian editor at this moment -- top and left
+    edges drawn plainly, right and foot on the screen's own boundary -- were
+    never measured at all, and the picture missed the two LARGEST windows on
+    screen. These numbers are the frame's own pixels, measured by hand off
+    00:00:00 before the finder was written."""
+    import bigwin
+    path = frame("memfiles", "00:00:00")
+    got = bigwin.big_windows(path)
+    want = {"the browser": (22, 65), "Obsidian": (77, 196)}
+    if len(got) != 2:
+        return False, "found %d big windows on a frame carrying 2" % len(got)
+    im = cv2.imread(path)
+    H, W = im.shape[:2]
+    said = []
+    for name, (wx, wy) in want.items():
+        near = [b for b in got if abs(b[0] - wx) <= 6 and abs(b[1] - wy) <= 6]
+        if not near:
+            return False, "%s is not at (%d, %d); found %s" % (
+                name, wx, wy, [(round(b[0]), round(b[1])) for b in got])
+        b = near[0]
+        if b[2] < W - 4 or b[3] < H - 4:
+            return False, "%s does not run to the screen's own edges: %s" % (
+                name, tuple(round(v) for v in b))
+        said.append("%s at (%d, %d)" % (name, round(b[0]), round(b[1])))
+    return True, "; ".join(said) + ", both cut off by the screen"
+
+
+@check("big windows: the box stops at a real edge, not at the screen's")
+def _bigwin_stops():
+    """The one thing a box grown outward must never do. Painted over so the
+    windows plainly END above the foot and left of the right edge, a finder
+    that runs to the boundary anyway is measuring the screen, not a window."""
+    import bigwin
+    im = cv2.imread(frame("memfiles", "00:00:00"))
+    H, W = im.shape[:2]
+    out = os.path.join(os.path.dirname(frame("memfiles", "00:00:00")), "_check-bigwin")
+    os.makedirs(out, exist_ok=True)
+    said = []
+    for label, cut in (("foot", "y"), ("right", "x")):
+        a = im.copy()
+        if cut == "y":
+            a[1500:, :] = (12, 8, 14)
+        else:
+            a[:, 2600:] = (12, 8, 14)
+        p = os.path.join(out, "cut-%s.png" % label)
+        cv2.imwrite(p, a)
+        shapes._CACHE.pop(p, None)
+        bigwin._CACHE.pop((p, 0.20), None)
+        got = bigwin.big_windows(p)
+        if not got:
+            return False, "found nothing on a frame still carrying two windows"
+        far = max(b[3] for b in got) if cut == "y" else max(b[2] for b in got)
+        edge = H if cut == "y" else W
+        if far > edge - 200:
+            return False, ("the %s edge came back at %d on a frame where the "
+                           "windows end at %d" % (label, round(far),
+                                                  1500 if cut == "y" else 2600))
+        said.append("%s edge %d, not %d" % (label, round(far), edge))
+    return True, "; ".join(said)
+
+
+@check("big windows: a camera is not one, and neither is a panel")
+def _bigwin_refuses():
+    """A face is a field of round features and a hat brim makes a straight
+    edge, so shape alone says window. And a flat card reaching the screen's
+    edges with three round dots in its corner is a card, while a panel drawn
+    inside a window is furniture. Each of these was a false window once."""
+    import bigwin
+    im = cv2.imread(frame("memfiles", "00:00:00"))
+    H, W = im.shape[:2]
+    out = os.path.join(os.path.dirname(frame("memfiles", "00:00:00")), "_check-bigwin")
+    os.makedirs(out, exist_ok=True)
+
+    face = cv2.resize(im[1152:2112, 0:1440], (W, H), interpolation=cv2.INTER_CUBIC)
+    pf = os.path.join(out, "face.png")
+    cv2.imwrite(pf, face)
+    shapes._CACHE.pop(pf, None); bigwin._CACHE.pop((pf, 0.20), None)
+    n_face = len(bigwin.big_windows(pf))
+    if n_face:
+        return False, "found %d windows on nothing but a camera" % n_face
+
+    card = np.full((H, W, 3), (12, 8, 14), np.uint8)
+    cv2.rectangle(card, (300, 240), (W - 1, H - 1), (45, 40, 38), -1)
+    for i, c in enumerate(((70, 70, 200), (70, 190, 220), (90, 190, 90))):
+        cv2.circle(card, (360 + i * 70, 300), 22, c, -1)
+    cv2.rectangle(card, (700, 500), (2600, 1600), (30, 30, 30), -1)
+    for i in range(3):
+        cv2.circle(card, (760 + i * 70, 560), 22, (90, 90, 90), -1)
+    pc = os.path.join(out, "panel.png")
+    cv2.imwrite(pc, card)
+    shapes._CACHE.pop(pc, None); bigwin._CACHE.pop((pc, 0.20), None)
+    got = bigwin.big_windows(pc)
+    if len(got) != 1:
+        return False, ("the panel inside the window came back as a window too: "
+                       "%d found where there is 1" % len(got))
+    return True, "camera refused; the window kept and its panel refused"
+
+
 def main():
     wanted = [a for a in sys.argv[1:] if not a.startswith("-")]
     if "--list" in sys.argv:
