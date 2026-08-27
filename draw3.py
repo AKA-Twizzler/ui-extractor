@@ -4883,9 +4883,6 @@ def note(records_path, diary_text=None):
                 if own in sub_states or id(own) in carded or T is None:
                     continue
                 hb = home_at(own, s["t0"])
-                if hb is None:
-                    continue
-                box = onto(T, hb)
                 # a long line of its own text read this stretch places the
                 # window more surely than any carried box
                 keys = own_words.get(id(own)) or set()
