@@ -1029,6 +1029,8 @@ class State:
                 self._title_rule()
         # where the window stood at this moment, measured from what it drew
         self.rects[m["ts"]] = content_rect(self, group, m)
+        if group.get("side_share"):
+            self.side_share = group["side_share"]
 
     def _absorb(self, group, m):
         W = (m.get("size") or [1920])[0]

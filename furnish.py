@@ -195,7 +195,13 @@ def finder(st):
     main = '<div class="sn-main">' + toolbar + body + foot + "</div>"
     cls = "sn-window sn-finder" + (" sn-dark" if st.theme == "dark" else "")
     if side:
-        return f'<div class="{cls}"><div class="sn-cols sn-finder-cols">{side}{main}</div></div>'
+        # a sidebar the frame MEASURED is drawn at the width it was; the
+        # card's fixed one stands for every Finder that was never measured
+        share = getattr(st, "side_share", None)
+        cols = (f' style="grid-template-columns: {share * 100:.1f}% 1fr"'
+                if share else "")
+        return (f'<div class="{cls}"><div class="sn-cols sn-finder-cols"{cols}>'
+                f'{side}{main}</div></div>')
     return f'<div class="{cls}">{main}</div>'
 
 

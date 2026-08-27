@@ -927,7 +927,7 @@ def _fold_split(m, groups):
         return groups
     for i, j in pairs:
         a, b = groups[i], groups[j]
-        r, o = a["rect"], b["rect"]
+        r, o = list(a["rect"]), list(b["rect"])
         a["rect"] = [min(r[0], o[0]), min(r[1], o[1]),
                      max(r[2], o[2]), max(r[3], o[3])]
         a["panes"] = a["panes"] + b["panes"]
@@ -962,6 +962,14 @@ def _fold_split(m, groups):
         for e_ in m.get("windows") or []:
             if e_.get("wi") in (a.get("wi"), b.get("wi")):
                 e_["rect"] = list(a["rect"])
+        # HOW WIDE THE SIDEBAR REALLY WAS. The card draws one at a fixed
+        # width, which is right for a Finder of ordinary size and wrong for
+        # this one: on the frame the sidebar takes a little over half the
+        # window, so a drawing that gives it a fifth puts every row of the
+        # file list left of where the screen had it. The split is the one
+        # thing this fold knows exactly - it is the seam it just measured.
+        whole = max(1.0, a["rect"][2] - a["rect"][0])
+        a["side_share"] = max(0.12, min(0.7, (r[2] - a["rect"][0]) / whole))
         b["folded"] = True
     return [g for g in groups if not g.get("folded")]
 
