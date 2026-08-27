@@ -255,19 +255,26 @@ def finder(st):
         # the drawn bar read `... > .claude > projects > Usersjaredrhodenizer
         # > jaredrhodenizer > .claude > projects > ...`, three times round.
         # It ends at the first crumb it has already passed.
-        # ...and it is a CYCLE that says so, not any repeated word. A bar
-        # read twice comes back as its own run again - `Users… > jared… >
-        # .claude > projects > Users… > jared… > .claude` - so the repeat
-        # stands several crumbs after the crumb it repeats. Cutting at ANY
-        # repeated name instead threw away real crumbs from the long bars at
-        # 00:03:00 and 00:03:30, which cost a point of ink on both.
-        path_, at = [], {}
-        for c in table.path:
-            n_ = re.sub(r"[^a-z0-9]+", "", str(c).lower())
-            if n_ in at and len(path_) - at[n_] >= 3:
-                break
-            at.setdefault(n_, len(path_))
-            path_.append(c)
+        # ...and what says so is a run that comes back, not a repeated word.
+        # The bar reads as `Users > jared > .claude > projects` TWICE and then
+        # continues `Documents > vault-demo > 02 Company A` - a real tail. Both
+        # earlier attempts cut at the first repeat and threw that tail away,
+        # which cost ink on seven pictures. So collapse the duplicated run
+        # where it sits and keep what stands on either side of it.
+        path_ = [c for c in table.path]
+        keys = [re.sub(r"[^a-z0-9]+", "", str(c).lower()) for c in path_]
+        again = True
+        while again:
+            again = False
+            for ln in range(len(keys) // 2, 0, -1):
+                for i in range(len(keys) - 2 * ln + 1):
+                    if keys[i:i + ln] == keys[i + ln:i + 2 * ln]:
+                        del path_[i + ln:i + 2 * ln]
+                        del keys[i + ln:i + 2 * ln]
+                        again = True
+                        break
+                if again:
+                    break
         crumbs = []
         for k, c in enumerate(path_):
             g = '<span class="sn-g">⊟</span>' if k == 0 and c.lower().startswith("macintosh") else ico("")
