@@ -122,10 +122,19 @@ def check_picture(stamp, stage, frame_path, fav_boxes=()):
         # That blindness is why a picture missing the two LARGEST windows on
         # screen passed every gate; the browser and the Obsidian editor at
         # 00:00:00 are both this shape. `bigwin` measures them.
+        # AGAINST THE `shapes` LIST ONLY, never against each other. TWO
+        # WINDOWS OF DIFFERENT PROGRAMS ARE TWO WINDOWS HOWEVER MUCH GROUND
+        # THEY SHARE -- the law of run 4, broken here the moment the list
+        # being compared against was allowed to grow: Obsidian sits almost
+        # exactly on top of the browser (they agree by 0.92), so the second
+        # was dropped as a copy of the first, the gate saw three windows
+        # where the screen drew four, and the browser then matched the box
+        # drawn for Obsidian and passed.
+        settled = list(fw)
         for b in bigwin.big_windows(frame_path):
             if (b[2] - b[0]) * (b[3] - b[1]) >= least and not any(
                     _iou((b[0]/W, b[1]/H, b[2]/W, b[3]/H),
-                         (r[0]/W, r[1]/H, r[2]/W, r[3]/H)) > 0.7 for r in fw):
+                         (r[0]/W, r[1]/H, r[2]/W, r[3]/H)) > 0.7 for r in settled):
                 fw.append(tuple(b))
         fboxes = [(o[0]/W, o[1]/H, o[2]/W, o[3]/H) for o in fw]
         top = [not any(j != i and overlap(fboxes[i], fboxes[j]) > 0.5
