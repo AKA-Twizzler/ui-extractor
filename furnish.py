@@ -186,7 +186,7 @@ def finder(st):
     body = '<div class="sn-body">' + "".join(out) + "</div>"
     # the path bar
     foot = ""
-    if table.path:
+    if table and table.path:
         crumbs = []
         for k, c in enumerate(table.path):
             g = '<span class="sn-g">⊟</span>' if k == 0 and c.lower().startswith("macintosh") else ico("")
