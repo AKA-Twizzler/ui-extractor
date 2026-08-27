@@ -908,6 +908,9 @@ def touching(a, b, W):
     return side or stack
 
 
+GENERIC = "A window"        # what a window is called when nothing names it
+
+
 def _fold_split(m, groups):
     """Fold each window the frame closed twice back into one group."""
     import cv2                     # only a desktop with two windows on it
@@ -940,7 +943,14 @@ def _fold_split(m, groups):
         # of how many windows the screen showed. Each half was already named
         # while it still looked like what it is; the name to keep is the one
         # from the half that carried the folder's name.
-        if b.get("title") and not a.get("title"):
+        # THE NAME IS THE ONE THAT IS ACTUALLY A NAME. Each half was named
+        # from what it alone holds, and only one half can be: the sidebar
+        # side reads as a Finder, while the file list on its own is just
+        # text and falls back to the bare "A window". Taking the titled
+        # half's name because it carried the folder's name kept exactly the
+        # wrong one, and a window called "A window" is not shown at all -
+        # the vault-demo Finder left the picture entirely.
+        if a["name"] == GENERIC and b["name"] != GENERIC:
             a["name"] = b["name"]
         a["title"] = a.get("title") or b.get("title")
         b["folded"] = True
@@ -961,7 +971,7 @@ def window_groups(m):
         panes = [p for p in m["panes"] if p.get("wi") == wi]
         if not panes:
             continue
-        name = name_of(e, panes) or "A window"
+        name = name_of(e, panes) or GENERIC
         title = e.get("top")
         groups.append({"name": name, "title": title, "rect": e["rect"], "panes": panes, "where": e.get("where")})
     # ONE WINDOW THE FRAME CLOSED TWICE - once whole, once at its own
