@@ -3616,24 +3616,12 @@ def span_of(st):
     return f"{st.times[0]} to {st.times[-1]}"
 
 
-def _OBS4(tag, states):
-    import sys as _s, re as _re
-    for st in states:
-        for q in st.parts:
-            ls = [t for t, _h in getattr(q["model"], "lines", [])]
-            if any("inbox" in _re.sub(r"[^a-z]", "", str(x).lower()) for x in ls[:4]):
-                print("  %-22s st=%d model=%d name=%r times=%s first=%r"
-                      % (tag, id(st) % 100000, id(q["model"]) % 100000, getattr(st, "name", None),
-                         getattr(st, "times", None), ls[:2]), file=_s.stderr)
-
-
 def note(records_path, diary_text=None):
     header, moments, footer = old.load(records_path)
     title = header.get("title") or os.path.basename(os.path.dirname(records_path))
     diary_text = diary_text if diary_text is not None else old.diary(records_path)
     secs = (moments[-1]["secs"] - moments[0]["secs"]) if len(moments) > 1 else 0
     all_states = build_states(moments)
-    _OBS4("A: after build", all_states)
     bar_at, clock_at, strip_at = desktop_bar(moments)
     if moments:
         H0 = (moments[0].get("size") or [0, 2160])[1]
@@ -3682,8 +3670,6 @@ def note(records_path, diary_text=None):
                 c.name = w.name
                 break
     states = [st for st in all_states if st.window_html() and not st.fragment()]
-    _OBS4("B: after filter", all_states)
-    _OBS4("C: kept states", states)
     frags = [st for st in all_states if st not in states and st.has_content() and st.rects]
     # a note's big heading is read as large loose words, never as a doc
     # line; when such a reading opens the window's own title, it is the
@@ -4672,7 +4658,6 @@ def note(records_path, diary_text=None):
             return list(box)
         return out
 
-    _OBS4("D: before convert", states)
     list_not_tree(states)
     mend_prose(all_states)
     title_from_bar(states)
