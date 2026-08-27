@@ -671,9 +671,11 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
                     other[1] = tag
                 if "sn-away" not in cls:
                     other[2] = cls
+                if other[3] is None and st_ is not None:
+                    other[3] = st_          # keep the state that can be drawn
                 break
         else:
-            merged.append([box, tag, cls])
+            merged.append([box, tag, cls, st_])
     for box, tag, cls in merged:
         shown.append(box)
         out.append(outline(box, tag, cls))
