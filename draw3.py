@@ -1706,16 +1706,23 @@ def retitle_by_rows(states):
         if not votes:
             continue
         best = max(votes, key=lambda v: votes[v])
-        import re as _re, sys as _sys
-        if "usersjared" in _re.sub(r"[^a-z]", "", str(best).lower()):
-            print("RETITLE  was=%r -> best=%r  votes=%r" % (st.title, best, votes), file=_sys.stderr)
-            for _n in list(t.names())[:8]:
-                _h = parent.get(fold(_n))
-                _how = "direct"
-                if _h is None:
-                    _h = next((v for k, v in parent.items() if name_fits(_n, v[0])), None)
-                    _how = "name_fits"
-                print("    row %-42r -> %-10s %r" % (_n, _how, _h), file=_sys.stderr)
+        # ONE ROW IS NOT "ITS ROWS". This rule renames a window when the rows
+        # it lists are the CHILDREN of a known folder - a claim about the body
+        # of the list, not about one line of it. With no quorum a single row
+        # carried it: the window titled `jaredrhodenizer` lists `.claude`
+        # among sixteen names, the settled bars make `.claude` a child of the
+        # glued crumb `Usersjaredrhodenizer`, and that one vote renamed a
+        # window whose own title bar had been read correctly. The same at the
+        # `memory` window, where the single row `MEMORY.md` voted for
+        # `-Users-jaredrh`. Five of seventeen pictures were titled after a
+        # folder that is on screen in no frame of the video.
+        #
+        # A window with no title at all still takes a single vote - one guess
+        # beats none - and so does a list too short for a quorum to mean
+        # anything.
+        named = sum(1 for n in t.names() if n)
+        if votes[best] < 2 and st.title and named > 2:
+            continue
         if st.title and crumb_same(st.title, best):
             continue
         weak = not getattr(st, "title_sure", False) or getattr(st, "title_from_path", False)
