@@ -4911,6 +4911,26 @@ def note(records_path, diary_text=None):
                 # window, but in the desktop picture it stays a named outline
                 # until the reader learns to measure it. A moment where the
                 # frame DID measure it (settled) draws it full as any window.
+                # THE READER HAS LEARNED TO MEASURE IT, which is the very
+                # condition the rule above was written to wait for. A window
+                # the screen CUTS OFF closes no rectangle in `shapes` and so
+                # never reached `st.measured`; `bigwin` measures it from the
+                # corner its two drawn edges make. Where a big window holds
+                # this state's own worked-out box, that box is finished and
+                # the window is drawn full like any other -- which is what
+                # puts Obsidian's text on the screen instead of a label.
+                # Only a state whose OWN box is already big may claim one: a
+                # Finder standing inside a maximised window must not.
+                if (id(st) not in settled and shape
+                        and shape[2] - shape[0] >= 0.5 * Wf
+                        and shape[3] - shape[1] >= 0.3 * Hf):
+                    cands = [b for b in frame_bigwins(s)
+                             if furnish._within(shape, b) > 0.7]
+                    if cands:
+                        shape = list(min(cands, key=lambda b:
+                                         (b[2] - b[0]) * (b[3] - b[1])))
+                        sl.rect = shape
+                        settled.add(id(st))
                 _obs_behind = (st.name == "The Obsidian window" and id(st) not in settled
                                and (frame_windows(s)
                                     or any(o.name != "The Obsidian window" and o.has_content()
