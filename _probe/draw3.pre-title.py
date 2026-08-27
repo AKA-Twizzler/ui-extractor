@@ -207,12 +207,6 @@ def tidy_size(s):
     return f"{m.group(1)} {unit}", m.group(3).strip()
 
 
-def _TP(where, val, extra=""):
-    import sys
-    if val and "usersjared" in re.sub(r"[^a-z]", "", str(val).lower()):
-        print("TITLE[%s] = %r  %s" % (where, val, extra), file=sys.stderr)
-
-
 class Table:
     def __init__(self):
         self.header = []
@@ -1031,7 +1025,6 @@ class State:
     def __init__(self, group, ts):
         self.name = window_name(group["name"])
         self.title = group.get("title")
-        _TP('group', self.title)
         self.rect = group["rect"]
         self.where = group.get("where")
         self.times = [ts]
@@ -1292,7 +1285,6 @@ class State:
                     break
             if hit:
                 self.title, self.title_sure, self.title_from_path = hit, True, False
-                _TP('rule:crumb-in-top', hit, 'crumbs=%r tops=%r' % (crumbs[:4], [t for t,_ in tops][:6]))
                 return
             if self.title:
                 return                # keep what an earlier moment gave
@@ -1306,12 +1298,10 @@ class State:
             end = table.path[-1] if table.path else ""
             if hit:
                 self.title = hit
-                _TP('rule:centred-top', hit)
             elif end and norm(end) not in GENERIC:
                 self.title = end
                 self.title_sure = True
                 self.title_from_path = True
-                _TP('rule:path-end', end, 'path=%r' % (table.path,))
 
     # --------------------------------------------------------- identity
 
@@ -1725,7 +1715,6 @@ def retitle_by_rows(states):
             and not any(crumb_same(parent[fold(n)][1], st.title) for n in t.names() if fold(n) in parent)
         if not st.title or weak or named_elsewhere:
             st.title = best
-            _TP('median/settle', best)
 
 
 def rebuild_line(h, t):
