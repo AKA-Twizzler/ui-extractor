@@ -4627,6 +4627,7 @@ def note(records_path, diary_text=None):
             fw_here = frame_windows(s)
             base = list(s["states"])
             extra = []
+            pin = {}                            # promoted state -> its measured rect
 
             def _lands(st_, r_):
                 hb = home_at(st_, s["t0"])
@@ -4648,6 +4649,15 @@ def note(records_path, diary_text=None):
                         pick, best = own, sc
                 if pick is not None:
                     extra.append(pick)
+                    # The rectangle the frame MEASURED for this window is the
+                    # truth about where it stands NOW. A box carried from when
+                    # the window was last read runs away under a later zoom -
+                    # memory, read wide early on, maps half off the left edge
+                    # by 02:20 and is dropped as off-screen, and the window it
+                    # names is left an outline. Pin the promoted window to its
+                    # measured rectangle, the same ground the focus windows
+                    # stand on.
+                    pin[id(pick)] = [float(v) for v in r]
             for st in base + extra:
                 if st not in shown:
                     continue
