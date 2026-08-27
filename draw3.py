@@ -1081,6 +1081,13 @@ class State:
                 part["model"].add(cut)
                 if p.get("_cut_pitch"):
                     self._own_pitch = p["_cut_pitch"]
+                # AND THE SCREEN CUT THIS WINDOW'S LEFT EDGE. That is the
+                # whole gate `cut_list` passed, so it is known here and
+                # nowhere else: the window's own corner, its three round
+                # buttons and its back and forward arrows all stand outside
+                # the frame, and a card that draws them puts on the page
+                # what the screen never showed.
+                self._cut_left = True
                 continue
             part = self.part_for(k, slot)
             part["x0"] = p["box"][0] if part["x0"] is None else min(part["x0"], p["box"][0])

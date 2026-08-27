@@ -91,7 +91,8 @@ def finder(st):
     # the section labels where they were read
     side = ""
     if side_words:
-        items = ['<div class="sn-lights"></div>']
+        items = ([] if getattr(st, "_cut_left", False)
+                 else ['<div class="sn-lights"></div>'])
         for w in side_words:
             if w in SECTIONS:
                 items.append(f'<div class="sn-section">{esc(w)}</div>')
@@ -101,9 +102,16 @@ def finder(st):
         side = '<div class="sn-side">' + "".join(items) + "</div>"
     # the toolbar: back and forward, the folder's name, the view and action buttons, search
     title = st.title or ""
-    lights = "" if side else '<span class="sn-lights"></span>'
-    toolbar = ('<div class="sn-toolbar">' + lights
-               + '<span class="sn-btn">‹</span><span class="sn-btn">›</span>'
+    # A WINDOW THE SCREEN CUT OFF DOWN ITS LEFT EDGE HAS NO CORNER ON SHOW.
+    # Its three round buttons and its back and forward arrows stand outside
+    # the frame, so drawing them puts on the page what the screen never had.
+    # The rest of the toolbar - the folder's name and the buttons on the
+    # right - is where the window really did carry it.
+    cut_left = bool(getattr(st, "_cut_left", False))
+    lights = "" if (side or cut_left) else '<span class="sn-lights"></span>'
+    arrows = ("" if cut_left else
+              '<span class="sn-btn">‹</span><span class="sn-btn">›</span>')
+    toolbar = ('<div class="sn-toolbar">' + lights + arrows
                + (f"<b>{esc(title)}</b>" if title else "<b>&nbsp;</b>")
                + '<span class="sn-grow"></span>'
                + '<span class="sn-btn">☰ ⌄</span><span class="sn-btn">⊞ ⌄</span>'
