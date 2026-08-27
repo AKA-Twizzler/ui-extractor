@@ -5374,7 +5374,7 @@ def note(records_path, diary_text=None):
             say = f"{COUNT.get(k, k)} {bare}s"
         parts[head_at] = parts[head_at].replace(f"@@{w}@@", say)
     parts[head_at] = re.sub(r"(\w+ windows) \((\d+) states\)",
-                            r"\1 (\2 states between them)", parts[head_at])
+                            r"\1, \2 folder views between them", parts[head_at])
 
     for w in windows:
         groups = split_windows([st for st in shown if st.name == w])
