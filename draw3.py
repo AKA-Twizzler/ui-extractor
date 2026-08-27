@@ -5403,6 +5403,9 @@ def note(records_path, diary_text=None):
                             for x in subjects]
             fine = []
             for stx, sl, shape in subjects:
+                if (os.environ.get("SN_FILLOBS") and stx.name == "The Obsidian window"):
+                    fine.append((stx, sl, shape))
+                    continue
                 if shape and not is_window(shape):
                     app = label_for(stx, s["t0"]).split(":")[0].strip()
                     if any(t.split(":")[0].strip() == app
