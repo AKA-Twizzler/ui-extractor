@@ -2355,7 +2355,12 @@ def harmonise(states):
                 if table.path and table.paths:
                     full = max(table.paths, key=len)
                     if full is not table.path and len(full) >= len(table.path):
+                        _was = list(table.path)
                         table.path = align_crumbs(table.path, full)
+                        if _was != table.path:
+                            import sys as _s; print("ALIGN FIRED:", _was, "->", table.path, file=_s.stderr)
+                        else:
+                            import sys as _s; print("align idle:", _was, "| full:", full, file=_s.stderr)
                 # a date cell no engine read whole, whose digits are a clean
                 # date's digits, is that date; a kind cell read twice over
                 # keeps one telling of itself
