@@ -4875,12 +4875,19 @@ def note(records_path, diary_text=None):
                 m0_ = next((mm for mm in moments if mm["ts"] == s["t0"]), None)
                 if not m0_:
                     return False
+                # BY THE WORD, NOT BY THE PANE. At 00:02:20 the same strip
+                # of screen was cut as one pane running the frame's whole
+                # height, so no pane stood inside the window's rectangle and
+                # nothing was found to contradict anything - the invented
+                # names stayed. A word's own box says where that word was.
                 read_ = []
                 for p_ in m0_.get("panes") or []:
-                    if furnish._within(p_["box"], r_) < 0.8:
-                        continue
-                    read_ += [norm(it["text"]) for it in draw2.items_of(p_)
-                              if it["text"].strip()]
+                    for it in draw2.items_of(p_):
+                        b = it.get("box")
+                        if not b or not it["text"].strip():
+                            continue
+                        if furnish._within(b, r_) >= 0.8:
+                            read_.append(norm(it["text"]))
                 read_ = [w for w in read_ if len(w) >= 4]
                 # too little was read there to contradict anything
                 if len(read_) < 8:
