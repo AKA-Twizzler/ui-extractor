@@ -21,6 +21,8 @@ except Exception:                 # pragma: no cover - the drawer has no cv2
 
 import shapes
 
+_CACHE: dict = {}
+
 
 def _corner_buttons(img, x0, y0):
     """The three round buttons at a window's own top-left, looked for in a
@@ -173,6 +175,12 @@ def big_windows(path, least_frac=0.20, img=None):
     buttons every window carries at that corner."""
     if cv2 is None:
         return []
+    # The same caching `shapes` keeps, and for the same reason: a gate asks
+    # for one frame's windows dozens of times over, and re-measuring a 4K
+    # frame each time turns a check into a coffee break.
+    key = (path, least_frac) if isinstance(path, str) else None
+    if key is not None and key in _CACHE:
+        return _CACHE[key]
     g, W, H = shapes._grey(path)
     h, w = g.shape
     verts, hors = shapes._sides(g, int(shapes.RUN * h), int(shapes.RUN * w))
@@ -265,6 +273,8 @@ def big_windows(path, least_frac=0.20, img=None):
         y0 = max(gp, key=lambda c: c[3])[2]
         kept.append((x0, y0, max(c[4] for c in gp), max(c[5] for c in gp)))
     kept.sort(key=lambda b: -(b[2] - b[0]) * (b[3] - b[1]))
+    if key is not None:
+        _CACHE[key] = kept
     return kept
 
 
