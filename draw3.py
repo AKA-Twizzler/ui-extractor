@@ -4984,6 +4984,9 @@ def note(records_path, diary_text=None):
                     # is. A window whose words reach across half the screen
                     # both ways fills it; a smaller spread is the window's
                     # own reach, and the frame's rectangles may tighten it.
+                    if os.environ.get("UIX_WHY") == s["t0"]:
+                        print(f"   no home {label_for(own)!r}: {len(long_hits)} own words read this stretch",
+                              file=sys.stderr)
                     if len(long_hits) < 2:
                         continue
                     box = [min(b[0] for b in long_hits), min(b[1] for b in long_hits),
