@@ -4927,10 +4927,20 @@ def note(records_path, diary_text=None):
                     cands = [b for b in frame_bigwins(s)
                              if furnish._within(shape, b) > 0.7]
                     if cands:
-                        shape = list(min(cands, key=lambda b:
-                                         (b[2] - b[0]) * (b[3] - b[1])))
+                        # THE BOX WHOSE TOP IS NEAREST THIS WINDOW'S OWN.
+                        # On a desktop where one big window stands inside
+                        # another -- Obsidian over a maximised browser --
+                        # both contain the state's box, and taking the
+                        # smaller by area still handed one Obsidian state
+                        # the browser's rectangle, 131 pixels too high.
+                        # A window's top edge is the thing its own content
+                        # begins under.
+                        shape = list(min(cands, key=lambda b: (
+                            abs(b[1] - shape[1]), (b[2] - b[0]) * (b[3] - b[1]))))
                         sl.rect = shape
                         settled.add(id(st))
+                        sl._cut_by_screen = False
+                        st._cut_by_screen = False
                 _obs_behind = (st.name == "The Obsidian window" and id(st) not in settled
                                and (frame_windows(s)
                                     or any(o.name != "The Obsidian window" and o.has_content()
@@ -5084,6 +5094,17 @@ def note(records_path, diary_text=None):
                 mx, my = max(4.0, 0.005 * Wf), max(4.0, 0.005 * Hf)
                 cut_x = shape[0] < mx or shape[2] > Wf - mx
                 cut_y = shape[1] < my or shape[3] > Hf - my
+                # A WINDOW WHOSE EDGE IS THE SCREEN'S EDGE IS NOT CUT OFF BY
+                # IT. "Cut off" means the window carries on past the frame,
+                # so its drawn width is not its own and cannot size its
+                # rows. A window `bigwin` measured was TRACED to that edge:
+                # the box is its on-screen extent, and its width is its
+                # width. Read as cut off both ways, Obsidian fell through to
+                # a width carried from another moment and its rows came out
+                # at 5.7 where the Finders beside it stood at 9.5 -- the
+                # whole window drawn about a quarter of its true size.
+                if getattr(sl, "_cut_by_screen", None) is False:
+                    cut_x = cut_y = False
                 share = pitch_home.get(stx.name) or pitch_home.get("*") or 0.0
                 if not cut_x and share:
                     span_now = share * (shape[2] - shape[0])
