@@ -3504,6 +3504,11 @@ def note(records_path, diary_text=None):
             if longest >= 40 or (len(ct) >= 12 and frac >= 0.6):
                 c.name = w.name
                 break
+    for _s in all_states:
+        if any(mm["ts"] == "00:00:00" for mm, _g in _s.pieces):
+            sys.stderr.write("TRACEST %-22s title=%-12s html=%s frag=%s rect=%s\n"
+                             % (str(_s.name)[:22], str(_s.title)[:12], bool(_s.window_html()),
+                                _s.fragment(), [round(v) for v in _s.rects.get("00:00:00", [])]))
     states = [st for st in all_states if st.window_html() and not st.fragment()]
     frags = [st for st in all_states if st not in states and st.has_content() and st.rects]
     # a note's big heading is read as large loose words, never as a doc
