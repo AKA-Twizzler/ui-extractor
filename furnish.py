@@ -546,7 +546,7 @@ def deskbar(bar_words, clock):
 
 
 def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
-                ghosts=(), camera=None, sure=True, kz=1.0, ink=()):
+                ghosts=(), camera=None, sure=True, kz=1.0, ink=(), chrome=()):
     """The layout of the screen over one stretch of time: the desktop bar
     with its own words, the window this stretch is about filled in with
     what it really said, and every other window standing where it stood,
@@ -773,6 +773,21 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
         out.append(scaled(html, clip_box(rect, W, H, bar=barred), W, kz=kz,
                           extra=f'{slot_style(rect, W, H, bar=barred)};z-index:{3 + z}',
                           step=getattr(st, "_row_step", 0.0)))
+    # THE ONE WINDOW THAT MAY SHOW ITS CONTENT FROM BEHIND. Tristan's
+    # exception, in his own words: "if a screen never shows up at all and
+    # only part of the screen (like browser did with obsidian) than that can
+    # be but behind whatever window in the desktop view with all of it's
+    # content". The browser never stands clear anywhere in this video -- it
+    # has no card of its own to hold its tabs and its address bar -- so the
+    # strip of it that WAS in view is drawn where it stood, above the
+    # outlines and under the windows in front, which is the order the screen
+    # had. Everything else behind stays an outline.
+    for cbox_, chtml in chrome or ():
+        if not chtml:
+            continue
+        box = clip_box(cbox_, W, H, bar=barred)
+        out.append(scaled(chtml, box, W, kz=kz, cls="sn-behind",
+                          extra=f'{slot_style(box, W, H, bar=barred)};z-index:2'))
     if camera:
         cbox = camera[0] if isinstance(camera, (tuple, list)) else camera
         out.append(f'<div class="sn-camera" style="{slot_style(cbox, W, H, bar=barred)}">'

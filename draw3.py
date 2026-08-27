@@ -5379,6 +5379,7 @@ def note(records_path, diary_text=None):
                 # windows first, then the backdrop ones behind them.
                 src = [(stx, sl) for stx, sl, _ in subjects] \
                     + [(own, own) for own in states if own not in sub_states]
+                browser_chrome = []
                 for stx, sl in src:
                     strip = behind_for(sl, dict(s, size=s["size"]), stx)
                     if strip:
@@ -5412,6 +5413,11 @@ def note(records_path, diary_text=None):
                                 if (b[3] - b[1]) >= 0.5 * Hf and b[1] <= sb[3]]
                         bb = min(tall, key=lambda b: b[1]) if tall else None
                         behinds.append(("the browser, behind", list(bb) if bb else sb))
+                        # its caught chrome, kept rather than thrown away: the
+                        # browser has no card of its own, so the desktop
+                        # picture is the only place its tabs and address bar
+                        # can live (Tristan's named exception).
+                        browser_chrome = [(sb, strip[0][2])]
                         break
             # A WINDOW DRAWN IN FULL MUST ITSELF BE A WINDOW. Its box has
             # to be one the frame drew, or - where the frame drew none,
@@ -5532,6 +5538,7 @@ def note(records_path, diary_text=None):
                 # (a browser strip) is drawn behind in the desktop view, but
                 # it is not poured onto the picture as loose words.
                 ink=(),
+                chrome=(browser_chrome if barred else ()),
                 ghosts=ghost_list(s, sub_states, carded),
                 camera=(cam, cam_pic) if cam else None,
                 sure=all(any(t in st.measured for t in s["ts"]) for st, _, _ in subjects),
