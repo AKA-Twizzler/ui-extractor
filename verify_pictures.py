@@ -364,8 +364,8 @@ def _break_split(stage):
                   r'width:([\d.]+)%;height:([\d.]+)%([^"]*)"', stage)
     if not m:
         return stage
-    left, top, wide, tall, rest = (float(m.group(i)) for i in range(1, 5)), m.group(5)
-    left, top, wide, tall = left
+    left, top, wide, tall = (float(m.group(i)) for i in range(1, 5))
+    rest = m.group(5)
     if wide < 8.0:
         return stage
     half = wide / 2.0
