@@ -3172,6 +3172,21 @@ def desktop_bar(moments):
     # the screen is filled in from the moment it stood clear. Only a
     # different program at the front, which shows as a different first
     # word, starts the bar over.
+    # A WORD CUT SHORT IS MENDED FROM THE SAME BAR READ WHOLE. The bar's
+    # first menu sits under the Apple mark and the app's bold name, and
+    # one moment reads it as "ile" where another reads "File". A short
+    # word that is the tail of a word some other moment read on a bar is
+    # that word: the puzzle-piece rule, applied to the bar.
+    every = {bare(w) for ws in words_at.values() for w in ws}
+    for ts, ws in words_at.items():
+        for i, w in enumerate(ws):
+            b = bare(w)
+            if b in every and len(b) >= 4:
+                continue
+            full = [k for k in every if k != b and k.endswith(b) and len(b) >= 3
+                    and 1 <= len(k) - len(b) <= 2]
+            if len(full) == 1:
+                ws[i] = full[0] if w == b else "<i>" + full[0] + "</i>"
     last_w, last_c = [], ""
     for m in moments:
         got = words_at.get(m["ts"]) or []
