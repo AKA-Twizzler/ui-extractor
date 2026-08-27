@@ -324,6 +324,7 @@ def obsidian(st, behind=True):
         blocks = getattr(st, "_doc_blocks", None) if placed else None
         bits = ([f"padding-top:{pad}px"] if pad else []) + \
                ([f"--sn-line:{wide}%"] if wide and wide < 98 else []) + \
+               (["--sn-lead:auto"] if wide and wide < 98 else []) + \
                (["position:relative"] if blocks else [])
         sty_doc = f' style="{";".join(bits)}"' if bits else ""
         cols.append(f'<div class="sn-doc"{sty_doc}>' + note_html(st, doc, title, blocks) + "</div>")
@@ -347,18 +348,8 @@ def obsidian(st, behind=True):
     # room it does not use goes to a blank column between them -- so the
     # note's column stays exactly where it already lands and only the tree
     # stops being drawn four times too wide.
-    placed_w = (not behind and getattr(st, "shape", None))
-    three = getattr(st, "_doc_cols", None) if placed_w else None
-    measured_tree = getattr(st, "_tree_fr", 0) if placed_w else 0
-    if three and tree and doc:
-        t_fr, gap, d_fr = three
-        rest = max(0, 100 - t_fr - gap - d_fr)
-        grid = (f"30px minmax(0, {t_fr}fr) {gap}fr {d_fr}fr"
-                + (f" {rest}fr" if rest >= 3 else ""))
-        cols.insert(len(cols) - 1, '<div class="sn-blank"></div>')
-        if rest >= 3:
-            cols.append('<div class="sn-blank"></div>')
-    elif measured_tree and tree and doc and measured_tree < tree_fr:
+    measured_tree = getattr(st, "_tree_fr", 0) if (not behind and getattr(st, "shape", None)) else 0
+    if measured_tree and tree and doc and measured_tree < tree_fr:
         gap = tree_fr - measured_tree
         grid = f"30px minmax(0, {measured_tree}fr) {gap}fr {doc_fr}fr"
         cols.insert(len(cols) - 1, '<div class="sn-blank"></div>')

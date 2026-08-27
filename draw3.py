@@ -5244,21 +5244,6 @@ def note(records_path, diary_text=None):
                                 if b_ and b_[2] <= dl:
                                     sl._tree_fr = max(4, round(
                                         100.0 * (b_[2] - shape[0]) / w_))
-                        # AND WHERE THE NOTE'S OWN PANE BEGINS. Keeping the
-                        # note where it already landed was right while its
-                        # column was the only thing that could move; with
-                        # the tree at its true width the room between them
-                        # is a measured distance, not slack. Drawn without
-                        # it the note sat at 41% of the window where the
-                        # frame has it at 26%, so its lines ran into the
-                        # seam between the two Finder windows -- text on a
-                        # patch of screen that showed no text at all.
-                        if getattr(sl, "_tree_fr", 0):
-                            lead = round(100.0 * (dl - shape[0]) / w_)
-                            wide_ = round(100.0 * (dr - dl) / w_)
-                            if lead > sl._tree_fr and wide_ >= 10:
-                                sl._doc_cols = (sl._tree_fr,
-                                                lead - sl._tree_fr, wide_)
                 sl._doc_blocks = []
                 d_ = sl.main_doc()
                 if d_ is not None and len(getattr(d_, "blocks", ())) > 1 and shape:
