@@ -754,6 +754,42 @@ def bar_crumbs(pane):
     return []
 
 
+def bar_across(group, m):
+    """A path bar the reader cut into several panes, read back as one.
+
+    `bar_crumbs` asks ONE pane for the whole bar. At 00:00:50 the strip under
+    a Finder came back as four panes with the bar's own words cut across them
+    - `Maci` | `ntoshHD>` | `Users` | `jaredrhode` | `nizer>` - so no pane
+    held even two crumbs and the window got no path. The words of one ROW,
+    read left to right and run together, are that row's bar; a chevron the
+    reader dropped only glues two crumbs into one rather than losing them.
+
+    LEFT TO RIGHT AND NEVER BACKWARDS. Gathered from every pane at that
+    height, two panes' worth of the same bar ran together and the crumbs came
+    out doubled. A word that begins left of where the last one ended is a
+    second reading of ground already covered, not the next crumb along.
+    """
+    H = (m.get("size") or [1920, 1080])[1]
+    its = [it for p in group.get("panes") or [] for it in draw2.items_of(p)
+           if str(it.get("text") or "").strip()]
+    best = []
+    for seed in its:
+        row = sorted((it["box"][0], it["box"][2], str(it["text"]))
+                     for it in its
+                     if abs(it["box"][1] - seed["box"][1]) <= 0.01 * H)
+        kept, reach = [], None
+        for x0, x1, txt in row:
+            if reach is not None and x0 < reach - 8:
+                continue
+            kept.append(txt)
+            reach = x1
+        parts = [q.strip() for q in re.split(r"[>\u203a]", "".join(kept)) if q.strip()]
+        if len(parts) >= 3 and norm(parts[0]) == norm("Macintosh HD") \
+                and len(parts) > len(best):
+            best = parts
+    return best
+
+
 GLUED_DATE = re.compile(
     r"[a-z]?((?:Today|Yesterday|[A-Z][a-z]{2}\s?\d{1,2},?\s?\d{4})"
     r"\s?(?:at)?\s?\d{1,2}:\d{2}\s?[AaPp]\.?[Mm])")
@@ -1020,6 +1056,9 @@ class State:
             if len(c) > len(bar):
                 bar = c
 
+        across = bar_across(group, m)
+        if len(across) > len(bar):
+            bar = across
         if bar:
             t_ = self.main_table()
             if t_ is not None and len(bar) > len(getattr(t_, "path", None) or []):
