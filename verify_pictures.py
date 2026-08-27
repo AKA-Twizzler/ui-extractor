@@ -89,19 +89,35 @@ def check_picture(stamp, stage, frame_path):
         least = 0.09 * W * H
         fw = [r for r in shapes.windows(frame_path)
               if (r[2] - r[0]) * (r[3] - r[1]) >= least]
-        for r in fw:
-            box = (r[0] / W, r[1] / H, r[2] / W, r[3] / H)
-            # is this window covered by ANOTHER frame window (i.e. behind)?
-            covered = any(o is not r and overlap(box, (o[0]/W, o[1]/H, o[2]/W, o[3]/H)) > 0.5
-                          for o in fw)
+        fboxes = [(o[0]/W, o[1]/H, o[2]/W, o[3]/H) for o in fw]
+        top = [not any(j != i and overlap(fboxes[i], fboxes[j]) > 0.5
+                       for j in range(len(fw)))
+               for i in range(len(fw))]        # a window no other window covers
+
+        def fills(d, i):
+            """A filled box that fills window i and DOES NOT also swallow a
+            different top-layer window. A single box drawn over the whole
+            screen overlaps every window at once and would pass the plain
+            test for each; it is one maximised fill masquerading as many, and
+            the render that drew it left two side-by-side windows collapsed
+            into one. Such a box fills NONE of them."""
+            if overlap(fboxes[i], d) <= 0.5:
+                return False
+            for j in range(len(fw)):
+                if j != i and top[j] and overlap(fboxes[j], d) > 0.5:
+                    return False
+            return True
+        for i, r in enumerate(fw):
+            box = fboxes[i]
+            covered = not top[i]
             hit_any = any(overlap(box, d) > 0.5 for d in drawn)
-            hit_filled = any(overlap(box, d) > 0.5 for d in filled)
+            hit_filled = any(fills(d, i) for d in filled)
             where = "%.0f-%.0f%% across, %.0f-%.0f%% down" % (
                 box[0]*100, box[2]*100, box[1]*100, box[3]*100)
             if not hit_any:
                 fails.append("MISSING WINDOW: the frame has a window at %s with nothing drawn there" % where)
             elif not covered and not hit_filled:
-                fails.append("WINDOW NOT FILLED: a top-layer window at %s is only outlined; a window nothing covers must be filled" % where)
+                fails.append("WINDOW NOT FILLED: a top-layer window at %s is only outlined or swallowed by a screen-wide fill; a window nothing covers must be filled in its own right" % where)
 
     # 2) NO PLACEHOLDER LABELS in a finished note.
     for tag in re.findall(r'sn-ghost-tag[^>]*>([^<]*)<', stage):
