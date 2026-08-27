@@ -2346,6 +2346,16 @@ def harmonise(states):
                         if t is not None and t == max((x for x in table.path_at if x is not None),
                                                       default=None)]
                 table.path = chain_paths(late if late else [table.path] + table.paths)
+                # The latest bar is spelt the way this window's fullest
+                # reading spells the same folders. Splitting by moment can
+                # leave the last moment holding a cut-short read - `Docur`,
+                # `02 Con` - where an earlier moment read the same folder
+                # whole. Correcting a spelling adds no crumb and drops none;
+                # a folder does not rename itself between two frames.
+                if table.path and table.paths:
+                    full = max(table.paths, key=len)
+                    if full is not table.path and len(full) >= len(table.path):
+                        table.path = align_crumbs(table.path, full)
                 # a date cell no engine read whole, whose digits are a clean
                 # date's digits, is that date; a kind cell read twice over
                 # keeps one telling of itself
