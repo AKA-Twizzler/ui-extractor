@@ -5343,10 +5343,6 @@ def note(records_path, diary_text=None):
                     sl._row_step = own * furnish.CANVAS_W / Wf
                     sl._step_sure = False      # and no median may replace it
                     sl._pitch_measured = True
-                if s["t0"] in ("00:03:00", "00:01:20"):
-                    sys.stderr.write("TRACESTEP %s %-20s share=%.5f wide=%.0f span_now=%.1f step=%.2f cut_x=%s cut_y=%s\n"
-                                     % (s["t0"], str(stx.name)[:20], share, shape[2]-shape[0],
-                                        span_now, sl._row_step, cut_x, cut_y))
 
             # Two windows of the same program standing on one screen set
             # their rows at the SAME pitch: the pitch belongs to the screen,
