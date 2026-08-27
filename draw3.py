@@ -26,6 +26,7 @@ import sys
 import draw as old          # HTML line helpers that do not change
 import draw2                 # the geometry: items, tables rebuilt, window groups
 import shapes                # where each window sat, measured off the frame
+import panes                 # which of the frame's rectangles are panes, not windows
 
 LONG_SAID = 700
 MAX_DOUBT = 12
@@ -3879,6 +3880,18 @@ def note(records_path, diary_text=None):
         edges worked out from where words sat."""
         return rects_at(s["t0"])
 
+    _frame_imgs = {}
+
+    def _frame_img(path):
+        """The frame's own pixels, read once per frame and kept."""
+        if path not in _frame_imgs:
+            try:
+                import cv2
+                _frame_imgs[path] = cv2.imread(path)
+            except Exception:
+                _frame_imgs[path] = None
+        return _frame_imgs[path]
+
     def frame_windows(s):
         """The DISTINCT windows the screen drew on this stretch's frame."""
         t0 = s["t0"]
@@ -3900,8 +3913,18 @@ def note(records_path, diary_text=None):
         # picture entirely. A window `bigwin` measures is used where it is
         # asked for, by name.
         least = 0.09 * Wf * Hf
-        _frame_wins[t0] = [[float(v) for v in r] for r in got
-                           if (r[2] - r[0]) * (r[3] - r[1]) >= least]
+        kept = [[float(v) for v in r] for r in got
+                if (r[2] - r[0]) * (r[3] - r[1]) >= least]
+        # ONE WINDOW THE FRAME CLOSED TWICE - once whole, once at its own
+        # sidebar divider - is one window. Without this the note drew two
+        # `vault-demo` windows at 00:00:10, each with its own traffic lights
+        # and title, where the screen had one. The law and the two
+        # measurements it rests on live in `panes.fold_split_panes`.
+        if len(kept) > 1 and m0:
+            im = _frame_img(frame_of(m0))
+            if im is not None:
+                kept = panes.fold_split_panes(im, kept)
+        _frame_wins[t0] = kept
         return _frame_wins[t0]
 
     SIDE_FLAT = {norm(n) for n in draw2.SIDE_NAMES}
