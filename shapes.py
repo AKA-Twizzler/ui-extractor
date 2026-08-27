@@ -471,30 +471,44 @@ def windows(path):
     This folds those to one rectangle per window and drops the panes, so
     the reader, the drawing and the checker can all say the same number.
     """
-    got = [list(map(float, r)) for r in find(path)]
-    got.sort(key=lambda r: -(r[2] - r[0]) * (r[3] - r[1]))
+    got = [(list(map(float, r)), float(gp)) for r, gp in _find_full(path)]
+    got.sort(key=lambda rg: -(rg[0][2] - rg[0][0]) * (rg[0][3] - rg[0][1]))
 
     def within(a, b):
         ix = max(0.0, min(a[2], b[2]) - max(a[0], b[0]))
         iy = max(0.0, min(a[3], b[3]) - max(a[1], b[1]))
         return (ix * iy) / max(1e-6, (a[2] - a[0]) * (a[3] - a[1]))
 
+    # THE BIGGEST OF THE RECTANGLES CLOSING ONE WINDOW IS NOT THE WINDOW;
+    # THE ONE WHOSE EDGES REACH ITS CORNERS IS. On a desktop, a Finder
+    # window stood beside Obsidian's file tree, and the tree's indent guide
+    # - a long vertical line 200 pixels left of the window's own side -
+    # paired with the window's right side, top and foot into a rectangle
+    # wider than the window. Biggest-wins kept it and threw the true
+    # window away as a duplicate, so the drawing put the tree's rows inside
+    # the Finder's sidebar. The edges say which is which: the true window's
+    # top begins at its own side, and the wide one's top begins 236 pixels
+    # in from the side it claims.
+    margin = 0.01 * (_a := _frame_size(path))[0] + 0.01 * _a[1]
     kept = []
-    for r in got:
-        for k in kept:
+    for r, gp in got:
+        for i, (k, kg) in enumerate(kept):
             ix = max(0.0, min(r[2], k[2]) - max(r[0], k[0]))
             iy = max(0.0, min(r[3], k[3]) - max(r[1], k[1]))
             inter = ix * iy
             both = ((r[2]-r[0])*(r[3]-r[1]) + (k[2]-k[0])*(k[3]-k[1]) - inter)
-            if inter / max(1e-6, both) > 0.8:
-                break
             wide = max(r[2] - r[0], k[2] - k[0])
             tall = max(r[3] - r[1], k[3] - k[1])
-            if (abs(r[0]-k[0]) < 0.012*wide and abs(r[2]-k[2]) < 0.012*wide
-                    and abs(r[1]-k[1]) < 0.012*tall and abs(r[3]-k[3]) < 0.012*tall):
+            same = inter / max(1e-6, both) > 0.8 or (
+                abs(r[0]-k[0]) < 0.012*wide and abs(r[2]-k[2]) < 0.012*wide
+                and abs(r[1]-k[1]) < 0.012*tall and abs(r[3]-k[3]) < 0.012*tall)
+            if same:
+                if gp + margin < kg:
+                    kept[i] = (r, gp)
                 break
         else:
-            kept.append(r)
+            kept.append((r, gp))
+    kept = [r for r, _gp in kept]
     # A RECTANGLE TOO SMALL TO BE A WINDOW IS FURNITURE INSIDE ONE. On a
     # frame where a window fills the screen there is no window edge to
     # measure, so a card drawn inside its sidebar is the only rectangle
