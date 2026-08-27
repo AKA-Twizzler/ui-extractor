@@ -4410,6 +4410,7 @@ def note(records_path, diary_text=None):
         if not m0:
             return []
         W_, H_ = (m0.get("size") or [1920, 1080])[:2]
+        barred_ = s["t0"] in bar_seen
         out = []
         for p_ in (m0.get("panes") or []):
             bx = p_.get("box")
@@ -4418,13 +4419,27 @@ def note(records_path, diary_text=None):
             shot_up, rows_up = pane_zooms(p_)
             d_ = p_.get("data") or {}
             said = []
-            for r_ in (d_.get("readings") or []):
-                b_, t_ = r_.get("box"), (r_.get("text") or "").strip()
-                if b_ and t_:
-                    # a reading carries the height of its own letters; the
-                    # box around it can be taller than the type it holds
-                    said.append((b_, t_, r_.get("height") or (b_[3] - b_[1]),
-                                 shot_up))
+            reads = [(r_.get("box"), (r_.get("text") or "").strip())
+                     for r_ in (d_.get("readings") or [])]
+            reads = [(b_, t_) for b_, t_ in reads if b_ and t_]
+            # ONE PANE, ONE SIZE OF TYPE. A reading's box is the engine's
+            # guess at where the letters stop, and it wanders by a third
+            # from one line to the next of the same paragraph, so sized
+            # line by line the same body text stood in four sizes on one
+            # picture. The pane's writing has one size - the middle of its
+            # readings - and only a line far taller than that (a heading)
+            # keeps its own. And the box is not the type: an engine's box
+            # stands a little taller than the letters, and dividing it by
+            # the ink's share of an em on top drew every word two fifths
+            # too big. Measured on the frame: a 40-pixel box holds type
+            # that a 38-pixel font-size draws.
+            highs = sorted(float(b_[3] - b_[1]) for b_, _t in reads)
+            med_ = highs[len(highs) // 2] if highs else 0.0
+            for b_, t_ in reads:
+                own_h = float(b_[3] - b_[1])
+                if med_ and 0.6 * med_ <= own_h <= 1.5 * med_:
+                    own_h = med_
+                said.append((b_, t_, own_h * 0.95 * 0.72, shot_up))
             line = float(d_.get("body_height") or 0)
             for row in (d_.get("rows") or []):
                 t_ = (row.get("text") or "").strip()
