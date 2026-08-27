@@ -4851,6 +4851,14 @@ def note(records_path, diary_text=None):
                 b = onto(T0, hb)
                 return furnish._within(r_, b) * furnish._within(b, r_)
             for r in fw_here:
+                if s["t0"] in ("00:00:10",):
+                    sys.stderr.write("TRACE rect %s\n" % ([round(v) for v in r],))
+                    for own in states:
+                        sc = _lands(own, r)
+                        if sc > 0.02:
+                            sys.stderr.write("   cand %-28s score %.3f base=%s content=%s\n"
+                                             % (str(getattr(own, 'title', '?'))[:28], sc,
+                                                own in base, own.has_content()))
                 if any(o is not r and furnish._within(r, o) > 0.5 for o in fw_here):
                     continue                    # this window stands behind another
                 if any(_lands(bst, r) > 0.25 for bst in base):
