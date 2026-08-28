@@ -633,8 +633,13 @@ def obsidian(st, behind=True):
         # tree's true share of the window; the names it cuts end in an
         # ellipsis as Obsidian's own do
         st._tree_min = "min(%dch, 20%%)" % min(44, tree_ch + 2)
-    tree_floor = "var(--sn-tree-min, 120px)"
+    # IN THE WINDOW'S OWN UNIT, so a picture drawn small keeps the tree at its
+    # share: a bare 120px floor stood at a quarter of the maximised Obsidian at
+    # 00:04:00, where the frame had the tree at an eighth. A card sets no unit
+    # and reads the same 120px it always did.
+    tree_floor = "var(--sn-tree-min, calc(120 * var(--sn-u, 1px)))"
     tree_fr, doc_fr = 38, 62
+    ribbon_w = "calc(30 * var(--sn-u, 1px))"
     # ON THE CARD ONLY: a picture's tree stands at the span the frame gave
     # it, and the median across moments moved three pictures off their frames
     share = tree_share_of(st) if (tree and doc and not getattr(st, "shape", None)) else None
@@ -663,10 +668,10 @@ def obsidian(st, behind=True):
     measured_tree = getattr(st, "_tree_fr", 0) if (not behind and getattr(st, "shape", None)) else 0
     if measured_tree and tree and doc and measured_tree < tree_fr:
         gap = tree_fr - measured_tree
-        grid = f"30px minmax({tree_floor}, {measured_tree}fr) {gap}fr {doc_fr}fr"
+        grid = f"{ribbon_w} minmax({tree_floor}, {measured_tree}fr) {gap}fr {doc_fr}fr"
         cols.insert(len(cols) - 1, '<div class="sn-blank"></div>')
     else:
-        grid = "30px " + (f"minmax({tree_floor}, {tree_fr}fr) " if tree else "") + (f"{doc_fr}fr" if doc else "")
+        grid = f"{ribbon_w} " + (f"minmax({tree_floor}, {tree_fr}fr) " if tree else "") + (f"{doc_fr}fr" if doc else "")
     body = f'<div class="sn-cols sn-obsidian-cols" style="grid-template-columns: {grid.strip()}">' + "".join(cols) + "</div>"
     cls = "sn-window sn-obsidian" + (" sn-dark" if st.theme == "dark" else "")
     return f'<div class="{cls}">{strip}{toolbar}{body}</div>'
