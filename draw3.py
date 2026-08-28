@@ -3353,11 +3353,45 @@ def harmonise(states):
                 for c_ in (q["model"].path or []):
                     if crumb_votes.get(flat(c_), 0) >= 2:
                         agreed.setdefault(flat(c_), c_)
+    def _agreed_form(text_):
+        """The agreed spelling of a name that is the agreed name after flat
+        (`(info Product)` for `(Info Product)`): the one with its capitals."""
+        k_ = flat(text_)
+        v_ = agreed.get(k_)
+        if v_ and v_ != text_ and sum(ch.isupper() for ch in v_) > sum(ch.isupper() for ch in text_):
+            return v_
+        return text_
+
+    def _agreed_near(text_):
+        """An agreed folder name one or two letters off this one, O and 0,
+        l and 1 counted alike; None where none or more than one."""
+        f_ = flat(text_)
+        if len(f_) < 6 or f_ in agreed:
+            return None
+        near_ = {v for k_, v in agreed.items() if len(k_) == len(f_) and _c0a(k_[:1]) == _c0a(f_[:1])
+                 and sum(1 for u, w in zip(k_, f_) if _c0a(u) != _c0a(w)) <= 2}
+        return next(iter(near_)) if len({flat(v) for v in near_}) == 1 else None
     for st in states:
+        if st.title:
+            st.title = _agreed_form(st.title)
         for q in st.parts:
+            if q["fam"] == "tree" and getattr(q["model"], "lines", None):
+                # a tree row one letter off an agreed folder name is that folder
+                new_ = []
+                for t, h in q["model"].lines:
+                    nm_ = row_name(t)
+                    rep_ = _agreed_near(nm_) or _agreed_form(nm_)
+                    if rep_ and rep_ != nm_:
+                        lead_ = t[:len(t) - len(t.lstrip("\u2502 \u02c3\u02c5"))]
+                        new_.append((lead_ + rep_, h))
+                    else:
+                        new_.append((t, h))
+                q["model"].lines = new_
             if q["fam"] != "table":
                 continue
             t_ = q["model"]
+            if t_.path:
+                t_.path = [_agreed_form(c_) for c_ in t_.path]
             ki_ = next((i for i, h in enumerate(t_.header) if h and "Kind" in h), None)
             # TWO ROWS READ AS ONE NAME: `My Product Opdsations` over a date
             # cell holding two dates, beside rows `My Product` and
@@ -3383,7 +3417,7 @@ def harmonise(states):
                             t_.path[i_] = next(iter(near_))
             for r in t_.rows:
                 if r["cells"] and r["cells"][0]:
-                    r["cells"][0] = bare_dot(r["cells"][0])
+                    r["cells"][0] = _agreed_form(bare_dot(r["cells"][0]))
                     f_ = flat(r["cells"][0])
                     if len(f_) >= 6 and f_ not in agreed and "." not in r["cells"][0]:
                         near_ = [v for k_, v in agreed.items() if abs(len(k_) - len(f_)) <= 1 and _c0a(k_[:1]) == _c0a(f_[:1])
