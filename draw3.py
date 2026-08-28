@@ -4273,6 +4273,25 @@ def unglue_like(whole, head, tail):
     return re.sub(r"\s{2,}", " ", head + mid + tail).strip()
 
 
+def unglue_from_cuts(name, cuts):
+    """A glued whole, spaced from a cut reading of the same name whose ends
+    show the spacing; None where no cut reading fits or the spacing is
+    already there."""
+    if not re.search(r"[a-z0-9][A-Z]|[^\s(]\(", name):
+        return None
+    nf = fold(flat(name))
+    out = set()
+    for c in cuts:
+        ends = cut_ends(c)
+        if not ends:
+            continue
+        head, tail = ends
+        hf, tf = fold(flat(head)), fold(flat(tail))
+        if len(nf) > len(hf) + len(tf) and nf.startswith(hf) and nf.endswith(tf):
+            out.add(unglue_like(name, head, tail))
+    return out.pop() if len(out) == 1 else None
+
+
 def complete_name(name, pool, heads):
     """The whole name behind a cut one, or None. First a name read with no
     cut anywhere that opens with the head and closes with the tail (Obsidian
@@ -4295,9 +4314,16 @@ def complete_name(name, pool, heads):
                 continue
             if len(cf) > len(hf) + len(tf) and cf.startswith(hf) and cf.endswith(tf):
                 fits.add(cand)
-    if len(fits) == 1:
-        return unglue_like(fits.pop(), head, tail)
-    if fits or not tail:
+    # one name however it was spelt: readings that fold to the same letters
+    # are one candidate, and the spelling with the most spaces stands
+    by_fold = {}
+    for cand in fits:
+        k = fold(flat(cand))
+        if k not in by_fold or cand.count(" ") > by_fold[k].count(" "):
+            by_fold[k] = cand
+    if len(by_fold) == 1:
+        return unglue_like(next(iter(by_fold.values())), head, tail)
+    if by_fold or not tail:
         return None
     joined = set()
     for h in heads:
@@ -5407,7 +5433,7 @@ def note(records_path, diary_text=None):
     # the other are the whole name; a reading with no cut at all is better
     # still. Point 3 of the fourteen, "a card adds up every frame". Only the
     # card changes: a picture keeps the cut the screen made.
-    pool, heads = set(), set()
+    pool, heads, cuts = set(), set(), set()
     for st in all_states:
         for q in st.parts:
             names = []
@@ -5429,6 +5455,8 @@ def note(records_path, diary_text=None):
                         pool.add(nm)
                 elif c[0] and not c[1] and len(c[0]) >= 8:
                     heads.add(c[0])
+                if c is not None and c[0] and c[1] and " " in (c[0] + c[1]):
+                    cuts.add(nm)
     # Recorded on the window, never written into its rows: the rows are
     # what the pictures are cut from, and a whole name there stood beside
     # the stretch's own cut reading as a second row. The card substitutes
@@ -5438,7 +5466,16 @@ def note(records_path, diary_text=None):
         for tb in tables_of(st):
             for row in tb.rows:
                 cells = row.get("cells") or []
-                if not cells or not cells[0] or not cut_ends(cells[0]):
+                if not cells or not cells[0]:
+                    continue
+                if not cut_ends(cells[0]):
+                    # A NAME READ WHOLE BUT GLUED ("03 CompanyB(LandscapeCompany)")
+                    # is spaced the way a cut reading of it spaces its own
+                    # two ends; the cut reading is the evidence the spaces
+                    # were there
+                    whole = unglue_from_cuts(cells[0], cuts)
+                    if whole and whole != cells[0]:
+                        whole_names[whole_name_key(cells[0])] = whole
                     continue
                 whole = complete_name(cells[0], pool, heads)
                 if whole and whole != cells[0]:
