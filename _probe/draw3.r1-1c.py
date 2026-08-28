@@ -1056,14 +1056,13 @@ class Seen:
     and the faults it produced all rhymed: a title, a path, a selection, a
     pitch, a width, each taken from the wrong moment. One record per moment
     ends the class rather than its fifth instance."""
-    __slots__ = ("ts", "rect", "measured", "pitch", "stood")
+    __slots__ = ("ts", "rect", "measured", "pitch")
 
     def __init__(self, ts):
         self.ts = ts
         self.rect = None        # where the window stood, worked out from what it drew
         self.measured = False   # the reader measured this window's own edges HERE
         self.pitch = None       # how far apart its rows really stood, here
-        self.stood = None       # (where its words sat, the edges then, sure?)
 
     def __repr__(self):
         return "Seen(%s%s)" % (self.ts, " measured" if self.measured else "")
@@ -1147,11 +1146,7 @@ class State:
         self._seen = {}         # ts -> Seen: the ONE home of every per-moment fact,
                                 # private, so no caller can hand one window's
                                 # moments to another window or to a stretch
-        # `_stood` was here: "where its words sat LAST, and the edges then" --
-        # a per-moment fact with no moment on it, so "last" meant whichever
-        # moment happened to run most recently against this object. It now
-        # lives on the moment that saw it, and the moment before is asked for
-        # by name.
+        self._stood = None      # where its words sat last, and the edges then
 
     # ------------------------------------------------------ moment in, moment out
 
@@ -1180,16 +1175,6 @@ class State:
     @property
     def _pitch_at(self):
         return _AtView(self._seen, "pitch")
-
-    def stood_before(self, ts):
-        """Where this window's words sat at the LAST MOMENT BEFORE this one,
-        or None if this is the first moment of it that was seen.
-
-        Named, because the thing it replaced was not: a bare cache holding
-        whichever moment ran most recently, which is not a fact about the
-        window at all but about the order the code happened to walk."""
-        earlier = [t for t, sn in self._seen.items() if t < ts and sn.stood]
-        return self._seen[max(earlier)].stood if earlier else None
 
     # --------------------------------------------------------- content in
 
@@ -2905,13 +2890,7 @@ def content_rect(state, group, m):
     # a window whose words sit where they sat a moment ago has not moved, so
     # its edges are the edges already measured: the picture of the screen is
     # only read again when something about the window actually changed
-    # THE MOMENT BEFORE THIS ONE, ASKED FOR BY NAME. This used to read a bare
-    # `_stood` on the window, which held whatever moment ran last against that
-    # object -- so the same frame got a different answer during the main build
-    # than during a stretch's replay, because the two visit moments in
-    # different company. A window has not moved if its words sit where they sat
-    # AT THE MOMENT BEFORE, and that is now what is compared.
-    was = state.stood_before(m["ts"])
+    was = getattr(state, "_stood", None)
     if was and all(abs(a - b) <= 0.015 * W for a, b in zip(plain[::2], was[0][::2])) \
             and all(abs(a - b) <= 0.015 * H for a, b in zip(plain[1::2], was[0][1::2])):
         if was[2]:
@@ -2940,7 +2919,7 @@ def content_rect(state, group, m):
                          drawn[2], drawn[3]]
         if sure:
             state.at(m["ts"], make=True).measured = True
-        state.at(m["ts"], make=True).stood = (plain, drawn, sure)
+        state._stood = (plain, drawn, sure)
         return drawn
     spans = [(q["x0"], q["x1"]) for q in state.parts if q.get("x0") is not None and q.get("x1") is not None]
     if spans:
@@ -2957,7 +2936,7 @@ def content_rect(state, group, m):
     top_pad = 2.6 * rh if heads else 1.4 * rh
     box = [max(0.0, x0 - 0.7 * rh), max(0.0, y0 - top_pad),
            min(float(W), x1 + 0.7 * rh), min(float(H), y1 + 0.9 * rh)]
-    state.at(m["ts"], make=True).stood = (plain, box, False)
+    state._stood = (plain, box, False)
     return box
 
 
