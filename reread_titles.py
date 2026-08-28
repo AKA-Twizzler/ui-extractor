@@ -51,7 +51,9 @@ def read_strip(png):
     # the title is a run of real words; icons come back as scraps
     words = []
     for t in toks:
-        t2 = t.strip("|.,;:'\"«»“”‘’()[]{}")
+        # icon scraps glue to the first letter of the title (`£=Dev`), so
+        # the scrap is cut off the front and the back, never the word
+        t2 = re.sub(r"^[^A-Za-z0-9]+|[^A-Za-z0-9.)]+$", "", t)
         if len(t2) >= 2 and re.search(r"[A-Za-z]{2}", t2) and not re.fullmatch(r"[0O]+", t2):
             words.append(t2)
     return words
