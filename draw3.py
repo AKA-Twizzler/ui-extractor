@@ -2695,7 +2695,7 @@ def harmonise(states):
 # that stretch of time, the others as empty outlines. Its content comes
 # only from the moments inside the stretch, so it stays an honest still.
 
-def card_shot(html, ratio):
+def card_shot(html, ratio, share=None):
     """A rebuilt window given the SHAPE it really had, as a floor.
 
     The moment pictures bind every window to its own measured width; the
@@ -2718,16 +2718,32 @@ def card_shot(html, ratio):
     """
     if not ratio or ratio <= 0 or "sn-window" not in html:
         return html
-    tall = max(1, int(round(CARD_W * ratio)))
-    # PLAIN PIXELS, AND NO CONTAINER WRAPPER. The obvious build wrapped the
-    # card in `container-type: inline-size` so the floor could be written in
-    # `cqw` and scale with the reading pane - and size containment takes the
-    # content out of the element's intrinsic width, so in a shrink-to-fit
-    # parent every card collapsed from 960 pixels wide to 60. The cards
-    # already render at the stylesheet's default unit of one pixel, so the
-    # floor is stated in the same unit they are already drawn in.
+    # THE SHAPE IS A RATIO, NOT A PIXEL COUNT. It was written as
+    # `min-height:673px`, worked out against a 960px card - so the moment the
+    # reading pane stopped being 960 wide, every proportion was wrong: at
+    # 1500px that same card stands at 0.45 where the window stood at 0.70.
+    # A floor in pixels is only correct at one width, and the width is the
+    # reader's to choose.
+    #
+    # `--sn-ratio` is height over width, and the stylesheet turns it into a
+    # floor with a percentage-padding pseudo-element, because PERCENTAGE
+    # PADDING RESOLVES AGAINST WIDTH. That gives height >= ratio x width at
+    # ANY width, while content taller than the shape still makes the card
+    # taller -- which is the rule these sections run on: the window's
+    # proportion is a floor and never a ceiling, and nothing is ever clipped.
+    # `aspect-ratio` was the obvious tool and is the wrong one: it fixes the
+    # height outright, and `.sn-window` sets `overflow:hidden`, so anything
+    # past the shape would be silently cut off.
+    #
+    # `max-width` is the window's own share of the SCREEN. A window that took
+    # a third of the desktop was being drawn as wide as one that filled it,
+    # which is the same fault as the height and reads worse, because side by
+    # side the two look like the same window.
+    bits = ["--sn-ratio:%.4f" % ratio]
+    if share and 0 < share <= 1:
+        bits.append("max-width:%.1f%%" % (100.0 * share))
     return re.sub(r'^(<div class="sn-window[^"]*")(?=>)',
-                  r'\1 style="min-height:%dpx"' % tall,
+                  r'\1 style="%s"' % ";".join(bits),
                   html, count=1)
 
 
@@ -6752,12 +6768,21 @@ def note(records_path, diary_text=None):
                 hs = sorted(r_[3] - r_[1] for r_ in use)
                 w_, h_ = ws[len(ws) // 2], hs[len(hs) // 2]
                 if w_ > 0:
+                    # THE SCREEN IT STOOD ON, not the page it is drawn on. A
+                    # window that took a third of the desktop is drawn a third
+                    # as wide as one that filled it, so two cards side by side
+                    # carry their real difference in size. The floor of 0.35
+                    # is there because these sections must stay readable: a
+                    # sliver of a window is still a window someone has to read.
+                    screen_w = max((mm.get("size") or [0])[0] for mm in moments) if moments else 0
                     for o in g:
-                        shape_of[id(o)] = h_ / w_
+                        shape_of[id(o)] = (h_ / w_,
+                                           min(1.0, max(0.35, w_ / screen_w)) if screen_w else None)
         for st in sorted((s for g in groups for s in g), key=lambda s: s.times[0]):
             parts.append(f"## {w} - as at {span_of(st)}" + (f", {st.title}" if st.title else ""))
             parts.append("")
-            parts.append(card_shot(st.window_html(), shape_of.get(id(st))))
+            _sh = shape_of.get(id(st)) or (None, None)
+            parts.append(card_shot(st.window_html(), _sh[0], _sh[1]))
             parts.append("")
             for ln in st.said_html():
                 parts.append(ln)
