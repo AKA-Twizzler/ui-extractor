@@ -191,6 +191,11 @@ def finder(st):
     n = max([len(head)] + [len(r["cells"]) for r in rows] + [1])
     head = head + [""] * (n - len(head))
     name_i = next((i for i, h in enumerate(head) if h == "Name"), 0)
+    # NO NAME COLUMN, NO ICONS. A window the screen cut off shows only its
+    # Size and Kind columns; drawn with a folder icon in front of every size
+    # its first column widened past the window and pushed the Kind column
+    # off the picture.
+    has_name = bool(head) and head[name_i] == "Name"
     size_i = next((i for i, h in enumerate(head) if h == "Size"), None)
     kind_i = next((i for i, h in enumerate(head) if h.startswith("Kind")), None)
     out = ['<table class="sn-list">']
@@ -238,7 +243,7 @@ def finder(st):
             t = esc(c)
             if it[i] and c:
                 t = f"<i>{t}</i>"
-            if i == name_i:
+            if i == name_i and has_name:
                 fico = "file md" if re.search(r"Markdo|\.md$", kind or cells[name_i]) else "file"
                 if folder is None:
                     lead = '<span class="sn-tri"></span>' + ico("unknown")

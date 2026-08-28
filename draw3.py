@@ -348,6 +348,13 @@ class Table:
         new_rows = []
         if len(built) > 7 and built[7]:
             self.rh = max(self.rh, float(built[7]))
+        # A LONE CRUMB IS THE PATH BAR, NOT A FILE. Read on a window the
+        # screen cut off, the bar's one visible crumb (`er-Documents-jarvis-demo >`)
+        # came back as a row of the list and was drawn with a folder icon
+        # between two files' sizes.
+        rows = [(cells, icon, band) for cells, icon, band in rows
+                if not (cells and cells[0] and str(cells[0]).rstrip().endswith((">", "\u203a"))
+                        and not any(cells[1:]))]
         for cells, icon, band in rows:
             width = max(len(self.header), max(mapping, default=-1) + 1, len(cells))
             plain = [""] * width
@@ -3956,13 +3963,22 @@ def mend_cells(sl, full):
         # two rows the stretch had dropped stayed dropped. A row that matches
         # no settled row is kept where it is; the walk goes on from the last
         # row that did match, and only the gaps BETWEEN two matched rows fill.
+        def _row_same(a_, b_):
+            # the whole name, or the same name with a letter or two read
+            # differently - NEVER one name inside another: `.claude` sits
+            # inside `.claude.json.backup`, and matching them put the backup
+            # in the hovered row's place and drew it twice
+            if name_fits(a_, b_):
+                return True
+            x_, y_ = norm(a_), norm(b_)
+            return (len(x_) >= 4 and len(x_) == len(y_)
+                    and sum(1 for u, v in zip(x_, y_) if u != v) <= 2)
         idxs, walk = [], 0
         for r in st_.rows:
             name = r["cells"][sni] if sni < len(r["cells"]) else ""
             hit = next((k for k in range(walk, len(ft.rows))
                         if fni < len(ft.rows[k]["cells"]) and name
-                        and (name_fits(name, ft.rows[k]["cells"][fni])
-                             or same_name(name, ft.rows[k]["cells"][fni]))), None)
+                        and _row_same(name, ft.rows[k]["cells"][fni])), None)
             idxs.append(hit)
             if hit is not None:
                 walk = hit + 1
