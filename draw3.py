@@ -1232,6 +1232,8 @@ class State:
                         Hf = (m.get("size") or [0, 2160])[1]
                         if (box and len(box) == 4 and box[3] <= 0.09 * Hf
                                 and re.search(r"type a URL|https?://", str(r["text"]))):
+                            import sys as _s
+                            print("ROUTED %s %r box=%s" % (m["ts"], r["text"][:40], box), file=_s.stderr)
                             if not any(same_text(r["text"], t[0]) for t in self.topwords):
                                 self.topwords.append((r["text"], box[0], box[1], box[2], box[3],
                                                       bool(r.get("confirmed"))))
@@ -3566,6 +3568,9 @@ def behind_for(slice_st, span, subject):
     import furnish
     out = []
     strip = furnish.browser_behind(slice_st)
+    if getattr(slice_st, "topwords", None) and any("URL" in str(t[0]) for t in slice_st.topwords):
+        import sys as _s
+        print("BEHIND asked, topwords has the address, strip=%r" % (strip[:60],), file=_s.stderr)
     if strip:
         rect = subject.rects.get(span["t0"]) or subject.rect or [0, 0, 0, 0]
         tops = [t for t in slice_st.topwords]
