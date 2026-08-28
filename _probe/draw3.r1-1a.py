@@ -1143,9 +1143,7 @@ class State:
         self.said = []
         self.theme = None
         self.pieces = []        # (moment, group) it was read from, in order
-        self._seen = {}         # ts -> Seen: the ONE home of every per-moment fact,
-                                # private, so no caller can hand one window's
-                                # moments to another window or to a stretch
+        self.seen = {}          # ts -> Seen: the ONE home of every per-moment fact
         self._stood = None      # where its words sat last, and the edges then
 
     # ------------------------------------------------------ moment in, moment out
@@ -1159,22 +1157,22 @@ class State:
         borrowing another moment's fact, which is the whole class of fault this
         record exists to make visible. Reaching a per-moment fact without
         naming a moment is now impossible, which was the point."""
-        got = self._seen.get(ts)
+        got = self.seen.get(ts)
         if got is None and make:
-            got = self._seen[ts] = Seen(ts)
+            got = self.seen[ts] = Seen(ts)
         return got
 
     @property
     def rects(self):
-        return _AtView(self._seen, "rect")
+        return _AtView(self.seen, "rect")
 
     @property
     def measured(self):
-        return _AtView(self._seen, "measured")
+        return _AtView(self.seen, "measured")
 
     @property
     def _pitch_at(self):
-        return _AtView(self._seen, "pitch")
+        return _AtView(self.seen, "pitch")
 
     # --------------------------------------------------------- content in
 
@@ -5496,14 +5494,11 @@ def note(records_path, diary_text=None):
                         if t_ in s["ts"]]
                 sl._doc_wide = (round(100 * med(sorted(mine))) if mine
                                 else getattr(st, "_doc_wide", 0))
-                # THE FAULT, DELETED. This line read `sl.rects, sl.measured =
-                # st.rects, st.measured`: the stretch was handed the WHOLE
-                # window's per-moment tables, so a picture of 00:01:00 could be
-                # shaped by an edge measured at 00:03:50. A stretch already
-                # holds its own moments -- `state_slice` replays them through
-                # `absorb`, which records a rect and a measured flag for each --
-                # so there was never anything to borrow, only something to
-                # overwrite it with.
+                # STEP 1a KEEPS THIS EXACTLY AS IT WAS: the slice shares the
+                # window's own moment records, aliased, which is what assigning
+                # the two side-tables did. It is the fault stated in one line
+                # and it is changed in its own step, measured on its own.
+                sl.seen = st.seen
                 # The shape the window really had. Where the reader measured
                 # its edges off the frame, those edges stand. Otherwise the
                 # window's own place - every reading of it carried home and
