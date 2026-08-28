@@ -5353,8 +5353,7 @@ def note(records_path, diary_text=None):
     # the same name at its end, so the head of one reading and the tail of
     # the other are the whole name; a reading with no cut at all is better
     # still. Point 3 of the fourteen, "a card adds up every frame". Only the
-    # window's gathered rows change: a picture keeps the cut the screen
-    # made, spelt from the whole (`mend_cells`).
+    # card changes: a picture keeps the cut the screen made.
     pool, heads = set(), set()
     for st in all_states:
         for q in st.parts:
@@ -5375,7 +5374,12 @@ def note(records_path, diary_text=None):
                         pool.add(nm)
                 elif c[0] and not c[1] and len(c[0]) >= 8:
                     heads.add(c[0])
+    # Recorded on the window, never written into its rows: the rows are
+    # what the pictures are cut from, and a whole name there stood beside
+    # the stretch's own cut reading as a second row. The card substitutes
+    # at drawing time (`furnish.finder`).
     for st in states:
+        whole_names = {}
         for tb in tables_of(st):
             for row in tb.rows:
                 cells = row.get("cells") or []
@@ -5383,9 +5387,8 @@ def note(records_path, diary_text=None):
                     continue
                 whole = complete_name(cells[0], pool, heads)
                 if whole and whole != cells[0]:
-                    cells[0] = whole
-                    if row.get("italic"):
-                        row["italic"][0] = False
+                    whole_names[cells[0]] = whole
+        st._whole_names = whole_names
 
     clocks = [c for m in moments for p in m.get("panes") or [] for c in [old.clock_in(p)] if c]
     parts = [f"# {title}", ""]

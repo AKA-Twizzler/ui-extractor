@@ -381,6 +381,8 @@ def finder(st):
     # over the whole window they land where the Name column was and the
     # strip the frame showed comes out empty. They hug the right edge.
     shares = col_shares(st, head) if has_name else None
+    # a name the screen cut and another moment read whole, whole on the card
+    whole_names = getattr(st, "_whole_names", None) or {} if on_card else {}
     if shares and on_card and rows and name_i in shares:
         # A NAME THE CARD KNOWS WHOLE IS SHOWN WHOLE. The card adds up every
         # frame (point 3 of the fourteen): a name Finder cut on screen and
@@ -389,10 +391,14 @@ def finder(st):
         # name, the other columns keeping their proportions of what is left
         # -- the way the card grows taller for rows known from other
         # moments. Widths are estimated for the card drawn 960 px wide.
-        longest = max((len(str((r.get("cells") or [""])[0] or "")) for r in rows), default=0)
+        longest = max((len(str(whole_names.get((r.get("cells") or [""])[0], (r.get("cells") or [""])[0]) or ""))
+                       for r in rows), default=0)
         side_est = (home[1] if home and home[1] else None) or side_share_card(st) or 0.25
         list_w = 960.0 * (1.0 - side_est) - 24.0
-        need = min(0.6, (0.58 * longest + 3.4) * 12.5 / list_w)
+        # 0.47 em a letter in the list's face, measured off a drawn card
+        # (43 letters ran 244 px at 12.5 px), and 3 em for the disclosure
+        # triangle, the icon and the cell's padding
+        need = min(0.6, (0.47 * longest + 3.0) * 12.5 / list_w)
         if need > shares[name_i]:
             rest = 1.0 - shares[name_i]
             scale = (1.0 - need) / rest if rest > 0 else 0.0
@@ -413,6 +419,9 @@ def finder(st):
     for r in rows:
         cells = list(r["cells"]) + [""] * (n - len(r["cells"]))
         it = list(r["italic"]) + [False] * (n - len(r["italic"]))
+        if whole_names and cells[name_i] in whole_names:
+            cells[name_i] = whole_names[cells[name_i]]
+            it[name_i] = False
         kind = cells[kind_i] if kind_i is not None else ""
         if kind_i is not None:
             m = re.match(r"^(\d+\s?(?:bytes|KB|MB|GB))\s+(.*)$", kind)
