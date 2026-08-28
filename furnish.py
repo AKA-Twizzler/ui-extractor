@@ -180,6 +180,21 @@ def _median(vs):
     return vs[n // 2] if n % 2 else 0.5 * (vs[n // 2 - 1] + vs[n // 2])
 
 
+def _layouts(readings, keys, tol=0.10):
+    """The readings grouped by layout: a reading joins the first group whose
+    mean it matches on every heading within tol, else starts its own."""
+    groups = []
+    for r in readings:
+        for g in groups:
+            n = len(g)
+            if all(abs(r[i][0] - sum(x[i][0] for x in g) / n) <= tol for i in keys):
+                g.append(r)
+                break
+        else:
+            groups.append([r])
+    return groups
+
+
 def col_shares(st, head):
     """Where the list's columns began, as shares of the list's width,
     measured off the frame: each heading's own left edge, over the readings
@@ -187,41 +202,48 @@ def col_shares(st, head):
     column took whatever its longest name wanted and the dates and sizes
     landed wherever was left -- proportions the frame never had.
 
-    The reader's box round a heading is sometimes the word and sometimes a
-    loose band that starts well left of it; one loose "Kind" at 00:00:30 put
-    the Size column at 7% and cut "31 bytes". So each heading's position is
-    the median over the readings, and only the readings whose box is the
-    word's own size vote while any such exist. A heading the stretch never
-    read tightly borrows from the whole window's other moments, but only
-    from readings whose OTHER headings agree with this stretch's within 6%:
-    the columns can be dragged mid-video (vault-demo's Name column widens at
-    00:02:20), and a moment must not inherit a layout it never showed. The
-    pane box stays the basis because the sidebar's share is measured off the
-    same boundary, so the headings land where the frame had them however the
-    reader drew that boundary. None where a heading was never placed."""
+    The columns can be dragged mid-video (vault-demo's Name column widens at
+    00:02:20), so the readings are grouped by layout first and the largest
+    group is the window's; a median over both groups once put the Size
+    column at 6%. The reader's box round a heading is sometimes the word and
+    sometimes a loose band that starts well left of it; one loose "Kind" at
+    00:00:30 put the Size column at 7% and cut "31 bytes". So each heading's
+    position is the median over the group, and only the readings whose box
+    is the word's own size vote while any such exist. A heading the stretch
+    never read tightly borrows from the whole window's other moments, but
+    only from readings that agree with this stretch on its tightly read
+    headings within 10%, so a moment never inherits a layout it never
+    showed. The pane box stays the basis because the sidebar's share is
+    measured off the same boundary, so the headings land where the frame
+    had them however the reader drew that boundary. None where a heading
+    was never placed."""
     names = [h for h in head if h]
     if len(names) < 2:
         return None
     order = [i for i in range(len(head)) if head[i]]
+    keys = order[1:]
     own = _col_readings(st, head)
     if not own:
         return None
-    med = {i: _median([r[i][0] for r in own]) for i in order[1:]}
+    main = max(_layouts(own, keys), key=len)
+    med = {i: _median([r[i][0] for r in main]) for i in keys}
+    tight = {i: [r[i][0] for r in main if r[i][1]] for i in keys}
+    tm = {i: (_median(tight[i]) if tight[i] else None) for i in keys}
     parent = None
     pos = {}
-    for i in order[1:]:
-        vs = [r[i][0] for r in own if r[i][1]]
+    for i in keys:
+        vs = list(tight[i])
         if not vs and getattr(st, "_parent", None) is not None:
             if parent is None:
                 parent = _col_readings(st._parent, head)
-            others = [j for j in order[1:] if j != i]
+            others = [j for j in keys if j != i and tm[j] is not None] or [j for j in keys if j != i]
             for r in parent:
-                if r[i][1] and others and all(abs(r[j][0] - med[j]) <= 0.06 for j in others):
+                if r[i][1] and others and all(abs(r[j][0] - (tm[j] if tm[j] is not None else med[j])) <= 0.10 for j in others):
                     vs.append(r[i][0])
         if not vs:
-            vs = [r[i][0] for r in own]
+            vs = [r[i][0] for r in main]
         pos[i] = _median(vs)
-    bounds = [0.0] + [pos[i] for i in order[1:]] + [1.0]
+    bounds = [0.0] + [pos[i] for i in keys] + [1.0]
     if any(bounds[k + 1] <= bounds[k] for k in range(len(bounds) - 1)):
         return None
     shares = [bounds[k + 1] - bounds[k] for k in range(len(bounds) - 1)]
