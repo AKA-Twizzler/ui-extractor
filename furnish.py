@@ -235,7 +235,12 @@ def finder(st):
     has_name = bool(head) and head[name_i] == "Name"
     size_i = next((i for i, h in enumerate(head) if h == "Size"), None)
     kind_i = next((i for i, h in enumerate(head) if h.startswith("Kind")), None)
-    out = ['<table class="sn-list">']
+    # A LIST WITH NO NAME COLUMN IS THE RIGHT-HAND END OF ONE. Finder keeps
+    # its Size and Kind columns at the window's right; a window the screen
+    # cut down its left edge shows only those, and laid out from the left
+    # over the whole window they land where the Name column was and the
+    # strip the frame showed comes out empty. They hug the right edge.
+    out = ['<table class="sn-list"%s>' % (' style="margin-left:auto;width:auto"' if (head and not has_name) else "")]
     if any(head):
         cells = []
         for i, h in enumerate(head):
