@@ -1056,7 +1056,7 @@ class Seen:
     and the faults it produced all rhymed: a title, a path, a selection, a
     pitch, a width, each taken from the wrong moment. One record per moment
     ends the class rather than its fifth instance."""
-    __slots__ = ("ts", "rect", "measured", "pitch", "stood", "doc_wide", "h1")
+    __slots__ = ("ts", "rect", "measured", "pitch", "stood")
 
     def __init__(self, ts):
         self.ts = ts
@@ -1064,8 +1064,6 @@ class Seen:
         self.measured = False   # the reader measured this window's own edges HERE
         self.pitch = None       # how far apart its rows really stood, here
         self.stood = None       # (where its words sat, the edges then, sure?)
-        self.doc_wide = None    # how wide its note ran here, as a share of the pane
-        self.h1 = None          # where its big heading sat here
 
     def __repr__(self):
         return "Seen(%s%s)" % (self.ts, " measured" if self.measured else "")
@@ -1182,17 +1180,6 @@ class State:
     @property
     def _pitch_at(self):
         return _AtView(self._seen, "pitch")
-
-    @property
-    def _doc_wide_at(self):
-        return _AtView(self._seen, "doc_wide")
-
-    @property
-    def _h1_read(self):
-        """Kept as (moment, box) pairs, which is the shape its readers already
-        walk -- and now it is the moment record answering rather than a list
-        stashed on the window beside it."""
-        return _AtView(self._seen, "h1").items()
 
     def stood_before(self, ts):
         """Where this window's words sat at the LAST MOMENT BEFORE this one,
@@ -4034,9 +4021,7 @@ def note(records_path, diary_text=None):
         # so only readings taken while this state was on the screen count.
         # The same note read at some other moment says nothing about how far
         # this window had been scrolled now.
-        for _, b_, t_ in hit:
-            if t_ in st.times:
-                st.at(t_, make=True).h1 = list(b_)
+        st._h1_read = [(t_, list(b_)) for _, b_, t_ in hit if t_ in st.times]
     real = [st for st in states if is_real_window(st.name)]
     shown = real if real else states          # a video with no named window shows its screens
     windows = []                               # names in order of first appearance
@@ -5063,9 +5048,9 @@ def note(records_path, diary_text=None):
                 if 0.2 <= span / pw <= 1.0:
                     wide.append(span / pw)
                     at[m["ts"]] = span / pw
-                    st.at(m["ts"], make=True).doc_wide = span / pw
         if wide:
             st._doc_wide = round(100 * med(sorted(wide)))
+            st._doc_wide_at = at
 
     # A NOTE'S LINE LENGTH BELONGS TO THE PROGRAM, NOT TO ONE READING OF IT.
     # A note is set to a readable line length and that does not change from
