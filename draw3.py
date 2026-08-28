@@ -216,13 +216,24 @@ class Table:
         self.top_items = []     # (text, centre x) for the title rule
         self.span = None        # the list's x-span
         self.path = []
-        self.paths = []         # every path bar read, latest last
-        self.now = None         # the moment being read, stamped by absorb
-        self.path_at = []       # the moment each entry in `paths` was read
+        # ONE LIST OF (MOMENT, READING), NOT TWO LISTS SIDE BY SIDE. It was
+        # `paths` and `path_at` kept in step by hand, and they came apart: one
+        # table copied `paths` from another without its moments, so the `zip`
+        # pairing them silently kept NOTHING -- two readings lost their moments,
+        # no error and no trace. Measured, one table of forty-seven. A pair
+        # cannot come apart.
+        self.readings = []      # (moment, path bar read), latest last
+        self.now = None         # the moment being read; a cursor, not a store
         self.rh = 0.0           # a row's height in frame pixels
         self.spoiled = 0        # lines dropped: two columns misread at once
         self.bottom = []
         self.banded_names = set()
+
+    @property
+    def paths(self):
+        """Every path bar read, latest last -- read-only, because a list of
+        readings without the moments they were read at is the fault above."""
+        return [p for _, p in self.readings]
 
     STANDARD = {4: ["Name", "Date Modified", "Size", "Kind"], 3: ["Name", "Date Modified", "Kind"],
                 2: ["Name", "Date Modified"], 5: ["Name", "Date Modified", "Size", "Kind", ""]}
@@ -418,8 +429,7 @@ class Table:
         if len(best) >= len(self.path):
             self.path = best
         if best and best not in self.paths:
-            self.paths.append(best)
-            self.path_at.append(self.now)
+            self.readings.append((self.now, best))
         self.tidy()
 
     def tidy(self):
@@ -1271,8 +1281,7 @@ class State:
             if t_ is not None and len(bar) > len(getattr(t_, "path", None) or []):
                 t_.path = unglue(list(bar))
                 if bar not in t_.paths:
-                    t_.paths.append(list(bar))
-                    t_.path_at.append(m["ts"])
+                    t_.readings.append((m["ts"], list(bar)))
                 # the name rule reads the path, and the path only just
                 # arrived: ask it again now the window has its bar
                 self._title_rule(again=True)
@@ -2590,8 +2599,8 @@ def harmonise(states):
                 # prjects > Documents > vault-demo > 02 Company A` - a path
                 # that never existed. So chain within the LATEST moment that
                 # read a bar, and let that bar stand alone.
-                late = [p for p, t in zip(table.paths, table.path_at)
-                        if t is not None and t == max((x for x in table.path_at if x is not None),
+                late = [p for t, p in table.readings
+                        if t is not None and t == max((x for x, _ in table.readings if x is not None),
                                                       default=None)]
                 table.path = chain_paths(late if late else [table.path] + table.paths)
                 # The latest bar is spelt the way this window's own reads
@@ -4938,7 +4947,9 @@ def note(records_path, diary_text=None):
         # sidebar were read whole at that other moment, and this one
         # only had them hidden
         tab.path = list(best.path)
-        tab.paths = list(best.paths)
+        # the readings come across WITH the moments they were read at, which
+        # is the whole reason they are one list now
+        tab.readings = list(best.readings)
         tab.side = list(best.side)
         by = {fold(flat((r.get("cells") or [""])[0])): r for r in best.rows
               if (r.get("cells") or [""])[0]}
