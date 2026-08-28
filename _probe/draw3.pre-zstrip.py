@@ -8135,34 +8135,6 @@ def note(records_path, diary_text=None):
                         sl._row_step = sl._row_step / _k
                     _subj.append((stx, sl, shape))
                 subjects = _subj
-                # THE BROWSER'S STRIP IN A ZOOMED FRAME. The strip is sought
-                # only where the desktop bar was seen, and a zoomed frame
-                # never shows the bar, so at 00:04:00 the address bar read
-                # above Obsidian's tree went unsought and the window carried
-                # its raw reading's top -- the screen's edge, 190 px above
-                # where the frame shows it under Chrome's bar. The strip is
-                # sought among the subjects here; found, a window filling the
-                # screen below it begins under it, as a window behind the
-                # strip does, and the strip is drawn behind.
-                if not any(t_ == "the browser, behind" for t_, _b in behinds):
-                    for stx_, sl_, _shape_ in subjects:
-                        strip_ = behind_for(sl_, dict(s, size=s["size"]), stx_)
-                        if not strip_:
-                            continue
-                        sb_ = strip_[0][1]                      # the frame's own space
-                        y1_ = back(T, list(sb_))[3]             # home
-                        for i_, (stx2, sl2, shape2) in enumerate(subjects):
-                            if (shape2[2] - shape2[0] >= 0.88 * Wf and shape2[1] < y1_ - 0.01 * Hf
-                                    and shape2[3] > y1_ + 0.2 * Hf):
-                                shape2 = [shape2[0], float(y1_), shape2[2], shape2[3]]
-                                sl2.rect = shape2
-                                subjects[i_] = (stx2, sl2, shape2)
-                        behinds.append(("the browser, behind", [0.0, 0.0, float(Wf), float(sb_[3])]))
-                        if not browser_bits:
-                            browser_bits = browser_chrome(s, [0.0, 0.0, float(Wf), float(Hf)], sb_[3])
-                        if os.environ.get("SN_ZOOM"):
-                            print("  strip in the zoom: %s bottom %d -> home %d" % (stx_.name, sb_[3], y1_), file=sys.stderr)
-                        break
                 behinds = [(t_, _home_box(b_, _whole_home_named(t_, back(T, list(b_)), _cut_sides(b_))
                                           if any(_cut_sides(b_)) else None)) for t_, b_ in behinds]
                 _ghosts = [(_home_box(b_) if b_ else b_, t_, k_) for b_, t_, k_ in ghost_list(s, sub_states, carded)]
