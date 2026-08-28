@@ -2869,6 +2869,15 @@ def state_slice(st, t0, t1):
     out._title_rule(again=True)
     if not out.title:
         out.title, out.title_sure = _inherited, getattr(st, "title_sure", False)
+    elif (_inherited and norm(flat(_inherited)) == norm(flat(out.title))
+            and len(_inherited) > len(out.title)):
+        # THE SAME FOLDER, SPELT BETTER BY THE WHOLE WINDOW. The slice reads
+        # only its own moments, so where it names the same folder it can name
+        # it worse - at 00:03:50 it gave `02Company A (Info Product)` for the
+        # `02 Company A (Info Product)` the window reads across its whole
+        # stretch. Same name, so the fuller spelling stands; a DIFFERENT name
+        # is the slice's to give, which is the whole point of asking it.
+        out.title = _inherited
     out.said = [(ts, s) for ts, s in st.said if t0 <= ts <= t1]
     out.of = st
     # a stretch reads the path bar in whatever pieces that stretch showed;
