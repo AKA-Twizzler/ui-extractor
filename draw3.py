@@ -3052,7 +3052,14 @@ def harmonise(states):
                     for c in path:
                         f = flat(c)
                         done = False
-                        if f not in settled_flat and len(f) >= 10:
+                        # ...UNLESS THIS WINDOW'S OWN BAR READ THE CRUMB LONGER
+                        # at another moment: `-Users-jaredrh` is Finder's own
+                        # cut of `-Users-jaredrhodenizer-Documents-jarvis-demo`,
+                        # read whole at 00:01:30, and splitting it into `Users`
+                        # and `jaredrh` threw the folder away for good.
+                        own_longer = any(crumb_same(c, w) and len(flat(w)) > len(f)
+                                         for p_ in (getattr(table, "paths", None) or []) for w in p_)
+                        if f not in settled_flat and len(f) >= 10 and not own_longer:
                             for g_ in ("users", "documents", "desktop", "downloads"):
                                 rest_ = f[len(g_):]
                                 if f.startswith(g_) and rest_ in known_flat and len(rest_) >= 4:
@@ -3076,7 +3083,12 @@ def harmonise(states):
                         path[i] = c
                         f = flat(c)
                         b = exact_fix(c)
-                        if not b and len(f) >= 6 and f not in strong_flats and f not in row_flats:
+                        # A CRUMB SOME WINDOW'S TITLE BAR OR ANOTHER BAR SPELLS
+                        # THIS WAY IS NOT A MISREADING: `projects` stood in a
+                        # title and in every bar, and was "corrected" into the
+                        # one row that read `projerts`.
+                        if (not b and len(f) >= 6 and f not in strong_flats and f not in row_flats
+                                and f not in title_flats and f not in crumb_flats):
                             # a crumb misread by a letter or two (`prjects`,
                             # `jaredrhodenize`) takes the name the video
                             # spells whole, when exactly one strong name
