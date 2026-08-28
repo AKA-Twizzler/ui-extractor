@@ -5362,7 +5362,9 @@ def note(records_path, diary_text=None):
             if q["fam"] == "table":
                 names = [(r.get("cells") or [""])[0] or "" for r in q["model"].rows]
             elif q["fam"] == "tree":
-                names = [re.sub(r"^[\s\u203a\u25b8\u25be\u25b9\u2022\-\u00b7>]+", "", t_ or "") for t_, _h in q["model"].lines]
+                # a tree line opens with its guide bars and glyphs
+                # ("│   name"); only the name is a name
+                names = [re.sub(r"^[\s\u2500-\u257f\u203a\u25b8\u25be\u25b9\u2022\-\u00b7>]+", "", t_ or "") for t_, _h in q["model"].lines]
             for nm in names:
                 nm = nm.strip()
                 c = cut_ends(nm)
