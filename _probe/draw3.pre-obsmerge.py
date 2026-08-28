@@ -4792,7 +4792,6 @@ def note(records_path, diary_text=None):
             frac = sum(b.size for b in sm.get_matching_blocks()) / max(1, len(ct))
             if longest >= 40 or (len(ct) >= 12 and frac >= 0.6):
                 c.name = w.name
-                c._same_as = w          # the window whose note this is: the cards fold on it
                 break
     states = [st for st in all_states if st.window_html() and not st.fragment()]
     frags = [st for st in all_states if st not in states and st.has_content() and st.rects]
@@ -5088,10 +5087,7 @@ def note(records_path, diary_text=None):
         kv = [(q[2] - q[0]) / max(1.0, p[2] - p[0]) for p, q in exact if p[2] - p[0] >= 8]
         kv += [(q[3] - q[1]) / max(1.0, p[3] - p[1]) for p, q in exact if p[3] - p[1] >= 10]
         kv += [(q[3] - q[1]) / max(1.0, p[3] - p[1]) for p, q, _ in cuts if p[3] - p[1] >= 10]
-        # THREE WORDS READ WHOLE ON BOTH FRAMES, not three numbers: one word
-        # gives a width and a height, so two words passed as three votes
-        # and 00:04:00 was fitted at 2.18 where its tree rows say 1.76.
-        if len(kv) < 3 or len(exact) < 3:
+        if len(kv) < 3:
             return None
         k = med(kv)
         if not 0.4 <= k <= 4.0:
@@ -5414,14 +5410,6 @@ def note(records_path, diary_text=None):
             for r_ in (getattr(t_, "rows", None) or []):
                 k_ = key_(r_)
                 if len(k_) >= 3:
-                    want.add(k_)
-        # A NOTE WINDOW IS PLACED BY ITS OWN LINES as a list window is by its
-        # rows: with no table, Obsidian at 00:04:00 had nothing to vote with
-        # and its box was carried in from another zoom, 2.6 times too big.
-        for m_ in (st.tree(), st.main_doc()):
-            for t_, _h in (getattr(m_, "lines", None) or []):
-                k_ = "".join(ch for ch in str(t_).lower() if ch.isalnum())
-                if len(k_) >= 6:
                     want.add(k_)
         if not want:
             return None
@@ -6492,10 +6480,6 @@ def note(records_path, diary_text=None):
                     if not shape:
                         T0, hb = span_T.get(s["t0"]), home_at(st, s["t0"])
                         shape = (onto(T0, hb) if (T0 and hb) else None)
-                # a box wider or taller than the frame was never a window on
-                # it: the carry ran away under a bad zoom
-                if shape and (shape[2] - shape[0] > 1.05 * Wf or shape[3] - shape[1] > 1.05 * Hf):
-                    shape = None
                 shape = shape or s["rects"].get(id(st)) or span_rect(st, s["t0"]) or st.rect
                 # A box as wide as the whole frame is the reader's own strip,
                 # not a window: it read a slab of the screen and the window's
@@ -7578,8 +7562,8 @@ def note(records_path, diary_text=None):
         # a size threshold: a small card holding something new is kept.
         def _card_words(st_):
             h = st_.window_html() or ""
-            h = re.sub(r"&[a-z]+;|&#\d+;", " ", re.sub(r"<[^>]+>", " ", h))
-            return set(x.lower() for x in re.findall(r"[A-Za-z][A-Za-z']{3,}", h))
+            return set(x.lower() for x in re.findall(r"[A-Za-z][A-Za-z']{3,}",
+                                                     re.sub(r"<[^>]+>", " ", h)))
 
         def _has_structure(st_):
             h = st_.window_html() or ""
@@ -7596,11 +7580,7 @@ def note(records_path, diary_text=None):
                     continue
                 mine = words[id(o)]
                 others = set().union(*[words[id(x)] for x in g if x is not o]) or set()
-                # a word cut at the edge (`ther` for `there`) is carried by
-                # the whole word another card holds
-                carried = {w_ for w_ in mine if w_ in others
-                           or (len(w_) >= 4 and any(x_.startswith(w_) for x_ in others))}
-                if mine and (len(carried) == len(mine) or (len(mine) >= 8 and len(carried) >= 0.9 * len(mine))):
+                if mine and len(mine & others) >= 0.9 * len(mine):
                     keep = max((x for x in g if x is not o), key=lambda x: len(words[id(x)]))
                     folded.setdefault(id(keep), []).extend(o.times)
                     folded[id(o)] = None
@@ -7621,15 +7601,10 @@ def note(records_path, diary_text=None):
                 return False
             reads = [w_ for p_ in (getattr(ft_, "paths", None) or []) for w_ in p_] + list(ft_.path or [])
             reads = [flat(w_).rstrip("›>") for w_ in reads if len(flat(w_)) >= 8]
-            whole_flats = [flat(c_) for c_ in wt_.path]
-            if reads and not all(any(wf == r_ or wf.endswith(r_) for wf in whole_flats) for r_ in reads):
+            if not reads:
                 return False
-            # the bar the window itself kept, or - read as loose words when
-            # no bar closed - a word of its own that is the tail of one of
-            # the folder's long crumbs (`er-Documents-jarvis-demo`)
-            tails = [flat(w_).rstrip("›>") for w_ in frag.words() if len(flat(w_)) >= 8]
-            return bool(reads) or any(len(wf) >= 12 and wf != t_ and wf.endswith(t_)
-                                      for t_ in tails for wf in whole_flats)
+            whole_flats = [flat(c_) for c_ in wt_.path]
+            return all(any(wf == r_ or wf.endswith(r_) for wf in whole_flats) for r_ in reads)
         _all = [s_ for g in groups for s_ in g]
         for o in _all:
             if id(o) in folded and folded[id(o)] is None:
@@ -7638,28 +7613,6 @@ def note(records_path, diary_text=None):
             if whole is not None:
                 folded.setdefault(id(whole), []).extend(o.times)
                 folded[id(o)] = None
-        # THE SAME NOTE, READ FROM BEHIND THE FINDERS, IS THE SAME CARD. A
-        # state named for this window because its words matched the
-        # window's own note (`_same_as`, set where the rest-of-the-screen
-        # states are named) is that note seen through a gap, never a card
-        # of its own: its moments join the fullest card of the window.
-        def _fullness(x_):
-            d_, t_ = x_.main_doc(), x_.tree()
-            return (len(d_.lines) if d_ else 0) + (len(t_.lines) if t_ else 0)
-        for o in _all:
-            if id(o) in folded and folded[id(o)] is None:
-                continue
-            if getattr(o, "_same_as", None) is None:
-                continue
-            kin = [x for x in _all if x is not o and x.name == o.name
-                   and not (id(x) in folded and folded[id(x)] is None)]
-            if not kin:
-                continue
-            base = max(kin + [o], key=_fullness)
-            if base is o:
-                continue
-            folded.setdefault(id(base), []).extend(o.times + (folded.get(id(o)) or []))
-            folded[id(o)] = None
 
         for st in sorted((s for g in groups for s in g), key=lambda s: s.times[0]):
             if id(st) in folded and folded[id(st)] is None:
