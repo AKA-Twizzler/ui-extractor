@@ -6902,11 +6902,12 @@ def note(records_path, diary_text=None):
                 if st.name == "The Finder window":
                     def _side_ok(v):
                         return v if v and 0.1 <= v <= 0.45 else None
-                    sl.side_share = (_side_ok(furnish.side_share_card(sl))
-                                     or _side_ok(getattr(sl, "side_share", None))
-                                     or _side_ok(furnish.side_share_card(st))
-                                     or _side_ok(getattr(st, "side_share", None))
-                                     or house_share)
+                    _own_share = (_side_ok(furnish.side_share_card(sl))
+                                  or _side_ok(getattr(sl, "side_share", None))
+                                  or _side_ok(furnish.side_share_card(st))
+                                  or _side_ok(getattr(st, "side_share", None)))
+                    sl.side_share = _own_share or house_share
+                    sl._side_from_house = not _own_share
                 if sl is not st:
                     # the desk's chrome stands all video; a stretch that did
                     # not re-read it still lives under it
@@ -8058,6 +8059,24 @@ def note(records_path, diary_text=None):
                         whole_ = _whole_home(stx, raw_, cut_, sure_) if any(cut_) else None
                         if whole_ is not None:
                             hb_ = whole_
+                            # THE SAME PHYSICAL WINDOW UNDER ANOTHER NAME
+                            # LENDS ITS SIDEBAR'S SHARE. The memory window
+                            # is the jaredrhodenizer window navigated, and
+                            # its sidebar was never on screen: the house's
+                            # median share (24%) stood in where that window
+                            # measures 28%. The Finder state whose own home
+                            # box is this whole is that window.
+                            if stx.name == "The Finder window" and getattr(sl, "_side_from_house", False):
+                                for o_ in states:
+                                    if o_ is stx or o_.name != stx.name:
+                                        continue
+                                    boxes_ = [home_at(o_, s["t0"])] + [list(mem[1]) for mem in (home_reads.get(id(o_)) or ()) if mem[1]]
+                                    if any(b_ and all(abs(b_[i_] - whole_[i_]) <= 0.02 * (Wf if i_ % 2 == 0 else Hf) for i_ in range(4)) for b_ in boxes_):
+                                        sib_ = furnish.side_share_card(o_)
+                                        if sib_ and 0.1 <= sib_ <= 0.45:
+                                            sl.side_share = sib_
+                                            sl._side_from_house = False
+                                            break
                         if os.environ.get("SN_ZOOM"):
                             print("  subject %s: frame %s -> home %s, whole %s" % (
                                 label_for(stx, s["t0"]), [round(v) for v in shape],
