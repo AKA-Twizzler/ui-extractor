@@ -1044,91 +1044,6 @@ def flatten_sidebars(states):
             q["model"].lines = fixed
 
 
-def sidebar_from_panes(st, house=None):
-    """A Finder window's favorites sidebar, read by the reader as a document
-    or a tree standing left of the list, put back as the window's sidebar.
-
-    At 00:00:00 the left Finder's sidebar came back as an open document -
-    `EC): Recents`, `fH: Movies`, `(] Desktop`, `@® Downloads` - with the
-    rest of its names as loose words on the same pane, and the window was
-    drawn with no sidebar at all while the frame shows one. The names are
-    the fixed macOS favorites, and a column of them standing hard against
-    the list's left edge is the sidebar, whatever the reader filed it as.
-    Only names actually read on the pane are drawn; the order is the house
-    order (the fullest sidebar read anywhere in the video), since the
-    favorites stand in one order in every window."""
-    import draw2 as _d2
-    t = st.main_table()
-    if st.name != "The Finder window" or t is None or getattr(t, "side", None):
-        return False
-    tp = next((q for q in st.parts if q["fam"] == "table" and q["model"] is t), None)
-    if not tp or tp.get("x0") is None:
-        return False
-    canon = {norm(n): n for n in _d2.SIDEBAR_WORDS}
-    for h in (house or []):
-        canon.setdefault(norm(h), h)
-
-    def _name(txt):
-        w = re.sub(r"^[^A-Za-z]+", "", str(txt)).strip()
-        key = norm(w)
-        if not key:
-            return None
-        if key in canon:
-            return canon[key]
-        # icon garbage glued to the front of the name: the name is its tail
-        return next((c for k, c in canon.items()
-                     if len(k) >= 5 and key.endswith(k) and len(key) - len(k) <= 3), None)
-
-    found, used = {}, []
-    lim = tp["x0"] + 0.1 * max(1.0, (tp["x1"] or tp["x0"]) - tp["x0"])
-    for m, g in getattr(st, "pieces", ()):
-        for p in g.get("panes") or []:
-            if p.get("kind") == "a list of columns":
-                continue
-            b = p.get("box")
-            if not b or b[2] > lim or b[0] >= tp["x0"]:
-                continue
-            texts = [(it["text"], it["box"][1]) for it in _d2.items_of(p)]
-            for ln in p.get("lines") or []:
-                q_ = ln.strip()
-                if q_.startswith("[also on this pane"):
-                    for w in q_.split("]", 1)[1].split("|"):
-                        texts.append((w.strip(), None))
-                elif q_ and not q_.startswith(("[", "---", "unsettled")):
-                    texts.append((re.split(r"\s+<- ", q_)[0].strip(), None))
-            got = 0
-            for txt, y in texts:
-                c = _name(txt)
-                if c:
-                    got += 1
-                    if c not in found or (found[c] is None and y is not None):
-                        found[c] = y
-            if got >= 3:
-                used.append(p)
-    if len(found) < 4:
-        return False
-    order = list(house) if house else sorted(found, key=lambda c: (found[c] is None, found[c] or 0))
-    side = [c for c in order if c in found] + [c for c in found if c not in order]
-    t.side = side
-    # the parts the reader built from those panes were the sidebar, not a
-    # note or a tree standing in the window: they go, so the window is not
-    # drawn with a document column beside its list
-    for p in used:
-        b = p["box"]
-        for q in list(st.parts):
-            if q["fam"] in ("doc", "tree", "words") and q.get("x0") is not None \
-                    and q["x0"] >= b[0] - 4 and (q["x1"] or 0) <= b[2] + 4:
-                st.parts.remove(q)
-    # how wide the sidebar stood, measured off the pane the reader cut
-    rect = st.best_shape() if hasattr(st, "best_shape") else None
-    if used and rect and rect[2] > rect[0]:
-        x1 = max(p["box"][2] for p in used)
-        share = (x1 - rect[0]) / float(rect[2] - rect[0])
-        if 0.12 <= share <= 0.45 and not getattr(st, "side_share", None):
-            st.side_share = share
-    return True
-
-
 def folder_marks(table):
     """The crumbs that name the folder, the generic ones left out."""
     return {norm(c) for c in table.path if norm(c) not in GENERIC and len(norm(c)) >= 3}
@@ -1659,14 +1574,6 @@ class State:
         others = [q for q in self.parts if q["fam"] in ("tree", "doc", "term")]
         if not self.title and not t and not others:
             return True           # words only: a window behind, showing through
-        # A FINDER WITH ITS OWN PATH BAR, STANDING IN A BOX THE FRAME MEASURED,
-        # IS A WINDOW HOWEVER FEW ROWS ITS FOLDER HOLDS. At 00:01:10 the
-        # `projects` folder lists one item, so its window was a "sliver",
-        # never drawn, and the moment had no picture at all - while the frame
-        # shows a titled Finder with a five-crumb bar under it. A folder with
-        # one file in it is a folder with one file in it.
-        if t and len(getattr(t, "path", None) or []) >= 3 and any(True for _ in self.measured):
-            return False
         return bool(t) and not getattr(self, "title_sure", False) and len(t.rows) < 3 and not others
 
     def has_content(self):
@@ -1994,18 +1901,6 @@ def build_states(moments):
     for st in states:
         if st.title and len(st.title) > 1 and st.title.endswith("."):
             st.title = st.title.rstrip(".") or st.title
-        # THE BACK AND FORWARD ARROWS BESIDE THE TITLE, read as `<>` in front
-        # of it, and the dot-plus-letter the reader hangs on a moving frame's
-        # title (`projects.Q`, `>jaredrhodenizer.Q`): neither is a letter of
-        # the folder's name. The dot-letter is taken off only where what is
-        # left is a crumb of the window's own path bar - the bar spells the
-        # folder, so the two readings confirm each other.
-        if st.title:
-            st.title = re.sub(r"^[<>\u3002\s]+", "", st.title) or st.title
-            m_ = re.match(r"^(.+)\.[A-Za-z]$", st.title)
-            t_ = st.main_table()
-            if m_ and t_ and any(crumb_same(m_.group(1), c) for c in (t_.path or [])):
-                st.title = m_.group(1)
     drop_guessed(states)
     if moments:
         W, H = (moments[0].get("size") or [1920, 1080])[:2]
@@ -3592,46 +3487,32 @@ def mend_cells(sl, full):
                 r["cells"][i] = fr["cells"][j]
                 if i < len(r["italic"]):
                     r["italic"][i] = False
-    # rows the stretch skips between rows it holds. A list is contiguous:
-    # where the stretch read row A and row C, and the window's settled list
-    # puts B between them, B stood on the screen too and only the reading
-    # dropped it. Measured at 00:00:10: `.claude` (the selected row) and
-    # `.claude.json` sit between `.CFUserTextEncoding` and
-    # `.claude.json.backup`, all four on the frame, and the stretch's reading
-    # carried neither. The columns are matched BY HEADING, not by the two
-    # tables having identical headers - a stretch that read three of the
-    # four columns is still the same list. Nothing is added past the
-    # stretch's last row: what follows may be past the fold.
-    if len(st_.rows) >= 2:
-        def _ni(hdr):
-            return next((i for i, h in enumerate(hdr) if h == "Name"), 0)
-        fni, sni = _ni(ft.header), _ni(st_.header)
+    # rows the stretch skips between rows it holds
+    if len(st_.rows) >= 2 and st_.header == ft.header:
         idxs, walk, ok = [], 0, True
         for r in st_.rows:
-            name = r["cells"][sni] if sni < len(r["cells"]) else ""
+            name = r["cells"][0] if r["cells"] else ""
             hit = next((k for k in range(walk, len(ft.rows))
-                        if fni < len(ft.rows[k]["cells"]) and name
-                        and name_fits(name, ft.rows[k]["cells"][fni])), None)
+                        if ft.rows[k]["cells"] and name and name_fits(name, ft.rows[k]["cells"][0])), None)
             if hit is None:
                 ok = False
                 break
             idxs.append(hit)
             walk = hit + 1
         if ok:
-            def _as_mine(fr):
-                cells, its = [], []
-                for i, h in enumerate(st_.header):
-                    j = fni if i == sni else (ft.header.index(h) if h and h in ft.header else None)
-                    cells.append(fr["cells"][j] if j is not None and j < len(fr["cells"]) else "")
-                    its.append(bool(fr.get("italic") and j is not None and j < len(fr["italic"]) and fr["italic"][j]))
-                return {**fr, "cells": cells, "italic": its, "band": None}
             merged, prev = [], None
             for r, k in zip(st_.rows, idxs):
                 if prev is not None and k > prev + 1:
                     for j in range(prev + 1, k):
-                        merged.append(_as_mine(ft.rows[j]))
+                        fr = ft.rows[j]
+                        merged.append({**fr, "cells": list(fr["cells"]),
+                                       "italic": list(fr.get("italic") or []), "band": None})
                 merged.append(r)
                 prev = k
+            for j in range(prev + 1, len(ft.rows)):
+                fr = ft.rows[j]
+                merged.append({**fr, "cells": list(fr["cells"]),
+                               "italic": list(fr.get("italic") or []), "band": None})
             st_.rows = merged
 
 
@@ -5286,11 +5167,6 @@ def note(records_path, diary_text=None):
         return out
 
     list_not_tree(states)
-    for st in states:
-        sidebar_from_panes(st, house_side)
-    house_side = max((furnish.side_words_of(st) for st in states
-                      if st.name == "The Finder window"), key=len, default=house_side)
-    house_keys = {fold(flat(w)) for w in house_side if len(flat(w)) >= 5}
     mend_prose(all_states)
     title_from_bar(states)
     heal_titles(states)
@@ -5780,19 +5656,6 @@ def note(records_path, diary_text=None):
                                                  if not any(same_text(t[0], u[0]) for u in sl.topwords)]
                     polish(sl, states)
                     drop_guessed([sl])
-                    # THE STRETCH'S LIST READ AS A TREE IS STILL ITS LIST. The
-                    # whole window had this put right by `list_not_tree`; a
-                    # stretch is rebuilt from its own panes and needs it again,
-                    # or the vault-demo Finder at 00:00:30 draws its names with
-                    # no columns, no path bar and no settled spelling.
-                    if sl.main_table() is None and st.main_table() is not None:
-                        _wt = st.main_table()
-                        _wk = {fold(flat((r.get("cells") or [""])[0])) for r in _wt.rows
-                               if (r.get("cells") or [""])[0]}
-                        for q in [x for x in sl.parts if x["fam"] == "tree"
-                                  and getattr(x["model"], "lines", None)]:
-                            _convert_tree(sl, q, [(_wt, _wk, st)])
-                    sidebar_from_panes(sl, house_side)
                     mend_cells(sl, st)
                     strip_furniture(sl, strip_at)
                     drop_side_prefix(sl)
