@@ -130,26 +130,46 @@ def ink_grid(im):
     return cells > 0.03
 
 
-def region_mask(stage_html, class_pat):
+def zoom_box(stage_html):
+    """Where the video zoomed in, as the picture says it (left, top, right,
+    bottom in 0..1 of the picture), or None when the frame was the whole
+    screen. The picture is always the whole desktop; a zoomed frame is a
+    crop of it, so the comparison is made on that crop of the drawing."""
+    m = re.search(r'class="sn-zoom" style="([^"]*)"', stage_html)
+    if not m:
+        return None
+    st = dict(re.findall(r"(left|top|width|height):([\d.]+)%", m.group(1)))
+    if len(st) != 4:
+        return None
+    l, t, w, h = (float(st[k]) / 100 for k in ("left", "top", "width", "height"))
+    return (l, t, l + w, t + h) if w > 0.05 and h > 0.05 else None
+
+
+def region_mask(stage_html, class_pat, zb=None):
     """Cells covered by the boxes whose class matches `class_pat`, read from
-    their left/top/width/height percentages."""
+    their left/top/width/height percentages -- carried into the zoomed
+    crop's own space when the picture holds one."""
     mask = np.zeros((PIC_H // CELL_GRID, PIC_W // CELL_GRID), dtype=bool)
     for m in re.finditer(r'class="' + class_pat + r'" style="([^"]*)"', stage_html):
         st = dict(re.findall(r"(left|top|width|height):([\d.]+)%", m.group(1)))
         if len(st) == 4:
             l, t, w, h = (float(st[k]) for k in ("left", "top", "width", "height"))
+            if zb:
+                zw, zh = zb[2] - zb[0], zb[3] - zb[1]
+                l, t = (l / 100 - zb[0]) / zw * 100, (t / 100 - zb[1]) / zh * 100
+                w, h = w / zw, h / zh
             y0, y1 = int(t / 100 * mask.shape[0]), int(np.ceil((t + h) / 100 * mask.shape[0]))
             x0, x1 = int(l / 100 * mask.shape[1]), int(np.ceil((l + w) / 100 * mask.shape[1]))
             mask[max(0, y0):y1, max(0, x0):x1] = True
     return mask
 
 
-def camera_mask(stage_html):
+def camera_mask(stage_html, zb=None):
     """Cells under the camera's box, which the drawing outlines and never draws."""
-    return region_mask(stage_html, r'sn-camera[^"]*')
+    return region_mask(stage_html, r'sn-camera[^"]*', zb)
 
 
-def behind_only_mask(stage_html):
+def behind_only_mask(stage_html, zb=None):
     """Cells that are BEHIND-ONLY: covered by an outline (a window drawn
     behind) and by no filled window on top. Tristan's rule is that only the
     top layer gets full content and everything behind is an outline, so the
@@ -157,8 +177,8 @@ def behind_only_mask(stage_html):
     to omit -- it must not count against coverage, any more than the camera
     does. A behind window that a front window is drawn over is not excluded:
     that ground is the front window's, and its content is scored normally."""
-    outline = region_mask(stage_html, r'sn-ghost(?: sn-\w+)*')
-    filled = region_mask(stage_html, r'sn-slot(?: sn-\w+)*')
+    outline = region_mask(stage_html, r'sn-ghost(?: sn-\w+)*', zb)
+    filled = region_mask(stage_html, r'sn-slot(?: sn-\w+)*', zb)
     return outline & ~filled
 
 
@@ -222,6 +242,11 @@ def main():
                 rows.append((name, line, None, None, "no frame at " + frame_path))
                 continue
             frame = Image.open(frame_path).convert("RGB").resize((PIC_W, PIC_H))
+            # a zoomed frame is compared with the same crop of the drawing
+            zb = zoom_box(stage)
+            if zb:
+                dw, dh = drawn.size
+                drawn = drawn.crop((int(zb[0] * dw), int(zb[1] * dh), int(zb[2] * dw), int(zb[3] * dh)))
             # `real` (is the drawn ink right?) is judged everywhere but under
             # the camera. `covered` (did the drawing put down the frame's
             # ink?) is judged only where the drawing is SUPPOSED to carry
@@ -229,8 +254,8 @@ def main():
             # the rule says to leave an outline. Otherwise the correct
             # picture, which omits behind content by design, scores as if it
             # had lost it.
-            keep_real = ~camera_mask(stage)
-            keep_cov = keep_real & ~behind_only_mask(stage)
+            keep_real = ~camera_mask(stage, zb)
+            keep_cov = keep_real & ~behind_only_mask(stage, zb)
             Dg = ink_grid(drawn)
             Fg = ink_grid(frame)
             D = Dg & keep_real

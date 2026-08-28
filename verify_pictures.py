@@ -107,6 +107,20 @@ def check_picture(stamp, stage, frame_path, fav_boxes=(), read_whole=()):
     filled = boxes(stage, r'sn-slot(?: sn-\w+)*')
     outline = boxes(stage, r'sn-ghost(?: sn-\w+)*')
     drawn = filled + outline
+    # A PICTURE OF THE WHOLE DESKTOP, CHECKED AGAINST A ZOOMED FRAME. Where
+    # the video zoomed in, the frame is a crop of the screen and the picture
+    # is the whole screen with that crop drawn as `sn-zoom`; so everything
+    # measured on the frame is carried into the picture's own space through
+    # that box before it is compared, or every window would fail as "off".
+    zb = boxes(stage, r'sn-zoom')
+    zb = zb[0] if zb else None
+
+    def _thru(b):
+        if not zb:
+            return b
+        zw, zh = zb[2] - zb[0], zb[3] - zb[1]
+        return (zb[0] + b[0] * zw, zb[1] + b[1] * zh, zb[0] + b[2] * zw, zb[1] + b[3] * zh)
+    fav_boxes = [_thru(f) for f in fav_boxes]
 
     # 1) EVERY WINDOW THE FRAME HAS IS IN THE DRAWING, and a TOP-LAYER window
     #    (one no other window covers) is FILLED, not merely outlined.
@@ -154,7 +168,7 @@ def check_picture(stamp, stage, frame_path, fav_boxes=(), read_whole=()):
                     _iou((b[0]/W, b[1]/H, b[2]/W, b[3]/H),
                          (r[0]/W, r[1]/H, r[2]/W, r[3]/H)) > 0.7 for r in settled):
                 fw.append(tuple(b))
-        fboxes = [(o[0]/W, o[1]/H, o[2]/W, o[3]/H) for o in fw]
+        fboxes = [_thru((o[0]/W, o[1]/H, o[2]/W, o[3]/H)) for o in fw]
         top = [not any(j != i and overlap(fboxes[i], fboxes[j]) > 0.5
                        for j in range(len(fw)))
                for i in range(len(fw))]        # a window no other window covers
