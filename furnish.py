@@ -107,6 +107,31 @@ def canon_side(words, st=None):
     return out
 
 
+def side_share_card(st):
+    """The sidebar's share of the window at the WIDEST moment the frame
+    measured both: Finder's sidebar is a fixed width, so the share is the
+    smallest where the window stood widest, and that is the share a card
+    - which is always drawn wide - should stand at. Measured off the pane
+    the reader cut at the window's left edge, against the window's own
+    rectangle on that frame."""
+    best = None
+    for m_, g_ in (getattr(st, "pieces", None) or ()):
+        rect = (getattr(st, "rects", None) or {}).get(m_.get("ts"))
+        if not rect or rect[2] - rect[0] <= 0:
+            continue
+        w = float(rect[2] - rect[0])
+        for p_ in (g_.get("panes") or []):
+            b = p_.get("box") or []
+            if len(b) != 4 or abs(b[0] - rect[0]) > 40 or b[2] >= rect[0] + 0.5 * w:
+                continue
+            if "list" in str(p_.get("kind") or ""):
+                continue                    # the file list is never the sidebar
+            share = (b[2] - rect[0]) / w
+            if 0.1 <= share <= 0.6 and (best is None or share < best):
+                best = share
+    return best
+
+
 def finder(st):
     table = st.main_table()
     side_words = side_words_of(st)
@@ -329,8 +354,8 @@ def finder(st):
         # width, so its share shrinks as the window widens; the median over
         # moments where the window stood narrow gave the vault-demo card a
         # sidebar of half its width and clipped the Kind column and the bar.
-        if not getattr(st, "shape", None) and getattr(st, "side_shares", None):
-            share = st.side_shares[0]
+        if not getattr(st, "shape", None):
+            share = side_share_card(st) or share
         cols = (f' style="grid-template-columns: {share * 100:.1f}% 1fr"'
                 if share else "")
         grid = (cols[:-1] + ';flex:1 1 auto;min-height:0"') if cols else \
