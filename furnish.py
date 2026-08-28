@@ -240,7 +240,7 @@ def finder(st):
     # cut down its left edge shows only those, and laid out from the left
     # over the whole window they land where the Name column was and the
     # strip the frame showed comes out empty. They hug the right edge.
-    out = ['<table class="sn-list"%s>' % (' style="margin-left:auto;width:auto"' if (head and not has_name) else "")]
+    out = ['<table class="sn-list"%s>' % (' style="margin-left:auto;width:auto"' if not has_name else "")]
     if any(head):
         cells = []
         for i, h in enumerate(head):
