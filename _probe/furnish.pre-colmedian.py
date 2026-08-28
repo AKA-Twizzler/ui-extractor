@@ -134,33 +134,24 @@ def side_share_card(st):
 
 def col_shares(st, head):
     """Where the list's columns began, as shares of the list's width,
-    measured off the frame: each heading's own left edge, over every reading
-    of the window. Laid out by the browser instead, the Name column took
-    whatever its longest name wanted and the dates and sizes landed wherever
-    was left -- proportions the frame never had.
-
-    The reader's box round a heading is sometimes the word and sometimes a
-    loose band that starts well left of it; one loose "Kind" at 00:00:30 put
-    the Size column at 7% and cut "31 bytes". So each heading's position is
-    the median over the readings, and only the readings whose box is the
-    word's own size vote while any such exist. The pane box stays the basis
-    because the sidebar's share is measured off the same boundary, so the
-    headings land where the frame had them however the reader drew that
-    boundary. None where a heading was never placed."""
+    measured off the frame: each heading's own left edge, at the reading
+    that found every heading, widest list first. Laid out by the browser
+    instead, the Name column took whatever its longest name wanted and the
+    dates and sizes landed wherever was left -- proportions the frame never
+    had. None where a heading was never placed."""
     names = [h for h in head if h]
     if len(names) < 2:
         return None
-    order = [i for i in range(len(head)) if head[i]]
-    votes = {i: [] for i in order[1:]}
+    best, best_w = None, 0.0
     for m_, g_ in (getattr(st, "pieces", None) or ()):
         for p_ in (g_.get("panes") or []):
             if p_.get("kind") != "a list of columns" or len(p_.get("box") or []) != 4:
                 continue
             b = p_["box"]
             W = float(b[2] - b[0])
-            if W <= 0:
+            if W <= 0 or W <= best_w:
                 continue
-            xs, tight = {}, {}
+            xs = {}
             for it in draw2.items_of(p_):
                 t = re.sub(r"\s+", " ", it["text"].strip())
                 for i, h in enumerate(head):
@@ -168,33 +159,18 @@ def col_shares(st, head):
                         continue
                     hk = h.split()[0]
                     if t == h or t.split()[0] == hk and (len(h.split()) == 1 or t.startswith(h[:6])):
-                        bx = it["box"]
-                        xs[i] = float(bx[0])
-                        hh = max(1.0, float(bx[3] - bx[1]))
-                        # the word's own box: about 0.6 of its height per
-                        # letter, with one wide letter's grace
-                        tight[i] = (bx[2] - bx[0]) <= hh * (0.6 * len(h) + 1.2)
+                        xs[i] = float(it["box"][0])
             if len(xs) < len(names):
                 continue
-            for i in order[1:]:
-                sh = (xs[i] - b[0]) / W
-                if 0.0 < sh < 1.0:
-                    votes[i].append((sh, tight[i]))
-    if any(not votes[i] for i in order[1:]):
-        return None
-    pos = {}
-    for i in order[1:]:
-        vs = [sh for sh, tg in votes[i] if tg] or [sh for sh, tg in votes[i]]
-        vs.sort()
-        n = len(vs)
-        pos[i] = vs[n // 2] if n % 2 else 0.5 * (vs[n // 2 - 1] + vs[n // 2])
-    bounds = [0.0] + [pos[i] for i in order[1:]] + [1.0]
-    if any(bounds[k + 1] <= bounds[k] for k in range(len(bounds) - 1)):
-        return None
-    shares = [bounds[k + 1] - bounds[k] for k in range(len(bounds) - 1)]
-    if min(shares) < 0.03:
-        return None
-    return dict(zip(order, shares))
+            order = [i for i in range(len(head)) if head[i]]
+            bounds = [b[0]] + [xs[i] for i in order[1:]] + [b[2]]
+            if any(bounds[k + 1] <= bounds[k] for k in range(len(bounds) - 1)):
+                continue
+            shares = [(bounds[k + 1] - bounds[k]) / W for k in range(len(bounds) - 1)]
+            if min(shares) < 0.03:
+                continue
+            best, best_w = dict(zip(order, shares)), W
+    return best
 
 
 def finder(st):
