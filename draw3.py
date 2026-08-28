@@ -3924,6 +3924,38 @@ def name_fits(short, full_name):
     return False
 
 
+def fold_nameless(table, sni=0):
+    """A row read without its name folds into the named row it is: the
+    same date, size and kind cell for cell, where it has them. At 00:00:10
+    the selected `.claude` row was read as a grey band with no name; the
+    stretch kept it as a blank row AND drew `.claude` filled in from the
+    other moments, so the list stood one row too long. The band is the
+    moment's own and goes with it. Two blank rows alike are one."""
+    rows = table.rows
+    named = [r for r in rows if sni < len(r["cells"]) and r["cells"][sni]]
+
+    def _fits(r, n):
+        if len(n["cells"]) < len(r["cells"]):
+            return False
+        return any(c for i, c in enumerate(r["cells"]) if i != sni) and all(
+            not c or norm(c) == norm(n["cells"][i]) for i, c in enumerate(r["cells"]) if i != sni)
+    out, blanks = [], []
+    for r in rows:
+        if sni < len(r["cells"]) and r["cells"][sni]:
+            out.append(r)
+            continue
+        twin = next((n for n in named if _fits(r, n)), None)
+        if twin is not None:
+            if r.get("band") and not twin.get("band"):
+                twin["band"] = r["band"]
+            continue
+        if any(_fits(r, b) and _fits(b, r) for b in blanks):
+            continue
+        blanks.append(r)
+        out.append(r)
+    table.rows = out
+
+
 def mend_cells(sl, full):
     """A stretch shows the same window the whole state shows, so what the
     stretch's own frames had mangled or covered is taken from the window's
@@ -4081,6 +4113,7 @@ def mend_cells(sl, full):
                 if k is not None:
                     prev = k
             st_.rows = merged
+        fold_nameless(st_, sni)
 
 
 def frag_owner(frag, shown):
