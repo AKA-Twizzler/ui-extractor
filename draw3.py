@@ -7962,6 +7962,22 @@ def note(records_path, diary_text=None):
                                 and not furnish.side_words_of(sl)):
                             sl._carried_side = house_side
                             sl._cut_left = False
+                        # the tree's column was measured against the FRAME
+                        # box; against the whole window at home it is a
+                        # smaller share (12% of the maximised Obsidian at
+                        # 00:04:00, not the 32% of the strip the crop showed)
+                        if getattr(sl, "_tree_fr", 0) and home_[2] > home_[0]:
+                            tr_ = None
+                            for m_, g_ in getattr(stx, "pieces", ()):
+                                if m_["ts"] not in s["ts"]:
+                                    continue
+                                for q_ in (g_.get("panes") or []):
+                                    if q_.get("kind") == "a file tree" and q_.get("box"):
+                                        b_ = back(T, list(q_["box"]))
+                                        if tr_ is None or b_[2] > tr_[2]:
+                                            tr_ = b_
+                            if tr_ is not None and home_[0] <= tr_[2] <= home_[2]:
+                                sl._tree_fr = max(4, round(100.0 * (tr_[2] - home_[0]) / (home_[2] - home_[0])))
                         shape = home_
                         sl.rect = shape
                     if getattr(sl, "_row_step", 0):
