@@ -414,22 +414,6 @@ def obsidian(st, behind=True):
             if m:
                 body = f'<span class="{m.group(1)}" style="font-weight:600">{body}</span>'
             lines.append(guides + chev + body)
-        # HOW WIDE THE TREE HAS TO BE TO SHOW WHAT WAS READ OFF IT. The
-        # column is sized as a share of the window, which is right and is
-        # measured off the frame -- and at 00:00:00 Obsidian stands full
-        # screen with its sidebar at 392 of 3840 pixels, a true 10%. Ten
-        # percent of a 3840px screen is 392px and shows every name; ten
-        # percent of a 700px card is 70px and shows none of them. The share
-        # is accurate and the card is small, so the share alone cannot be the
-        # whole answer here: a card exists to be READ.
-        #
-        # So the column has a floor set by its own longest row, in `ch` --
-        # the width of a character in the font it is actually drawn in, so it
-        # follows the reader's font rather than a guess in pixels. Capped at
-        # 45% of the card, because a tree that swallows the window is a worse
-        # lie than a narrow one. Where the window's true share is wider than
-        # the floor, the true share still wins.
-        tree_ch = max((len(re.sub(r"<[^>]+>", "", l)) for l in lines), default=0)
         count = getattr(st, "explorer_count", "")
         explorer = ('<div class="sn-explorer"><div class="sn-explorer-head"><span class="sn-g">✎</span><span class="sn-g">▱+</span>'
                     '<span class="sn-g">⇅</span><span class="sn-g">⊟</span><span class="sn-g">⌃</span></div>'
@@ -456,7 +440,6 @@ def obsidian(st, behind=True):
     # tree's pane against the rest of the window - not a fixed 38 to 62,
     # which drew the explorer two and a half times too wide and squeezed
     # the note into a column a third of its real width.
-    tree_floor = ("min(%dch, 45%%)" % min(44, tree_ch + 2)) if tree_ch else "120px"
     tree_fr, doc_fr = 38, 62
     tp = next((q for q in getattr(st, "parts", []) if q.get("fam") == "tree" and q.get("x0") is not None), None)
     rect = getattr(st, "shape", None) or getattr(st, "rect", None)
@@ -475,10 +458,10 @@ def obsidian(st, behind=True):
     measured_tree = getattr(st, "_tree_fr", 0) if (not behind and getattr(st, "shape", None)) else 0
     if measured_tree and tree and doc and measured_tree < tree_fr:
         gap = tree_fr - measured_tree
-        grid = f"30px minmax({tree_floor}, {measured_tree}fr) {gap}fr {doc_fr}fr"
+        grid = f"30px minmax(0, {measured_tree}fr) {gap}fr {doc_fr}fr"
         cols.insert(len(cols) - 1, '<div class="sn-blank"></div>')
     else:
-        grid = "30px " + (f"minmax({tree_floor}, {tree_fr}fr) " if tree else "") + (f"{doc_fr}fr" if doc else "")
+        grid = "30px " + (f"minmax(120px, {tree_fr}fr) " if tree else "") + (f"{doc_fr}fr" if doc else "")
     body = f'<div class="sn-cols sn-obsidian-cols" style="grid-template-columns: {grid.strip()}">' + "".join(cols) + "</div>"
     cls = "sn-window sn-obsidian" + (" sn-dark" if st.theme == "dark" else "")
     return f'<div class="{cls}">{strip}{toolbar}{body}</div>'
