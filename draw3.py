@@ -385,8 +385,12 @@ class Table:
         for r_ in new_rows:
             nm_ = r_["cells"][0] if r_["cells"] else ""
             m_ = GLUED_DATE.search(nm_) if nm_ else None
-            if not m_ or m_.end() < len(nm_.rstrip()) - 1 or not nm_[:m_.start()].strip():
+            if not m_ or m_.end() < len(nm_.rstrip()) - 1:
                 continue
+            # A NAME THAT IS ONLY A DATE IS A DATE WITH THE NAME MISSED: the
+            # row keeps its size and kind and its name stays blank, which is
+            # what was read. `Jun30,2026at5:51PM` stood as a file's name in
+            # the memory list.
             r_["cells"][0] = nm_[:m_.start()].strip()
             date_ = m_.group(1).strip()
             if di_ is None:
@@ -457,6 +461,12 @@ class Table:
             rest = " ".join(r["cells"][1:]).strip()
             twin = next((n for n in named if rest and same_text(" ".join(n["cells"][1:]), rest)), None)
             if twin is None and rest and len(named) < 2:
+                kept.append(r)
+            elif twin is None and sum(1 for c in r["cells"][1:] if c) >= 2 and len(named) >= 2:
+                # A ROW WITH ITS DATE, SIZE AND KIND READ AND ITS NAME MISSED
+                # IS A ROW OF THE LIST, not the window behind: Finder gives
+                # every row a name, and this one's was not read. It stands
+                # with its name blank rather than being thrown away.
                 kept.append(r)
         self.rows = kept
         new_side = []
