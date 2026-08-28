@@ -5938,6 +5938,14 @@ def note(records_path, diary_text=None):
             T = (span_T.get(s_["t0"]) if s_ else None) or fit_map([t])
             if not T:
                 continue
+            # A FRAME THAT IS THE WHOLE SCREEN COMES HOME AS ITSELF. A fit
+            # of 0.83 on a full-screen frame (read off a handful of words)
+            # carried its windows home a fifth too large, past the screen's
+            # edges, and those inflated boxes then stood as candidates for
+            # every window's whole. No recording zooms OUT past the desktop,
+            # and a frame that shows the desktop bar is the desktop.
+            if T[0] < 1.15 or t in bar_seen:
+                T = (1.0, 0.0, 0.0)
             outs.append((secs_of.get(t, 0), back(T, r), T[0]))
         if outs:
             home_reads[id(st)] = outs
@@ -7824,7 +7832,7 @@ def note(records_path, diary_text=None):
                     """Which sides of a frame box the crop cut: left, top, right, bottom."""
                     return (b_[0] <= 0.04 * Wf, b_[1] <= 0.04 * Hf, b_[2] >= 0.96 * Wf, b_[3] >= 0.96 * Hf)
 
-                def _whole_home(stx_, hbox_, cut_):
+                def _whole_home(stx_, hbox_, cut_, sure_=True):
                     """The window this cut strip is part of: a same-program
                     window standing round it at this time whose sides AGREE
                     with the strip's on every side the crop did not cut.
@@ -7855,6 +7863,18 @@ def note(records_path, diary_text=None):
                               [[round(v) for v in c_] for c_ in cands_]), file=sys.stderr)
                     for hb2 in cands_:
                         if not hb2 or furnish._within(hbox_, hb2) < 0.8 or _area(hb2) < 1.3 * _area(hbox_):
+                            continue
+                        if hb2[0] < -0.05 * Wf or hb2[1] < -0.05 * Hf or hb2[2] > 1.05 * Wf or hb2[3] > 1.05 * Hf:
+                            continue                  # a box past the screen is a fit gone wrong
+                        # A BOX DRAWN ROUND THE WORDS HAS NO EDGES TO AGREE ON.
+                        # Where the strip's own edges were measured off the
+                        # frame, the whole must agree on the sides the crop
+                        # left; where they are only where the words sat, its
+                        # left and top are inside the window, and the largest
+                        # reading of the window that holds the strip is it.
+                        if not sure_:
+                            if best_ is None or _area(hb2) > _area(best_):
+                                best_, best_off = hb2, 0.0
                             continue
                         off_ = 0.0
                         for i_, cut1 in enumerate(cut_):
@@ -7909,13 +7929,19 @@ def note(records_path, diary_text=None):
                         raw_ = back(T, list(shape))
                         # a strip of a window the crop cut off is that window
                         cut_ = _cut_sides(shape)
-                        if any(cut_):
-                            hb_ = _whole_home(stx, raw_, cut_) or hb_
+                        sure_ = bool(getattr(sl, "_on_frame", False))
+                        whole_ = _whole_home(stx, raw_, cut_, sure_) if any(cut_) else None
+                        if whole_ is not None:
+                            hb_ = whole_
                         if os.environ.get("SN_ZOOM"):
                             print("  subject %s: frame %s -> home %s, whole %s" % (
                                 label_for(stx, s["t0"]), [round(v) for v in shape],
                                 [round(v) for v in raw_], hb_ and [round(v) for v in hb_]), file=sys.stderr)
-                        home_ = _home_box(shape, hb_)
+                        # a box drawn round the words, cut by the crop, is the
+                        # whole window it belongs to on every side
+                        home_ = (list(whole_) if (whole_ is not None and not sure_)
+                                 else _home_box(shape, hb_))
+                        home_ = [max(0.0, home_[0]), max(0.0, home_[1]), min(float(Wf), home_[2]), min(float(Hf), home_[3])]
                         # the part of a Finder the crop cut off down its left
                         # side is its sidebar, by Finder's own layout; drawn
                         # whole, the window carries the favorites the video
