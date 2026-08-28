@@ -528,7 +528,7 @@ def obsidian(st, behind=True):
         # readable, and no wider than that: at 45% the floor tripled the
         # tree's true share of the window; the names it cuts end in an
         # ellipsis as Obsidian's own do
-        st._tree_min = "min(%dch, 28%%)" % min(44, tree_ch + 2)
+        st._tree_min = "min(%dch, 20%%)" % min(44, tree_ch + 2)
     tree_floor = "var(--sn-tree-min, 120px)"
     tree_fr, doc_fr = 38, 62
     # ON THE CARD ONLY: a picture's tree stands at the span the frame gave
