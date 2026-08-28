@@ -72,6 +72,15 @@ def same_rect(a, b, slack=40):
     return all(abs(x - y) <= slack for x, y in zip(a, b))
 
 
+def rect_of(recs, ts, wi):
+    for mm in recs:
+        if mm.get("ts") == ts:
+            for x in mm.get("windows") or []:
+                if x["wi"] == wi:
+                    return x["rect"]
+    return [0, 0, 0, 0]
+
+
 def main():
     path = sys.argv[1]
     recs = [json.loads(l) for l in open(path, encoding="utf-8") if l.strip()]
@@ -107,27 +116,29 @@ def main():
             if w.get("top"):
                 continue
             cands = strips.get((m["ts"], w["wi"])) or []
-            pick = None
-            for run in cands:
-                key = re.sub(r"[^a-z0-9]", "", run.lower())
-                if len(key) < 3:
+            # every token on the strip, judged on its own: the icons beside a
+            # Finder's title come back as scraps (`Ke`, `ip`) and would spoil
+            # a whole-run match
+            toks = [t for run in cands for t in run.split()]
+            same_place = [runs2 for (ts2, wi2), runs2 in strips.items() if ts2 != m["ts"]
+                          and same_rect(rect_of(recs, ts2, wi2), w["rect"])]
+            other_keys = {re.sub(r"[^a-z0-9]", "", t2.lower())
+                          for runs2 in same_place for run2 in runs2 for t2 in run2.split()}
+            kept = []
+            for t in toks:
+                key = re.sub(r"[^a-z0-9]", "", t.lower())
+                if len(key) < 3 or not re.search(r"[a-z]", key):
                     continue
-                # confirmation one: the same run on another moment's strip of
-                # a window standing at the same place
-                elsewhere = any(re.sub(r"[^a-z0-9]", "", r2.lower()) == key
-                                for (ts2, wi2), runs2 in strips.items()
-                                if ts2 != m["ts"] for r2 in runs2
-                                if same_rect(next(x["rect"] for x in next(mm for mm in recs if mm.get("ts") == ts2)["windows"] if x["wi"] == wi2), w["rect"]))
-                # confirmation two: the run stands in the window's own bar or list
+                elsewhere = key in other_keys
                 inside = key in own or any(len(key) >= 5 and (key in o or o in key) for o in own if len(o) >= 5)
-                if elsewhere or inside:
-                    pick = run
-                    break
+                if (elsewhere or inside) and t not in kept:
+                    kept.append(t)
+            pick = " ".join(kept) if kept else None
             if pick:
                 w["top"] = pick
                 w["top_from"] = "reread"
                 filled += 1
-                print(f"{m['ts']} window {w['wi']} {w['rect']}: {pick!r}")
+                print(f"{m['ts']} window {w['wi']} {w['rect']}: {pick!r}   (strip read {toks})")
     if filled:
         shutil.copy2(path, path + ".bak-titles")
         with open(path + ".tmp", "w", encoding="utf-8") as f:
