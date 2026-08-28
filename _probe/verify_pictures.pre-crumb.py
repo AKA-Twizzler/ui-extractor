@@ -92,16 +92,12 @@ PLACEHOLDERS = ("rest of the screen", "a window behind", "its name unread",
                 "some window", "unknown window")
 
 
-def check_picture(stamp, stage, frame_path, fav_boxes=(), read_whole=()):
+def check_picture(stamp, stage, frame_path, fav_boxes=()):
     """Machine checks for one picture. Returns a list of failure strings.
 
     `fav_boxes` is the favorites-sidebar word boxes the reader read on this
     moment (empty when the records were not supplied); it drives the
-    sidebar-completeness check, which is skipped without them.
-
-    `read_whole` is every string the reader read as ONE item at this moment.
-    It is what lets the breadcrumb check tell a folder whose real name is
-    full of dashes from two crumbs glued together -- see the check itself."""
+    sidebar-completeness check, which is skipped without them."""
     fails = []
     filled = boxes(stage, r'sn-slot(?: sn-\w+)*')
     outline = boxes(stage, r'sn-ghost(?: sn-\w+)*')
@@ -251,28 +247,9 @@ def check_picture(stamp, stage, frame_path, fav_boxes=(), read_whole=()):
         seps = pb.count('sn-sep')
         if len(crumbs) >= 2 and seps < len(crumbs) - 1:
             fails.append("BREADCRUMB RUN-TOGETHER: %d crumbs but %d separators" % (len(crumbs), seps))
-        def _read_as_one(c):
-            """Did the reader see this crumb as ONE word on this frame?
-
-            A folder can honestly be named with dashes in it: Claude Code
-            names each project folder after the path it came from, so
-            `-Users-jaredrhodenizer-Documents-jarvis-demo` is a real folder
-            and the frame draws it as a single crumb with its own icon. The
-            shape test alone cannot tell that from two crumbs glued by a lost
-            chevron, and it failed the true drawing at 00:01:00 and 00:01:30.
-            The reader can tell them apart: a glued pair was read as two
-            items and only ran together in the DRAWING, while a real name was
-            read as one item all along. Twenty letters, so a short token
-            cannot excuse a long glue."""
-            k = _norm_tok(c)
-            return any(len(w) >= 20 and (w.startswith(k) or k.startswith(w))
-                       for w in read_whole)
-
         for c in crumbs:
             # a crumb that itself contains a run of a path is two crumbs glued
             if c.count(">") >= 1 or re.search(r"[a-z]{6,}-[A-Za-z]", c) or len(c) > 40:
-                if _read_as_one(c):
-                    continue
                 fails.append('BREADCRUMB CRUMB MANGLED: "%s"' % c.strip()[:50])
     return fails
 
@@ -325,30 +302,6 @@ FAVORITES = ("recents", "shared", "applications", "pictures", "movies",
 # the same words in every application; what changes is which of them are there.
 MENUS = ("file", "edit", "view", "go", "window", "help", "format", "insert",
          "shortcuts", "bookmarks", "history", "profiles", "tab", "develop")
-
-
-def _norm_tok(t):
-    return re.sub(r"[^a-z0-9]", "", str(t).lower())
-
-
-def whole_words_by_stamp(records):
-    """For each moment, every string the reader read as ONE item.
-
-    The breadcrumb check uses it to tell a folder whose real name carries
-    dashes from two crumbs glued by a chevron the reader dropped."""
-    import draw as old
-    import draw2
-    hdr, moments, ftr = old.load(records)
-    out = {}
-    for m in moments:
-        got = set()
-        for p in m.get("panes") or []:
-            for it in draw2.items_of(p):
-                k = _norm_tok(it.get("text") or "")
-                if len(k) >= 12:
-                    got.add(k)
-        out[m["ts"]] = got
-    return out
 
 
 def favorites_by_stamp(records):
@@ -635,7 +588,6 @@ def main():
     records = argv[2] if len(argv) > 2 else None
     fav = favorites_by_stamp(records) if records else {}
     bar = deskbar_by_stamp(records) if records else {}
-    whole = whole_words_by_stamp(records) if records else {}
     if "--prove" in sys.argv:
         return prove(note, frames, fav, bar)
     total = 0
@@ -648,7 +600,7 @@ def main():
         return 1
     for stamp, heading, stage in pics:
         frame = os.path.join(frames, stamp.replace(":", "-") + ".png")
-        fails = check_picture(stamp, stage, frame, fav.get(stamp, ()), whole.get(stamp, ()))
+        fails = check_picture(stamp, stage, frame, fav.get(stamp, ()))
         fails += check_deskbar(stamp, stage, bar.get(stamp, set()))
         if fails:
             print("FAIL %s" % stamp)
