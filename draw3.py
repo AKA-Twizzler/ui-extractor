@@ -1113,15 +1113,7 @@ class State:
                     t_.path_at.append(m["ts"])
                 # the name rule reads the path, and the path only just
                 # arrived: ask it again now the window has its bar
-                import sys as _s
-                _before = self.title
                 self._title_rule(again=True)
-                if m["ts"] == "00:01:00":
-                    _t = self.main_table()
-                    print("REASK ts=%s title %r -> %r  path=%r tops=%r"
-                          % (m["ts"], _before, self.title,
-                             (getattr(_t, "path", None) or [])[-2:],
-                             [x[0] for x in (getattr(_t, "top_items", None) or [])][:4]), file=_s.stderr)
         # where the window stood at this moment, measured from what it drew
         self.rects[m["ts"]] = content_rect(self, group, m)
         if group.get("side_share"):
@@ -3755,6 +3747,14 @@ def note(records_path, diary_text=None):
                 c.name = w.name
                 break
     states = [st for st in all_states if st.window_html() and not st.fragment()]
+    import sys as _s
+    for _st in all_states:
+        if "00:01:00" in (getattr(_st, "times", []) or []):
+            _t = _st.main_table()
+            print("STATE@00:01:00 id=%d title=%r kept=%s rows=%r path=%r"
+                  % (id(_st) % 100000, _st.title, _st in states,
+                     [str((r.get("cells") or [""])[0])[:22] for r in (getattr(_t, "rows", []) or [])][:2],
+                     (getattr(_t, "path", None) or [])[-2:]), file=_s.stderr)
     frags = [st for st in all_states if st not in states and st.has_content() and st.rects]
     # a note's big heading is read as large loose words, never as a doc
     # line; when such a reading opens the window's own title, it is the
