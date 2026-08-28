@@ -7834,11 +7834,21 @@ def note(records_path, diary_text=None):
                     # a part-read cluster of another Obsidian state because
                     # only OTHER states were asked. Ties within 2% go to the
                     # larger box, since a cut strip belongs to the whole.
+                    # EVERY PLACE THE WINDOW WAS READ, not the one nearest
+                    # in time: nearest in time is this very moment's own
+                    # part-reading, which is the strip being asked about.
+                    # The maximised Obsidian read ten seconds later is the
+                    # whole; it is a reading of the same window and is here.
                     best_, best_off = None, None
+                    cands_ = []
                     for o_ in states:
                         if o_.name != stx_.name:
                             continue
-                        hb2 = home_at(o_, s["t0"])
+                        hb_at = home_at(o_, s["t0"])
+                        if hb_at:
+                            cands_.append(hb_at)
+                        cands_.extend(list(mem[1]) for mem in (home_reads.get(id(o_)) or ()) if mem[1])
+                    for hb2 in cands_:
                         if not hb2 or furnish._within(hbox_, hb2) < 0.8 or _area(hb2) < 1.3 * _area(hbox_):
                             continue
                         off_ = 0.0
