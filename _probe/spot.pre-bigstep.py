@@ -177,7 +177,6 @@ def stretches(samples):
 CELL = 20
 CELL_BOUND = 2.0
 CELL_EVERY = 0.5
-CELL_BIG = 0.10     # a step that moves a tenth of the thumb is a new moment, moving cells or not
 
 
 def dense_moments(samples):
@@ -200,15 +199,7 @@ def dense_moments(samples):
                 for a, b in zip(thumbs, thumbs[1:])])
             moving = (steps > CELL_BOUND).mean(axis=0) >= CELL_EVERY
             for i, cells in enumerate(steps):
-                # A REGION THAT CHANGES OFTEN CAN STILL CHANGE WHOLESALE. The
-                # Finder's list at 00:03:00-00:03:50 opened a new folder at
-                # every sample, so its cells counted as "moving" and every
-                # step inside the stretch was passed over - the Dev folder
-                # stood for ten seconds and was never captured. A step that
-                # moves a tenth of the thumb is a new screen wherever it
-                # falls; the quiet-cell rule still catches the small ones.
-                big = (cells > CELL_BOUND).mean() >= CELL_BIG
-                if big or (cells[~moving] > CELL_BOUND).any():
+                if (cells[~moving] > CELL_BOUND).any():
                     times.append(st[i + 1]["t"])
         out.append({"start": run["start"], "end": run["end"],
                     "times": sorted(set(times)), "best": run["best"]})

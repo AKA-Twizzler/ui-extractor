@@ -1388,15 +1388,6 @@ def main():
           "stumbled": STUMBLED, "text": tee.take()})
     recs.close()
     sys.stdout = tee.real
-    # THE TITLE STRIPS ARE READ AGAIN AS A STEP OF THE CHAIN. A window whose
-    # name the reader could not settle keeps its saved title strip; read once
-    # more with the plain engine and confirmed against the window's own path
-    # bar and the other moments' strips, the strip names the folder (`Dev`,
-    # `Assets`, `vault-demo`) where the run left the name blank. Done by hand
-    # once, it was the one thing a clean re-run of the video did not reproduce.
-    import subprocess
-    subprocess.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "reread_titles.py"), rec_path],
-                   check=False)
 
 
 if __name__ == "__main__":
