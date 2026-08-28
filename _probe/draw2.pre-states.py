@@ -668,13 +668,7 @@ def table_from_items(items):
         if any(cells):
             body.append((cells, icon, band))
             body_ys.append(cy)
-    # A FOLDER WITH ONE ITEM IN IT IS A FOLDER WITH ONE ITEM IN IT. Two
-    # headings on one row and one row under them carrying a date is a
-    # Finder list however short: at 00:01:10 the `projects` folder lists one
-    # entry, and refusing it left that moment with no Finder and no picture.
-    one_row = (len(body) == 1 and len(heads) >= 2
-               and any(re.search(r"\d{4}|Today|Yesterday", c or "") for c in body[0][0]))
-    if len(body) < (4 if lone else 2) and not one_row:
+    if len(body) < (4 if lone else 2):
         return None
     head = [name for name, _, _ in heads]
     span = [min([x_lo] + [it["box"][0] for it in side]), cols[-1][1]]

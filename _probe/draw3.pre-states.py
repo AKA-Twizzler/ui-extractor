@@ -121,32 +121,6 @@ def same_line(a, b):
     return difflib.SequenceMatcher(None, a, b, autojunk=False).ratio() >= 0.85
 
 
-def same_title(a, b):
-    """Two readings of a window's title are the same title when they read
-    the same, or one is the other cut short by Finder's own ellipsis.
-
-    `same_text` was used here and it holds a substring match for anything
-    over eight letters - so `jaredrhodenizer` matched
-    `-Users-jaredrhodenizer-Documents-jarvis...` and the folder opened at
-    00:01:00 was filed as a moment of the folder before it, its two rows
-    drawn under the wrong name and its own card never written. A title is a
-    whole name; a name inside another name is a different folder."""
-    if not a or not b:
-        return False
-    na, nb = norm(a), norm(b)
-    if not na or not nb:
-        return False
-    if na == nb:
-        return True
-    for cut, full in ((a, b), (b, a)):
-        c = cut.strip()
-        if c.endswith(("...", "\u2026")):
-            head = norm(c.rstrip(".\u2026"))
-            if len(head) >= 8 and norm(full).startswith(head):
-                return True
-    return len(na) >= 6 and len(nb) >= 6 and same_name(a, b)
-
-
 def same_name(a, b):
     """Two readings of one file name: alike, or the same length with at
     most two letters read differently (0olnbox / ooInbox)."""
@@ -370,12 +344,7 @@ class Table:
                 if i < len(cells) and not cells[i] and c:
                     cells[i] = c
                     italics[i] = n["italic"][i] if i < len(n["italic"]) else False
-            # THE BAND IS THE LATEST MOMENT'S. A selection is a property of
-            # the moment, and a row read again at a later moment carries
-            # that moment's band or none: kept sticky, `03 Company B` stood
-            # green on a card spanning eight moments because it was selected
-            # at one of them.
-            return {"cells": cells, "italic": italics, "band": n["band"], "icon": o.get("icon") or n.get("icon")}
+            return {"cells": cells, "italic": italics, "band": o["band"] or n["band"], "icon": o.get("icon") or n.get("icon")}
         self.rows = stitch(self.rows, new_rows, key=lambda r: r["cells"][0] if r["cells"] else "", same=same_name, merge=keep)
         # a row whose name was missed folds into the row with the same
         # other cells; a nameless row alone is the window behind
@@ -1075,32 +1044,6 @@ def flatten_sidebars(states):
             q["model"].lines = fixed
 
 
-def tidy_side(table, house=None, title=None):
-    """A sidebar holds the fixed favorites and the home folder, nothing
-    else: a crumb of the path bar glued into one word and filed as a
-    sidebar name (`Usersjaredrhodeniz`) is not a favorite, and an icon's
-    scrap in front of a name (`(] Desktop`) is not part of it."""
-    import draw2 as _d2
-    if not table or not getattr(table, "side", None):
-        return
-    canon = {norm(n): n for n in _d2.SIDEBAR_WORDS}
-    for h in (house or []):
-        canon.setdefault(norm(h), h)
-    crumbs = {norm(c) for c in (getattr(table, "path", None) or [])}
-    out = []
-    for w in table.side:
-        bare_ = re.sub(r"^[^A-Za-z]+", "", str(w)).strip()
-        key = norm(bare_)
-        hit = canon.get(key) or next((c for k, c in canon.items()
-                                      if len(k) >= 5 and key.endswith(k) and len(key) - len(k) <= 3), None)
-        if not hit and key and (key in crumbs or (title and key == norm(title))) and " " not in bare_:
-            hit = bare_               # the home folder, named after the user
-        if hit and hit not in out:
-            out.append(hit)
-    if len(out) >= 3:
-        table.side = out
-
-
 def sidebar_from_panes(st, house=None):
     """A Finder window's favorites sidebar, read by the reader as a document
     or a tree standing left of the list, put back as the window's sidebar.
@@ -1753,7 +1696,7 @@ class State:
             # merges states that never stood together. A title read off a cut
             # path bar names a folder the path passes THROUGH, not the one on
             # show, so it can never merge.
-            titles_match = (self.title and other.title and same_title(self.title, other.title)
+            titles_match = (self.title and other.title and same_text(self.title, other.title)
                             and not (getattr(self, "title_from_path", False)
                                      or getattr(other, "title_from_path", False)))
             if titles_match and (min(len(a), len(b)) < 3
@@ -1980,136 +1923,6 @@ def drop_guessed(states):
                 st.fine.append(f"{gone} line{'s' if gone != 1 else ''} of letters the engines guessed at, left out")
 
 
-def list_not_tree(states):
-    """A Finder list that came back as a file tree, put right.
-
-    A window showing only its Name column - the rest of it off the side
-    of the screen or behind another window - has no columns left to
-    tell the reader it is a list, and its rows come back as a tree with
-    a level of nesting that was never on the screen. The same folder
-    names read as a LIST elsewhere in the video say what that window
-    is: one window, one program. Nothing is invented - the names are
-    the ones that were read, and only what KIND of thing they are in
-    changes.
-    """
-    lists = []
-    for st_ in states:
-        t_ = st_.main_table()
-        if st_.name == "The Finder window" and t_ and len(t_.rows) >= 4:
-            lists.append((t_, {fold(flat((r.get("cells") or [""])[0]))
-                               for r in t_.rows if (r.get("cells") or [""])[0]}, st_))
-    if not lists:
-        return
-    own = {id(o_) for _t, _k, o_ in lists}
-    for st_ in states:
-        # ANY window holding a tree whose names are some Finder list's
-        # names. Asking only about windows named for the vault left the
-        # case the naming rules had ALREADY got right: a window named
-        # Finder, drawn with a tree in it and a level of nesting that
-        # was never on the screen. A window that is itself one of the
-        # lists is not converted - it is the witness.
-        if id(st_) in own:
-            continue
-        # EVERY tree part of the window, not the first. A window can
-        # show its own sidebar (a tree of Finder's fixed names, which no
-        # list will ever match) and a Finder list beside it that came
-        # back as a tree too - and asking only about the first left the
-        # second drawn with a level of nesting that was never there.
-        for q in [x for x in st_.parts if x["fam"] == "tree"
-                  and getattr(x["model"], "lines", None)]:
-            _convert_tree(st_, q, lists)
-
-def _convert_tree(st_, q, lists):
-    """One tree part put back as the list it really is."""
-    names = [row_name(t) for t, _h in q["model"].lines]
-    keys = {fold(flat(n)) for n in names if n}
-    if len(keys) < 4:
-        return
-    best, hit, from_ = None, 0, None
-    for t_, ks, o_ in lists:
-        n = len(keys & ks)
-        if n > hit:
-            best, hit, from_ = t_, n, o_
-    if best is None or hit < max(4, 0.6 * len(keys)):
-        return
-    head = list(best.header) or ["Name"]
-    tab = Table()
-    tab.header = head
-    tab.span = best.span
-    tab.rh = best.rh
-    # the same window showing the same folder: its bar and its
-    # sidebar were read whole at that other moment, and this one
-    # only had them hidden
-    tab.path = list(best.path)
-    # the readings come across WITH the moments they were read at, which
-    # is the whole reason they are one list now
-    tab.readings = list(best.readings)
-    tab.side = list(best.side)
-    by = {fold(flat((r.get("cells") or [""])[0])): r for r in best.rows
-          if (r.get("cells") or [""])[0]}
-    for n in names:
-        if not n:
-            return
-        src = by.get(fold(flat(n))) or by.get(fold(flat(n)) + "md")
-        cells = list(src["cells"]) if src else [n] + [""] * (len(head) - 1)
-        if src:
-            cells[0] = src["cells"][0]
-        tab.rows.append({"cells": cells,
-                         "italic": [False] * len(cells),
-                         # NOT the band. A file's date and kind are the
-                         # same at every moment, so taking them from the
-                         # moment this window was read whole is sound -
-                         # but WHICH ROW IS SELECTED is the one thing
-                         # about a list that changes from moment to
-                         # moment. Carried across, it drew `03 Company B
-                         # (Landscape Company)` green at 00:01:20, where
-                         # the reader records no band at all; the band it
-                         # was wearing belongs to 00:02:20. The same
-                         # state-against-moment distinction as the path
-                         # bar, and no measure can catch this one, since
-                         # the green lands on rows the frame drew text
-                         # across.
-                         "band": None,
-                         # a name the list never read whole says nothing
-                         # about folder or file: no icon is claimed for it
-                         "icon": (src or {}).get("icon")})
-    q["fam"] = "table"
-    q["model"] = tab
-    st_.parts.sort(key=lambda x: x["slot"])
-    st_.name = "The Finder window"
-    # and the folder it was showing: the window's own title bar,
-    # read whole at the moment the window stood clear
-    if not st_.title and from_ is not None and from_.title:
-        st_.title = from_.title
-
-
-def _finder_lists(states):
-    """Every Finder list with rows enough to be a witness."""
-    lists = []
-    for st_ in states:
-        t_ = st_.main_table()
-        if st_.name == "The Finder window" and t_ and len(t_.rows) >= 4:
-            lists.append((t_, {fold(flat((r.get("cells") or [""])[0]))
-                               for r in t_.rows if (r.get("cells") or [""])[0]}, st_))
-    return lists
-
-
-def convert_probe(probe, states):
-    """A moment's window read as a tree, put right BEFORE it is matched
-    against the open states - so a Finder whose list came back as a column
-    of names joins the window that already lists that folder, instead of
-    opening a state of its own that `list_not_tree` only converts after the
-    matching is over. Measured: the vault-demo window at 00:00:30 became a
-    second card of the same folder that way."""
-    if probe.main_table() is not None:
-        return
-    lists = _finder_lists(states)
-    if not lists:
-        return
-    for q in [x for x in probe.parts if x["fam"] == "tree" and getattr(x["model"], "lines", None)]:
-        _convert_tree(probe, q, lists)
-
-
 def build_states(moments):
     """Walk the moments; each window group joins the open state showing
     the same thing, or opens a new state."""
@@ -2124,7 +1937,6 @@ def build_states(moments):
             probe.absorb(g, m)
             if not probe.has_content():
                 continue
-            convert_probe(probe, states)
             slot = draw2.group_key(g, W)
             all_repeat = all(p.get("since") or p.get("same_as") for p in g["panes"])
             # the open state in this slot first (a repeat is judged against
@@ -2397,12 +2209,6 @@ def crumb_same(a, b):
         return False
     if fa == fb:
         return True
-    # A FOLDER AND THE NOTE INSIDE IT NAMED ALIKE ARE TWO CRUMBS. `memory`
-    # and `MEMORY.md` flatten to `memory` and `memorymd`, one opening the
-    # other, and the rule below took them for one crumb read twice - so the
-    # bar under the memory window lost the folder and kept the file, twice.
-    if (fa.endswith("md") and fa[:-2] == fb) or (fb.endswith("md") and fb[:-2] == fa):
-        return False
     if min(len(fa), len(fb)) >= 4 and abs(len(fa) - len(fb)) <= 10 and (fa.startswith(fb) or fb.startswith(fa)):
         return True
     if (min(len(fa), len(fb)) >= 4 and abs(len(fa) - len(fb)) <= 6 and fa[:3] == fb[:3]
@@ -2443,14 +2249,6 @@ def align_crumbs(mine, whole):
     out = []
     for c in mine:
         f = flat(c)
-        # `Users`, `Documents`, the disk: whole names every bar carries. One
-        # of them was "corrected" to `-Users-jaredrh` because that crumb
-        # opens with the same letters and the other reading had glued
-        # `Users` to the disk - a crumb the video spells the same way
-        # everywhere is never a worse spelling of something else.
-        if norm(c) in GENERIC:
-            out.append(c)
-            continue
         if len(f) >= 4 and not any(crumb_same(c, w) for w in whole):
             fits = {w for w in whole if len(flat(w)) > len(f) and flat(w)[:3] == f[:3]
                     and not any(crumb_same(w, m) for m in mine)}
@@ -2542,8 +2340,6 @@ def unglue(path):
             head = c[:len(c) - len(nxt)].strip(" -/>")
             if len(head) >= 3:
                 c = head
-        if out and flat(out[-1]) == flat(c):
-            continue                # the same crumb twice running: once
         out.append(c)
     return out
 
@@ -3810,9 +3606,6 @@ def mend_cells(sl, full):
         def _ni(hdr):
             return next((i for i, h in enumerate(hdr) if h == "Name"), 0)
         fni, sni = _ni(ft.header), _ni(st_.header)
-        if os.environ.get("SN_MEND"):
-            print("MEND %s hdr=%s full=%s names=%s" % (getattr(sl, "times", "?"), st_.header, ft.header,
-                  [r["cells"][sni] if sni < len(r["cells"]) else "" for r in st_.rows]), file=sys.stderr)
         idxs, walk, ok = [], 0, True
         for r in st_.rows:
             name = r["cells"][sni] if sni < len(r["cells"]) else ""
@@ -4574,19 +4367,6 @@ def note(records_path, diary_text=None):
         fixed = []
         for c in t.path:
             f = flat(c)
-            # ONE ENGINE GLUES `Users` TO THE FOLDER AFTER IT. `unglue`
-            # catches the pair when the next crumb is the glued tail; here
-            # the bar read `Macintosh HD > Usersjaredrhodenizer > .claude`
-            # with no such next crumb, so the glue stood in two pictures. A
-            # crumb that opens with a generic crumb and whose remainder is a
-            # name the video knows whole is those two crumbs.
-            if f not in known and len(f) >= 10:
-                for g_ in ("users", "documents", "desktop", "downloads"):
-                    if f.startswith(g_) and f[len(g_):] in known:
-                        fixed.append(g_.capitalize())
-                        c = known[f[len(g_):]]
-                        f = flat(c)
-                        break
             # a crumb every other bar also carries is spelt the way the
             # video keeps spelling it; only a crumb read once, and never
             # read as a whole name anywhere, can be a cut-short reading
@@ -5352,6 +5132,106 @@ def note(records_path, diary_text=None):
             if best != mine:
                 st_.title = best
 
+    def list_not_tree(states):
+        """A Finder list that came back as a file tree, put right.
+
+        A window showing only its Name column - the rest of it off the side
+        of the screen or behind another window - has no columns left to
+        tell the reader it is a list, and its rows come back as a tree with
+        a level of nesting that was never on the screen. The same folder
+        names read as a LIST elsewhere in the video say what that window
+        is: one window, one program. Nothing is invented - the names are
+        the ones that were read, and only what KIND of thing they are in
+        changes.
+        """
+        lists = []
+        for st_ in states:
+            t_ = st_.main_table()
+            if st_.name == "The Finder window" and t_ and len(t_.rows) >= 4:
+                lists.append((t_, {fold(flat((r.get("cells") or [""])[0]))
+                                   for r in t_.rows if (r.get("cells") or [""])[0]}, st_))
+        if not lists:
+            return
+        own = {id(o_) for _t, _k, o_ in lists}
+        for st_ in states:
+            # ANY window holding a tree whose names are some Finder list's
+            # names. Asking only about windows named for the vault left the
+            # case the naming rules had ALREADY got right: a window named
+            # Finder, drawn with a tree in it and a level of nesting that
+            # was never on the screen. A window that is itself one of the
+            # lists is not converted - it is the witness.
+            if id(st_) in own:
+                continue
+            # EVERY tree part of the window, not the first. A window can
+            # show its own sidebar (a tree of Finder's fixed names, which no
+            # list will ever match) and a Finder list beside it that came
+            # back as a tree too - and asking only about the first left the
+            # second drawn with a level of nesting that was never there.
+            for q in [x for x in st_.parts if x["fam"] == "tree"
+                      and getattr(x["model"], "lines", None)]:
+                _convert_tree(st_, q, lists)
+
+    def _convert_tree(st_, q, lists):
+        """One tree part put back as the list it really is."""
+        names = [row_name(t) for t, _h in q["model"].lines]
+        keys = {fold(flat(n)) for n in names if n}
+        if len(keys) < 4:
+            return
+        best, hit, from_ = None, 0, None
+        for t_, ks, o_ in lists:
+            n = len(keys & ks)
+            if n > hit:
+                best, hit, from_ = t_, n, o_
+        if best is None or hit < max(4, 0.6 * len(keys)):
+            return
+        head = list(best.header) or ["Name"]
+        tab = Table()
+        tab.header = head
+        tab.span = best.span
+        tab.rh = best.rh
+        # the same window showing the same folder: its bar and its
+        # sidebar were read whole at that other moment, and this one
+        # only had them hidden
+        tab.path = list(best.path)
+        # the readings come across WITH the moments they were read at, which
+        # is the whole reason they are one list now
+        tab.readings = list(best.readings)
+        tab.side = list(best.side)
+        by = {fold(flat((r.get("cells") or [""])[0])): r for r in best.rows
+              if (r.get("cells") or [""])[0]}
+        for n in names:
+            if not n:
+                return
+            src = by.get(fold(flat(n)))
+            cells = list(src["cells"]) if src else [n] + [""] * (len(head) - 1)
+            if src:
+                cells[0] = src["cells"][0]
+            tab.rows.append({"cells": cells,
+                             "italic": [False] * len(cells),
+                             # NOT the band. A file's date and kind are the
+                             # same at every moment, so taking them from the
+                             # moment this window was read whole is sound -
+                             # but WHICH ROW IS SELECTED is the one thing
+                             # about a list that changes from moment to
+                             # moment. Carried across, it drew `03 Company B
+                             # (Landscape Company)` green at 00:01:20, where
+                             # the reader records no band at all; the band it
+                             # was wearing belongs to 00:02:20. The same
+                             # state-against-moment distinction as the path
+                             # bar, and no measure can catch this one, since
+                             # the green lands on rows the frame drew text
+                             # across.
+                             "band": None,
+                             "icon": (src or {}).get("icon", "green")})
+        q["fam"] = "table"
+        q["model"] = tab
+        st_.parts.sort(key=lambda x: x["slot"])
+        st_.name = "The Finder window"
+        # and the folder it was showing: the window's own title bar,
+        # read whole at the moment the window stood clear
+        if not st_.title and from_ is not None and from_.title:
+            st_.title = from_.title
+
     def words_in(box, st_, times):
         """How many of this window's OWN words were read inside that box."""
         keys = own_words.get(id(st_)) or set()
@@ -5408,7 +5288,6 @@ def note(records_path, diary_text=None):
     list_not_tree(states)
     for st in states:
         sidebar_from_panes(st, house_side)
-        tidy_side(st.main_table(), house_side, st.title)
     house_side = max((furnish.side_words_of(st) for st in states
                       if st.name == "The Finder window"), key=len, default=house_side)
     house_keys = {fold(flat(w)) for w in house_side if len(flat(w)) >= 5}
@@ -5914,7 +5793,6 @@ def note(records_path, diary_text=None):
                                   and getattr(x["model"], "lines", None)]:
                             _convert_tree(sl, q, [(_wt, _wk, st)])
                     sidebar_from_panes(sl, house_side)
-                    tidy_side(sl.main_table(), house_side, sl.title)
                     mend_cells(sl, st)
                     strip_furniture(sl, strip_at)
                     drop_side_prefix(sl)
@@ -6371,10 +6249,6 @@ def note(records_path, diary_text=None):
                     sl._row_step = own * furnish.CANVAS_W / Wf
                     sl._step_sure = False      # and no median may replace it
                     sl._pitch_measured = True
-                if os.environ.get("SN_PITCH"):
-                    print("PITCH %s %-28s shape=%s own=%s step=%.1f sure=%s cut=%s/%s"
-                          % (s["t0"], label_for(stx, s["t0"]), [round(v) for v in shape] if shape else None,
-                             own, sl._row_step, sl._step_sure, cut_x, cut_y), file=sys.stderr)
 
             # Two windows of the same program standing on one screen set
             # their rows at the SAME pitch: the pitch belongs to the screen,
