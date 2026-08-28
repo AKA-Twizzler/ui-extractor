@@ -4286,6 +4286,8 @@ def unglue_from_cuts(name, cuts):
         if not ends:
             continue
         head, tail = ends
+        if " " not in (head + tail):
+            continue                    # a reading with no space says nothing
         hf, tf = fold(flat(head)), fold(flat(tail))
         if len(nf) > len(hf) + len(tf) and nf.startswith(hf) and nf.endswith(tf):
             out.add(unglue_like(name, head, tail))
@@ -5320,16 +5322,23 @@ def note(records_path, diary_text=None):
     # "02 Company A (Info Product)" - is spelt the way the video itself
     # spelt it, but only when exactly one name in the whole video opens
     # that way. Two candidates and the crumb stays as it was read.
-    known = {}
+    # THE SPELLING THE VIDEO USES MOST. One title read once as "(info
+    # Product)" seeded the map ahead of the six rows reading "(Info
+    # Product)", and every bar then carried the odd one.
+    _spell = {}
     for st in states:
         if st.title:
-            known.setdefault(flat(st.title), st.title)
+            _spell.setdefault(flat(st.title), {}).setdefault(st.title, 0)
+            _spell[flat(st.title)][st.title] += 1
         for q in st.parts:
             if q["fam"] != "table":
                 continue
             for r in q["model"].rows:
                 if r["cells"] and r["cells"][0] and "..." not in r["cells"][0]:
-                    known.setdefault(flat(r["cells"][0]), r["cells"][0])
+                    _spell.setdefault(flat(r["cells"][0]), {}).setdefault(r["cells"][0], 0)
+                    _spell[flat(r["cells"][0])][r["cells"][0]] += 1
+    known = {k: max(v.items(), key=lambda kv: (kv[1], sum(1 for ch in kv[0] if ch.isupper())))[0]
+             for k, v in _spell.items()}
     times_seen, after = {}, {}
     for st in states:
         t = st.main_table()
