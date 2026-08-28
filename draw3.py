@@ -5941,6 +5941,8 @@ def note(records_path, diary_text=None):
             outs.append((secs_of.get(t, 0), back(T, r), T[0]))
         if outs:
             home_reads[id(st)] = outs
+        if os.environ.get("SN_ZOOM") and st.name == "The Obsidian window":
+            print("HOME %s %s: %s" % (st.name, st.times[:1], [(round(o[0]), [round(v) for v in o[1]], round(o[2], 2)) for o in outs]), file=sys.stderr)
 
     def home_at(st, t0):
         """Where this window stood around that time. Readings of a standing
@@ -7848,6 +7850,9 @@ def note(records_path, diary_text=None):
                         if hb_at:
                             cands_.append(hb_at)
                         cands_.extend(list(mem[1]) for mem in (home_reads.get(id(o_)) or ()) if mem[1])
+                    if os.environ.get("SN_ZOOM"):
+                        print("  whole? %s strip %s cands %s" % (stx_.name, [round(v) for v in hbox_],
+                              [[round(v) for v in c_] for c_ in cands_]), file=sys.stderr)
                     for hb2 in cands_:
                         if not hb2 or furnish._within(hbox_, hb2) < 0.8 or _area(hb2) < 1.3 * _area(hbox_):
                             continue
