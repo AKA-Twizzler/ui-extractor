@@ -132,13 +132,26 @@ def side_share_card(st):
     return best
 
 
-def _col_readings(st, head):
-    """Every reading of the window's list that placed all its headings: one
-    dict per reading, heading index -> (its left edge as a share of the pane,
-    whether the box was the word's own size)."""
+def col_shares(st, head):
+    """Where the list's columns began, as shares of the list's width,
+    measured off the frame: each heading's own left edge, over every reading
+    of the window. Laid out by the browser instead, the Name column took
+    whatever its longest name wanted and the dates and sizes landed wherever
+    was left -- proportions the frame never had.
+
+    The reader's box round a heading is sometimes the word and sometimes a
+    loose band that starts well left of it; one loose "Kind" at 00:00:30 put
+    the Size column at 7% and cut "31 bytes". So each heading's position is
+    the median over the readings, and only the readings whose box is the
+    word's own size vote while any such exist. The pane box stays the basis
+    because the sidebar's share is measured off the same boundary, so the
+    headings land where the frame had them however the reader drew that
+    boundary. None where a heading was never placed."""
     names = [h for h in head if h]
+    if len(names) < 2:
+        return None
     order = [i for i in range(len(head)) if head[i]]
-    out = []
+    votes = {i: [] for i in order[1:]}
     for m_, g_ in (getattr(st, "pieces", None) or ()):
         for p_ in (g_.get("panes") or []):
             if p_.get("kind") != "a list of columns" or len(p_.get("box") or []) != 4:
@@ -163,64 +176,18 @@ def _col_readings(st, head):
                         tight[i] = (bx[2] - bx[0]) <= hh * (0.6 * len(h) + 1.2)
             if len(xs) < len(names):
                 continue
-            r = {}
             for i in order[1:]:
                 sh = (xs[i] - b[0]) / W
-                if not 0.0 < sh < 1.0:
-                    break
-                r[i] = (sh, tight[i])
-            else:
-                out.append(r)
-    return out
-
-
-def _median(vs):
-    vs = sorted(vs)
-    n = len(vs)
-    return vs[n // 2] if n % 2 else 0.5 * (vs[n // 2 - 1] + vs[n // 2])
-
-
-def col_shares(st, head):
-    """Where the list's columns began, as shares of the list's width,
-    measured off the frame: each heading's own left edge, over the readings
-    of the stretch being drawn. Laid out by the browser instead, the Name
-    column took whatever its longest name wanted and the dates and sizes
-    landed wherever was left -- proportions the frame never had.
-
-    The reader's box round a heading is sometimes the word and sometimes a
-    loose band that starts well left of it; one loose "Kind" at 00:00:30 put
-    the Size column at 7% and cut "31 bytes". So each heading's position is
-    the median over the readings, and only the readings whose box is the
-    word's own size vote while any such exist. A heading the stretch never
-    read tightly borrows from the whole window's other moments, but only
-    from readings whose OTHER headings agree with this stretch's within 6%:
-    the columns can be dragged mid-video (vault-demo's Name column widens at
-    00:02:20), and a moment must not inherit a layout it never showed. The
-    pane box stays the basis because the sidebar's share is measured off the
-    same boundary, so the headings land where the frame had them however the
-    reader drew that boundary. None where a heading was never placed."""
-    names = [h for h in head if h]
-    if len(names) < 2:
+                if 0.0 < sh < 1.0:
+                    votes[i].append((sh, tight[i]))
+    if any(not votes[i] for i in order[1:]):
         return None
-    order = [i for i in range(len(head)) if head[i]]
-    own = _col_readings(st, head)
-    if not own:
-        return None
-    med = {i: _median([r[i][0] for r in own]) for i in order[1:]}
-    parent = None
     pos = {}
     for i in order[1:]:
-        vs = [r[i][0] for r in own if r[i][1]]
-        if not vs and getattr(st, "_parent", None) is not None:
-            if parent is None:
-                parent = _col_readings(st._parent, head)
-            others = [j for j in order[1:] if j != i]
-            for r in parent:
-                if r[i][1] and others and all(abs(r[j][0] - med[j]) <= 0.06 for j in others):
-                    vs.append(r[i][0])
-        if not vs:
-            vs = [r[i][0] for r in own]
-        pos[i] = _median(vs)
+        vs = [sh for sh, tg in votes[i] if tg] or [sh for sh, tg in votes[i]]
+        vs.sort()
+        n = len(vs)
+        pos[i] = vs[n // 2] if n % 2 else 0.5 * (vs[n // 2 - 1] + vs[n // 2])
     bounds = [0.0] + [pos[i] for i in order[1:]] + [1.0]
     if any(bounds[k + 1] <= bounds[k] for k in range(len(bounds) - 1)):
         return None

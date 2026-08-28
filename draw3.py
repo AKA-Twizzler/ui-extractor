@@ -3897,6 +3897,7 @@ def state_slice(st, t0, t1):
     out.name, out.title = st.name, st.title
     out.theme = st.theme
     out.title_sure = getattr(st, "title_sure", False)
+    out._parent = st        # the whole window, for what this stretch never read tightly
     # A TITLE IS A PROPERTY OF THE MOMENT, NOT OF THE WINDOW. This slice holds
     # only its own stretch's reading, and `label_for` already says a window
     # that opens a different folder later must not be named here by the folder
