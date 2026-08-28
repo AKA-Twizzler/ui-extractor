@@ -6797,8 +6797,11 @@ def note(records_path, diary_text=None):
                                          or (len(f_) >= 5 and f_[:1] == flat(w_)[:1] and abs(len(f_) - len(flat(w_))) <= 2
                                              and not _md_pair(f_, flat(w_))
                                              and difflib.SequenceMatcher(None, f_, flat(w_), autojunk=False).ratio() >= 0.85)), None)
+                            _caps = lambda x_: sum(ch.isupper() for ch in x_)
                             if hit_ is not None and f_ != flat(hit_) and not flat(hit_).startswith(f_):
                                 _fixed.append(hit_)
+                            elif hit_ is not None and f_ == flat(hit_) and hit_ != c_ and _caps(hit_) > _caps(c_):
+                                _fixed.append(hit_)         # `(info Product)` takes the settled `(Info Product)`
                             else:
                                 _fixed.append(c_)
                         if os.environ.get("SN_PATH") and _fixed != list(_st_t.path):
