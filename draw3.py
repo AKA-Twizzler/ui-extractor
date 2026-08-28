@@ -6021,6 +6021,7 @@ def note(records_path, diary_text=None):
             Finder beside it stands where it stood, and its favorites are
             read inside its box at 00:00:50. Tristan's puzzle-piece rule
             fills what was hidden from a moment it stood clear."""
+            why = os.environ.get("SN_STILL") == "2"
             meas = sorted(t for t in own.measured if own.rects.get(t))
             if not meas:
                 return None
@@ -6029,9 +6030,13 @@ def note(records_path, diary_text=None):
             after = [t for t in meas if t > s_["t1"] and at_idx.get(t, 99) - i1 <= 3]
             tb, ta = (before[-1] if before else None), (after[0] if after else None)
             if tb is None and ta is None:
+                if why:
+                    print("STILL? %s %s: no measured neighbour (meas %s)" % (s_["t0"], label_for(own), meas), file=sys.stderr)
                 return None
             rb, ra = (own.rects[tb] if tb else None), (own.rects[ta] if ta else None)
             if rb and ra and not _agree(rb, ra):
+                if why:
+                    print("STILL? %s %s: moved %s -> %s" % (s_["t0"], label_for(own), rb, ra), file=sys.stderr)
                 return None
             box = [(x + y) / 2 for x, y in zip(rb, ra)] if (rb and ra) else list(rb or ra)
             anchor = tb if tb else ta
@@ -6045,9 +6050,13 @@ def note(records_path, diary_text=None):
                           for r1 in measured_rects_at(anchor)
                           for r2 in measured_rects_at(s_["t0"]))
             if not zoom_ok:
+                if why:
+                    print("STILL? %s %s: zoom changed since %s" % (s_["t0"], label_for(own), anchor), file=sys.stderr)
                 return None
             hits = any_words_in(box, own, s_["ts"])
             if hits < (3 if (tb and ta) else 4):
+                if why:
+                    print("STILL? %s %s: only %d own words inside %s" % (s_["t0"], label_for(own), hits, [round(v) for v in box]), file=sys.stderr)
                 return None
             # not where a window already drawn full stands
             for b in base_ + extra_:
