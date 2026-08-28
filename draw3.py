@@ -224,12 +224,21 @@ def fold_twins(table, sni=0):
 
 
 def same_name(a, b):
-    """Two readings of one file name: alike, or the same length with at
-    most two letters read differently (0olnbox / ooInbox)."""
-    if same_text(a, b):
-        return True
+    """Two readings of one file name: the same after norm, or the same
+    length with at most two letters read differently (0olnbox / ooInbox),
+    or a letter dropped or added. NEVER one name inside another:
+    `.claude.json` sits inside `.claude.json.backup`, and `same_text`'s
+    containment rule stitched the two files into one row, whose votes
+    then renamed the first for the second."""
     a, b = norm(a), norm(b)
-    return bool(a) and len(a) == len(b) and len(a) <= 12 and sum(1 for x, y in zip(a, b) if x != y) <= 2
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+    if len(a) == len(b) and len(a) <= 12 and sum(1 for x, y in zip(a, b) if x != y) <= 2:
+        return True
+    return (min(len(a), len(b)) >= 6 and abs(len(a) - len(b)) <= 1
+            and difflib.SequenceMatcher(None, a, b, autojunk=False).ratio() >= 0.9)
 
 
 def stitch(old_items, new_items, key, same=same_text, merge=None):
