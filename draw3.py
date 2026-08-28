@@ -1371,9 +1371,10 @@ def sidebar_from_panes(st, house=None):
     # how wide the sidebar stood, measured off the pane the reader cut,
     # against the window's own rectangle on that same frame
     shares = [v for v in share_seen if 0.12 <= v <= 0.45]
+    if shares:
+        st.side_shares = sorted(set(shares) | set(getattr(st, "side_shares", None) or []))   # the card takes the widest window's
     if shares and not getattr(st, "side_share", None):
         st.side_share = sorted(shares)[len(shares) // 2]
-        st.side_shares = sorted(shares)      # the card takes the widest window's
     return True
 
 
