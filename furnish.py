@@ -389,6 +389,7 @@ def obsidian(st, behind=True):
                + (f'<span class="sn-tab active">{esc(title)} &nbsp;×</span>' if title else "")
                + '<span class="sn-plus">+</span><span class="sn-grow"></span></div>')
     ribbon = '<div class="sn-ribbon">' + "".join('<span class="sn-g">' + g + "</span>" for g in "▯⌬⊞▦⊡›≣") + "</div>"
+    tree_ch = 0             # the tree's own longest row, set where the rows are built
     cols = [ribbon]
     if tree:
         lines = []
