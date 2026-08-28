@@ -1238,7 +1238,11 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
         # THE PART OF THE SCREEN THE VIDEO ZOOMED IN ON, drawn as a dashed
         # box over the whole desktop. Placed explicitly, so a reader whose
         # snippet has not caught up still sees it where it belongs.
-        out.append(f'<div class="sn-zoom" style="position:absolute;{slot_style(zoom, W, H, bar=False)};'
+        # not through `slot_style`, which clips a box to the screen: the crop
+        # may run past the desktop's edge, and the box says so
+        zs = (f"left:{100.0 * zoom[0] / W:.2f}%;top:{100.0 * zoom[1] / H:.2f}%;"
+              f"width:{100.0 * (zoom[2] - zoom[0]) / W:.2f}%;height:{100.0 * (zoom[3] - zoom[1]) / H:.2f}%")
+        out.append(f'<div class="sn-zoom" style="position:absolute;{zs};'
                    f'z-index:45;border:2px dashed #e0b040;box-sizing:border-box;pointer-events:none">'
                    f'<span class="sn-zoom-tag" style="position:absolute;right:4px;bottom:2px;'
                    f'font-size:10px;color:#e0b040;background:rgba(0,0,0,0.55);padding:1px 5px;'
