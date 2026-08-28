@@ -258,9 +258,9 @@ def _find_full(path):
     def _say(why, x0, x1, **kw):
         if _wx and abs(x0 - _wx[0]) < 4 and abs(x1 - _wx[1]) < 4:
             print("   x=%.0f..%.0f  rejected by %-26s %s" % (x0, x1, why, kw), file=_sys.stderr)
-    if _wx:
-        print("   sides near the watch: %r" % ([round(v[0]) for v in sides
-                                                if abs(v[0]-_wx[0]) < 4 or abs(v[0]-_wx[1]) < 4],), file=_sys.stderr)
+    if _wx is not None:
+        print("   PROBE ARMED: %d vertical sides, %d horizontals; every side x: %r"
+              % (len(verts), len(hors), sorted(round(v[0]) for v in sides)), file=_sys.stderr)
     found = []
     for i, (x0, ya, yb, e0) in enumerate(sides):
         for x1, yc, yd, e1 in sides[i + 1:]:
