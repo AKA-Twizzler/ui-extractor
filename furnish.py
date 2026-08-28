@@ -149,6 +149,11 @@ def finder(st):
         side = '<div class="sn-side">' + "".join(items) + "</div>"
     # the toolbar: back and forward, the folder's name, the view and action buttons, search
     title = st.title or ""
+    import sys as _s, re as _re
+    if any("9ad9b1da" in str((r.get("cells") or [""])[0]) for r in (st.main_table().rows if st.main_table() else [])):
+        print("DRAW title=%r name=%r times=%s sure=%s from_path=%s"
+              % (title, getattr(st, "name", None), getattr(st, "times", None),
+                 getattr(st, "title_sure", None), getattr(st, "title_from_path", None)), file=_s.stderr)
     # A WINDOW THE SCREEN CUT OFF DOWN ITS LEFT EDGE HAS NO CORNER ON SHOW.
     # Its three round buttons and its back and forward arrows stand outside
     # the frame, so drawing them puts on the page what the screen never had.

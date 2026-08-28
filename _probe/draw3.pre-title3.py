@@ -1304,12 +1304,7 @@ class State:
             hit = None
             crumbs = [c for path in reversed(table.paths) for c in reversed(path)]
             for c in crumbs:
-                # ...AND THE OTHER WAY ROUND, WHICH IS THE COMMON ONE. Finder
-                # cuts a long folder name short IN ITS TITLE BAR, so the word
-                # read there OPENS the crumb rather than the crumb opening it.
-                hit = next((t for t, _ in tops
-                            if same_text(t, c) or norm(t).startswith(norm(c))
-                            or (len(norm(t)) >= 8 and norm(c).startswith(norm(t)))), None)
+                hit = next((t for t, _ in tops if same_text(t, c) or norm(t).startswith(norm(c))), None)
                 if hit:
                     break
             if hit:
