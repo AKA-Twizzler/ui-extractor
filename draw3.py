@@ -2893,6 +2893,10 @@ def harmonise(states):
     title_flats = {flat(st.title) for st in states if st.title}
     crumb_flats = {flat(c) for st in states for q in st.parts
                    if q["fam"] == "table" for c in (q["model"].path or [])}
+    # how many WINDOWS spell a crumb this way: a spelling two bars agree on
+    # is the folder's name; one bar's own reading proves nothing about itself
+    crumb_votes = collections.Counter(f_ for st in states for q in st.parts if q["fam"] == "table"
+                                      for f_ in {flat(c) for c in (q["model"].path or [])})
     # every name any list actually carried: a crumb spelt like one of these
     # is already the folder's own name and must not be grown into a longer
     # one, or a second reading would stretch it again
@@ -3088,7 +3092,7 @@ def harmonise(states):
                         # title and in every bar, and was "corrected" into the
                         # one row that read `projerts`.
                         if (not b and len(f) >= 6 and f not in strong_flats and f not in row_flats
-                                and f not in title_flats and f not in crumb_flats):
+                                and f not in title_flats and crumb_votes.get(f, 0) < 2):
                             # a crumb misread by a letter or two (`prjects`,
                             # `jaredrhodenize`) takes the name the video
                             # spells whole, when exactly one strong name
@@ -7580,6 +7584,35 @@ def note(records_path, diary_text=None):
                     keep = max((x for x in g if x is not o), key=lambda x: len(words[id(x)]))
                     folded.setdefault(id(keep), []).extend(o.times)
                     folded[id(o)] = None
+        # A WINDOW CUT OFF BY THE SCREEN'S EDGE IS THE WINDOW IT IS, not a
+        # window of its own. From 00:01:50 the memory Finder stood pushed off
+        # the left edge with only its Size and Kind columns in view and its
+        # bar reading `…er-Documents-jarvis-demo › m…`; read without a Name
+        # column it became a state of its own and a card of sixteen sizes.
+        # Its bar names the folder whose card already stands - the same file
+        # scrolled is the same card - so its moments join that card. Its
+        # sixteen nameless rows are a stretch of the list never read whole
+        # and cannot be placed among the named rows, so they are not drawn.
+        def _cut_of(frag, whole):
+            ft_, wt_ = frag.main_table(), whole.main_table()
+            if not (ft_ and wt_ and wt_.path) or frag.title or not whole.title:
+                return False
+            if any(h and "Name" in h for h in ft_.header) or set(frag.times) & set(whole.times):
+                return False
+            reads = [w_ for p_ in (getattr(ft_, "paths", None) or []) for w_ in p_] + list(ft_.path or [])
+            reads = [flat(w_).rstrip("›>") for w_ in reads if len(flat(w_)) >= 8]
+            if not reads:
+                return False
+            whole_flats = [flat(c_) for c_ in wt_.path]
+            return all(any(wf == r_ or wf.endswith(r_) for wf in whole_flats) for r_ in reads)
+        _all = [s_ for g in groups for s_ in g]
+        for o in _all:
+            if id(o) in folded and folded[id(o)] is None:
+                continue
+            whole = next((x for x in _all if x is not o and _cut_of(o, x)), None)
+            if whole is not None:
+                folded.setdefault(id(whole), []).extend(o.times)
+                folded[id(o)] = None
 
         for st in sorted((s for g in groups for s in g), key=lambda s: s.times[0]):
             if id(st) in folded and folded[id(st)] is None:
