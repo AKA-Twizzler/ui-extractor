@@ -142,7 +142,7 @@ def zoom_box(stage_html):
     m = re.search(r'class="sn-zoom" style="([^"]*)"', stage_html)
     if not m:
         return None
-    st = dict(re.findall(r"(left|top|width|height):([\d.]+)%", m.group(1)))
+    st = dict(re.findall(r"(left|top|width|height):(-?[\d.]+)%", m.group(1)))
     if len(st) != 4:
         return None
     l, t, w, h = (float(st[k]) / 100 for k in ("left", "top", "width", "height"))
@@ -155,7 +155,7 @@ def region_mask(stage_html, class_pat, zb=None):
     crop's own space when the picture holds one."""
     mask = np.zeros((PIC_H // CELL_GRID, PIC_W // CELL_GRID), dtype=bool)
     for m in re.finditer(r'class="' + class_pat + r'" style="([^"]*)"', stage_html):
-        st = dict(re.findall(r"(left|top|width|height):([\d.]+)%", m.group(1)))
+        st = dict(re.findall(r"(left|top|width|height):(-?[\d.]+)%", m.group(1)))
         if len(st) == 4:
             l, t, w, h = (float(st[k]) for k in ("left", "top", "width", "height"))
             if zb:

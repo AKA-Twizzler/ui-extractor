@@ -7829,9 +7829,14 @@ def note(records_path, diary_text=None):
                     Chosen by that agreement, not by size -- the smallest
                     box round the strip was a stray cluster whose right edge
                     sat 46 px inside the strip's own."""
+                    # ...the window's own place among the candidates: at
+                    # 00:04:00 the maximised Obsidian's own reading lost to
+                    # a part-read cluster of another Obsidian state because
+                    # only OTHER states were asked. Ties within 2% go to the
+                    # larger box, since a cut strip belongs to the whole.
                     best_, best_off = None, None
                     for o_ in states:
-                        if o_ is stx_ or o_.name != stx_.name:
+                        if o_.name != stx_.name:
                             continue
                         hb2 = home_at(o_, s["t0"])
                         if not hb2 or furnish._within(hbox_, hb2) < 0.8 or _area(hb2) < 1.3 * _area(hbox_):
@@ -7842,7 +7847,7 @@ def note(records_path, diary_text=None):
                                 off_ += abs(hb2[i_] - hbox_[i_]) / (Wf if i_ % 2 == 0 else Hf)
                         if off_ > 0.12:
                             continue
-                        if best_ is None or off_ < best_off:
+                        if best_ is None or off_ < best_off - 0.02 or (abs(off_ - best_off) <= 0.02 and _area(hb2) > _area(best_)):
                             best_, best_off = hb2, off_
                     return best_
 

@@ -55,7 +55,7 @@ def boxes(stage, class_pat):
     screen, read from its percent style."""
     out = []
     for m in re.finditer(r'class="' + class_pat + r'" style="([^"]*)"', stage):
-        st = dict(re.findall(r"(left|top|width|height):([\d.]+)%", m.group(1)))
+        st = dict(re.findall(r"(left|top|width|height):(-?[\d.]+)%", m.group(1)))
         if len(st) == 4:
             l, t, w, h = (float(st[k]) / 100 for k in ("left", "top", "width", "height"))
             out.append((l, t, l + w, t + h))
