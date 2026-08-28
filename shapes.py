@@ -300,6 +300,7 @@ def _find_full(path):
             if bot - top < ALONG * tall:
                 _say("sides too short for the box", x0, x1, sides=round(bot-top), need=round(ALONG*tall))
                 continue                       # the sides must run its height
+            _say("ACCEPTED", x0, x1, y_top=round(y_top), y_bot=round(y_bot), top=round(top), bot=round(bot))
             found.append([x0, y_top, x1, y_bot, e0, e1, top, bot])
     found.sort(key=lambda r: -(r[2] - r[0]) * (r[3] - r[1]))
     # near-identical rectangles are the same window found twice: one edge
