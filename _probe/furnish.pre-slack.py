@@ -318,7 +318,7 @@ def finder(st):
     # stays empty, which is what the rule requires.
     main = ('<div class="sn-main" style="display:flex;flex-direction:column;'
             'flex:1 1 auto;min-height:0">' + toolbar
-            + '<div class="sn-slack" style="flex:1 1 auto;min-height:0">' + body + '</div>'
+            + '<div style="flex:1 1 auto;min-height:0">' + body + '</div>'
             + foot + "</div>")
     cls = "sn-window sn-finder" + (" sn-dark" if st.theme == "dark" else "")
     if side:
