@@ -1156,7 +1156,6 @@ class State:
         self.said = []
         self.theme = None
         self.pieces = []        # (moment, group) it was read from, in order
-        self._now = None        # the moment being read right now, while absorbing
         self._seen = {}         # ts -> Seen: the ONE home of every per-moment fact,
                                 # private, so no caller can hand one window's
                                 # moments to another window or to a stretch
@@ -1256,22 +1255,12 @@ class State:
             if part["fam"] == fam and abs(part["slot"] - slot) <= 1:
                 return part
         model = Table() if fam == "table" else (Lines(kind) if fam in ("tree", "doc", "term") else [])
-        # A READING WITH NO MOMENT ON IT CANNOT BE PLACED IN TIME AT ALL, and
-        # that is worse than a reading placed at the wrong one. `absorb` stamps
-        # the moment onto the parts a window ALREADY has, and then `_absorb`
-        # creates the new ones through here and reads into them straight away
-        # -- so the FIRST reading of every table was recorded blank. Measured
-        # before this line: 23 readings of 38 carried no moment, and the rule
-        # that picks the latest moment's reading skips every one of them.
-        if hasattr(model, "now"):
-            model.now = self._now
         part = {"fam": fam, "slot": slot, "model": model, "x0": None, "x1": None}
         self.parts.append(part)
         self.parts.sort(key=lambda q: q["slot"])
         return part
 
     def absorb(self, group, m):
-        self._now = m["ts"]     # the moment being read; a cursor, not a store
         for q in self.parts:
             if hasattr(q["model"], "now"):
                 q["model"].now = m["ts"]
