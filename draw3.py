@@ -6080,11 +6080,13 @@ def note(records_path, diary_text=None):
             # top of the editor. The cut-off Finder at 00:03:50 and the
             # vault-demo Finder at 00:00:50 were both lost to that. A window
             # covers this place only when it is not far bigger than it.
-            def _area(r):
-                return max(1.0, (r[2] - r[0]) * (r[3] - r[1]))
+            # The place is TAKEN when another window of the same program
+            # stands on it, or when the frame measured some window at that
+            # very box. Obsidian's editor read to the right of the Finder is
+            # the backdrop the Finder stands on, not a window in its place.
             for b in base_ + extra_:
                 r_ = s_["rects"].get(id(b)) or pin.get(id(b))
-                if r_ and overlap(box, r_) > 0.5 and _area(r_) < 2.0 * _area(box):
+                if r_ and overlap(box, r_) > 0.5 and (b.name == own.name or _agree(box, r_)):
                     if why:
                         print("STILL? %s %s: %s stands there" % (s_["t0"], label_for(own), label_for(b)), file=sys.stderr)
                     return None
