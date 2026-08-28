@@ -1303,30 +1303,12 @@ class State:
                     if ok and above <= 4 and not re.fullmatch(r"[0O]+", t) and len(t) >= 3 and t not in FINDER_WORDS]
             hit = None
             crumbs = [c for path in reversed(table.paths) for c in reversed(path)]
-            import sys as _s
-            if any("jarvis" in str(c).lower() for c in crumbs):
-                print("TOPS %r" % ([t for t, _ in tops][:8],), file=_s.stderr)
-                print("  top_items raw %r" % ([(t, ok, ab) for t, cx, ok, ab in table.top_items][:8],), file=_s.stderr)
-                print("  crumbs %r" % (crumbs[:5],), file=_s.stderr)
             for c in crumbs:
-                # ...AND THE OTHER WAY ROUND, WHICH IS THE COMMON ONE. Finder
-                # cuts a long folder name short IN ITS TITLE BAR, so the word
-                # read there OPENS the crumb rather than the crumb opening it:
-                # at 00:01:00 the bar reads `-Users-jaredrhodenizer-Documents-
-                # jarvis...` against the crumb `-Users-jaredrhodenizer-
-                # Documents-jarvis-demo`, and asking only whether the top word
-                # starts with the crumb found nothing, so the window fell back
-                # to the path's end and was titled `jaredrhodenizer`. Eight
-                # letters, so a short word cannot claim a long folder.
-                hit = next((t for t, _ in tops
-                            if same_text(t, c) or norm(t).startswith(norm(c))
-                            or (len(norm(t)) >= 8 and norm(c).startswith(norm(t)))), None)
+                hit = next((t for t, _ in tops if same_text(t, c) or norm(t).startswith(norm(c))), None)
                 if hit:
                     break
             if hit:
                 self.title, self.title_sure, self.title_from_path = hit, True, False
-                if "jarvis" in str(hit).lower():
-                    import sys as _s; print("RULE SET %r" % hit, file=_s.stderr)
                 return
             if self.title:
                 return                # keep what an earlier moment gave
@@ -1781,10 +1763,6 @@ def retitle_by_rows(states):
         named_elsewhere = st.title and any(crumb_same(st.title, v[1]) for v in parent.values()) \
             and not any(crumb_same(parent[fold(n)][1], st.title) for n in t.names() if fold(n) in parent)
         if not st.title or weak or named_elsewhere:
-            if "jarvis" in str(st.title).lower():
-                import sys as _s
-                print("RETITLE OVERWROTE %r -> %r  votes=%r weak=%s named_elsewhere=%s"
-                      % (st.title, best, votes, weak, named_elsewhere), file=_s.stderr)
             st.title = best
 
 
