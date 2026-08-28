@@ -253,21 +253,13 @@ def _find_full(path):
     sides = [(x, ya, yb, False) for x, ya, yb in verts] + \
             [(x, 0.0, float(h), True) for x in edges]
     sides.sort(key=lambda v: v[0])
-    import os as _os, sys as _sys
-    _WATCH = _os.environ.get("SHAPES_WATCH")          # e.g. "0,588"
-    _wx = [float(v) for v in _WATCH.split(",")] if _WATCH else None
-    def _say(why, x0, x1, **kw):
-        if _wx and abs(x0 - _wx[0]) < 3 and abs(x1 - _wx[1]) < 3:
-            print("  pair x=%.0f..%.0f REJECTED by %s %s" % (x0, x1, why, kw), file=_sys.stderr)
     found = []
     for i, (x0, ya, yb, e0) in enumerate(sides):
         for x1, yc, yd, e1 in sides[i + 1:]:
             if x1 - x0 < min_w or (e0 and e1):
-                _say("min_w/both-edges", x0, x1, w=x1-x0, min_w=min_w, e0=e0, e1=e1)
                 continue
             top, bot = max(ya, yc), min(yb, yd)
             if bot - top < min_h:
-                _say("min_h", x0, x1, overlap=bot-top, min_h=min_h)
                 continue
             # the screen's edge runs the whole height, so it says nothing
             # about how much of a side this window's own side gave up
@@ -275,7 +267,6 @@ def _find_full(path):
             runs += [yd - yc] if not e1 else []
             share = (bot - top) / max(runs)
             if share < 0.55:
-                _say("share<0.55", x0, x1, share=round(share, 3), runs=[round(r) for r in runs])
                 continue
             slack = max(12, int(0.05 * (bot - top)))
             # A window has at least ONE edge drawn corner to corner - its
@@ -287,16 +278,13 @@ def _find_full(path):
             top_c = _across(shelf, top, x0, x1, slack, ALONG, -1, corner=True)
             bot_c = _across(shelf, bot, x0, x1, slack, ALONG, +1, corner=True)
             if top_c is None and bot_c is None:
-                _say("no corner-true horizontal", x0, x1, top=round(top), bot=round(bot))
                 continue
             y_top = top_c if top_c is not None else _across(shelf, top, x0, x1, slack, ALONG, -1)
             y_bot = bot_c if bot_c is not None else _across(shelf, bot, x0, x1, slack, ALONG, +1)
             if y_top is None or y_bot is None or y_bot - y_top < min_h:
-                _say("no horizontal at all", x0, x1, y_top=y_top, y_bot=y_bot)
                 continue
             tall = y_bot - y_top
             if bot - top < ALONG * tall:
-                _say("sides too short for the box", x0, x1, sides=round(bot-top), tall=round(tall), need=round(ALONG*tall))
                 continue                       # the sides must run its height
             found.append([x0, y_top, x1, y_bot, e0, e1, top, bot])
     found.sort(key=lambda r: -(r[2] - r[0]) * (r[3] - r[1]))
