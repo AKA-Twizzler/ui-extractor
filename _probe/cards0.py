@@ -7,7 +7,7 @@ draw3.harmonise(states)
 for st in states:
     t = st.main_table()
     if st.name == "The Finder window" and (not st.title or st.title == "memory"):
-        print("FINDER", repr(st.title), st.times, "heads", t.heads if t else None, "path", t.path if t else None, "rows", len(t.rows) if t else None)
+        print("FINDER", repr(st.title), st.times, "heads", t.header if t else None, "path", t.path if t else None, "rows", len(t.rows) if t else None)
     if st.name == "The Obsidian window":
         print("OBS", repr(st.title), st.times[0], st.times[-1], len(st.times), "parts", [(q["fam"], q["slot"]) for q in st.parts][:8], "topwords", [w[0] for w in st.topwords][:6])
 for m in moments:
