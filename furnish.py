@@ -950,7 +950,7 @@ def _glue(parts):
 
 def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
                 ghosts=(), camera=None, sure=True, kz=1.0, ink=(), chrome=(),
-                chrome_step=0.0):
+                chrome_step=0.0, zoom=None):
     """The layout of the screen over one stretch of time: the desktop bar
     with its own words, the window this stretch is about filled in with
     what it really said, and every other window standing where it stood,
@@ -1222,10 +1222,21 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
         cbox = camera[0] if isinstance(camera, (tuple, list)) else camera
         out.append(f'<div class="sn-camera" style="{slot_style(cbox, W, H, bar=barred)}">'
                    f'<span class="sn-camera-tag">the camera picture</span></div>')
+    if zoom:
+        # THE PART OF THE SCREEN THE VIDEO ZOOMED IN ON, drawn as a dashed
+        # box over the whole desktop. Placed explicitly, so a reader whose
+        # snippet has not caught up still sees it where it belongs.
+        out.append(f'<div class="sn-zoom" style="position:absolute;{slot_style(zoom, W, H, bar=False)};'
+                   f'z-index:45;border:2px dashed #e0b040;box-sizing:border-box;pointer-events:none">'
+                   f'<span class="sn-zoom-tag" style="position:absolute;right:4px;bottom:2px;'
+                   f'font-size:10px;color:#e0b040;background:rgba(0,0,0,0.55);padding:1px 5px;'
+                   f'border-radius:3px">the video zoomed in here</span></div>')
     out.extend(names)
     stamp = span["t0"] if span["t0"] == span["t1"] else f"{span['t0']} to {span['t1']}"
     if not sure:
         stamp += " \u00b7 edges taken from where its words sat"
+    if zoom:
+        stamp += " \u00b7 the video was zoomed in; the whole screen is drawn"
     out.append(f'<div class="sn-stamp">{esc(stamp)}</div>')
     out.append("</div>")
     return ('<div class="sn-stage">' + "".join(out) + "</div>")

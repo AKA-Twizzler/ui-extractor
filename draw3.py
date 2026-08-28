@@ -7752,12 +7752,64 @@ def note(records_path, diary_text=None):
                                 hits += 1
                     if hits >= 2:
                         sl._carried_side = house_side
+            # THE PICTURE IS THE WHOLE DESKTOP, EVEN WHERE THE VIDEO ZOOMED IN.
+            # The editor zooms the recording in on a window now and then, so
+            # the frame at those moments is a crop of the screen, enlarged.
+            # Drawn as the frame showed it, the "desktop" picture then cut
+            # windows off at its edges and moved the camera, and Tristan
+            # read it as "almost like the whole screen is just zooming in
+            # at specific points". His rule stands: the picture is the whole
+            # screen. The fit already carries this stretch's frame onto the
+            # base moment's places (`span_T`: a scale and a shift), so every
+            # box here is taken back through it onto the desktop, the type
+            # scale goes back to the screen's own, and the crop the video
+            # showed is drawn as a dashed box that says so. A window the
+            # crop cut off at the frame's edge runs on to where the window
+            # really stood, known from the moments it stood clear.
+            zoom_box = None
+            if T and not flatT(T):
+                _k = T[0]
+
+                def _home_box(b_, hb_=None):
+                    x0_, y0_, x1_, y1_ = back(T, list(b_))
+                    if hb_:
+                        if b_[0] <= 0.01 * Wf and hb_[0] < x0_:
+                            x0_ = hb_[0]
+                        if b_[1] <= 0.01 * Hf and hb_[1] < y0_:
+                            y0_ = hb_[1]
+                        if b_[2] >= 0.99 * Wf and hb_[2] > x1_:
+                            x1_ = hb_[2]
+                        if b_[3] >= 0.99 * Hf and hb_[3] > y1_:
+                            y1_ = hb_[3]
+                    return [max(0.0, x0_), max(0.0, y0_), min(float(Wf), x1_), min(float(Hf), y1_)]
+
+                _subj = []
+                for stx, sl, shape in subjects:
+                    if shape:
+                        shape = _home_box(shape, home_at(stx, s["t0"]))
+                        sl.rect = shape
+                    if getattr(sl, "_row_step", 0):
+                        sl._row_step = sl._row_step / _k
+                    _subj.append((stx, sl, shape))
+                subjects = _subj
+                behinds = [(t_, _home_box(b_)) for t_, b_ in behinds]
+                _ghosts = [(_home_box(b_) if b_ else b_, t_, k_) for b_, t_, k_ in ghost_list(s, sub_states, carded)]
+                if cam:
+                    cam = _home_box(cam)
+                browser_bits = [(_home_box(cb_), tb_, ad_, rt_) for cb_, tb_, ad_, rt_ in (browser_bits or [])]
+                zoom_box = _home_box([0.0, 0.0, float(Wf), float(Hf)])
+                if os.environ.get("SN_ZOOM"):
+                    print("ZOOM %s: k %.2f shift %.0f,%.0f -> crop %s" % (
+                        s["t0"], T[0], T[1], T[2], [round(v) for v in zoom_box]), file=sys.stderr)
+            else:
+                _ghosts = ghost_list(s, sub_states, carded)
             _shot = (furnish.screen_shot(
                 {"t0": s["t0"], "t1": s["t1"]},
                 [(sl, shape) for _, sl, shape in subjects],
                 s["size"][0], s["size"][1],
                 bar_words if barred else None, clock if barred else "",
                 behind_cards=behinds,
+                zoom=zoom_box,
                 # ONLY THE TOP LAYER GETS FULL CONTENT; EVERYTHING BEHIND IS
                 # AN OUTLINE. Tristan's ruling, found in the record on
                 # 2026-08-24: "those outlined screens NEED content within the
@@ -7788,11 +7840,11 @@ def note(records_path, diary_text=None):
                 chrome_step=next((getattr(sl_, "_row_step", 0)
                                   for _, sl_, _ in subjects
                                   if getattr(sl_, "_row_step", 0)), 0.0),
-                ghosts=ghost_list(s, sub_states, carded),
+                ghosts=_ghosts,
                 camera=(cam, cam_pic) if cam else None,
                 sure=all(any(t in st.measured for t in s["ts"]) or id(st) in settled
                          for st, _, _ in subjects),
-                kz=(T[0] if T else 1.0)))
+                kz=(1.0 if zoom_box else (T[0] if T else 1.0))))
             parts.append(_shot)
             parts.append("")
             # A BROWSER READ AND NOT DRAWN SAYS SO. At 00:04:00 the frame is
