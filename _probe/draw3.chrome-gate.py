@@ -5965,13 +5965,6 @@ def note(records_path, diary_text=None):
                 browser_bits = []
                 for stx, sl in src:
                     strip = behind_for(sl, dict(s, size=s["size"]), stx)
-                    if s["t0"] == "00:04:00":
-                        import sys as _s
-                        print("CHROME t0=%s state=%r topwords=%d url=%s -> strip=%s"
-                              % (s["t0"], getattr(stx, "name", None),
-                                 len(getattr(sl, "topwords", []) or []),
-                                 any("URL" in str(t[0]) for t in (getattr(sl, "topwords", []) or [])),
-                                 bool(strip)), file=_s.stderr)
                     if strip:
                         sb = strip[0][1]
                         # A WINDOW BEHIND THE STRIP BEGINS UNDER IT. The
