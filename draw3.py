@@ -6895,8 +6895,17 @@ def note(records_path, diary_text=None):
                 # sat 70 px left of its place. The stretch's own measure
                 # first, then the window's, then the widest window's, then
                 # the house's.
-                if st.name == "The Finder window" and not getattr(sl, "side_share", None):
-                    sl.side_share = (getattr(st, "side_share", None) or furnish.side_share_card(st)
+                # The widest-window measure first, as the cards use: the
+                # median share over a window's moments is the fault the
+                # card rule names (vault-demo's came out at 53%, half the
+                # window), and a raw share past 45% is no Finder sidebar.
+                if st.name == "The Finder window":
+                    def _side_ok(v):
+                        return v if v and 0.1 <= v <= 0.45 else None
+                    sl.side_share = (_side_ok(furnish.side_share_card(sl))
+                                     or _side_ok(getattr(sl, "side_share", None))
+                                     or _side_ok(furnish.side_share_card(st))
+                                     or _side_ok(getattr(st, "side_share", None))
                                      or house_share)
                 if sl is not st:
                     # the desk's chrome stands all video; a stretch that did
