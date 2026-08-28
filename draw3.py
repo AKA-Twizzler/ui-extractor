@@ -1232,8 +1232,6 @@ class State:
                         Hf = (m.get("size") or [0, 2160])[1]
                         if (box and len(box) == 4 and box[3] <= 0.09 * Hf
                                 and re.search(r"type a URL|https?://", str(r["text"]))):
-                            import sys as _s
-                            print("ROUTED %s %r box=%s" % (m["ts"], r["text"][:40], box), file=_s.stderr)
                             if not any(same_text(r["text"], t[0]) for t in self.topwords):
                                 self.topwords.append((r["text"], box[0], box[1], box[2], box[3],
                                                       bool(r.get("confirmed"))))
@@ -3568,12 +3566,6 @@ def behind_for(slice_st, span, subject):
     import furnish
     out = []
     strip = furnish.browser_behind(slice_st)
-    import sys as _s
-    if span.get("t0") in ("00:04:00", "00:04:10"):
-        print("BEHIND t0=%s  topwords=%d  has_url=%s  strip=%s"
-              % (span.get("t0"), len(getattr(slice_st, "topwords", []) or []),
-                 any("URL" in str(t[0]) for t in (getattr(slice_st, "topwords", []) or [])),
-                 bool(strip)), file=_s.stderr)
     if strip:
         rect = subject.rects.get(span["t0"]) or subject.rect or [0, 0, 0, 0]
         tops = [t for t in slice_st.topwords]
@@ -5518,6 +5510,17 @@ def note(records_path, diary_text=None):
                             key=len, default=[])
             clock = next((clock_at[t] for t in s["ts"] if clock_at.get(t)), "")
             barred = any(t in bar_seen for t in s["ts"])
+            # ...OR WHERE A BROWSER'S OWN ADDRESS BAR WAS READ ALONG THE TOP.
+            # `barred` asks whether the DESKTOP MENU BAR was seen, and the
+            # browser strip was drawn only where it was. At 00:04:00 the frame
+            # is panned past the menu bar, so the browser the screen plainly
+            # shows - its address bar read, confirmed, and positioned in the
+            # frame's top strip - was never even asked for. A browser can
+            # stand at the top of a frame with no menu bar above it. The menu
+            # bar itself stays gated on `barred`, which is its own evidence.
+            chrome_seen = any(re.search(r"type a URL|https?://", str(t_[0]))
+                              for st_ in states
+                              for t_ in (getattr(st_, "topwords", []) or []))
 
             kz_now = T[0] if T else 1.0
             S_now = max(0.05, kz_now * furnish.UI_TXT / furnish.CSS_TXT)
@@ -5949,7 +5952,7 @@ def note(records_path, diary_text=None):
                         fresh.append((tag_, box_))
                 behinds = fresh
             behinds.sort(key=lambda hb: -(hb[1][2] - hb[1][0]) * (hb[1][3] - hb[1][1]))
-            if barred:
+            if barred or chrome_seen:
                 # the browser's tab strip runs along the very top of the
                 # screen, above whatever window it stands behind. It is read
                 # on the top rows of the window that spans that strip -- often
@@ -6145,7 +6148,7 @@ def note(records_path, diary_text=None):
                 # own measured row height, and `furnish.browser_behind`
                 # recovers two of the five tabs. The box is measured; the
                 # chrome is not finished.
-                chrome=(browser_bits if barred else ()),
+                chrome=(browser_bits if (barred or chrome_seen) else ()),
                 chrome_step=next((getattr(sl_, "_row_step", 0)
                                   for _, sl_, _ in subjects
                                   if getattr(sl_, "_row_step", 0)), 0.0),
