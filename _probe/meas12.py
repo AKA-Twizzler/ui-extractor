@@ -1,7 +1,7 @@
 import sys, os, re, subprocess
 sys.path.insert(0, "/home/trism/.claude/jobs/014c964f/tmp/replay"); os.chdir("/home/trism/.claude/jobs/014c964f/tmp/replay")
 import compare
-note = open("_probe/note-tree2.md", encoding="utf-8").read()
+note = open("_probe/note-nomax.md", encoding="utf-8").read()
 cards = [l for l in note.splitlines() if l.startswith('<div class="sn-window sn-obsidian')]
 css = open(compare.CSS_PATH, encoding="utf-8").read()
 out = "/home/trism/.claude/jobs/014c964f/tmp/replay/_probe/wmeas"
