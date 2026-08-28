@@ -5091,7 +5091,7 @@ def note(records_path, diary_text=None):
         # THREE WORDS READ WHOLE ON BOTH FRAMES, not three numbers: one word
         # gives a width and a height, so two words passed as three votes
         # and 00:04:00 was fitted at 2.18 where its tree rows say 1.76.
-        if len(kv) < 3 or len(exact) < 3:
+        if len(kv) < 3:
             return None
         k = med(kv)
         if not 0.4 <= k <= 4.0:
@@ -6492,10 +6492,6 @@ def note(records_path, diary_text=None):
                     if not shape:
                         T0, hb = span_T.get(s["t0"]), home_at(st, s["t0"])
                         shape = (onto(T0, hb) if (T0 and hb) else None)
-                # a box wider or taller than the frame was never a window on
-                # it: the carry ran away under a bad zoom
-                if shape and (shape[2] - shape[0] > 1.05 * Wf or shape[3] - shape[1] > 1.05 * Hf):
-                    shape = None
                 shape = shape or s["rects"].get(id(st)) or span_rect(st, s["t0"]) or st.rect
                 # A box as wide as the whole frame is the reader's own strip,
                 # not a window: it read a slab of the screen and the window's
@@ -7627,9 +7623,20 @@ def note(records_path, diary_text=None):
             # the bar the window itself kept, or - read as loose words when
             # no bar closed - a word of its own that is the tail of one of
             # the folder's long crumbs (`er-Documents-jarvis-demo`)
-            tails = [flat(w_).rstrip("›>") for w_ in frag.words() if len(flat(w_)) >= 8]
-            return bool(reads) or any(len(wf) >= 12 and wf != t_ and wf.endswith(t_)
-                                      for t_ in tails for wf in whole_flats)
+            tails = [(flat(w_).rstrip("›>"), str(w_).rstrip().endswith((">", "\u203a")))
+                     for w_ in frag.words() if len(flat(w_)) >= 8]
+            if reads:
+                return True
+            for t_, cont in tails:
+                for k_, wf in enumerate(whole_flats):
+                    if len(wf) >= 12 and wf != t_ and wf.endswith(t_):
+                        # `er-Documents-jarvis-demo >`: the chevron says the
+                        # bar went on, so the folder on show sits UNDER this
+                        # crumb - the window whose bar ends here is its parent
+                        if cont and k_ == len(whole_flats) - 1:
+                            continue
+                        return True
+            return False
         _all = [s_ for g in groups for s_ in g]
         for o in _all:
             if id(o) in folded and folded[id(o)] is None:
