@@ -6794,56 +6794,8 @@ def note(records_path, diary_text=None):
                     for o in g:
                         shape_of[id(o)] = (h_ / w_,
                                            min(1.0, max(0.35, w_ / screen_w)) if screen_w else None)
-        # A CARD THAT ADDS NOTHING IS NOT A VIEW OF THE WINDOW. One window can
-        # end up with four cards where two of them are an empty frame around a
-        # stray line -- measured on this video, the Obsidian window's second
-        # card holds no tree, no list, and 25 words of which 100% already stand
-        # in another of its cards, and the third holds four words. A reader
-        # scrolls past two window frames that say nothing, which is the layout
-        # reading as wrong even though every part of it is true.
-        #
-        # So a state with NO STRUCTURE OF ITS OWN -- no tree rows, no list rows
-        # -- whose words are already carried by another card of the same
-        # window is not drawn again. Its moments are added to the card that
-        # does carry them, so nothing about WHEN the window stood that way is
-        # lost. The test is containment against the other cards' own text, not
-        # a size threshold: a small card holding something new is kept.
-        def _card_words(st_):
-            h = st_.window_html() or ""
-            return set(x.lower() for x in re.findall(r"[A-Za-z][A-Za-z']{3,}",
-                                                     re.sub(r"<[^>]+>", " ", h)))
-
-        def _has_structure(st_):
-            h = st_.window_html() or ""
-            return ('<div class="sn-tree">' in h and "<div>" in h.split('<div class="sn-tree">')[1][:4000]) \
-                or "<tr>" in h
-
-        folded = {}
-        for g in groups:
-            if len(g) < 2:
-                continue
-            words = {id(o): _card_words(o) for o in g}
-            for o in g:
-                if _has_structure(o):
-                    continue
-                mine = words[id(o)]
-                others = set().union(*[words[id(x)] for x in g if x is not o]) or set()
-                if mine and len(mine & others) >= 0.9 * len(mine):
-                    keep = max((x for x in g if x is not o), key=lambda x: len(words[id(x)]))
-                    folded.setdefault(id(keep), []).extend(o.times)
-                    folded[id(o)] = None
-
         for st in sorted((s for g in groups for s in g), key=lambda s: s.times[0]):
-            if id(st) in folded and folded[id(st)] is None:
-                continue
-            _extra = [t for t in (folded.get(id(st)) or []) if t not in st.times]
-            _when = span_of(st)
-            if _extra:
-                _all = sorted(set(st.times) | set(_extra))
-                _when = _all[0] if len(_all) == 1 else (
-                    "%s and %s" % (_all[0], _all[1]) if len(_all) == 2
-                    else "%s to %s" % (_all[0], _all[-1]))
-            parts.append(f"## {w} - as at {_when}" + (f", {st.title}" if st.title else ""))
+            parts.append(f"## {w} - as at {span_of(st)}" + (f", {st.title}" if st.title else ""))
             parts.append("")
             _sh = shape_of.get(id(st)) or (None, None)
             _html = st.window_html()
