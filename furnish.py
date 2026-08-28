@@ -382,7 +382,8 @@ def finder(st):
     # strip the frame showed comes out empty. They hug the right edge.
     shares = col_shares(st, head) if has_name else None
     # a name the screen cut and another moment read whole, whole on the card
-    whole_names = getattr(st, "_whole_names", None) or {} if on_card else {}
+    import draw3
+    whole_names = (getattr(st, "_whole_names", None) or {}) if on_card else {}
     if shares and on_card and rows and name_i in shares:
         # A NAME THE CARD KNOWS WHOLE IS SHOWN WHOLE. The card adds up every
         # frame (point 3 of the fourteen): a name Finder cut on screen and
