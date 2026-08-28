@@ -5944,7 +5944,7 @@ def note(records_path, diary_text=None):
             # edges, and those inflated boxes then stood as candidates for
             # every window's whole. No recording zooms OUT past the desktop,
             # and a frame that shows the desktop bar is the desktop.
-            if T[0] < 1.15 or t in bar_seen:
+            if T[0] < 1.15:
                 T = (1.0, 0.0, 0.0)
             outs.append((secs_of.get(t, 0), back(T, r), T[0]))
         if outs:
