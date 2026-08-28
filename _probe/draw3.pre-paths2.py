@@ -2185,11 +2185,7 @@ def build_states(moments):
     # left alone, as is any name whose last stop belongs to an extension
     # (`Vault Index.md` ends in `d`).
     for st in states:
-        if st.title and re.search(r"\.{2,}$", st.title):
-            # Finder cuts a long title with an ellipsis, which the engines
-            # read as two, three or four dots: the screen showed one mark
-            st.title = re.sub(r"\.{2,}$", "\u2026", st.title)
-        elif st.title and len(st.title) > 1 and st.title.endswith("."):
+        if st.title and len(st.title) > 1 and st.title.endswith("."):
             st.title = st.title.rstrip(".") or st.title
         # THE BACK AND FORWARD ARROWS BESIDE THE TITLE, read as `<>` in front
         # of it, and the dot-plus-letter the reader hangs on a moving frame's
@@ -2406,13 +2402,6 @@ def crumb_same(a, b):
         return False
     if fa == fb:
         return True
-    # A GENERIC CRUMB IS ONLY EVER ITSELF. `Users` opens `-Users-jaredrh`
-    # and the prefix rule below called them one crumb, so the bar under the
-    # memory window was respelt with a folder three levels down standing
-    # at its root. The disk, Users, Documents and the home folder are whole
-    # names every bar carries; nothing is a longer spelling of them.
-    if norm(a) in GENERIC or norm(b) in GENERIC:
-        return False
     # A FOLDER AND THE NOTE INSIDE IT NAMED ALIKE ARE TWO CRUMBS. `memory`
     # and `MEMORY.md` flatten to `memory` and `memorymd`, one opening the
     # other, and the rule below took them for one crumb read twice - so the
@@ -2566,11 +2555,6 @@ def unglue(path):
         # never part of a folder's name; `...` marks a cut and stays
         if len(c) > 2 and c.endswith(".") and not c.endswith(".."):
             c = c[:-1]
-        # and its dot-plus-capital (`projects.Q`), read off a moving frame:
-        # no folder in this video ends in a one-letter capital extension
-        m_ = re.match(r"^(.{4,})\.[A-Z]$", c)
-        if m_:
-            c = m_.group(1)
         out.append(c)
     return out
 
@@ -2917,27 +2901,18 @@ def harmonise(states):
                     # crumb opening with a generic crumb whose remainder is a
                     # name the video knows whole is those two crumbs.
                     known_flat = strong_flats | row_flats | {flat(c_) for c_ in clean}
-                    settled_flat = strong_flats | row_flats
                     split_ = []
                     for c in path:
                         f = flat(c)
                         done = False
-                        if f not in settled_flat and len(f) >= 10:
+                        if f not in known_flat and len(f) >= 10:
                             for g_ in ("users", "documents", "desktop", "downloads"):
                                 rest_ = f[len(g_):]
-                                if f.startswith(g_) and rest_ in known_flat and len(rest_) >= 4:
+                                if f.startswith(g_) and rest_ in known_flat:
                                     split_.append(g_.capitalize())
                                     split_.append(canon.get(rest_) or canon_fold.get(fold(rest_)) or c[len(g_):])
                                     done = True
                                     break
-                        # ...AND A CHEVRON THE READER DROPPED leaves two crumbs
-                        # in one, `.claude projects`: two names the video knows
-                        # whole with a space between them are two crumbs.
-                        if not done and " " in c.strip() and f not in settled_flat:
-                            bits_ = c.split()
-                            if len(bits_) >= 2 and all(flat(x_) in known_flat for x_ in bits_):
-                                split_.extend(bits_)
-                                done = True
                         if not done:
                             split_.append(c)
                     path[:] = split_
@@ -2946,18 +2921,25 @@ def harmonise(states):
                         path[i] = c
                         f = flat(c)
                         b = exact_fix(c)
-                        if not b and len(f) >= 6 and f not in strong_flats and f not in row_flats:
-                            # a crumb misread by a letter or two (`prjects`,
-                            # `jaredrhodenize`) takes the name the video
-                            # spells whole, when exactly one strong name
-                            # reads that close
+                        # A CRUMB THE VIDEO SPELLS THE SAME WAY EVERYWHERE IS
+                        # NEVER COMPLETED. `Users` opens `-Users-jaredrh` and
+                        # was "completed" to it, which put a folder at the
+                        # root of a path the screen never showed. Its
+                        # spelling is still put right (`MacintoshHD`).
+                        if norm(c) in GENERIC:
+                            pass
+                        elif not b and len(f) >= 6 and f not in strong_flats and f not in row_flats:
+                            # a crumb misread by a letter or two (`prjects`)
+                            # takes the name the video spells whole, when
+                            # exactly one strong name reads that close
                             near = [p_ for p_ in strong_names
                                     if abs(len(flat(p_)) - len(f)) <= 2 and flat(p_)[:1] == f[:1]
                                     and difflib.SequenceMatcher(None, flat(p_), f, autojunk=False).ratio() >= 0.85]
                             if len({flat(p_) for p_ in near}) == 1:
                                 b = near[0]
                         if (not b and len(f) >= 4 and f not in strong_flats
-                                and f not in row_flats and canon.get(f, c) == c):
+                                and f not in row_flats and canon.get(f, c) == c
+                                and norm(c) not in GENERIC):
                             # Finder cuts a long crumb short: the folder's
                             # real name is the pool name this crumb opens,
                             # allowing one slip in what was read
@@ -2973,12 +2955,6 @@ def harmonise(states):
                             starts = [p for p in strong_names if opens(p)]
                             exact = [p for p in starts if flat(p).startswith(f)]
                             starts = exact or starts      # a clean opening beats a slipped one
-                            # A GENERIC CRUMB IS NEVER COMPLETED INTO A FOLDER
-                            # BELOW IT. `Users` opens `-Users-jaredrh`; the only
-                            # completion a generic crumb may take is the generic
-                            # name it was cut from (`jaredr` -> `jaredrhodenizer`).
-                            if norm(c) in GENERIC or len(f) <= 7:
-                                starts = [p for p in starts if norm(p) in GENERIC]
                             if starts:
                                 b = min(starts, key=lambda p: len(flat(p)))
                         if b:
