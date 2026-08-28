@@ -33,6 +33,9 @@ JUNK = re.compile(r"^[^A-Za-z0-9]*$")
 
 
 def here(path):
+    """The record's Windows path, as this side of the machine reaches it."""
+    if os.name == "nt":
+        return path
     if len(path) > 2 and path[1] == ":":
         return "/mnt/" + path[0].lower() + path[2:].replace("\\", "/")
     return path
