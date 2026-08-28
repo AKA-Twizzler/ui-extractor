@@ -124,6 +124,14 @@ def _across(shelf, pos, a, b, slack, part, outward, corner=False):
     rectangle whose corners were never drawn."""
     want = part * (b - a)
     ends = max(6.0, 0.03 * (b - a))
+    # STRICT ON OVERSHOOT, TOLERANT ON UNDERSHOOT. The test's own reason is
+    # entirely about lines running PAST a side -- a divider inside another
+    # window, a bar crossing the whole screen -- and none of it applies to a
+    # line stopping SHORT. A real traced edge wobbles: measured across four
+    # frames, one window's foot ends at 145 on one and at 136, 136, 137 on the
+    # others, against a side at 147. The window closes on one frame and is lost
+    # on three, from eleven pixels of wobble in an edge that is really there.
+    short = max(ends, 12.0)
     best = None
     lines, step = shelf
     lo, hi = int(pos - slack) // step, int(pos + slack) // step
@@ -133,7 +141,7 @@ def _across(shelf, pos, a, b, slack, part, outward, corner=False):
                 continue
             if min(b, lb) - max(a, la) < want:
                 continue
-            if corner and not (a - ends <= la <= a + ends and b - ends <= lb <= b + ends):
+            if corner and not (a - ends <= la <= a + short and b - short <= lb <= b + ends):
                 continue        # it does not begin and end at the two sides
             if best is None or (p - pos) * outward > (best - pos) * outward:
                 best = p
