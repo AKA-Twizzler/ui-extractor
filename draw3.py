@@ -182,11 +182,14 @@ def fold_twins(table, sni=0):
     `user_review_drafts_...`). The better-confirmed name stands and the
     band goes with it."""
     rows = table.rows
+    hdr = getattr(table, "header", None) or []
+    if not (sni < len(hdr) and hdr[sni] and "Name" in hdr[sni]):
+        return                      # a Size or Kind column is never a name
     out = []
     for r in rows:
         nm = r["cells"][sni] if sni < len(r["cells"]) else ""
         rest = [c for i, c in enumerate(r["cells"]) if i != sni]
-        if not nm or sum(1 for c in rest if c) < 2:
+        if not nm or sum(1 for c in rest if c) < 2 or GLUED_SIZE.search(nm) or GLUED_DATE.search(nm):
             out.append(r)
             continue
         twin = None
@@ -3346,8 +3349,14 @@ def harmonise(states):
                 nm_ = r["cells"][0] if r["cells"] else ""
                 dc_ = r["cells"][di_] if (di_ is not None and di_ < len(r["cells"])) else ""
                 two_ = len(re.findall(r"\d{4}", dc_ or "")) >= 2
-                glued_ = bool(nm_) and " " in nm_ and any(o_ != nm_ and nm_.startswith(o_ + " ") for o_ in names_)
-                if glued_ and two_:
+                heads_ = [o_ for o_ in names_ if o_ != nm_ and nm_.startswith(o_ + " ")]
+                tail_ok = False
+                for h_ in heads_:
+                    tail_ = norm(nm_[len(h_):])
+                    tail_ok = tail_ok or any(o_ != nm_ and o_ != h_ and len(norm(o_)) >= 5 and abs(len(norm(o_)) - len(tail_)) <= 2
+                                             and difflib.SequenceMatcher(None, norm(o_), tail_, autojunk=False).ratio() >= 0.7
+                                             for o_ in names_)
+                if heads_ and (two_ or tail_ok):
                     continue
                 kept_.append(r)
             t_.rows = kept_
@@ -3904,25 +3913,34 @@ def respell_from(sl, st):
     def score_(s_):
         return (sum(1 for ch in s_ if not ch.isalnum()), sum(ch.isupper() for ch in s_), len(s_))
 
-    def close_(a_, b_):
+    def close_(a_, b_, same_rest=False):
         x_, y_ = norm(a_), norm(b_)
         if not x_ or not y_:
             return False
         if x_ == y_:
             return True
-        return len(x_) == len(y_) and len(x_) >= 5 and sum(1 for u, v in zip(x_, y_) if u != v) <= 2
+        if min(len(x_), len(y_)) < 5 or abs(len(x_) - len(y_)) > 2:
+            return False
+        ratio_ = difflib.SequenceMatcher(None, x_, y_, autojunk=False).ratio()
+        return ratio_ >= (0.8 if same_rest else 0.88)
 
     def pick_(mine_, settled_):
         if norm(mine_) == norm(settled_):
             return settled_ if score_(settled_) >= score_(mine_) else mine_
         return settled_
     t_, w_ = sl.main_table(), st.main_table()
-    if t_ and w_ and t_ is not w_:
+    named_ = bool(t_ and t_.header and t_.header[0] and "Name" in t_.header[0])
+    if t_ and w_ and t_ is not w_ and named_:
         for r in t_.rows:
             nm_ = r["cells"][0] if r["cells"] else ""
-            if not nm_:
+            if not nm_ or GLUED_SIZE.search(nm_) or GLUED_DATE.search(nm_):
                 continue
-            hit_ = next((o["cells"][0] for o in w_.rows if o["cells"] and o["cells"][0] and close_(nm_, o["cells"][0])), None)
+            def _rest_same(o_):
+                a_ = [norm(c) for c in r["cells"][1:] if c]
+                b_ = [norm(c) for c in o_["cells"][1:] if c]
+                return len(a_) >= 2 and all(c in b_ for c in a_)
+            hit_ = next((o["cells"][0] for o in w_.rows if o["cells"] and o["cells"][0]
+                         and close_(nm_, o["cells"][0], _rest_same(o))), None)
             if hit_ and hit_ != nm_:
                 r["cells"][0] = pick_(nm_, hit_)
     if sl.title and st.title and sl.title != st.title and close_(sl.title, st.title):
@@ -6462,8 +6480,8 @@ def note(records_path, diary_text=None):
             if not meas:
                 return None
             i0, i1 = at_idx.get(s_["t0"], 0), at_idx.get(s_["t1"], 0)
-            before = [t for t in meas if t < s_["t0"] and i0 - at_idx.get(t, -99) <= 3]
-            after = [t for t in meas if t > s_["t1"] and at_idx.get(t, 99) - i1 <= 3]
+            before = [t for t in meas if t < s_["t0"] and i0 - at_idx.get(t, -99) <= 5]
+            after = [t for t in meas if t > s_["t1"] and at_idx.get(t, 99) - i1 <= 5]
             tb, ta = (before[-1] if before else None), (after[0] if after else None)
             if tb is None and ta is None:
                 if why:
@@ -6684,7 +6702,10 @@ def note(records_path, diary_text=None):
                             _convert_tree(sl, q, [(_wt, _wk, st)])
                     sidebar_from_panes(sl, house_side)
                     tidy_side(sl.main_table(), house_side, sl.title)
+                    respell_from(sl, st)      # so the mend's walk meets the settled names
                     mend_cells(sl, st)
+                    if sl.main_table():
+                        fold_twins(sl.main_table(), 0)
                     # the bar ends at the folder the window shows, and the
                     # title bar names it: a stretch whose reading of the bar
                     # stopped short (`... > 02 Co` under a window titled
@@ -6701,7 +6722,9 @@ def note(records_path, diary_text=None):
                         _fixed = []
                         for c_ in _st_t.path:
                             f_ = flat(c_)
-                            hit_ = next((w_ for w_ in _whole_t.path if crumb_same(c_, w_)), None)
+                            hit_ = next((w_ for w_ in _whole_t.path if crumb_same(c_, w_)
+                                         or (len(f_) >= 5 and f_[:1] == flat(w_)[:1] and abs(len(f_) - len(flat(w_))) <= 2
+                                             and difflib.SequenceMatcher(None, f_, flat(w_), autojunk=False).ratio() >= 0.85)), None)
                             if hit_ is not None and f_ != flat(hit_) and not flat(hit_).startswith(f_):
                                 _fixed.append(hit_)
                             else:
