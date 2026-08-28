@@ -7173,6 +7173,12 @@ def note(records_path, diary_text=None):
             T = span_T.get(s["t0"])
             if T is None:
                 T = last_T          # nothing readable moved between the two
+            # A FIT UNDER 1.15 IS NO ZOOM, HERE AS IN THE HOME READS: the
+            # 0.83 read off two full-screen frames sized their type by it
+            # while their boxes came home unchanged, and the note at
+            # 00:04:10 was drawn a sixth too small (0.62 to 0.57).
+            if T and T[0] < 1.15:
+                T = (1.0, 0.0, 0.0)
             last_T = T
             bar_words = max((bar_at[t] for t in s["ts"] if bar_at.get(t)),
                             key=len, default=[])
