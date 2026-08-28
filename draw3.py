@@ -2695,7 +2695,7 @@ def harmonise(states):
 # that stretch of time, the others as empty outlines. Its content comes
 # only from the moments inside the stretch, so it stays an honest still.
 
-def card_shot(html, ratio, share=None):
+def card_shot(html, ratio, share=None, tree_min=None):
     """A rebuilt window given the SHAPE it really had, as a floor.
 
     The moment pictures bind every window to its own measured width; the
@@ -2749,6 +2749,15 @@ def card_shot(html, ratio, share=None):
         # card whose own style attribute said `48.6%`. A custom property is not
         # in that fight; the stylesheet reads it back with its own !important.
         bits.append("--sn-max:%.1f%%" % (100.0 * share))
+    if tree_min:
+        # THE FILE TREE, WIDE ENOUGH TO READ -- ON THE CARD ONLY. Its column is
+        # a share of the window measured off the frame, and that share is
+        # right: at 00:00:00 Obsidian stands full screen with its sidebar at
+        # 392 of 3840 pixels, a true 10%. But 10% of a 3840px screen is 392px
+        # and shows every name, where 10% of a 700px card is 70px and shows
+        # none. The picture keeps the true share; the card, which exists to be
+        # READ, floors the column at the width its own longest row needs.
+        bits.append("--sn-tree-min:%s" % tree_min)
     return re.sub(r'^(<div class="sn-window[^"]*")(?=>)',
                   r'\1 style="%s"' % ";".join(bits),
                   html, count=1)
@@ -6789,7 +6798,8 @@ def note(records_path, diary_text=None):
             parts.append(f"## {w} - as at {span_of(st)}" + (f", {st.title}" if st.title else ""))
             parts.append("")
             _sh = shape_of.get(id(st)) or (None, None)
-            parts.append(card_shot(st.window_html(), _sh[0], _sh[1]))
+            _html = st.window_html()
+            parts.append(card_shot(_html, _sh[0], _sh[1], getattr(st, "_tree_min", None)))
             parts.append("")
             for ln in st.said_html():
                 parts.append(ln)

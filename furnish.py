@@ -457,7 +457,15 @@ def obsidian(st, behind=True):
     # tree's pane against the rest of the window - not a fixed 38 to 62,
     # which drew the explorer two and a half times too wide and squeezed
     # the note into a column a third of its real width.
-    tree_floor = ("min(%dch, 45%%)" % min(44, tree_ch + 2)) if tree_ch else "120px"
+    # THE FLOOR TRAVELS AS A VARIABLE, AND ONLY A CARD SETS IT. A picture must
+    # stand at the shape the frame had: forcing this floor there widened the
+    # tree past its true column and cost ten of seventeen pictures agreement
+    # (mean 0.5159 -> 0.5047), which is the picture being made to lie so the
+    # card could be read. `card_shot` sets `--sn-tree-min` on cards only; a
+    # picture never sets it and falls back to the 120px it always had.
+    if tree_ch:
+        st._tree_min = "min(%dch, 45%%)" % min(44, tree_ch + 2)
+    tree_floor = "var(--sn-tree-min, 120px)"
     tree_fr, doc_fr = 38, 62
     tp = next((q for q in getattr(st, "parts", []) if q.get("fam") == "tree" and q.get("x0") is not None), None)
     rect = getattr(st, "shape", None) or getattr(st, "rect", None)
