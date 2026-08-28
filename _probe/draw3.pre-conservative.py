@@ -3674,19 +3674,6 @@ def span_of(st):
     return f"{st.times[0]} to {st.times[-1]}"
 
 
-_MASKED = {}
-
-
-def masked_share(path):
-    """`masked_rows`, remembered - the note asks the same frame twice."""
-    if path not in _MASKED:
-        try:
-            _MASKED[path] = masked_rows(path)
-        except Exception:
-            _MASKED[path] = 0.0
-    return _MASKED[path]
-
-
 def masked_rows(path):
     """How much of a frame the RECORDING ITSELF blacks out.
 
@@ -6231,22 +6218,6 @@ def note(records_path, diary_text=None):
                 sure=all(any(t in st.measured for t in s["ts"]) for st, _, _ in subjects),
                 kz=(T[0] if T else 1.0)))
             parts.append("")
-            # WHAT THE RECORDING DID NOT CARRY, said UNDER the picture it
-            # affects and not only on the front page. A picture showing one
-            # window confidently where the screen held three reads as
-            # unreliable; the same picture with a line saying the video
-            # blacked that part of the screen out reads as honest. Tristan,
-            # on the note as a whole: "at some points it looks greatd and at
-            # other points in the same file where one looked great the other
-            # doesn't keep the same quality". A note that is never wrong and
-            # sometimes sparse reads as reliable; one that is sometimes
-            # perfect and sometimes wrong reads as unreliable.
-            _m0 = next((mm for mm in moments if mm["ts"] == s["t0"]), None)
-            _hid = masked_share(frame_of(_m0)) if _m0 is not None else 0.0
-            if _hid >= 0.05:
-                parts += ["*The recording blacks out %.0f%% of this screen's height here. Any window "
-                          "standing behind those bands is not drawn, because the video does not "
-                          "carry it.*" % (100 * _hid), ""]
             seen_said = set()
             for _, sl, _ in subjects:
                 for ln in sl.said_html():
