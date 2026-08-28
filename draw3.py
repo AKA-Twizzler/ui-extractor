@@ -279,6 +279,12 @@ class Table:
             head = self.STANDARD.get(len(head), [""] * len(head))
         if head and not head[0] and sum(1 for h in head if h in FINDER_WORDS) >= 2 and "Name" not in head:
             head[0] = "Name"
+        # A SENTENCE IS NOT A COLUMN HEADING. Finder's tooltip "See folders
+        # you viewed previously" hung over the Name heading at 00:03:40 and
+        # was read as the heading; a heading is one or two words.
+        if head and sum(1 for h in head if h in FINDER_WORDS) >= 1:
+            head = [("Name" if (i == 0 and "Name" not in head) else "") if (h and h not in FINDER_WORDS and h.count(" ") >= 2) else h
+                    for i, h in enumerate(head)]
         # A heading holding SEVERAL of Finder's headings means the reader ran
         # the columns together, and the cells under it are glued too. Where
         # the cells plainly hold a date or a size, the column is cut back
@@ -404,7 +410,8 @@ class Table:
             if len(votes) > 1 and r["cells"] and r["cells"][0]:
                 # a spelling read with its dot or its capital intact ranks
                 # above a barer one on a tie
-                best = max(votes, key=lambda nm: (votes[nm], nm.startswith("."), sum(ch.isupper() for ch in nm)))
+                best = max(votes, key=lambda nm: (votes[nm], nm.startswith("."),
+                                                  sum(1 for ch in nm if not ch.isalnum()), sum(ch.isupper() for ch in nm)))
                 if best != r["cells"][0] and votes[best] > votes.get(r["cells"][0], 0):
                     r["cells"][0] = best
                     if r["italic"]:
@@ -6234,6 +6241,13 @@ def note(records_path, diary_text=None):
                     sidebar_from_panes(sl, house_side)
                     tidy_side(sl.main_table(), house_side, sl.title)
                     mend_cells(sl, st)
+                    # the bar ends at the folder the window shows, and the
+                    # title bar names it: a stretch whose reading of the bar
+                    # stopped short (`... > 02 Co` under a window titled
+                    # `Assets`) gets the folder back on the end
+                    _st_t = sl.main_table()
+                    if _st_t and _st_t.path and sl.title and not getattr(st, "title_from_path", False):
+                        _st_t.path = end_at_folder(_st_t.path, sl.title)
                     strip_furniture(sl, strip_at)
                     drop_side_prefix(sl)
                     drop_crumb_rows(sl, _all_crumbs)
@@ -7122,7 +7136,7 @@ def note(records_path, diary_text=None):
                             for x in subjects]
             fine = []
             for stx, sl, shape in subjects:
-                if shape and not is_window(shape):
+                if shape and not is_window(shape) and id(stx) not in settled:
                     app = label_for(stx, s["t0"]).split(":")[0].strip()
                     if any(t.split(":")[0].strip() == app
                            or app in t for t, _b in behinds):
