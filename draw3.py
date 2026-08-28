@@ -3097,6 +3097,13 @@ def harmonise(states):
                 # too: this path was chained and re-spelt after `Table.add`
                 # saw it, so a glue can be reassembled on the way through.
                 table.path = unglue(table.path)
+                # THE BAR ENDS AT THE FOLDER THE TITLE BAR NAMES, and it is
+                # put there HERE because this is where the bar is rebuilt
+                # from its readings: every later pass that rebuilt it threw
+                # the folder away again, so `Assets` stood in the window's
+                # title and never at the end of its bar.
+                if st.title and not getattr(st, "title_from_path", False) and st.name == "The Finder window":
+                    table.path = end_at_folder(table.path, st.title)
                 # a date cell no engine read whole, whose digits are a clean
                 # date's digits, is that date; a kind cell read twice over
                 # keeps one telling of itself
