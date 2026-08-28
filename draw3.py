@@ -4235,6 +4235,11 @@ def cut_ends(name):
     return name[:m.start()], name[m.end():]
 
 
+def whole_name_key(name):
+    """A cut name as a key, whatever dots the reader gave the cut."""
+    return fold(flat(_ELL.sub("...", name or "")))
+
+
 def complete_name(name, pool, heads):
     """The whole name behind a cut one, or None. First a name read with no
     cut anywhere that opens with the head and closes with the tail (Obsidian
@@ -5387,7 +5392,10 @@ def note(records_path, diary_text=None):
                     continue
                 whole = complete_name(cells[0], pool, heads)
                 if whole and whole != cells[0]:
-                    whole_names[cells[0]] = whole
+                    # keyed past the reader's spelling of the cut: the same
+                    # name comes back with two dots at one moment and three
+                    # at another, and the card draws whichever stood last
+                    whole_names[whole_name_key(cells[0])] = whole
         st._whole_names = whole_names
 
     clocks = [c for m in moments for p in m.get("panes") or [] for c in [old.clock_in(p)] if c]

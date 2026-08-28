@@ -391,7 +391,7 @@ def finder(st):
         # name, the other columns keeping their proportions of what is left
         # -- the way the card grows taller for rows known from other
         # moments. Widths are estimated for the card drawn 960 px wide.
-        longest = max((len(str(whole_names.get((r.get("cells") or [""])[0], (r.get("cells") or [""])[0]) or ""))
+        longest = max((len(str(whole_names.get(draw3.whole_name_key((r.get("cells") or [""])[0]), (r.get("cells") or [""])[0]) or ""))
                        for r in rows), default=0)
         side_est = (home[1] if home and home[1] else None) or side_share_card(st) or 0.25
         list_w = 960.0 * (1.0 - side_est) - 24.0
@@ -419,8 +419,8 @@ def finder(st):
     for r in rows:
         cells = list(r["cells"]) + [""] * (n - len(r["cells"]))
         it = list(r["italic"]) + [False] * (n - len(r["italic"]))
-        if whole_names and cells[name_i] in whole_names:
-            cells[name_i] = whole_names[cells[name_i]]
+        if whole_names and draw3.whole_name_key(cells[name_i]) in whole_names:
+            cells[name_i] = whole_names[draw3.whole_name_key(cells[name_i])]
             it[name_i] = False
         kind = cells[kind_i] if kind_i is not None else ""
         if kind_i is not None:
