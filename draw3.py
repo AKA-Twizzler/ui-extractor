@@ -2940,6 +2940,38 @@ def content_rect(state, group, m):
     return box
 
 
+BORROWED = collections.Counter()    # where a shape came from another moment
+
+
+def rect_at(st, ts):
+    """Where this window stood at ONE moment, AND WHERE THE ANSWER CAME FROM.
+
+        ("measured", box)  the reader measured this window's own edges here
+        ("read", box)      worked out from what the window drew at this moment
+        ("borrowed", box)  NOTHING WAS RECORDED FOR THIS MOMENT -- the box is
+                           another moment's, carried in
+        (None, None)       nothing to give
+
+    THE THIRD ONE IS THE POINT. Every site that wanted a shape used to write
+    `st.rects.get(ts) or st.rect`, and that `or` silently answered "what did
+    this window look like at 00:01:20" with the shape it had at 00:00:00.
+    Measured on the memory-files video, that fallback answers 18 times, so it
+    is not a theoretical hole. Text encoding has drawn this line since TEI P5:
+    a GAP -- not read here, carrying its reason -- is a different thing from a
+    reading, and neither may be quietly turned into the other. Occupancy grids
+    draw it a second way and never let unobserved collapse into free.
+
+    The borrow still happens where a site chooses it; what it may no longer do
+    is happen invisibly."""
+    sn = st.at(ts)
+    if sn is not None and sn.rect:
+        return ("measured" if sn.measured else "read"), sn.rect
+    if st.rect:
+        BORROWED[ts] += 1
+        return "borrowed", st.rect
+    return None, None
+
+
 def overlap(a, b):
     """How much of the smaller box the two share, nought to one."""
     w = min(a[2], b[2]) - max(a[0], b[0])
@@ -2955,7 +2987,7 @@ def span_rect(st, ts):
     measurement stands as it is. Otherwise a window does not shrink because
     less of its text was read at one moment, so readings that start and end
     at the same edges are joined into one shape."""
-    here = st.rects.get(ts) or st.rect
+    _how, here = rect_at(st, ts)
     if not here:
         return None
     if ts in getattr(st, "measured", set()):
@@ -3430,7 +3462,7 @@ def near_windows(states, spans, order):
             if pick is None:
                 continue
             ts = order[pick]
-            box = st.rects.get(ts) or st.rect
+            box = rect_at(st, ts)[1]
             if box:
                 near.append((st, list(box), "before" if pick < lo else "after"))
         out[s["t0"] + s["t1"]] = near
@@ -3467,7 +3499,7 @@ def screens(states, moments):
     spans, cur = [], None
 
     def place(st, ts):
-        return st.rects.get(ts) or st.rect or [0, 0, 0, 0]
+        return rect_at(st, ts)[1] or [0, 0, 0, 0]
 
     for ts in order:
         here = present[ts]
@@ -3735,7 +3767,7 @@ def behind_for(slice_st, span, subject):
     out = []
     strip = furnish.browser_behind(slice_st)
     if strip:
-        rect = subject.rects.get(span["t0"]) or subject.rect or [0, 0, 0, 0]
+        rect = rect_at(subject, span["t0"])[1] or [0, 0, 0, 0]
         tops = [t for t in slice_st.topwords]
         if tops:
             W = span["size"][0] if "size" in span else 3840
