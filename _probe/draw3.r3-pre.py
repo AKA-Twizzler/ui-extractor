@@ -3991,87 +3991,6 @@ def masked_rows(path):
     return hid / float(h)
 
 
-# A REGION READ AS EMPTY AND A REGION NOT READ ARE DIFFERENT CLAIMS, and the
-# bars that tell them apart. Measured by sweeping both over every picture in
-# this video: anywhere from 3% to 7% of the frame, and 0.008 to 0.012 ink,
-# marks exactly one region and no other -- a broad plateau, so these sit in the
-# middle of it rather than on an edge. Below 0.008 the menu-bar strip joins in
-# (it is 12.6% of the frame at 0.004 ink, on eight moments); above 0.012
-# nothing is marked at all.
-GAP_AREA, GAP_INK = 0.05, 0.010
-_GAPS = {}
-
-
-class Gap:
-    """A region the reader LOOKED AT and read nothing on, at one moment.
-
-    TEI P5 has separated these since the nineties -- `<gap>`, material left out
-    because it could not be read, carrying a REASON and an EXTENT, against
-    `<unclear>`, text that WAS read and is doubtful -- and occupancy grids draw
-    it again, never letting unobserved collapse into free.
-
-    THE RECORD ALREADY HELD THE GAP. Run 19v said the difference between NOT
-    READ and NOT THERE "exists in the record only as prose inside the `text`
-    field" and that "there is no structured field for it anywhere". That was
-    wrong, and this supersedes it: the reader writes `quiet` -- the panes it
-    looked at and could read nothing on -- and states the rule in its own
-    words, that refusal is an answer and silence is not. The DRAWING never
-    opened it, along with `rendered`, `unwritten`, `standing`, `wins` and
-    `lone_panels`: six structured fields written at one end of the pipe and
-    read at neither.
-
-    WHAT WAS MISSING IS THE REASON AND THE EXTENT, not the gap. `quiet` holds
-    pane indices and nothing else, so "blank wallpaper" and "content I could
-    not read" arrive as the same value -- and 65 of this video's 66 quiet
-    regions are the first kind. Read as-is it would say nothing useful: the
-    unread SHARE does not track picture quality at all (62% on a good picture,
-    12% on a bad one). The frame settles it, because the regions can be found
-    again and the ink inside them measured."""
-    __slots__ = ("ts", "pi", "box", "area", "ink")
-
-    def __init__(self, ts, pi, box, area, ink):
-        self.ts, self.pi, self.box, self.area, self.ink = ts, pi, box, area, ink
-
-    @property
-    def unread(self):
-        """True where something was THERE and did not come back."""
-        return self.area >= GAP_AREA and self.ink >= GAP_INK
-
-
-def gaps_of(m):
-    """Every region looked at and not read at this moment, measured.
-
-    No try/except swallowing the answer: a frame that cannot be opened must
-    say so, because "nothing was hidden" is a legitimate answer everywhere
-    this is read and a silent failure would wear it."""
-    ts = m.get("ts")
-    if ts in _GAPS:
-        return _GAPS[ts]
-    quiet = set(m.get("quiet") or [])
-    if not quiet:
-        _GAPS[ts] = []
-        return _GAPS[ts]
-    import cv2
-    path = frame_of(m)
-    img = cv2.imread(path) if path else None
-    if img is None:
-        raise IOError("cannot open the frame for %s at %r -- the gap for this "
-                      "moment cannot be measured, and must not read as none" % (ts, path))
-    Hh, Ww = img.shape[:2]
-    out = []
-    for pi, b in enumerate(panes.frame_regions(img) or []):
-        if pi not in quiet:
-            continue
-        x0, y0, x1, y1 = (int(v) for v in b)
-        crop = img[y0:y1, x0:x1]
-        ink = (float((cv2.Canny(cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY), 60, 160) > 0).mean())
-               if crop.size else 0.0)
-        out.append(Gap(ts, pi, [x0, y0, x1, y1],
-                       (x1 - x0) * (y1 - y0) / float(Hh * Ww), ink))
-    _GAPS[ts] = out
-    return out
-
-
 def note(records_path, diary_text=None):
     header, moments, footer = old.load(records_path)
     title = header.get("title") or os.path.basename(os.path.dirname(records_path))
@@ -6624,21 +6543,6 @@ def note(records_path, diary_text=None):
                 parts += ["*The recording blacks out %.0f%% of this screen's height here. Any window "
                           "standing behind those bands is not drawn, because the video does not "
                           "carry it.*" % (100 * _hid), ""]
-            # AND WHAT WAS LOOKED AT AND NOT READ, which is a different claim
-            # from what was not there. Only a region carrying ink counts: most
-            # of what the reader passes over is desktop with nothing on it, and
-            # saying so of blank wallpaper would be noise on every picture.
-            _gaps = gaps_of(_m0) if _m0 is not None else []
-            _lost = [g for g in _gaps if g.unread]
-            if _lost:
-                _blank = len(_gaps) - len(_lost)
-                parts += ["*%s of this screen, %s of it, %s looked at and could not be read, so nothing "
-                          "is drawn there.%s*"
-                          % ("One part" if len(_lost) == 1 else "%d parts" % len(_lost),
-                             " and ".join("%.0f%%" % (100 * g.area) for g in _lost),
-                             "was" if len(_lost) == 1 else "were",
-                             (" Everything else the reader passed over was blank."
-                              if _blank else "")), ""]
             seen_said = set()
             for _, sl, _ in subjects:
                 for ln in sl.said_html():
