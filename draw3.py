@@ -1039,9 +1039,6 @@ def folder_marks(table):
     return {norm(c) for c in table.path if norm(c) not in GENERIC and len(norm(c)) >= 3}
 
 
-PROBE = None
-
-
 class Seen:
     """One window AS IT STOOD AT ONE MOMENT -- the observation, kept apart
     from the identity that runs through the moments.
@@ -1095,12 +1092,9 @@ class _AtView:
 
     def get(self, ts, default=None):
         try:
-            v = self[ts]
+            return self[ts]
         except KeyError:
-            v = None
-        if PROBE is not None:
-            PROBE.append((self._field, ts, v is not None, list(self._seen.keys())))
-        return default if v is None else v
+            return default
 
     def __iter__(self):
         return (t for t, _ in self._pairs())
