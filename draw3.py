@@ -1039,6 +1039,89 @@ def folder_marks(table):
     return {norm(c) for c in table.path if norm(c) not in GENERIC and len(norm(c)) >= 3}
 
 
+class Seen:
+    """One window AS IT STOOD AT ONE MOMENT -- the observation, kept apart
+    from the identity that runs through the moments.
+
+    Multiple-object tracking draws exactly this line and its whole discipline
+    rests on it: a DETECTION is what one frame showed, a TRACK is the identity
+    carried across frames. `State` is the track. This is the detection, and it
+    is the ONLY home of anything measured off a single frame.
+
+    WHY IT EXISTS. `State` spans time, and every per-moment fact was hung off
+    it in a side-table keyed by timestamp -- `rects`, `measured`, `_pitch_at`,
+    `_doc_wide_at`, `_h1_read`, and `Table.path_at` beside them. SEVEN of them,
+    one added each time a per-moment fact was caught being read at a moment it
+    did not cover. That is a valid-time index hand-rolled one column at a time,
+    and the faults it produced all rhymed: a title, a path, a selection, a
+    pitch, a width, each taken from the wrong moment. One record per moment
+    ends the class rather than its fifth instance."""
+    __slots__ = ("ts", "rect", "measured", "pitch")
+
+    def __init__(self, ts):
+        self.ts = ts
+        self.rect = None        # where the window stood, worked out from what it drew
+        self.measured = False   # the reader measured this window's own edges HERE
+        self.pitch = None       # how far apart its rows really stood, here
+
+    def __repr__(self):
+        return "Seen(%s%s)" % (self.ts, " measured" if self.measured else "")
+
+
+class _AtView:
+    """A read-only look at one field across the moments, so the old readers
+    keep reading and nothing can WRITE a per-moment fact except through
+    `State.at`. A plain dict here would let a write land on a throwaway copy
+    and vanish silently, which is worse than the fault being replaced."""
+    __slots__ = ("_seen", "_field")
+
+    def __init__(self, seen, field):
+        self._seen, self._field = seen, field
+
+    def _pairs(self):
+        for ts, sn in self._seen.items():
+            v = getattr(sn, self._field)
+            if v is not None and v is not False:
+                yield ts, v
+
+    def __getitem__(self, ts):
+        for t, v in self._pairs():
+            if t == ts:
+                return v
+        raise KeyError(ts)
+
+    def get(self, ts, default=None):
+        try:
+            return self[ts]
+        except KeyError:
+            return default
+
+    def __iter__(self):
+        return (t for t, _ in self._pairs())
+
+    def __contains__(self, ts):
+        return any(t == ts for t, _ in self._pairs())
+
+    def __len__(self):
+        return sum(1 for _ in self._pairs())
+
+    def __bool__(self):
+        return any(True for _ in self._pairs())
+
+    def keys(self):
+        return [t for t, _ in self._pairs()]
+
+    def values(self):
+        return [v for _, v in self._pairs()]
+
+    def items(self):
+        return list(self._pairs())
+
+    def __setitem__(self, ts, v):
+        raise TypeError("a per-moment fact is written through State.at(ts, make=True), "
+                        "never into a view -- see class Seen")
+
+
 class State:
     """One window showing one thing, across the moments it was on screen.
 
@@ -1060,10 +1143,36 @@ class State:
         self.said = []
         self.theme = None
         self.pieces = []        # (moment, group) it was read from, in order
-        self.rects = {}         # ts -> the window's rect at that moment
-        self.measured = set()   # the moments the reader measured the window itself
-        self._pitch_at = {}     # ts -> how far apart this window's rows really stood
+        self.seen = {}          # ts -> Seen: the ONE home of every per-moment fact
         self._stood = None      # where its words sat last, and the edges then
+
+    # ------------------------------------------------------ moment in, moment out
+
+    def at(self, ts, make=False):
+        """This window as it stood at ONE named moment, or None where this
+        window was never seen at that moment.
+
+        None means NOT SEEN HERE and it is not the same thing as "nothing was
+        there" -- a caller that answers it with the window's span-wide value is
+        borrowing another moment's fact, which is the whole class of fault this
+        record exists to make visible. Reaching a per-moment fact without
+        naming a moment is now impossible, which was the point."""
+        got = self.seen.get(ts)
+        if got is None and make:
+            got = self.seen[ts] = Seen(ts)
+        return got
+
+    @property
+    def rects(self):
+        return _AtView(self.seen, "rect")
+
+    @property
+    def measured(self):
+        return _AtView(self.seen, "measured")
+
+    @property
+    def _pitch_at(self):
+        return _AtView(self.seen, "pitch")
 
     # --------------------------------------------------------- content in
 
@@ -1115,7 +1224,7 @@ class State:
                 # arrived: ask it again now the window has its bar
                 self._title_rule(again=True)
         # where the window stood at this moment, measured from what it drew
-        self.rects[m["ts"]] = content_rect(self, group, m)
+        self.at(m["ts"], make=True).rect = content_rect(self, group, m)
         if group.get("side_share"):
             self.side_share = group["side_share"]
 
@@ -1167,7 +1276,7 @@ class State:
                 part["x1"] = p["box"][2] if part["x1"] is None else max(part["x1"], p["box"][2])
                 part["model"].add(cut)
                 if p.get("_cut_pitch"):
-                    self._pitch_at[m["ts"]] = p["_cut_pitch"]
+                    self.at(m["ts"], make=True).pitch = p["_cut_pitch"]
                 # AND THE SCREEN CUT THIS WINDOW'S LEFT EDGE. That is the
                 # whole gate `cut_list` passed, so it is known here and
                 # nowhere else: the window's own corner, its three round
@@ -1207,7 +1316,7 @@ class State:
                     # and the Finder cut off beside it at 81 where its rows
                     # stand at 42.
                     if len(built) > 8 and built[8]:
-                        self._pitch_at[m["ts"]] = built[8]
+                        self.at(m["ts"], make=True).pitch = built[8]
                     if len(tables) > 1 and built[6]:
                         # this list's own span, not the pane's two windows
                         part["x0"], part["x1"] = built[6]
@@ -1689,7 +1798,9 @@ def build_states(moments):
                     # settled list, which is what the rule was for.
                     if not any(mm is m for mm, _g in cur.pieces):
                         cur.pieces.append((m, g))
-                cur.rects.setdefault(m["ts"], content_rect(cur, g, m))
+                _sn = cur.at(m["ts"], make=True)
+                if _sn.rect is None:
+                    _sn.rect = content_rect(cur, g, m)
                 st = cur
             else:
                 st = probe
@@ -2696,7 +2807,7 @@ def settle_rects(state, W, H):
             near = sum((abs(r[0] - big[0]) <= 0.02 * W, abs(r[2] - big[2]) <= 0.02 * W,
                         abs(r[1] - big[1]) <= 0.02 * H, abs(r[3] - big[3]) <= 0.02 * H))
             if near >= 3:
-                state.rects[t] = list(big)
+                state.at(t, make=True).rect = list(big)
                 break
 
 
@@ -2729,9 +2840,9 @@ def settle_across(states, order, W, H):
                     near = sum((abs(r[0] - big[0]) <= 0.02 * W, abs(r[2] - big[2]) <= 0.02 * W,
                                 abs(r[1] - big[1]) <= 0.02 * H, abs(r[3] - big[3]) <= 0.02 * H))
                     if near >= 3:
-                        st.rects[ts] = list(big)
-                        st.measured.add(ts)
-                        r = st.rects[ts]
+                        _sn = st.at(ts, make=True)
+                        _sn.rect, _sn.measured = list(big), True
+                        r = _sn.rect
 
 
 def content_rect(state, group, m):
@@ -2759,7 +2870,7 @@ def content_rect(state, group, m):
         wi = filed.most_common(1)[0][0]
         for w in m.get("windows") or []:
             if w.get("wi") == wi and w.get("rect"):
-                state.measured.add(m["ts"])
+                state.at(m["ts"], make=True).measured = True
                 return [float(v) for v in w["rect"]]
     for w in m.get("windows") or []:
         r = w.get("rect")
@@ -2769,7 +2880,7 @@ def content_rect(state, group, m):
                      if r[0] - 20 <= it["box"][0] and it["box"][2] <= r[2] + 20
                      and r[1] - 20 <= it["box"][1] and it["box"][3] <= r[3] + 20)
         if inside >= 0.6 * len(items):
-            state.measured.add(m["ts"])
+            state.at(m["ts"], make=True).measured = True
             return [float(v) for v in r]
     rh = max(12.0, (sum(it["box"][3] - it["box"][1] for it in items) / len(items)) * 1.6)
     plain = [min(it["box"][0] for it in items), min(it["box"][1] for it in items),
@@ -2781,7 +2892,7 @@ def content_rect(state, group, m):
     if was and all(abs(a - b) <= 0.015 * W for a, b in zip(plain[::2], was[0][::2])) \
             and all(abs(a - b) <= 0.015 * H for a, b in zip(plain[1::2], was[0][1::2])):
         if was[2]:
-            state.measured.add(m["ts"])
+            state.at(m["ts"], make=True).measured = True
         return list(was[1])
     own, own_strong = box_texts(state)
     mine = [it for it in items if fold(it["text"]) in own] if own else []
@@ -2805,7 +2916,7 @@ def content_rect(state, group, m):
                 drawn = [drawn[0], min(it["box"][1] for it in caps) - 0.01 * H,
                          drawn[2], drawn[3]]
         if sure:
-            state.measured.add(m["ts"])
+            state.at(m["ts"], make=True).measured = True
         state._stood = (plain, drawn, sure)
         return drawn
     spans = [(q["x0"], q["x1"]) for q in state.parts if q.get("x0") is not None and q.get("x1") is not None]
@@ -5383,7 +5494,11 @@ def note(records_path, diary_text=None):
                         if t_ in s["ts"]]
                 sl._doc_wide = (round(100 * med(sorted(mine))) if mine
                                 else getattr(st, "_doc_wide", 0))
-                sl.rects, sl.measured = st.rects, st.measured
+                # STEP 1a KEEPS THIS EXACTLY AS IT WAS: the slice shares the
+                # window's own moment records, aliased, which is what assigning
+                # the two side-tables did. It is the fault stated in one line
+                # and it is changed in its own step, measured on its own.
+                sl.seen = st.seen
                 # The shape the window really had. Where the reader measured
                 # its edges off the frame, those edges stand. Otherwise the
                 # window's own place - every reading of it carried home and
