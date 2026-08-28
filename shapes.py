@@ -124,6 +124,19 @@ def _across(shelf, pos, a, b, slack, part, outward, corner=False):
     rectangle whose corners were never drawn."""
     want = part * (b - a)
     ends = max(6.0, 0.03 * (b - a))
+    # ENDING SHORT AND RUNNING PAST ARE NOT THE SAME FAULT. The reason this
+    # test exists is stated below: a line that CROSSES the span belongs to
+    # something else - a divider inside another window, a bar running the
+    # whole width - and pairing it with these two sides invents a rectangle
+    # whose corners were never drawn. Nothing in that reasoning applies to a
+    # line that stops a little SHORT of a side: a window's own edge fades
+    # where its corner rounds, and how far it is traced wobbles frame to
+    # frame. Measured on one window's foot across four frames of one video:
+    # it reached x=145 on one and x=136, x=136 and x=137 on the others,
+    # against a side at x=147 - so the window was closed on one frame and
+    # lost on three, from nine pixels of wobble in a real edge. Overshoot
+    # keeps the strict tolerance; undershoot gets the width-proportional one.
+    short = max(ends, 0.08 * (b - a))
     best = None
     lines, step = shelf
     lo, hi = int(pos - slack) // step, int(pos + slack) // step
@@ -133,7 +146,7 @@ def _across(shelf, pos, a, b, slack, part, outward, corner=False):
                 continue
             if min(b, lb) - max(a, la) < want:
                 continue
-            if corner and not (a - ends <= la <= a + ends and b - ends <= lb <= b + ends):
+            if corner and not (a - ends <= la <= a + short and b - short <= lb <= b + ends):
                 continue        # it does not begin and end at the two sides
             if best is None or (p - pos) * outward > (best - pos) * outward:
                 best = p
@@ -253,23 +266,13 @@ def _find_full(path):
     sides = [(x, ya, yb, False) for x, ya, yb in verts] + \
             [(x, 0.0, float(h), True) for x in edges]
     sides.sort(key=lambda v: v[0])
-    import sys as _sys
-    _wx = globals().get("WATCH")            # (x0, x1) to trace, set by a probe
-    def _say(why, x0, x1, **kw):
-        if _wx and abs(x0 - _wx[0]) < 4 and abs(x1 - _wx[1]) < 4:
-            print("   x=%.0f..%.0f  rejected by %-26s %s" % (x0, x1, why, kw), file=_sys.stderr)
-    if _wx is not None:
-        print("   PROBE ARMED: %d vertical sides, %d horizontals; every side x: %r"
-              % (len(verts), len(hors), sorted(round(v[0]) for v in sides)), file=_sys.stderr)
     found = []
     for i, (x0, ya, yb, e0) in enumerate(sides):
         for x1, yc, yd, e1 in sides[i + 1:]:
             if x1 - x0 < min_w or (e0 and e1):
-                _say("min_w or both screen edges", x0, x1, w=round(x1-x0), min_w=round(min_w))
                 continue
             top, bot = max(ya, yc), min(yb, yd)
             if bot - top < min_h:
-                _say("min_h", x0, x1, overlap=round(bot-top), min_h=round(min_h))
                 continue
             # the screen's edge runs the whole height, so it says nothing
             # about how much of a side this window's own side gave up
@@ -277,7 +280,6 @@ def _find_full(path):
             runs += [yd - yc] if not e1 else []
             share = (bot - top) / max(runs)
             if share < 0.55:
-                _say("share<0.55", x0, x1, share=round(share,3), runs=[round(r) for r in runs])
                 continue
             slack = max(12, int(0.05 * (bot - top)))
             # A window has at least ONE edge drawn corner to corner - its
@@ -289,18 +291,14 @@ def _find_full(path):
             top_c = _across(shelf, top, x0, x1, slack, ALONG, -1, corner=True)
             bot_c = _across(shelf, bot, x0, x1, slack, ALONG, +1, corner=True)
             if top_c is None and bot_c is None:
-                _say("no corner-true horizontal", x0, x1, top=round(top), bot=round(bot))
                 continue
             y_top = top_c if top_c is not None else _across(shelf, top, x0, x1, slack, ALONG, -1)
             y_bot = bot_c if bot_c is not None else _across(shelf, bot, x0, x1, slack, ALONG, +1)
             if y_top is None or y_bot is None or y_bot - y_top < min_h:
-                _say("no horizontal at all", x0, x1, y_top=y_top, y_bot=y_bot)
                 continue
             tall = y_bot - y_top
             if bot - top < ALONG * tall:
-                _say("sides too short for the box", x0, x1, sides=round(bot-top), need=round(ALONG*tall))
                 continue                       # the sides must run its height
-            _say("ACCEPTED", x0, x1, y_top=round(y_top), y_bot=round(y_bot), top=round(top), bot=round(bot))
             found.append([x0, y_top, x1, y_bot, e0, e1, top, bot])
     found.sort(key=lambda r: -(r[2] - r[0]) * (r[3] - r[1]))
     # near-identical rectangles are the same window found twice: one edge
