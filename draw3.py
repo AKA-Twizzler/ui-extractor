@@ -6190,7 +6190,7 @@ def note(records_path, diary_text=None):
                                 hits += 1
                     if hits >= 2:
                         sl._carried_side = house_side
-            parts.append(furnish.screen_shot(
+            _shot = (furnish.screen_shot(
                 {"t0": s["t0"], "t1": s["t1"]},
                 [(sl, shape) for _, sl, shape in subjects],
                 s["size"][0], s["size"][1],
@@ -6230,7 +6230,28 @@ def note(records_path, diary_text=None):
                 camera=(cam, cam_pic) if cam else None,
                 sure=all(any(t in st.measured for t in s["ts"]) for st, _, _ in subjects),
                 kz=(T[0] if T else 1.0)))
+            parts.append(_shot)
             parts.append("")
+            # A BROWSER READ AND NOT DRAWN SAYS SO. At 00:04:00 the frame is
+            # panned past the desktop bar, so the whole chrome path is never
+            # asked for (Run 19t), and the browser's address bar - read,
+            # confirmed, and sitting in the frame's top strip - appears
+            # nowhere. The picture then shows one window where the screen
+            # held a browser above it, and looks confident about it.
+            _addr = ""
+            for _t in s["ts"]:
+                _mm = next((x for x in moments if x["ts"] == _t), None)
+                for _p in ((_mm or {}).get("panes") or []):
+                    for _r in ((_p.get("data") or {}).get("remainder") or []):
+                        if re.search(r"type a URL|https?://", str(_r.get("text") or "")):
+                            _addr = str(_r["text"]).strip()
+                    for _l in (_p.get("lines") or []):
+                        if re.search(r"type a URL|https?://", str(_l)):
+                            _addr = _addr or re.sub(r"^.*?\]\s*", "", str(_l)).strip()
+            if _addr and "sn-browser" not in _shot:
+                parts += ["*A browser stood above this window - its address bar reads "
+                          "\u201c%s\u201d - and it is not drawn: the frame is panned past the desktop "
+                          "bar, and its tabs were never read.*" % esc(_addr[:60]), ""]
             # WHAT THE RECORDING DID NOT CARRY, said UNDER the picture it
             # affects and not only on the front page. A picture showing one
             # window confidently where the screen held three reads as
