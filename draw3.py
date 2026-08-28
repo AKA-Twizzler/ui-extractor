@@ -2857,6 +2857,18 @@ def state_slice(st, t0, t1):
     out.name, out.title = st.name, st.title
     out.theme = st.theme
     out.title_sure = getattr(st, "title_sure", False)
+    # A TITLE IS A PROPERTY OF THE MOMENT, NOT OF THE WINDOW. This slice holds
+    # only its own stretch's reading, and `label_for` already says a window
+    # that opens a different folder later must not be named here by the folder
+    # it opened later - the name drawn in the window's own title bar owes the
+    # same. At 00:01:00 the state reaches back to 00:00:10, when that window
+    # listed `jaredrhodenizer`, and the slice wore that name over a stretch
+    # showing another folder entirely. Asked of its OWN table the slice works
+    # out its own name; the state's stands only where the slice cannot.
+    _inherited = out.title
+    out._title_rule(again=True)
+    if not out.title:
+        out.title, out.title_sure = _inherited, getattr(st, "title_sure", False)
     out.said = [(ts, s) for ts, s in st.said if t0 <= ts <= t1]
     out.of = st
     # a stretch reads the path bar in whatever pieces that stretch showed;
@@ -3747,14 +3759,6 @@ def note(records_path, diary_text=None):
                 c.name = w.name
                 break
     states = [st for st in all_states if st.window_html() and not st.fragment()]
-    import sys as _s
-    for _st in all_states:
-        if "00:01:00" in (getattr(_st, "times", []) or []):
-            _t = _st.main_table()
-            print("STATE@00:01:00 id=%d title=%r kept=%s rows=%r path=%r"
-                  % (id(_st) % 100000, _st.title, _st in states,
-                     [str((r.get("cells") or [""])[0])[:22] for r in (getattr(_t, "rows", []) or [])][:2],
-                     (getattr(_t, "path", None) or [])[-2:]), file=_s.stderr)
     frags = [st for st in all_states if st not in states and st.has_content() and st.rects]
     # a note's big heading is read as large loose words, never as a doc
     # line; when such a reading opens the window's own title, it is the
