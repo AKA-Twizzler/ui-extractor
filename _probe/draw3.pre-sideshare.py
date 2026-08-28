@@ -6180,12 +6180,6 @@ def note(records_path, diary_text=None):
     house_side = max((furnish.side_words_of(st) for st in states
                       if st.name == "The Finder window"), key=len, default=house_side)
     house_keys = {fold(flat(w)) for w in house_side if len(flat(w)) >= 5}
-    # the house sidebar's share of its window, for a Finder drawn with the
-    # house's favorites but never measured with them: the median of the
-    # windows that were
-    _hs = sorted(v for v in (furnish.side_share_card(st) for st in states
-                             if st.name == "The Finder window") if v)
-    house_share = _hs[len(_hs) // 2] if _hs else None
     mend_prose(all_states)
     title_from_bar(states)
     heal_titles(states)
@@ -6801,16 +6795,6 @@ def note(records_path, diary_text=None):
                     # whole gathered content
                     sl = state_slice(st, still[id(st)], still[id(st)])
                 sl = sl or st
-                # A SIDEBAR IS DRAWN AT ITS MEASURED SHARE IN A PICTURE TOO.
-                # Without one the stylesheet's 160 units stood in, 15% of
-                # the window where the frame had 28%, and the list spread
-                # left over the sidebar's ground: at 00:00:30 every column
-                # sat 70 px left of its place. The stretch's own measure
-                # first, then the window's, then the widest window's, then
-                # the house's.
-                if st.name == "The Finder window" and not getattr(sl, "side_share", None):
-                    sl.side_share = (getattr(st, "side_share", None) or furnish.side_share_card(st)
-                                     or house_share)
                 if sl is not st:
                     # the desk's chrome stands all video; a stretch that did
                     # not re-read it still lives under it
