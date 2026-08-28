@@ -209,12 +209,17 @@ def fold_twins(table, sni=0):
         if twin is None:
             out.append(r)
             continue
-        # the confirmed spelling stands; a reading in doubt (italic) yields
-        r_sure = not (r.get("italic") and r["italic"][sni])
-        t_sure = not (twin.get("italic") and twin["italic"][sni])
-        if r_sure and not t_sure:
+        # the name read most often stands (`.claude.json` at three moments
+        # over `clauds son` at one), then the confirmed one, then the fullest
+        def _weight(row_, name_):
+            v_ = row_.get("_names") or {}
+            sure_ = not (row_.get("italic") and row_["italic"][sni])
+            return (sum(v_.values()) if v_ else (2 if sure_ else 1), sure_,
+                    sum(1 for ch in name_ if not ch.isalnum()), len(name_))
+        if _weight(r, nm) > _weight(twin, twin["cells"][sni]):
             twin["cells"][sni] = nm
             twin["italic"][sni] = False
+            twin["_names"] = dict(r.get("_names") or {})
         for i, c in enumerate(r["cells"]):
             if i < len(twin["cells"]) and c and not twin["cells"][i]:
                 twin["cells"][i] = c
@@ -3338,6 +3343,7 @@ def harmonise(states):
     # stood in the .claude list under a bar and a title that both read
     # `projects`.
     agreed = {}
+    _c0a = lambda ch: {"o": "0", "i": "1", "l": "1"}.get(ch, ch)
     for st in states:
         if st.title:
             agreed.setdefault(flat(st.title), st.title)
@@ -3368,12 +3374,19 @@ def harmonise(states):
                         longer_ = {v for k_, v in agreed.items() if k_.startswith(f_) and len(k_) > len(f_)}
                         if len({flat(v) for v in longer_}) == 1:
                             t_.path[i_] = next(iter(longer_))
+                            continue
+                        # `O2CompanyA(InfoProduct)` for `02 Company A (Info Product)`:
+                        # one letter the reader cannot tell from a digit
+                        near_ = {v for k_, v in agreed.items() if len(k_) == len(f_) and _c0a(k_[:1]) == _c0a(f_[:1])
+                                 and sum(1 for u, w in zip(k_, f_) if u != w) <= 2}
+                        if len({flat(v) for v in near_}) == 1:
+                            t_.path[i_] = next(iter(near_))
             for r in t_.rows:
                 if r["cells"] and r["cells"][0]:
                     r["cells"][0] = bare_dot(r["cells"][0])
                     f_ = flat(r["cells"][0])
                     if len(f_) >= 6 and f_ not in agreed and "." not in r["cells"][0]:
-                        near_ = [v for k_, v in agreed.items() if abs(len(k_) - len(f_)) <= 1 and k_[:1] == f_[:1]
+                        near_ = [v for k_, v in agreed.items() if abs(len(k_) - len(f_)) <= 1 and _c0a(k_[:1]) == _c0a(f_[:1])
                                  and difflib.SequenceMatcher(None, k_, f_, autojunk=False).ratio() >= 0.85]
                         if len({flat(v) for v in near_}) == 1:
                             r["cells"][0] = near_[0]
@@ -6744,8 +6757,11 @@ def note(records_path, diary_text=None):
                         _fixed = []
                         for c_ in _st_t.path:
                             f_ = flat(c_)
+                            def _md_pair(x_, y_):
+                                return (x_.endswith("md") and x_[:-2] == y_) or (y_.endswith("md") and y_[:-2] == x_)
                             hit_ = next((w_ for w_ in _whole_t.path if crumb_same(c_, w_)
                                          or (len(f_) >= 5 and f_[:1] == flat(w_)[:1] and abs(len(f_) - len(flat(w_))) <= 2
+                                             and not _md_pair(f_, flat(w_))
                                              and difflib.SequenceMatcher(None, f_, flat(w_), autojunk=False).ratio() >= 0.85)), None)
                             if hit_ is not None and f_ != flat(hit_) and not flat(hit_).startswith(f_):
                                 _fixed.append(hit_)
