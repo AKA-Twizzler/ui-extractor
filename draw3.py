@@ -6751,6 +6751,8 @@ def note(records_path, diary_text=None):
                                 _fixed.append(hit_)
                             else:
                                 _fixed.append(c_)
+                        if os.environ.get("SN_PATH") and _fixed != list(_st_t.path):
+                            print("PATHFIX %s %s: %s -> %s" % (s["t0"], label_for(st), _st_t.path, _fixed), file=sys.stderr)
                         _st_t.path = _fixed
                     respell_from(sl, st)
                     strip_furniture(sl, strip_at)
