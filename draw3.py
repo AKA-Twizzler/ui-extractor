@@ -7715,8 +7715,15 @@ def note(records_path, diary_text=None):
                 subjects = [(x[0], x[1], box0 if x is big else x[2])
                             for x in subjects]
             fine = []
+            _zoomed = bool(T and not flatT(T) and T[0] >= 1.15 and not barred)
             for stx, sl, shape in subjects:
                 if shape and not is_window(shape) and id(stx) not in settled:
+                    # a strip the crop cut off is judged after it is put back
+                    # whole on the desktop, not by the sliver the frame showed
+                    if _zoomed and (shape[0] <= 0.04 * Wf or shape[1] <= 0.04 * Hf
+                                    or shape[2] >= 0.96 * Wf or shape[3] >= 0.96 * Hf):
+                        fine.append((stx, sl, shape))
+                        continue
                     app = label_for(stx, s["t0"]).split(":")[0].strip()
                     if any(t.split(":")[0].strip() == app
                            or app in t for t, _b in behinds):
@@ -7869,13 +7876,24 @@ def note(records_path, diary_text=None):
                         raw_ = back(T, list(shape))
                         # a strip of a window the crop cut off is that window
                         cut_ = _cut_sides(shape)
-                        if any(cut_) and (not hb_ or _area(hb_) < 1.3 * _area(raw_)):
+                        if any(cut_):
                             hb_ = _whole_home(stx, raw_, cut_) or hb_
                         if os.environ.get("SN_ZOOM"):
                             print("  subject %s: frame %s -> home %s, whole %s" % (
                                 label_for(stx, s["t0"]), [round(v) for v in shape],
                                 [round(v) for v in raw_], hb_ and [round(v) for v in hb_]), file=sys.stderr)
-                        shape = _home_box(shape, hb_)
+                        home_ = _home_box(shape, hb_)
+                        # the part of a Finder the crop cut off down its left
+                        # side is its sidebar, by Finder's own layout; drawn
+                        # whole, the window carries the favorites the video
+                        # read on it, or the list spreads over ground the
+                        # sidebar had and every column lands off its place
+                        if (stx.name == "The Finder window" and house_side and cut_[0]
+                                and home_[0] < raw_[0] - 0.15 * (home_[2] - home_[0])
+                                and not furnish.side_words_of(sl)):
+                            sl._carried_side = house_side
+                            sl._cut_left = False
+                        shape = home_
                         sl.rect = shape
                     if getattr(sl, "_row_step", 0):
                         sl._row_step = sl._row_step / _k
