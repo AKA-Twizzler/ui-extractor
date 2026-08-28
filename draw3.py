@@ -4222,6 +4222,56 @@ def mend_tree(mine, whole):
     return out
 
 
+_ELL = re.compile(r"(?<=\S)(?:\.{2,}|\u2026)(?=\S|$)")
+
+
+def cut_ends(name):
+    """A name the screen cut, as (head, tail): Finder cuts in the middle
+    ("project_company_...unch_campaign.md"), a narrow tree at the end
+    ("project_company_a_launch_c..."). None for a name with no cut."""
+    m = _ELL.search(name or "")
+    if not m:
+        return None
+    return name[:m.start()], name[m.end():]
+
+
+def complete_name(name, pool, heads):
+    """The whole name behind a cut one, or None. First a name read with no
+    cut anywhere that opens with the head and closes with the tail (Obsidian
+    hides `.md`, so a tree's name may be the Finder name without it); then
+    a longer head from a reading cut further along, joined to the tail
+    where the two overlap by four letters or more. One answer or none: two
+    candidates and the name stays as the screen cut it."""
+    c = cut_ends(name)
+    if not c:
+        return None
+    head, tail = c
+    hf, tf = fold(flat(head)), fold(flat(tail))
+    if len(hf) + len(tf) < 6 or not hf:
+        return None
+    fits = set()
+    for p in pool:
+        pf = fold(flat(p))
+        for cand, cf in ((p, pf), (p + ".md", pf + "md") if tail.endswith(".md") and not re.search(r"\.\w{1,5}$", p) else (None, None)):
+            if cand is None:
+                continue
+            if len(cf) > len(hf) + len(tf) and cf.startswith(hf) and cf.endswith(tf):
+                fits.add(cand)
+    if len(fits) == 1:
+        return fits.pop()
+    if fits or not tail:
+        return None
+    joined = set()
+    for h in heads:
+        if len(h) <= len(head) or not fold(flat(h)).startswith(hf):
+            continue
+        for k in range(min(len(h), len(tail)), 3, -1):
+            if h.endswith(tail[:k]):
+                joined.add(h + tail[k:])
+                break
+    return joined.pop() if len(joined) == 1 else None
+
+
 def name_fits(short, full_name):
     """The same file, one reading cut shorter: equal flat, or the cut's two
     ends opening and closing the full name."""
@@ -5297,6 +5347,43 @@ def note(records_path, diary_text=None):
                 nm, k = row_name_kind(tb, row)
                 if not KIND.match(k) and nm in kind_of:
                     row["folder"] = kind_of[nm]
+
+    # A NAME CUT ON SCREEN STANDS WHOLE ON THE CARD IF ANY MOMENT READ IT
+    # WHOLE. Finder cuts a long name in the middle and Obsidian's tree cuts
+    # the same name at its end, so the head of one reading and the tail of
+    # the other are the whole name; a reading with no cut at all is better
+    # still. Point 3 of the fourteen, "a card adds up every frame". Only the
+    # window's gathered rows change: a picture keeps the cut the screen
+    # made, spelt from the whole (`mend_cells`).
+    pool, heads = set(), set()
+    for st in all_states:
+        for q in st.parts:
+            names = []
+            if q["fam"] == "table":
+                names = [(r.get("cells") or [""])[0] or "" for r in q["model"].rows]
+            elif q["fam"] == "tree":
+                names = [re.sub(r"^[\s\u203a\u25b8\u25be\u25b9\u2022\-\u00b7>]+", "", t_ or "") for t_, _h in q["model"].lines]
+            for nm in names:
+                nm = nm.strip()
+                c = cut_ends(nm)
+                if c is None:
+                    # a name that stops at "_" or "." was clipped by the
+                    # pane's edge with no dots to say so
+                    if len(nm) >= 6 and " " not in nm and not nm.endswith(("_", "-", ".")):
+                        pool.add(nm)
+                elif c[0] and not c[1] and len(c[0]) >= 8:
+                    heads.add(c[0])
+    for st in states:
+        for tb in tables_of(st):
+            for row in tb.rows:
+                cells = row.get("cells") or []
+                if not cells or not cells[0] or not cut_ends(cells[0]):
+                    continue
+                whole = complete_name(cells[0], pool, heads)
+                if whole and whole != cells[0]:
+                    cells[0] = whole
+                    if row.get("italic"):
+                        row["italic"][0] = False
 
     clocks = [c for m in moments for p in m.get("panes") or [] for c in [old.clock_in(p)] if c]
     parts = [f"# {title}", ""]
