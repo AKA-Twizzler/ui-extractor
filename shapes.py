@@ -124,24 +124,6 @@ def _across(shelf, pos, a, b, slack, part, outward, corner=False):
     rectangle whose corners were never drawn."""
     want = part * (b - a)
     ends = max(6.0, 0.03 * (b - a))
-    # ENDING SHORT AND RUNNING PAST ARE NOT THE SAME FAULT. The reason this
-    # test exists is stated below: a line that CROSSES the span belongs to
-    # something else - a divider inside another window, a bar running the
-    # whole width - and pairing it with these two sides invents a rectangle
-    # whose corners were never drawn. Nothing in that reasoning applies to a
-    # line that stops a little SHORT of a side: a window's own edge fades
-    # where its corner rounds, and how far it is traced wobbles frame to
-    # frame. Measured on one window's foot across four frames of one video:
-    # it reached x=145 on one and x=136, x=136 and x=137 on the others,
-    # against a side at x=147 - so the window was closed on one frame and
-    # lost on three, from nine pixels of wobble in a real edge. Overshoot
-    # keeps the strict tolerance; undershoot gets the width-proportional one.
-    # ...and it is a SMALL, FIXED allowance, not a proportional one. Measured
-    # in this working space the wobble in a real edge is about nine pixels
-    # whatever the window's width, so scaling it by the span gave a 529-wide
-    # window 42 pixels of slack and split it into two rectangles - one real,
-    # one closed against the screen's edge - at 00:00:10.
-    short = max(ends, 12.0)
     best = None
     lines, step = shelf
     lo, hi = int(pos - slack) // step, int(pos + slack) // step
@@ -151,7 +133,7 @@ def _across(shelf, pos, a, b, slack, part, outward, corner=False):
                 continue
             if min(b, lb) - max(a, la) < want:
                 continue
-            if corner and not (a - ends <= la <= a + short and b - short <= lb <= b + ends):
+            if corner and not (a - ends <= la <= a + ends and b - ends <= lb <= b + ends):
                 continue        # it does not begin and end at the two sides
             if best is None or (p - pos) * outward > (best - pos) * outward:
                 best = p

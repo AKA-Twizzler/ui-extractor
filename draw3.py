@@ -1161,8 +1161,6 @@ class State:
                         tree_part["x1"] = max(tree_part["x1"], p["box"][2])
                         continue
             cut = draw2.cut_list(p, m.get("size"))
-            if not cut:
-                cut = cut_in_window(p, m)
             if cut:
                 part = self.part_for("a list of columns", slot)
                 part["x0"] = p["box"][0] if part["x0"] is None else min(part["x0"], p["box"][0])
@@ -2509,54 +2507,6 @@ def harmonise(states):
 # window where it sat, the one being shown filled with what it held over
 # that stretch of time, the others as empty outlines. Its content comes
 # only from the moments inside the stretch, so it stays an honest still.
-
-def cut_in_window(p, m):
-    """A pane that spills past a window THE SCREEN CUT, read inside it.
-
-    The reader sometimes files a whole column of the screen as ONE pane -
-    `[0, 0, 612, 2160]` at 00:02:50, the full height of the frame - and
-    `cut_list` refuses it, because words above and below the window sit
-    among the window's own rows. The window `shapes` measures there is then
-    drawn as a bare outline over content that WAS read.
-
-    Clipped to that measured window the same pane reads twenty-one rows.
-    Nothing is invented: the words kept are the ones standing inside the
-    rectangle the frame itself drew.
-
-    NARROW, AND DELIBERATELY SO. Offered for any window at all this cost
-    00:00:00 half its windows - four to two, 32 rows to 22 - and grew the
-    note two pictures it should not have. It runs only where the SCREEN'S
-    OWN EDGE cuts the window, which is the case `cut_list` exists for, and
-    only where the pane swallows that window whole.
-    """
-    box = p.get("box")
-    if not box or len(box) != 4:
-        return None
-    W, H = (m.get("size") or [0, 0])[:2]
-    if not (W and H):
-        return None
-    tall = max(1.0, box[3] - box[1])
-    if tall < 0.9 * H:
-        return None                      # not a whole-column pane
-    try:
-        wins = shapes.windows(frame_of(m)) or []
-    except Exception:
-        return None
-    for w in wins:
-        if (w[2] - w[0]) * (w[3] - w[1]) < 0.09 * W * H:
-            continue
-        if w[0] > 0.02 * W and w[2] < 0.98 * W:
-            continue                     # the screen's edge does not cut it
-        if not (box[0] <= w[0] + 2 and box[2] >= w[2] - 2
-                and box[1] <= w[1] + 2 and box[3] >= w[3] - 2):
-            continue                     # the pane does not hold it whole
-        q = dict(p)
-        q["box"] = [max(box[0], w[0]), max(box[1], w[1]), min(box[2], w[2]), min(box[3], w[3])]
-        got = draw2.cut_list(q, m.get("size"))
-        if got:
-            return got
-    return None
-
 
 def frame_of(m):
     return shapes.frame_of(m)
