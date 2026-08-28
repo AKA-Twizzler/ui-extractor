@@ -3568,9 +3568,12 @@ def behind_for(slice_st, span, subject):
     import furnish
     out = []
     strip = furnish.browser_behind(slice_st)
-    if getattr(slice_st, "topwords", None) and any("URL" in str(t[0]) for t in slice_st.topwords):
-        import sys as _s
-        print("BEHIND asked, topwords has the address, strip=%r" % (strip[:60],), file=_s.stderr)
+    import sys as _s
+    if span.get("t0") in ("00:04:00", "00:04:10"):
+        print("BEHIND t0=%s  topwords=%d  has_url=%s  strip=%s"
+              % (span.get("t0"), len(getattr(slice_st, "topwords", []) or []),
+                 any("URL" in str(t[0]) for t in (getattr(slice_st, "topwords", []) or [])),
+                 bool(strip)), file=_s.stderr)
     if strip:
         rect = subject.rects.get(span["t0"]) or subject.rect or [0, 0, 0, 0]
         tops = [t for t in slice_st.topwords]
