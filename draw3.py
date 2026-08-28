@@ -7918,7 +7918,11 @@ def note(records_path, diary_text=None):
                 if cam:
                     cam = _home_box(cam)
                 browser_bits = [(_home_box(cb_), tb_, ad_, rt_) for cb_, tb_, ad_, rt_ in (browser_bits or [])]
-                zoom_box = _home_box([0.0, 0.0, float(Wf), float(Hf)])
+                # the crop itself is NOT clipped to the screen: a zoom that
+                # ran past the desktop's edge shows a dark band there, and
+                # cutting the box at the edge would shift every comparison
+                # by that band's width (an eleventh of the crop at 00:04:00)
+                zoom_box = back(T, [0.0, 0.0, float(Wf), float(Hf)])
                 if os.environ.get("SN_ZOOM"):
                     print("ZOOM %s: k %.2f shift %.0f,%.0f -> crop %s" % (
                         s["t0"], T[0], T[1], T[2], [round(v) for v in zoom_box]), file=sys.stderr)
