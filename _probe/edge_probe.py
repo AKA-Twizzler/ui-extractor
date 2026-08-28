@@ -1,7 +1,7 @@
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)) + "/..")
 import shapes
-shapes.WATCH = (0.0, 588.0)
+shapes.WATCH = (0.0, 147.0)
 D = r"G:\Images\Move Memory Files Out of Claude Code Into Obsidian\Images"
 for ts in ("00-02-50", "00-03-00", "00-03-30", "00-03-50"):
     print("==", ts)
