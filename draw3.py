@@ -375,6 +375,33 @@ class Table:
                 plain[j] = (plain[j] + " " + c.replace("*", "")).strip()
                 italics[j] = italics[j] or it
             new_rows.append({"cells": plain, "italic": italics, "band": band, "icon": icon})
+        # A DATE GLUED TO THE END OF A NAME IS THE DATE COLUMN, NOT THE NAME.
+        # Read as one cell, `feedback_lo...kimmers.md Jun30,2026at5:51PM`
+        # matched `feedback_id.andlers.md Jun 30, 2026 at 5:51PM` as the same
+        # row - the shared date made two different files alike enough - and
+        # the list came out with three rows named for one file. The date is
+        # cut off the name here, before any row is matched by its name.
+        di_ = next((k for k, g in enumerate(self.header) if g and "Date Modified" in g), None)
+        for r_ in new_rows:
+            nm_ = r_["cells"][0] if r_["cells"] else ""
+            m_ = GLUED_DATE.search(nm_) if nm_ else None
+            if not m_ or m_.end() < len(nm_.rstrip()) - 1 or not nm_[:m_.start()].strip():
+                continue
+            r_["cells"][0] = nm_[:m_.start()].strip()
+            date_ = m_.group(1).strip()
+            if di_ is None:
+                at_ = 1
+                self.header.insert(at_, "Date Modified")
+                for q_ in self.rows:
+                    q_["cells"].insert(at_, "")
+                    q_["italic"].insert(at_, False)
+                for q_ in new_rows:
+                    q_["cells"].insert(at_, "")
+                    q_["italic"].insert(at_, False)
+                di_ = at_
+            if di_ < len(r_["cells"]) and not r_["cells"][di_]:
+                r_["cells"][di_] = date_
+                r_["italic"][di_] = False
         def keep(o, n):
             # EVERY READING OF THE NAME IS COUNTED, and the spelling most
             # readings agree on wins at `tidy`. Taking the first confirmed
