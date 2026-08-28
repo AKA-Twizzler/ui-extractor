@@ -99,7 +99,8 @@ def check_picture(stamp, stage, frame_path, fav_boxes=(), read_whole=()):
     moment (empty when the records were not supplied); it drives the
     sidebar-completeness check, which is skipped without them.
 
-    `read_whole` is every string the reader read as ONE item at this moment.
+    `read_whole` is every string the reader read as ONE item anywhere in the
+    video.
     It is what lets the breadcrumb check tell a folder whose real name is
     full of dashes from two crumbs glued together -- see the check itself."""
     fails = []
@@ -331,24 +332,34 @@ def _norm_tok(t):
     return re.sub(r"[^a-z0-9]", "", str(t).lower())
 
 
-def whole_words_by_stamp(records):
-    """For each moment, every string the reader read as ONE item.
+def whole_words_read(records):
+    """Every string the reader read as ONE item, anywhere in the video.
 
     The breadcrumb check uses it to tell a folder whose real name carries
-    dashes from two crumbs glued by a chevron the reader dropped."""
+    dashes -- Claude Code names each project folder after the path it came
+    from -- from two crumbs glued by a chevron the reader dropped.
+
+    ACROSS ALL MOMENTS, not per moment, and for the same reason the rest of
+    this tool now works that way: a NAME does not change between two frames.
+    A folder read whole once is that folder's name for the whole video. At
+    00:01:30 the only whole reading of the bar is the WHOLE BAR as one
+    string, which says nothing about where its crumbs divide, while
+    00:01:00 read the folder on its own.
+
+    A WHOLE BAR IS NOT EVIDENCE ABOUT ANY CRUMB, so a reading that begins at
+    the disk is left out: it contains every crumb of the path and would
+    excuse any glue that happens to open it."""
     import draw as old
     import draw2
     hdr, moments, ftr = old.load(records)
-    out = {}
+    got = set()
     for m in moments:
-        got = set()
         for p in m.get("panes") or []:
             for it in draw2.items_of(p):
                 k = _norm_tok(it.get("text") or "")
-                if len(k) >= 12:
+                if len(k) >= 12 and not k.startswith("macintoshhd"):
                     got.add(k)
-        out[m["ts"]] = got
-    return out
+    return got
 
 
 def favorites_by_stamp(records):
@@ -635,7 +646,7 @@ def main():
     records = argv[2] if len(argv) > 2 else None
     fav = favorites_by_stamp(records) if records else {}
     bar = deskbar_by_stamp(records) if records else {}
-    whole = whole_words_by_stamp(records) if records else {}
+    whole = whole_words_read(records) if records else set()
     if "--prove" in sys.argv:
         return prove(note, frames, fav, bar)
     total = 0
@@ -648,7 +659,7 @@ def main():
         return 1
     for stamp, heading, stage in pics:
         frame = os.path.join(frames, stamp.replace(":", "-") + ".png")
-        fails = check_picture(stamp, stage, frame, fav.get(stamp, ()), whole.get(stamp, ()))
+        fails = check_picture(stamp, stage, frame, fav.get(stamp, ()), whole)
         fails += check_deskbar(stamp, stage, bar.get(stamp, set()))
         if fails:
             print("FAIL %s" % stamp)
