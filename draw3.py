@@ -4261,6 +4261,26 @@ def desktop_bar(moments):
     return words_at, clock_at, strip_at
 
 
+def drop_crumb_rows(st, crumbs):
+    """A row holding one cell that is the tail of a path crumb is the path
+    bar, read off a window the screen cut down its left edge
+    (`er-Documents-jarvis-demo` for `-Users-jaredrhodenizer-Documents-jarvis-demo`)."""
+    tails = [flat(c) for c in crumbs if len(flat(c)) >= 10]
+    for q in st.parts:
+        if q["fam"] != "table":
+            continue
+        t = q["model"]
+        kept = []
+        for r in t.rows:
+            cells = r.get("cells") or []
+            nm = flat(cells[0]) if cells and cells[0] else ""
+            lone = bool(nm) and not any(cells[1:])
+            if lone and len(nm) >= 8 and any(c.endswith(nm) and c != nm for c in tails):
+                continue
+            kept.append(r)
+        t.rows = kept
+
+
 def drop_side_prefix(st):
     """A sidebar name left sitting in front of a file's name.
 
@@ -5576,9 +5596,12 @@ def note(records_path, diary_text=None):
         return out
 
     list_not_tree(states)
+    _all_crumbs = [c for st in states for q in st.parts if q["fam"] == "table"
+                   for c in (q["model"].path or [])]
     for st in states:
         sidebar_from_panes(st, house_side)
         tidy_side(st.main_table(), house_side, st.title)
+        drop_crumb_rows(st, _all_crumbs)
     house_side = max((furnish.side_words_of(st) for st in states
                       if st.name == "The Finder window"), key=len, default=house_side)
     house_keys = {fold(flat(w)) for w in house_side if len(flat(w)) >= 5}
@@ -5942,19 +5965,40 @@ def note(records_path, diary_text=None):
         def _agree(a, b):
             return all(abs(a[i] - b[i]) <= (0.04 * Wf if i % 2 == 0 else 0.04 * Hf) for i in range(4))
 
+        _all_words = {}
+
+        def all_words_of(t):
+            """Every reading on that moment's panes, as (key, box) - a size
+            or a kind read on sixteen rows is sixteen readings, and a window
+            showing only sizes and kinds is placed by them."""
+            if t not in _all_words:
+                m_ = next((mm for mm in moments if mm["ts"] == t), None)
+                got = []
+                for p_ in (m_ or {}).get("panes") or []:
+                    for it in draw2.items_of(p_):
+                        key = fold(flat(it["text"]))
+                        if len(key) >= 5:
+                            got.append((key, it["box"]))
+                _all_words[t] = got
+            return _all_words[t]
+
         def any_words_in(box, st_, times):
             """How many of this window's own words - any of them, the
-            sidebar's fixed names included - were read inside that box."""
-            keys = {flat(w) for w in state_texts(st_) if len(flat(w)) >= 5}
+            sidebar's fixed names and the sizes in its list included - were
+            read inside that box at these moments."""
+            keys = {fold(flat(w)) for w in state_texts(st_) if len(flat(w)) >= 5}
             n = 0
             for t in times:
-                for key, b in (words_of.get(t) or {}).items():
+                for key, b in all_words_of(t):
                     if not (key in keys or (len(key) >= 6 and any(key in sk for sk in keys))):
                         continue
                     cx, cy = (b[0] + b[2]) / 2, (b[1] + b[3]) / 2
                     if box[0] <= cx <= box[2] and box[1] <= cy <= box[3]:
                         n += 1
             return n
+
+        def measured_rects_at(t):
+            return [st_.rects[t] for st_ in states if t in st_.measured and st_.rects.get(t)]
 
         def still_here(own, s_, base_, extra_):
             """The place a window stood at this stretch, where the frames
@@ -5986,9 +6030,13 @@ def note(records_path, diary_text=None):
             anchor = tb if tb else ta
             # the same zoom: some other window measured on both frames, at
             # the same place on both - the screen did not move between them
-            zoom_ok = any(u is not own and u.rects.get(anchor) and anchor in u.measured
-                          and u.rects.get(s_["t0"]) and s_["t0"] in u.measured
-                          and _agree(u.rects[anchor], u.rects[s_["t0"]]) for u in states)
+            # ANY window measured on both frames at the same place will do:
+            # the Finder beside it is a different state at 00:00:30 (folder
+            # `jaredrhodenizer`) and at 00:00:50 (folder `.claude`), and it
+            # is the same rectangle on both frames
+            zoom_ok = any(_agree(r1, r2)
+                          for r1 in measured_rects_at(anchor)
+                          for r2 in measured_rects_at(s_["t0"]))
             if not zoom_ok:
                 return None
             hits = any_words_in(box, own, s_["ts"])
@@ -6172,6 +6220,7 @@ def note(records_path, diary_text=None):
                     mend_cells(sl, st)
                     strip_furniture(sl, strip_at)
                     drop_side_prefix(sl)
+                    drop_crumb_rows(sl, _all_crumbs)
                     if bar_title(sl, s["size"][1]):
                         sl.title = None
                     sl.title = sl.title or st.title
