@@ -2983,8 +2983,13 @@ def harmonise(states):
                    if q["fam"] == "table" for c in (q["model"].path or [])}
     # how many WINDOWS spell a crumb this way: a spelling two bars agree on
     # is the folder's name; one bar's own reading proves nothing about itself
-    crumb_votes = collections.Counter(f_ for st in states for q in st.parts if q["fam"] == "table"
-                                      for f_ in {flat(c) for c in (q["model"].path or [])})
+    _voices = {}
+    for st in states:
+        for q in st.parts:
+            if q["fam"] == "table":
+                for f_ in {flat(c) for c in (q["model"].path or [])}:
+                    _voices.setdefault(f_, set()).add((st.name, flat(st.title or "")))
+    crumb_votes = {f_: len(v_) for f_, v_ in _voices.items()}
     # every name any list actually carried: a crumb spelt like one of these
     # is already the folder's own name and must not be grown into a longer
     # one, or a second reading would stretch it again
@@ -3342,24 +3347,7 @@ def harmonise(states):
             # TWO ROWS READ AS ONE NAME: `My Product Opdsations` over a date
             # cell holding two dates, beside rows `My Product` and
             # `Operations` - the glue is dropped, both rows stand
-            names_ = [r["cells"][0] for r in t_.rows if r["cells"] and r["cells"][0]]
-            di_ = next((i for i, h in enumerate(t_.header) if h and "Date" in h), None)
-            kept_ = []
-            for r in t_.rows:
-                nm_ = r["cells"][0] if r["cells"] else ""
-                dc_ = r["cells"][di_] if (di_ is not None and di_ < len(r["cells"])) else ""
-                two_ = len(re.findall(r"\d{4}", dc_ or "")) >= 2
-                heads_ = [o_ for o_ in names_ if o_ != nm_ and nm_.startswith(o_ + " ")]
-                tail_ok = False
-                for h_ in heads_:
-                    tail_ = norm(nm_[len(h_):])
-                    tail_ok = tail_ok or any(o_ != nm_ and o_ != h_ and len(norm(o_)) >= 5 and abs(len(norm(o_)) - len(tail_)) <= 2
-                                             and difflib.SequenceMatcher(None, norm(o_), tail_, autojunk=False).ratio() >= 0.7
-                                             for o_ in names_)
-                if heads_ and (two_ or tail_ok):
-                    continue
-                kept_.append(r)
-            t_.rows = kept_
+            drop_glued(t_)
             # A CRUMB FINDER CUT SHORT, ON THE WINDOW'S OWN CARD, IS THE
             # FOLDER'S WHOLE NAME where the video agrees on exactly one:
             # `02 Co` under the Assets window is `02 Company A (Info Product)`.
@@ -3901,6 +3889,30 @@ def state_slice(st, t0, t1):
     # those rows back where they stood.
     mend_slice_tree(out, st)
     return out
+
+
+def drop_glued(t_):
+    """Two rows read as one name - `My Product Opdsations` over a date cell
+    holding two dates, beside rows `My Product` and `Operations` - the glue
+    is dropped and both rows stand."""
+    names_ = [r["cells"][0] for r in t_.rows if r["cells"] and r["cells"][0]]
+    di_ = next((i for i, h in enumerate(t_.header) if h and "Date" in h), None)
+    kept_ = []
+    for r in t_.rows:
+        nm_ = r["cells"][0] if r["cells"] else ""
+        dc_ = r["cells"][di_] if (di_ is not None and di_ < len(r["cells"])) else ""
+        two_ = len(re.findall(r"\d{4}", dc_ or "")) >= 2
+        heads_ = [o_ for o_ in names_ if o_ != nm_ and nm_.startswith(o_ + " ")]
+        tail_ok = False
+        for h_ in heads_:
+            tail_ = norm(nm_[len(h_):])
+            tail_ok = tail_ok or any(o_ != nm_ and o_ != h_ and len(norm(o_)) >= 5 and abs(len(norm(o_)) - len(tail_)) <= 2
+                                     and difflib.SequenceMatcher(None, norm(o_), tail_, autojunk=False).ratio() >= 0.7
+                                     for o_ in names_)
+        if heads_ and (two_ or tail_ok):
+            continue
+        kept_.append(r)
+    t_.rows = kept_
 
 
 def respell_from(sl, st):
@@ -6706,6 +6718,7 @@ def note(records_path, diary_text=None):
                     mend_cells(sl, st)
                     if sl.main_table():
                         fold_twins(sl.main_table(), 0)
+                        drop_glued(sl.main_table())
                     # the bar ends at the folder the window shows, and the
                     # title bar names it: a stretch whose reading of the bar
                     # stopped short (`... > 02 Co` under a window titled
