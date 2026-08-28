@@ -144,7 +144,10 @@ def same_title(a, b):
             head = norm(c.rstrip(".\u2026"))
             if len(head) >= 8 and norm(full).startswith(head):
                 return True
-    return len(na) >= 6 and len(nb) >= 6 and same_name(a, b)
+    # the same name with at most two letters read differently - and never a
+    # name found INSIDE another, which is what `same_name` allows through
+    return (len(na) >= 6 and len(na) == len(nb) and len(na) <= 24
+            and sum(1 for x, y in zip(na, nb) if x != y) <= 2)
 
 
 def same_name(a, b):
@@ -2544,6 +2547,10 @@ def unglue(path):
                 c = head
         if out and flat(out[-1]) == flat(c):
             continue                # the same crumb twice running: once
+        # the reader's own full stop on the end of a crumb (`memory.`),
+        # never part of a folder's name; `...` marks a cut and stays
+        if len(c) > 2 and c.endswith(".") and not c.endswith(".."):
+            c = c[:-1]
         out.append(c)
     return out
 
@@ -2888,8 +2895,24 @@ def harmonise(states):
                         path[i] = c
                         f = flat(c)
                         b = exact_fix(c)
+                        # A CRUMB THE VIDEO SPELLS THE SAME WAY EVERYWHERE IS
+                        # NEVER COMPLETED. `Users` opens `-Users-jaredrh` and
+                        # was "completed" to it, which put a folder at the
+                        # root of a path the screen never showed.
+                        if norm(c) in GENERIC:
+                            b = None
+                        elif not b and len(f) >= 6 and f not in strong_flats and f not in row_flats:
+                            # a crumb misread by a letter or two (`prjects`)
+                            # takes the name the video spells whole, when
+                            # exactly one strong name reads that close
+                            near = [p_ for p_ in strong_names
+                                    if abs(len(flat(p_)) - len(f)) <= 2 and flat(p_)[:1] == f[:1]
+                                    and difflib.SequenceMatcher(None, flat(p_), f, autojunk=False).ratio() >= 0.85]
+                            if len({flat(p_) for p_ in near}) == 1:
+                                b = near[0]
                         if (not b and len(f) >= 4 and f not in strong_flats
-                                and f not in row_flats and canon.get(f, c) == c):
+                                and f not in row_flats and canon.get(f, c) == c
+                                and norm(c) not in GENERIC):
                             # Finder cuts a long crumb short: the folder's
                             # real name is the pool name this crumb opens,
                             # allowing one slip in what was read

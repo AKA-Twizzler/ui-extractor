@@ -556,6 +556,9 @@ def _mend_edge_head(items):
     return out
 
 
+DATED = re.compile(r"(?:\d{4}\s*at\s*\d{1,2}:\d{2}|Today|Yesterday|\d+\s?(?:bytes|KB|MB|GB)\b)", re.I)
+
+
 def table_from_items(items):
     if not items:
         return None
@@ -624,8 +627,15 @@ def table_from_items(items):
                 it["above"] = (hy - cy) / rh
             top.extend(r)
             continue
-        # the path bar: a row of crumbs with no list row under it
-        if (len(r) >= 2 and all(crumb_like(it["text"]) or it["text"].endswith(">") for it in r) and cy > hy + 3 * rh
+        # the path bar: a row of crumbs with no list row under it. A ROW
+        # CARRYING A DATE OR A SIZE IS A FILE, NEVER THE BAR - a path bar
+        # holds folder names only. At 00:01:10 the `projects` folder's one
+        # row stood twelve row-heights under the headings with nothing
+        # between, read as crumb-like, and was filed as the bar: the window
+        # lost its only file and with it its table, its name and its picture.
+        dated_row = any(DATED.search(it["text"]) for it in r)
+        if (len(r) >= 2 and not dated_row
+                and all(crumb_like(it["text"]) or it["text"].endswith(">") for it in r) and cy > hy + 3 * rh
                 and ri >= last_listy):
             bottom.extend(it for it in r if it["box"][2] > x_lo - rh and it["box"][0] <= x_end)
             side.extend(it for it in r if it["box"][2] <= x_lo - rh and sidebar_word(it))   # the sidebar's last entry, level with the path bar
@@ -645,7 +655,8 @@ def table_from_items(items):
         side.extend(it for it in left if sidebar_word(it))
         if not in_list:
             continue
-        if all(crumb_like(it["text"]) for it in in_list) and len(in_list) >= 2 and cy > hy + 3 * rh and ri >= last_listy:
+        if (all(crumb_like(it["text"]) for it in in_list) and len(in_list) >= 2 and cy > hy + 3 * rh
+                and ri >= last_listy and not dated_row):
             bottom.extend(in_list)
             continue
         cells = [""] * len(cols)
