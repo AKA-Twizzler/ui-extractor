@@ -3936,6 +3936,13 @@ def mend_cells(sl, full):
             if j is None or j >= len(fr["cells"]) or not fr["cells"][j]:
                 continue
             bad = not r["cells"][i] or (h == "Date Modified" and not tidy_date(r["cells"][i]))
+            if not bad and h.startswith("Kind"):
+                # a kind read cut (`Folde`) or mangled (`Marko Markd`) where
+                # the window's settled row reads a kind: the settled one
+                mine_, theirs_ = flat(r["cells"][i]), flat(fr["cells"][j])
+                kindish_ = re.compile(r"(folder|document|textfile|json|logfile|application|image|alias)")
+                bad = bool(theirs_) and (theirs_.startswith(mine_) and len(mine_) < len(theirs_)
+                                         or (not kindish_.search(mine_) and bool(kindish_.search(theirs_))))
             if bad:
                 r["cells"][i] = fr["cells"][j]
                 if i < len(r["italic"]):
@@ -7200,7 +7207,8 @@ def note(records_path, diary_text=None):
                                   if getattr(sl_, "_row_step", 0)), 0.0),
                 ghosts=ghost_list(s, sub_states, carded),
                 camera=(cam, cam_pic) if cam else None,
-                sure=all(any(t in st.measured for t in s["ts"]) for st, _, _ in subjects),
+                sure=all(any(t in st.measured for t in s["ts"]) or id(st) in settled
+                         for st, _, _ in subjects),
                 kz=(T[0] if T else 1.0)))
             parts.append(_shot)
             parts.append("")
