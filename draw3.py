@@ -1161,8 +1161,6 @@ class State:
                         tree_part["x1"] = max(tree_part["x1"], p["box"][2])
                         continue
             cut = draw2.cut_list(p, m.get("size"))
-            if not cut:
-                cut = cut_in_window(p, m)
             if cut:
                 part = self.part_for("a list of columns", slot)
                 part["x0"] = p["box"][0] if part["x0"] is None else min(part["x0"], p["box"][0])
@@ -2509,48 +2507,6 @@ def harmonise(states):
 # window where it sat, the one being shown filled with what it held over
 # that stretch of time, the others as empty outlines. Its content comes
 # only from the moments inside the stretch, so it stays an honest still.
-
-def cut_in_window(p, m):
-    """A pane that spills past the window it belongs to, read inside it.
-
-    The reader sometimes files a whole column of the screen as ONE pane -
-    `[0, 0, 612, 2160]` at 00:02:50, the full height of the frame - and
-    `cut_list` refuses it, because words standing above and below the window
-    sit among the window's own rows. The window `shapes` measures there is
-    then drawn as a bare outline over content that was read.
-
-    Offered the same pane CLIPPED TO THAT MEASURED WINDOW, `cut_list` reads
-    twenty-one rows. Nothing is invented: the words kept are the ones
-    standing inside the rectangle the frame itself drew. Only a pane that
-    spills WELL past a window is clipped - one already the window's own
-    shape is `cut_list`'s business as it stands.
-    """
-    box = p.get("box")
-    if not box or len(box) != 4:
-        return None
-    try:
-        path = frame_of(m)
-        wins = shapes.windows(path) if path else []
-    except Exception:
-        return None
-    W, H = (m.get("size") or [0, 0])[:2]
-    if not (W and H):
-        return None
-    tall = max(1.0, box[3] - box[1])
-    for w in wins:
-        if (w[2] - w[0]) * (w[3] - w[1]) < 0.09 * W * H:
-            continue
-        x0, y0 = max(box[0], w[0]), max(box[1], w[1])
-        x1, y1 = min(box[2], w[2]), min(box[3], w[3])
-        if x1 - x0 <= 0 or y1 - y0 <= 0 or (y1 - y0) > 0.85 * tall:
-            continue
-        q = dict(p)
-        q["box"] = [x0, y0, x1, y1]
-        got = draw2.cut_list(q, m.get("size"))
-        if got:
-            return got
-    return None
-
 
 def frame_of(m):
     return shapes.frame_of(m)
