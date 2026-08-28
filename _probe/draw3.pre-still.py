@@ -5937,73 +5937,8 @@ def note(records_path, diary_text=None):
                   "the reader measured a window's edges those are the edges drawn, otherwise they are taken from "
                   "where that window's own words sat.", ""]
         last_T = None
-        at_idx = {m["ts"]: i for i, m in enumerate(moments)}
-
-        def _agree(a, b):
-            return all(abs(a[i] - b[i]) <= (0.04 * Wf if i % 2 == 0 else 0.04 * Hf) for i in range(4))
-
-        def any_words_in(box, st_, times):
-            """How many of this window's own words - any of them, the
-            sidebar's fixed names included - were read inside that box."""
-            keys = {flat(w) for w in state_texts(st_) if len(flat(w)) >= 5}
-            n = 0
-            for t in times:
-                for key, b in (words_of.get(t) or {}).items():
-                    if not (key in keys or (len(key) >= 6 and any(key in sk for sk in keys))):
-                        continue
-                    cx, cy = (b[0] + b[2]) / 2, (b[1] + b[3]) / 2
-                    if box[0] <= cx <= box[2] and box[1] <= cy <= box[3]:
-                        n += 1
-            return n
-
-        def still_here(own, s_, base_, extra_):
-            """The place a window stood at this stretch, where the frames
-            either side measured it in the same place and its own words are
-            read inside that place now - the window stood still and the
-            reader merely failed to close it here. Returns (box, the moment
-            to draw it from) or None.
-
-            At 00:00:50 the video's black bands cut every edge of the
-            vault-demo Finder, so no rectangle closed and the picture showed
-            one window where the screen held three. The same window was
-            measured at 00:00:30 and at 00:01:00 at the same place, the
-            Finder beside it stands where it stood, and its favorites are
-            read inside its box at 00:00:50. Tristan's puzzle-piece rule
-            fills what was hidden from a moment it stood clear."""
-            meas = sorted(t for t in own.measured if own.rects.get(t))
-            if not meas:
-                return None
-            i0, i1 = at_idx.get(s_["t0"], 0), at_idx.get(s_["t1"], 0)
-            before = [t for t in meas if t < s_["t0"] and i0 - at_idx.get(t, -99) <= 3]
-            after = [t for t in meas if t > s_["t1"] and at_idx.get(t, 99) - i1 <= 3]
-            tb, ta = (before[-1] if before else None), (after[0] if after else None)
-            if tb is None and ta is None:
-                return None
-            rb, ra = (own.rects[tb] if tb else None), (own.rects[ta] if ta else None)
-            if rb and ra and not _agree(rb, ra):
-                return None
-            box = [(x + y) / 2 for x, y in zip(rb, ra)] if (rb and ra) else list(rb or ra)
-            anchor = tb if tb else ta
-            # the same zoom: some other window measured on both frames, at
-            # the same place on both - the screen did not move between them
-            zoom_ok = any(u is not own and u.rects.get(anchor) and anchor in u.measured
-                          and u.rects.get(s_["t0"]) and s_["t0"] in u.measured
-                          and _agree(u.rects[anchor], u.rects[s_["t0"]]) for u in states)
-            if not zoom_ok:
-                return None
-            hits = any_words_in(box, own, s_["ts"])
-            if hits < (3 if (tb and ta) else 4):
-                return None
-            # not where a window already drawn full stands
-            for b in base_ + extra_:
-                r_ = s_["rects"].get(id(b)) or pin.get(id(b))
-                if r_ and overlap(box, r_) > 0.5:
-                    return None
-            return box, anchor
-
         for s in spans:
             subjects = []
-            still = {}        # a window carried from the moment it stood still at
             settled = set()   # states whose box the frame itself measured
             # A WINDOW THE FRAME DREW IN FULL, THAT NO FOCUS WINDOW COVERS,
             # IS A TOP-LAYER WINDOW AND MUST BE FILLED, not merely outlined.
@@ -6125,29 +6060,10 @@ def note(records_path, diary_text=None):
                     # measured rectangle, the same ground the focus windows
                     # stand on.
                     pin[id(pick)] = [float(v) for v in r]
-            for own in states:
-                if own in base or own in extra or not own.has_content() or not is_real_window(own.name):
-                    continue
-                got = still_here(own, s, base, extra)
-                if got is None:
-                    continue
-                box, anchor = got
-                extra.append(own)
-                pin[id(own)] = [float(v) for v in box]
-                still[id(own)] = anchor
-                if os.environ.get("SN_STILL"):
-                    print("STILL %s %s carried from %s at %s" % (s["t0"], label_for(own), anchor,
-                                                                 [round(v) for v in box]), file=sys.stderr)
             for st in base + extra:
                 if st not in shown:
                     continue
-                sl = state_slice(st, s["t0"], s["t1"])
-                if sl is None and id(st) in still:
-                    # drawn as it stood at the moment beside this one where
-                    # it stood clear - the puzzle piece, never the window's
-                    # whole gathered content
-                    sl = state_slice(st, still[id(st)], still[id(st)])
-                sl = sl or st
+                sl = state_slice(st, s["t0"], s["t1"]) or st
                 if sl is not st:
                     # the desk's chrome stands all video; a stretch that did
                     # not re-read it still lives under it
@@ -7188,15 +7104,9 @@ def note(records_path, diary_text=None):
             _m0 = next((mm for mm in moments if mm["ts"] == s["t0"]), None)
             _hid = masked_share(frame_of(_m0)) if _m0 is not None else 0.0
             if _hid >= 0.05:
-                if still:
-                    parts += ["*The recording blacks out %.0f%% of this screen's height here. The windows "
-                              "under those bands stood still from the moment before to the moment after, "
-                              "and are drawn as they stood then; anything else behind the bands is not drawn, "
-                              "because the video does not carry it.*" % (100 * _hid), ""]
-                else:
-                    parts += ["*The recording blacks out %.0f%% of this screen's height here. Any window "
-                              "standing behind those bands is not drawn, because the video does not "
-                              "carry it.*" % (100 * _hid), ""]
+                parts += ["*The recording blacks out %.0f%% of this screen's height here. Any window "
+                          "standing behind those bands is not drawn, because the video does not "
+                          "carry it.*" % (100 * _hid), ""]
             # AND WHAT WAS LOOKED AT AND NOT READ, which is a different claim
             # from what was not there. Only a region carrying ink counts: most
             # of what the reader passes over is desktop with nothing on it, and
