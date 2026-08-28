@@ -381,6 +381,22 @@ def finder(st):
     # over the whole window they land where the Name column was and the
     # strip the frame showed comes out empty. They hug the right edge.
     shares = col_shares(st, head) if has_name else None
+    if shares and on_card and rows and name_i in shares:
+        # A NAME THE CARD KNOWS WHOLE IS SHOWN WHOLE. The card adds up every
+        # frame (point 3 of the fourteen): a name Finder cut on screen and
+        # another moment read whole stands whole here, and where the frame's
+        # Name column is too narrow for it the column grows to the longest
+        # name, the other columns keeping their proportions of what is left
+        # -- the way the card grows taller for rows known from other
+        # moments. Widths are estimated for the card drawn 960 px wide.
+        longest = max((len(str((r.get("cells") or [""])[0] or "")) for r in rows), default=0)
+        side_est = (home[1] if home and home[1] else None) or side_share_card(st) or 0.25
+        list_w = 960.0 * (1.0 - side_est) - 24.0
+        need = min(0.6, (0.58 * longest + 3.4) * 12.5 / list_w)
+        if need > shares[name_i]:
+            rest = 1.0 - shares[name_i]
+            scale = (1.0 - need) / rest if rest > 0 else 0.0
+            shares = {i: (need if i == name_i else v * scale) for i, v in shares.items()}
     out = ['<table class="sn-list%s%s">' % (" sn-tail" if not has_name else "", " sn-fixed" if shares else "")]
     if shares:
         # THE COLUMNS WHERE THE FRAME HAD THEM. `sn-fixed` fixes the layout so
