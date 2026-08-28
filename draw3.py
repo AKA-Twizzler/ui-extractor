@@ -7864,7 +7864,8 @@ def note(records_path, diary_text=None):
               "Every window rebuilt, large enough to read: the toolbar, the sidebar, the rows with their dates and "
               "sizes, the path bar, the note's own text -- drawn from what was read off the screen, holding everything "
               "gathered across every moment that window showed the same thing. This is the content; the pictures above "
-              "only say where each of these stood.", ""]
+              "only say where each of these stood. One part per program; a window seen only in part, and the "
+              "desktop's own bar, come last.", ""]
     def split_windows(sts):
         """Two windows of one program are two windows. Whatever else is
         uncertain, two states that stood on the screen at the SAME moment
@@ -8085,6 +8086,79 @@ def note(records_path, diary_text=None):
             folded.setdefault(id(base), []).extend(o.times + (folded.get(id(o)) or []))
             folded[id(o)] = None
 
+        # THE WINDOW'S FIXED FURNITURE IS SHARED BY EVERY CARD OF IT. A Finder's
+        # favorites sidebar does not come and go as the folder changes, and a
+        # tree's column does not move when the note scrolls; what changes from
+        # moment to moment is only how much of the window the screen showed.
+        # Measured on this video: four of the left window's five cards drew
+        # no sidebar at all, because at those moments the screen was zoomed
+        # in past the window's left edge -- while its first card, read when
+        # the window stood clear, drew the sidebar in full. Tristan's rule:
+        # "the sidebar is bigger in one than the other, no sidebar at all"
+        # is the fault, and the fix is the puzzle-piece rule applied to the
+        # window's furniture -- what one moment hid, another moment showed.
+        # So every card of one physical window carries the fullest sidebar
+        # any of its cards read, at the share the window's widest measured
+        # moment gave it; and every card of a window with a tree beside a
+        # note takes its column split from the moment that window showed the
+        # most of itself (the most tree rows and note lines together), with
+        # the note's own line length measured at that same moment against
+        # the pane it sat in, so the card is the window in the pictures,
+        # only large enough to read and as tall as its gathered content.
+        def _home_furniture(g):
+            words, share = [], None
+            for o in g:
+                sw = furnish.side_words_of(o)
+                if len(sw) > len(words):
+                    words = list(sw)
+                sh = furnish.side_share_card(o)
+                if sh and (share is None or sh < share):
+                    share = sh
+            best, tree_fr, line_fr = -1, None, None
+            for o in g:
+                for m_, g_ in (getattr(o, "pieces", None) or ()):
+                    rect = (getattr(o, "rects", None) or {}).get(m_.get("ts"))
+                    if not rect or rect[2] - rect[0] <= 0:
+                        continue
+                    w_ = float(rect[2] - rect[0])
+                    trees = [p_ for p_ in (g_.get("panes") or [])
+                             if p_.get("kind") == "a file tree" and len(p_.get("box") or []) == 4
+                             and rect[0] - 0.05 * w_ <= p_["box"][0] and p_["box"][2] <= rect[0] + 0.5 * w_]
+                    docs = [p_ for p_ in (g_.get("panes") or [])
+                            if p_.get("kind") == "an open document" and len(p_.get("box") or []) == 4
+                            and p_["box"][2] - p_["box"][0] >= 0.25 * w_
+                            and rect[0] - 0.02 * w_ <= p_["box"][0] and p_["box"][2] <= rect[2] + 0.02 * w_]
+                    if not (trees and docs):
+                        continue
+                    tr = max(trees, key=lambda p_: len(p_.get("lines") or p_.get("rows") or []))
+                    dc = max(docs, key=lambda p_: p_["box"][2] - p_["box"][0])
+                    score = len(tr.get("lines") or tr.get("rows") or []) + len(dc.get("lines") or dc.get("rows") or [])
+                    if score <= best:
+                        continue
+                    t_ = (tr["box"][2] - rect[0]) / w_
+                    if not 0.04 <= t_ <= 0.5 or tr["box"][2] > dc["box"][0]:
+                        continue
+                    xs = [it["box"] for it in draw2.items_of(dc) if it["box"][2] - it["box"][0] > 20]
+                    editor = float(rect[2] - tr["box"][2])
+                    if len(xs) >= 3 and editor > 0:
+                        span = max(b[2] for b in xs) - min(b[0] for b in xs)
+                        l_ = span / editor
+                        if 0.15 <= l_ <= 1.0:
+                            best, tree_fr, line_fr = score, t_, l_
+            for o in g:
+                o._side_home = (words, share)
+                if tree_fr:
+                    o._card_tree = tree_fr
+                    o._card_line = line_fr
+        for g in groups:
+            _home_furniture(g)
+        # ONE PART PER PROGRAM. Tristan's rule for this section: "a subsection
+        # per window type (obsidian windows, finder windows, fragmented not
+        # full windows like browser fragment, top bar of the desktop, etc)".
+        _prog = re.sub(r"^[Tt]he ", "", re.sub(r" window$", "", w))
+        _k = len(groups)
+        parts.append(f"### {_prog}: " + (f"{COUNT.get(_k, _k)} windows" if _k > 1 else "one window"))
+        parts.append("")
         for st in sorted((s for g in groups for s in g), key=lambda s: s.times[0]):
             if id(st) in folded and folded[id(st)] is None:
                 continue
@@ -8095,7 +8169,7 @@ def note(records_path, diary_text=None):
                 _when = _all[0] if len(_all) == 1 else (
                     "%s and %s" % (_all[0], _all[1]) if len(_all) == 2
                     else "%s to %s" % (_all[0], _all[-1]))
-            parts.append(f"## {w} - as at {_when}" + (f", {st.title}" if st.title else ""))
+            parts.append(f"#### {w} - as at {_when}" + (f", {st.title}" if st.title else ""))
             parts.append("")
             _sh = shape_of.get(id(st)) or (None, None)
             _html = st.window_html()
@@ -8109,8 +8183,66 @@ def note(records_path, diary_text=None):
                 parts.append("")
             parts.append("---")
             parts.append("")
-    # the desktop bar stands in the screen pictures themselves; saying it
-    # again at the end is the same fact twice
+    # A WINDOW SEEN ONLY IN PART IS STILL A WINDOW. The browser stood behind
+    # Obsidian for the whole video with only its tab strip and address bar in
+    # view along the top of the frame; the pictures draw that strip where it
+    # sat, and this card gathers it once, read across every moment, with a
+    # plain line saying the rest of the window was never on show.
+    _tops, _seen_top = [], set()
+    for st in shown:
+        for t in (getattr(st, "topwords", None) or []):
+            k_ = (str(t[0]).strip().lower(), int(round(float(t[1]) / 40)))
+            if k_ not in _seen_top:
+                _seen_top.add(k_)
+                _tops.append(t)
+
+    class _TopOnly:
+        """A stand-in carrying only the words read along the top of the frame."""
+        topwords = ()
+    _bro = _TopOnly()
+    _bro.topwords = _tops
+    strip = furnish.browser_behind(_bro) if _tops else ""
+    if strip:
+        dark = any(getattr(st, "theme", None) == "dark" for st in shown)
+        parts += ["### The browser: seen only at its top", "",
+                  f'<div class="sn-window sn-browser-card{" sn-dark" if dark else ""}">{strip}'
+                  '<div class="sn-covered">Only its tab strip and address bar were ever in view; '
+                  'the rest of this window stood behind the others the whole time.</div></div>',
+                  "", "---", ""]
+    # THE DESKTOP BAR, ONCE PER PROGRAM THAT SET IT. The bar along the top of
+    # the screen belongs to the program at the front, so the video shows one
+    # bar per program; each is drawn once with the clock as it read while
+    # that bar stood, first reading to last.
+    bars = []
+    for m in moments:
+        ws = tuple(bar_at.get(m["ts"]) or ())
+        if len(ws) < 3:
+            continue
+        c = clock_at.get(m["ts"], "")
+        hit = next((b for b in bars if b[0] == ws), None)
+        if hit is None:
+            bars.append([ws, c, c])
+        else:
+            hit[2] = c or hit[2]
+    if bars:
+        parts += ["### The desktop bar", "",
+                  "The menu bar along the top of the screen, as each program at the front set it, "
+                  "with the clock as it read while that bar stood.", ""]
+        for ws, c0, c1 in bars:
+            def _word(w_, first):
+                it = w_.startswith("<i>") and w_.endswith("</i>")
+                t_ = esc(w_[3:-4] if it else w_)
+                t_ = f"<b>{t_}</b>" if first else t_
+                return f"<i>{t_}</i>" if it else t_
+            menus = " &nbsp; ".join(_word(w_, i == 0) for i, w_ in enumerate(ws[:14]))
+            clock = c0
+            if c1 and c1 != c0:
+                day = " ".join(c0.split()[:-1])
+                tail = c1[len(day):].strip() if day and c1.startswith(day) else c1
+                clock = f"{c0} to {tail}"
+            parts += [f'<div class="sn-menubar"><span>{menus}</span>'
+                      + (f'<span class="sn-right">{esc(clock)}</span>' if clock else "") + "</div>", ""]
+        parts += ["---", ""]
 
     parts += ["", f"> [!note]- The moment-by-moment record, {len(moments)} moments (appendix)", "> ````text"]
     for ln in diary_text.rstrip("\n").split("\n"):
