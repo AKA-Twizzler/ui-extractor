@@ -5,7 +5,7 @@ D = r"G:\Images\Move Memory Files Out of Claude Code Into Obsidian\records.jsonl
 HEAD = ("Name", "Date Modified", "Size", "Kind")
 for l in io.open(D, encoding="utf-8"):
     r = json.loads(l)
-    for p in r["panes"]:
+    for p in r.get("panes") or []:
         if p.get("kind") != "a list of columns" or len(p.get("box") or []) != 4: continue
         b = p["box"]; W = float(b[2]-b[0])
         xs = {}; dims = {}
