@@ -637,9 +637,14 @@ def obsidian(st, behind=True):
     # share: a bare 120px floor stood at a quarter of the maximised Obsidian at
     # 00:04:00, where the frame had the tree at an eighth. A card sets no unit
     # and reads the same 120px it always did.
-    tree_floor = "var(--sn-tree-min, calc(120 * var(--sn-u, 1px)))"
+    # ...and NO floor at all on a picture: a picture stands at the share the
+    # frame had, and any floor -- 120px, or 120 of the window's own unit --
+    # widened the tree past it wherever the window was drawn small.
+    tree_floor = "var(--sn-tree-min, 120px)" if not getattr(st, "shape", None) else "0px"
     tree_fr, doc_fr = 38, 62
-    ribbon_w = "calc(30 * var(--sn-u, 1px))"
+    # the ribbon: a readable 30px on a card, its true share of the window in
+    # a picture (57 of 3840 pixels here)
+    ribbon_w = "30px" if not getattr(st, "shape", None) else "1.5%"
     # ON THE CARD ONLY: a picture's tree stands at the span the frame gave
     # it, and the median across moments moved three pictures off their frames
     share = tree_share_of(st) if (tree and doc and not getattr(st, "shape", None)) else None
