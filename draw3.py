@@ -5518,8 +5518,15 @@ def note(records_path, diary_text=None):
             # frame's top strip - was never even asked for. A browser can
             # stand at the top of a frame with no menu bar above it. The menu
             # bar itself stays gated on `barred`, which is its own evidence.
+            # ...AND ONLY FOR THE STRETCH BEING DRAWN. Asked of every state
+            # in the video, one browser read anywhere turned the chrome on
+            # everywhere: fourteen pictures a point or three worse, none
+            # better, because each gained a browser strip its own frame never
+            # showed. A stretch is asked about ITS OWN moments.
+            here_states = [st_ for st_ in states
+                           if any(t_ in (getattr(st_, "times", []) or []) for t_ in s["ts"])]
             chrome_seen = any(re.search(r"type a URL|https?://", str(t_[0]))
-                              for st_ in states
+                              for st_ in here_states
                               for t_ in (getattr(st_, "topwords", []) or []))
 
             kz_now = T[0] if T else 1.0
