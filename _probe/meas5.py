@@ -1,7 +1,7 @@
 import sys, os, re, subprocess
 sys.path.insert(0, "/home/trism/.claude/jobs/014c964f/tmp/replay"); os.chdir("/home/trism/.claude/jobs/014c964f/tmp/replay")
 import compare
-note = open("_probe/note-ratio.md", encoding="utf-8").read()
+note = open("_probe/note-ratio2.md", encoding="utf-8").read()
 cards = [l for l in note.splitlines() if l.startswith('<div class="sn-window sn-')]
 css = open(compare.CSS_PATH, encoding="utf-8").read()
 out = "/home/trism/.claude/jobs/014c964f/tmp/replay/_probe/wmeas"; os.makedirs(out, exist_ok=True)
@@ -9,7 +9,7 @@ JS = ("<script>window.addEventListener('load',function(){var e=document.querySel
       "document.title='MEAS w='+(e?e.offsetWidth:-1)+' h='+(e?e.offsetHeight:-1);});</script>")
 print("%-4s %-34s %-28s %-28s" % ("card", "asked for", "in a 900px pane", "in a 1600px pane"))
 for i, card in enumerate(cards[:12]):
-    m = re.search(r'--sn-ratio:([\d.]+)(?:;max-width:([\d.]+)%)?', card)
+    m = re.search(r'--sn-ratio:([\d.]+)(?:;--sn-max:([\d.]+)%)?', card)
     want_r = float(m.group(1)) if m else 0
     want_s = float(m.group(2)) if (m and m.group(2)) else 100.0
     res = []
