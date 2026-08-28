@@ -2411,8 +2411,15 @@ def crumb_same(a, b):
     # memory window was respelt with a folder three levels down standing
     # at its root. The disk, Users, Documents and the home folder are whole
     # names every bar carries; nothing is a longer spelling of them.
-    if norm(a) in GENERIC or norm(b) in GENERIC:
-        return False
+    ga, gb = norm(a) in GENERIC, norm(b) in GENERIC
+    if ga or gb:
+        # the one thing a generic crumb can be besides itself is ITSELF CUT
+        # SHORT by Finder or by the reading - `Docur` for `Documents`,
+        # `jaredr` for `jaredrhodenizer` - never the head of something longer
+        g, o = (fa, fb) if len(fa) >= len(fb) else (fb, fa)
+        if len(o) >= len(g) or len(o) < 4:
+            return False
+        return sum(1 for x, y in zip(o, g[:len(o)]) if x != y) <= (0 if len(o) < 5 else 1)
     # A FOLDER AND THE NOTE INSIDE IT NAMED ALIKE ARE TWO CRUMBS. `memory`
     # and `MEMORY.md` flatten to `memory` and `memorymd`, one opening the
     # other, and the rule below took them for one crumb read twice - so the
@@ -2763,6 +2770,9 @@ def harmonise(states):
     # alike, the one with the most of its letters intact (capitals, dots,
     # spaces survive OCR worst, so the fullest form is the truest)
     strong_flats = {flat(s) for s in strong}
+    title_flats = {flat(st.title) for st in states if st.title}
+    crumb_flats = {flat(c) for st in states for q in st.parts
+                   if q["fam"] == "table" for c in (q["model"].path or [])}
     # every name any list actually carried: a crumb spelt like one of these
     # is already the folder's own name and must not be grown into a longer
     # one, or a second reading would stretch it again
@@ -2966,7 +2976,7 @@ def harmonise(states):
                                 if len(fp) <= len(f) or len(fp) - len(f) > 16:
                                     return False
                                 head = fp[:len(f)]
-                                return sum(1 for x, y in zip(head, f) if x != y) <= (0 if len(f) < 6 else 1)
+                                return sum(1 for x, y in zip(head, f) if x != y) <= (0 if len(f) < 5 else 1)
                             # only a name read whole somewhere can finish a
                             # crumb, and the shortest such name is the folder
                             # Finder cut short -- a longer one is a different file
@@ -2977,8 +2987,15 @@ def harmonise(states):
                             # BELOW IT. `Users` opens `-Users-jaredrh`; the only
                             # completion a generic crumb may take is the generic
                             # name it was cut from (`jaredr` -> `jaredrhodenizer`).
-                            if norm(c) in GENERIC or len(f) <= 7:
+                            if norm(c) in GENERIC:
                                 starts = [p for p in starts if norm(p) in GENERIC]
+                            elif len(f) <= 7:
+                                # a short crumb completes only into a folder
+                                # some window was seen standing in - a title
+                                # or another bar's crumb - never into a file
+                                # name that happens to open the same way
+                                starts = [p for p in starts
+                                          if flat(p) in title_flats or flat(p) in crumb_flats]
                             if starts:
                                 b = min(starts, key=lambda p: len(flat(p)))
                         if b:
