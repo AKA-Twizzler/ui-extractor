@@ -121,6 +121,14 @@ def check_picture(stamp, stage, frame_path, fav_boxes=(), read_whole=()):
         zw, zh = zb[2] - zb[0], zb[3] - zb[1]
         return (zb[0] + b[0] * zw, zb[1] + b[1] * zh, zb[0] + b[2] * zw, zb[1] + b[3] * zh)
     fav_boxes = [_thru(f) for f in fav_boxes]
+    if zb:
+        # a window the crop cut off is drawn whole; what the frame can
+        # vouch for is the part inside the crop, so that is what is judged
+        def _clip(b):
+            return (max(b[0], zb[0]), max(b[1], zb[1]), min(b[2], zb[2]), min(b[3], zb[3]))
+        filled = [_clip(b) for b in filled if _clip(b)[2] > _clip(b)[0] and _clip(b)[3] > _clip(b)[1]]
+        outline = [_clip(b) for b in outline if _clip(b)[2] > _clip(b)[0] and _clip(b)[3] > _clip(b)[1]]
+        drawn = filled + outline
 
     # 1) EVERY WINDOW THE FRAME HAS IS IN THE DRAWING, and a TOP-LAYER window
     #    (one no other window covers) is FILLED, not merely outlined.

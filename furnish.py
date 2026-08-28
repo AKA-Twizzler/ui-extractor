@@ -418,8 +418,13 @@ def browser_behind(st):
                     tabs.append((it["text"], it["box"][0]))
     joined_tabs = []
     for t, x in sorted(tabs, key=lambda tx: tx[1]):
-        # a piece that starts mid-word is the tail of the tab before it
+        # a piece that starts mid-word is the tail of the tab before it --
+        # a whole word's tail, not a stray letter: `s - YouTube` read off a
+        # zoomed moment is a second reading of the tab, not its ending
+        first = re.split(r"[\s-]", t.strip(), 1)[0]
         if joined_tabs and (t[:1].islower() or t[:1] in "-–—"):
+            if len(first) <= 1:
+                continue
             joined_tabs[-1] = joined_tabs[-1] + t
         else:
             joined_tabs.append(t)

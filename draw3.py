@@ -7767,26 +7767,56 @@ def note(records_path, diary_text=None):
             # crop cut off at the frame's edge runs on to where the window
             # really stood, known from the moments it stood clear.
             zoom_box = None
-            if T and not flatT(T):
+            # ...and only where the frame REALLY was a crop: a frame that
+            # shows the desktop bar is the whole screen whatever the fit
+            # says (the fit read 0.83 on two full-screen frames off a
+            # handful of words), and a scale under one would mean the video
+            # zoomed OUT past the screen, which no recording does.
+            if T and not flatT(T) and T[0] >= 1.15 and not barred:
                 _k = T[0]
+
+                def _area(b_):
+                    return max(0.0, b_[2] - b_[0]) * max(0.0, b_[3] - b_[1])
+
+                def _whole_home(stx_, hbox_):
+                    """The window this cut strip is part of: the smallest
+                    same-program window standing round it at this time."""
+                    best_ = None
+                    for o_ in states:
+                        if o_ is stx_ or o_.name != stx_.name:
+                            continue
+                        hb2 = home_at(o_, s["t0"])
+                        if not hb2 or furnish._within(hbox_, hb2) < 0.8 or _area(hb2) < 1.3 * _area(hbox_):
+                            continue
+                        if best_ is None or _area(hb2) < _area(best_):
+                            best_ = hb2
+                    return best_
 
                 def _home_box(b_, hb_=None):
                     x0_, y0_, x1_, y1_ = back(T, list(b_))
                     if hb_:
-                        if b_[0] <= 0.01 * Wf and hb_[0] < x0_:
+                        # a side the crop cut runs on to where the window
+                        # really stood; the crop's edge sits a little inside
+                        # the frame's own, so the test is a few percent
+                        if b_[0] <= 0.04 * Wf and hb_[0] < x0_:
                             x0_ = hb_[0]
-                        if b_[1] <= 0.01 * Hf and hb_[1] < y0_:
+                        if b_[1] <= 0.04 * Hf and hb_[1] < y0_:
                             y0_ = hb_[1]
-                        if b_[2] >= 0.99 * Wf and hb_[2] > x1_:
+                        if b_[2] >= 0.96 * Wf and hb_[2] > x1_:
                             x1_ = hb_[2]
-                        if b_[3] >= 0.99 * Hf and hb_[3] > y1_:
+                        if b_[3] >= 0.96 * Hf and hb_[3] > y1_:
                             y1_ = hb_[3]
                     return [max(0.0, x0_), max(0.0, y0_), min(float(Wf), x1_), min(float(Hf), y1_)]
 
                 _subj = []
                 for stx, sl, shape in subjects:
                     if shape:
-                        shape = _home_box(shape, home_at(stx, s["t0"]))
+                        hb_ = home_at(stx, s["t0"])
+                        raw_ = back(T, list(shape))
+                        # a strip of a window the crop cut off is that window
+                        if not hb_ or _area(hb_) < 1.3 * _area(raw_):
+                            hb_ = _whole_home(stx, raw_) or hb_
+                        shape = _home_box(shape, hb_)
                         sl.rect = shape
                     if getattr(sl, "_row_step", 0):
                         sl._row_step = sl._row_step / _k
@@ -8276,14 +8306,19 @@ def note(records_path, diary_text=None):
     def _bare(w_):
         return w_[3:-4] if (w_.startswith("<i>") and w_.endswith("</i>")) else w_
 
-    def _same_bar(a, b):
-        hits = sum(1 for w_ in a if any(same_text(_bare(w_), _bare(x)) for x in b))
-        return hits * 10 >= 6 * min(len(a), len(b))
-
     def _first_is_app(ws):
         first = _bare(ws[0])
         return first[:1].isupper() and not same_text(first, "File") and not same_text(first, "Window") \
             and not same_text(first, "Help") and not same_text(first, "Edit") and not same_text(first, "View")
+
+    def _same_bar(a, b):
+        # two bars naming different programs are two bars, however many
+        # menus they share: File, Edit, View, Window and Help are on every
+        # bar, and by those alone Obsidian's bar folded into Finder's
+        if _first_is_app(a) and _first_is_app(b) and not same_text(_bare(a[0]), _bare(b[0])):
+            return False
+        hits = sum(1 for w_ in a if any(same_text(_bare(w_), _bare(x)) for x in b))
+        return hits * 10 >= 6 * min(len(a), len(b))
 
     for m in moments:
         ws = tuple(bar_at.get(m["ts"]) or ())
