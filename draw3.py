@@ -4244,18 +4244,17 @@ def unglue_like(whole, head, tail):
     """A whole read glued ("03CompanyB(LandscapeCompany)") spaced the way the
     cut reading spaces its own two ends, and in the middle neither showed,
     the way Finder's names are spaced: before a bracket, and where a small
-    letter meets a capital."""
-    if " " in whole or not (head or tail):
+    letter meets a capital. A reading with no space in it says nothing about
+    spacing, and the whole stands as read."""
+    if " " in whole or " " not in (head + tail):
         return whole
     nh, nt = len(flat(head)), len(flat(tail))
-    i = 0
-    seen = 0
+    i, seen = 0, 0
     while i < len(whole) and seen < nh:
         if whole[i].isalnum():
             seen += 1
         i += 1
-    j = len(whole)
-    seen = 0
+    j, seen = len(whole), 0
     while j > 0 and seen < nt:
         j -= 1
         if whole[j].isalnum():
@@ -4265,11 +4264,13 @@ def unglue_like(whole, head, tail):
     mid = whole[i:j]
     mid = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", mid)
     mid = re.sub(r"(?<=[^\s(])(?=\()", " ", mid)
-    out = head + mid + tail
-    out = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", out) if not head.endswith(" ") and mid[:1].isupper() and head[-1:].islower() else out
-    if tail and mid and mid[-1:].isalnum() and tail[:1].isupper() and not mid.endswith(" "):
-        out = head + mid + " " + tail
-    return re.sub(r"\s{2,}", " ", out).strip()
+    if head and head[-1:].isalnum() and not head[-1:].isupper() and mid[:1].isupper():
+        mid = " " + mid
+    if tail and mid and mid[-1:].isalnum() and tail[:1].isupper():
+        mid = mid + " "
+    if not mid and head and tail and head[-1:].isalnum() and not head[-1:].isupper() and tail[:1].isupper():
+        mid = " "
+    return re.sub(r"\s{2,}", " ", head + mid + tail).strip()
 
 
 def complete_name(name, pool, heads):
