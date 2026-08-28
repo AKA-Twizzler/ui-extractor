@@ -6045,7 +6045,8 @@ def note(records_path, diary_text=None):
             tb, ta = (before[-1] if before else None), (after[0] if after else None)
             if tb is None and ta is None:
                 if why:
-                    print("STILL? %s %s: no measured neighbour (meas %s)" % (s_["t0"], label_for(own), meas), file=sys.stderr)
+                    print("STILL? %s %s: no measured neighbour (meas %s; i0 %s i1 %s idx %s)"
+                          % (s_["t0"], label_for(own), meas, i0, i1, [at_idx.get(t) for t in meas]), file=sys.stderr)
                 return None
             rb, ra = (own.rects[tb] if tb else None), (own.rects[ta] if ta else None)
             if rb and ra and not _agree(rb, ra):
@@ -6203,6 +6204,8 @@ def note(records_path, diary_text=None):
                     # measured rectangle, the same ground the focus windows
                     # stand on.
                     pin[id(pick)] = [float(v) for v in r]
+            if os.environ.get("SN_STILL") == "2":
+                print("STILL@ %s base %s extra %s" % (s["t0"], [label_for(b) for b in base], [label_for(b) for b in extra]), file=sys.stderr)
             for own in states:
                 if own in base or own in extra or not own.has_content() or not is_real_window(own.name):
                     continue
