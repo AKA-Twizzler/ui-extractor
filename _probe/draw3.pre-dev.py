@@ -884,21 +884,9 @@ def bar_across(group, m):
                      for it in its
                      if abs(it["box"][1] - seed["box"][1]) <= 0.01 * H)
         kept, reach = [], None
-        # THE GAP BETWEEN TWO CRUMBS IS A CHEVRON THE READER DID NOT KEEP.
-        # Finder sets `› [icon]` between crumbs, and the engines read the
-        # words and drop the marks; run together, `02 Company A (Info
-        # Product)` and `Dev` became one crumb and the bar lost its last
-        # folder. Two words a whole letter-height apart on one row were
-        # never one crumb: a space inside a folder's name is a fraction of
-        # that.
-        hs = sorted(it["box"][3] - it["box"][1] for it in its
-                    if abs(it["box"][1] - seed["box"][1]) <= 0.01 * H)
-        h_ = hs[len(hs) // 2] if hs else 0
         for x0, x1, txt in row:
             if reach is not None and x0 < reach - 8:
                 continue
-            if reach is not None and h_ and x0 - reach > 1.0 * h_ and not re.search(r"[>\u203a]\s*$", kept[-1] if kept else ""):
-                kept.append("\u203a")
             kept.append(txt)
             reach = x1
         parts = [q.strip() for q in re.split(r"[>\u203a]", "".join(kept)) if q.strip()]
