@@ -30,6 +30,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import machine
 
 JUNK = re.compile(r"^[^A-Za-z0-9]*$")
+UI_WORDS = {"name", "date", "modified", "size", "kind", "datemodified", "today", "yesterday"}
 
 
 def here(path):
@@ -115,13 +116,29 @@ def main():
             for ln in p.get("lines") or []:
                 for w in re.split(r"\s*\|\s*", re.sub(r"^\[[^\]]*\]\s*", "", ln)):
                     own.add(re.sub(r"[^a-z0-9]", "", w.lower()))
+        # THE NAMES THE VIDEO ALREADY KNOWS THIS WINDOW BY: its own path bar's
+        # crumbs, and the titles the reader confirmed on any window. A row of
+        # the list is NOT among them - a row is what the folder holds, never
+        # what it is called.
+        known = []
+        for p in m.get("panes") or []:
+            for ln in p.get("lines") or []:
+                if "below the list" in ln or "crumb" in ln:
+                    for w in re.split(r"\s*\|\s*", re.sub(r"^\[[^\]]*\]\s*", "", ln)):
+                        w = w.strip().rstrip(">\u203a ").strip()
+                        if len(w) >= 3:
+                            known.append(w)
+        for mm in recs:
+            for x in mm.get("windows") or []:
+                if x.get("top") and x.get("top_from") != "reread":
+                    for w in str(x["top"]).split(" | "):
+                        if len(w) >= 3:
+                            known.append(w.strip())
+        known_keys = {re.sub(r"[^a-z0-9]", "", w.lower()): w for w in known}
         for w in m.get("windows") or []:
             if w.get("top"):
                 continue
             cands = strips.get((m["ts"], w["wi"])) or []
-            # every token on the strip, judged on its own: the icons beside a
-            # Finder's title come back as scraps (`Ke`, `ip`) and would spoil
-            # a whole-run match
             toks = [t for run in cands for t in run.split()]
             same_place = [runs2 for (ts2, wi2), runs2 in strips.items() if ts2 != m["ts"]
                           and same_rect(rect_of(recs, ts2, wi2), w["rect"])]
@@ -130,20 +147,43 @@ def main():
             kept = []
             for t in toks:
                 key = re.sub(r"[^a-z0-9]", "", t.lower())
-                if len(key) < 3 or not re.search(r"[a-z]", key):
+                if len(key) < 3 or not re.search(r"[a-z]", key) or key in UI_WORDS:
+                    continue
+                # a solid word: letters enough, a vowel, not one letter
+                # repeated - the icons beside a title come back as `eee`
+                # and `Ss` on every strip alike, so repetition across
+                # strips proves nothing about them
+                solid = (len(key) >= 5 and re.search(r"[aeiouy]", key)
+                         and len(set(re.sub(r"[^a-z]", "", key))) >= 3)
+                if not solid:
                     continue
                 elsewhere = key in other_keys
-                inside = key in own or any(len(key) >= 5 and (key in o or o in key) for o in own if len(o) >= 5)
-                if (elsewhere or inside) and t not in kept:
-                    kept.append(t)
-            pick = " ".join(kept) if kept else None
+                inside = key in known_keys
+                near = next((v for k2, v in known_keys.items()
+                             if len(k2) >= 6 and len(k2) == len(key)
+                             and sum(1 for a_, b_ in zip(k2, key) if a_ != b_) == 1), None)
+                if near and near not in kept:
+                    kept.append(near)             # one letter misread: the known spelling
+                elif (elsewhere or inside) and t not in kept:
+                    kept.append(known_keys.get(key, t))
+            pick = None
+            if kept:
+                # a known name holding every kept word is the name itself
+                # (`Company`, `Info`, `Product` -> `02 Company A (Info Product)`)
+                keys_ = [re.sub(r"[^a-z0-9]", "", k.lower()) for k in kept]
+                whole = [v for k2, v in known_keys.items() if all(k in k2 for k in keys_)]
+                if whole:
+                    pick = min(whole, key=len)
+                else:
+                    pick = " ".join(kept)
             if pick:
                 w["top"] = pick
                 w["top_from"] = "reread"
                 filled += 1
                 print(f"{m['ts']} window {w['wi']} {w['rect']}: {pick!r}   (strip read {toks})")
     if filled:
-        shutil.copy2(path, path + ".bak-titles")
+        if not os.path.exists(path + ".bak-titles"):
+            shutil.copy2(path, path + ".bak-titles")     # the reader's own record, kept once
         with open(path + ".tmp", "w", encoding="utf-8") as f:
             for r in recs:
                 f.write(json.dumps(r, ensure_ascii=False) + "\n")
