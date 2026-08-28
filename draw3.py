@@ -463,7 +463,14 @@ class Table:
             # row of `Jun 30 ... 60 bytes Markdown` folded into the row of
             # `Jun 30 ... 59 bytes Markdown` beside it, and a file the
             # screen showed was gone from the list.
-            twin = next((n for n in named if rest and norm(" ".join(n["cells"][1:])) == norm(rest)), None)
+            def _twin_of(n_):
+                # every cell the nameless row HAS must match; a cell it
+                # lacks was not read, which is no difference
+                if len(n_["cells"]) < len(r["cells"]):
+                    return False
+                return all(not c or norm(c) == norm(n_["cells"][i])
+                           for i, c in enumerate(r["cells"]) if i >= 1)
+            twin = next((n for n in named if rest and _twin_of(n)), None)
             if twin is None and rest and len(named) < 2:
                 kept.append(r)
             elif twin is None and sum(1 for c in r["cells"][1:] if c) >= 2 and len(named) >= 2:
