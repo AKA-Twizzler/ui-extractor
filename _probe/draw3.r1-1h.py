@@ -1217,19 +1217,16 @@ class State:
     def _pitch_at(self):
         return _AtView(self._seen, "pitch")
 
-    def moments(self):
-        """Every moment this window was seen at, earliest first, with what was
-        seen at each. The public way in, and the only one.
+    @property
+    def _doc_wide_at(self):
+        return _AtView(self._seen, "doc_wide")
 
-        It replaced two read-through properties that were reached as
-        `getattr(st, "_h1_read", ())`. A default on a getattr swallows any
-        AttributeError raised INSIDE a property and hands back an empty
-        container -- so a broken record would have read as "nothing found",
-        and "nothing found" is a legitimate answer everywhere in this file.
-        That is a check whose failure is indistinguishable from its success,
-        which is the shape that has cost this job the most. A method cannot be
-        reached that way, and a break here is now loud."""
-        return sorted(self._seen.items())
+    @property
+    def _h1_read(self):
+        """Kept as (moment, box) pairs, which is the shape its readers already
+        walk -- and now it is the moment record answering rather than a list
+        stashed on the window beside it."""
+        return _AtView(self._seen, "h1").items()
 
     def stood_before(self, ts):
         """Where this window's words sat at the LAST MOMENT BEFORE this one,
@@ -5137,7 +5134,7 @@ def note(records_path, diary_text=None):
             st._doc_wide_borrowed = True
 
     for st in states:
-        for t_, b_ in [(t, sn.h1) for t, sn in st.moments() if sn.h1]:
+        for t_, b_ in getattr(st, "_h1_read", ()):
             s_ = next((x for x in spans if t_ in x["ts"]), None)
             T_ = (span_T.get(s_["t0"]) if s_ else None) or fit_map([t_])
             hb = home_at(st, t_)
@@ -5608,8 +5605,8 @@ def note(records_path, diary_text=None):
                 sl._doc_pad = getattr(st, "_doc_pad", 0)
                 # the line length this stretch's own moments measured, so a
                 # picture shows the note as wide as it ran THEN
-                mine = [sn.doc_wide for t_, sn in st.moments()
-                        if sn.doc_wide is not None and t_ in s["ts"]]
+                mine = [v for t_, v in getattr(st, "_doc_wide_at", {}).items()
+                        if t_ in s["ts"]]
                 sl._doc_wide = (round(100 * med(sorted(mine))) if mine
                                 else getattr(st, "_doc_wide", 0))
                 # THE FAULT, DELETED. This line read `sl.rects, sl.measured =
@@ -5875,8 +5872,8 @@ def note(records_path, diary_text=None):
             S_now = max(0.05, kz_now * furnish.UI_TXT / furnish.CSS_TXT)
 
             def span_pad(st_, top):
-                seen = next((sn.h1 for t_, sn in st_.moments()
-                             if sn.h1 and t_ in s["ts"]), None)
+                seen = next((b_ for t_, b_ in getattr(st_, "_h1_read", ())
+                             if t_ in s["ts"]), None)
                 if seen is None:
                     return getattr(st_, "_doc_pad", 0)
                 pad = (seen[1] - top) * furnish.CANVAS_W / Wf / S_now - 60
