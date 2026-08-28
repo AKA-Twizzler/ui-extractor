@@ -3639,46 +3639,6 @@ def span_of(st):
     return f"{st.times[0]} to {st.times[-1]}"
 
 
-def masked_rows(path):
-    """How much of a frame the RECORDING ITSELF blacks out.
-
-    At 00:00:50 of one video two pure-black bands cross the whole screen -
-    612 of 2160 rows - and the two Finder windows behind them can never be
-    closed, because every edge that would close them is cut. That is the
-    source material withholding the pixels, not this tool failing to read
-    them, and the difference matters enough to say on the page: everything
-    else the note declares is a limit of the reading.
-
-    Checked on the RAW video, the bands are in it - none at 49 seconds, 612
-    at 50 and 51 - so this is not the frame builder's doing either.
-
-    A band must be interior: the black above and below a letterboxed video
-    is the shape of the picture, not a thing hidden inside it."""
-    try:
-        from PIL import Image
-        import numpy as np
-    except Exception:
-        return 0.0
-    try:
-        a = np.asarray(Image.open(path).convert("L"), dtype=np.float32)
-    except Exception:
-        return 0.0
-    h, w = a.shape
-    if not h or not w:
-        return 0.0
-    dark = a.mean(axis=1) < 6.0
-    hid, run, start = 0, 0, None
-    for y in range(h):
-        if dark[y]:
-            if start is None:
-                start = y
-        elif start is not None:
-            if y - start >= 0.02 * h and start > 0.02 * h and y < 0.98 * h:
-                hid += y - start
-            start = None
-    return hid / float(h)
-
-
 def note(records_path, diary_text=None):
     header, moments, footer = old.load(records_path)
     title = header.get("title") or os.path.basename(os.path.dirname(records_path))
@@ -3888,22 +3848,6 @@ def note(records_path, diary_text=None):
     if clocks:
         head += f" The desktop clock read {clocks[0]}" + (f" at the start and {clocks[-1]} at the end." if clocks[-1] != clocks[0] else ".")
     head += " A word in italics was read by one engine only."
-    # WHAT THE RECORDING ITSELF HIDES, said on the page rather than left for
-    # the reader to wonder about. This is not a limit of the reading: the
-    # video draws black over part of its own screen, and no amount of better
-    # reading recovers what was never recorded.
-    hidden = []
-    for m_ in moments:
-        try:
-            frac = masked_rows(frame_of(m_))
-        except Exception:
-            frac = 0.0
-        if frac >= 0.05:
-            hidden.append((m_["ts"], frac))
-    if hidden:
-        head += (" The recording itself blacks out part of the screen at "
-                 + ", ".join("%s (%.0f%% of the height)" % (t_, 100 * f_) for t_, f_ in hidden)
-                 + " - windows behind those bands cannot be drawn, because the video does not carry them.")
     head_at = len(parts)           # filled in once the windows are told apart
     parts += [head, "", "**The order of events**", ""]
     # filled in AFTER the titles are settled: a window whose name was read
