@@ -950,7 +950,7 @@ def bar_across(group, m):
 
 
 GLUED_DATE = re.compile(
-    r"[a-z]?((?:Today|Yesterday|[A-Z][a-z]{2}\s?\d{1,2},?\s?\d{4})"
+    r"[a-z0-9]?((?:Today|Yesterday|[A-Z][a-z]{2}\s?\d{1,2},?\s?\d{4})"
     r"\s?(?:at)?\s?\d{1,2}:\d{2}\s?[AaPp]\.?[Mm])")
 GLUED_SIZE = re.compile(r"(\d+(?:[.,]\d+)?\s?(?:bytes|byte|KB|MB|GB|TB))", re.I)
 
