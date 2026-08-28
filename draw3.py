@@ -1113,7 +1113,7 @@ class State:
                     t_.path_at.append(m["ts"])
                 # the name rule reads the path, and the path only just
                 # arrived: ask it again now the window has its bar
-                self._title_rule()
+                self._title_rule(again=True)
         # where the window stood at this moment, measured from what it drew
         self.rects[m["ts"]] = content_rect(self, group, m)
         if group.get("side_share"):
@@ -1288,12 +1288,21 @@ class State:
         self._title_rule()
 
 
-    def _title_rule(self):
+    def _title_rule(self, again=False):
         """The folder's name, from the window's own furniture. Called
         again once a path bar cut as its own pane has been folded in:
         the rule reads the path, so it must run after the path is there."""
         table = self.main_table()
-        if table and (not self.title or not getattr(self, "title_sure", False) or getattr(self, "title_from_path", False)):
+        # `again` is for the one caller that has just GIVEN this window its
+        # path bar. The rule reads the path, so a title settled before the bar
+        # arrived was settled on less than the window knows now - and the
+        # guard below, which exists to stop a confident title being churned,
+        # was refusing the very re-ask its call site asks for. At 00:01:00 it
+        # locked `jaredrhodenizer` from a three-crumb path and never looked
+        # again when the full bar landed carrying the folder the title bar
+        # actually reads.
+        if table and (again or not self.title or not getattr(self, "title_sure", False)
+                      or getattr(self, "title_from_path", False)):
             # the folder's name. Finder centres it in the title bar, so the
             # confirmed top word nearest the list's centre is the title;
             # failing that, the top word that is also a crumb of the path;
