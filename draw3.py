@@ -1113,7 +1113,15 @@ class State:
                     t_.path_at.append(m["ts"])
                 # the name rule reads the path, and the path only just
                 # arrived: ask it again now the window has its bar
+                import sys as _s
+                _before = self.title
                 self._title_rule(again=True)
+                if m["ts"] == "00:01:00":
+                    _t = self.main_table()
+                    print("REASK ts=%s title %r -> %r  path=%r tops=%r"
+                          % (m["ts"], _before, self.title,
+                             (getattr(_t, "path", None) or [])[-2:],
+                             [x[0] for x in (getattr(_t, "top_items", None) or [])][:4]), file=_s.stderr)
         # where the window stood at this moment, measured from what it drew
         self.rects[m["ts"]] = content_rect(self, group, m)
         if group.get("side_share"):
