@@ -6073,10 +6073,20 @@ def note(records_path, diary_text=None):
                 if why:
                     print("STILL? %s %s: only %d own words inside %s" % (s_["t0"], label_for(own), hits, [round(v) for v in box]), file=sys.stderr)
                 return None
-            # not where a window already drawn full stands
+            # not where a window already drawn full stands - a window of ITS
+            # OWN SIZE. `overlap` measures the share of the smaller box, so
+            # a Finder standing on a maximised Obsidian scored 1.0 against
+            # it and was refused for standing where it always stands: on
+            # top of the editor. The cut-off Finder at 00:03:50 and the
+            # vault-demo Finder at 00:00:50 were both lost to that. A window
+            # covers this place only when it is not far bigger than it.
+            def _area(r):
+                return max(1.0, (r[2] - r[0]) * (r[3] - r[1]))
             for b in base_ + extra_:
                 r_ = s_["rects"].get(id(b)) or pin.get(id(b))
-                if r_ and overlap(box, r_) > 0.5:
+                if r_ and overlap(box, r_) > 0.5 and _area(r_) < 2.0 * _area(box):
+                    if why:
+                        print("STILL? %s %s: %s stands there" % (s_["t0"], label_for(own), label_for(b)), file=sys.stderr)
                     return None
             return box, anchor
 
