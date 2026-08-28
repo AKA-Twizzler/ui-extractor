@@ -135,6 +135,14 @@ def side_share_card(st):
 def finder(st):
     table = st.main_table()
     side_words = side_words_of(st)
+    # ON A CARD, THE WINDOW'S OWN SIDEBAR WHEREVER IT WAS READ. A card is the
+    # window rebuilt from every moment of it, and its favorites sidebar is
+    # fixed furniture: a folder view read while the screen was zoomed in
+    # past the window's left edge still belongs to a window that has one.
+    on_card = not getattr(st, "shape", None)
+    home = getattr(st, "_side_home", None)
+    if on_card and home and len(home[0] or ()) > len(side_words):
+        side_words = list(home[0])
     rows = table.rows if (table and table.rows) else []
     # A FINDER'S LIST READ AS A TREE IS STILL ITS LIST. With only its Name
     # column in view, a file list comes back as a plain column of names and
@@ -201,7 +209,11 @@ def finder(st):
     # the frame, so drawing them puts on the page what the screen never had.
     # The rest of the toolbar - the folder's name and the buttons on the
     # right - is where the window really did carry it.
-    cut_left = bool(getattr(st, "_cut_left", False))
+    # ...and a window the screen cut down its left edge in THIS folder view
+    # is drawn whole on its card when another view of the same window showed
+    # its left edge: the corner buttons and arrows are the window's, not
+    # the moment's.
+    cut_left = bool(getattr(st, "_cut_left", False)) and not (on_card and home and home[0])
     lights = "" if (side or cut_left) else '<span class="sn-lights"></span>'
     arrows = ("" if cut_left else
               '<span class="sn-btn">‹</span><span class="sn-btn">›</span>')
@@ -361,8 +373,8 @@ def finder(st):
         # width, so its share shrinks as the window widens; the median over
         # moments where the window stood narrow gave the vault-demo card a
         # sidebar of half its width and clipped the Kind column and the bar.
-        if not getattr(st, "shape", None):
-            share = side_share_card(st) or share
+        if on_card:
+            share = (home[1] if (home and home[1]) else None) or side_share_card(st) or share
         cols = (f' style="grid-template-columns: {share * 100:.1f}% 1fr"'
                 if share else "")
         grid = (cols[:-1] + ';flex:1 1 auto;min-height:0"') if cols else \
@@ -447,6 +459,15 @@ def tab_title(st, doc):
     h1 = doc.title() if doc else ""
     if getattr(st, "title", None):
         return st.title
+    # A STRETCH OF THE WINDOW WEARS THE WINDOW'S OWN NAME. A slice reads only
+    # its own moments, and at 00:04:10 those held no reading of the tab; it
+    # fell through to the note's first heading and the picture's tab read
+    # "Vault Index: the map of the brain" where the screen's read "Vault
+    # Index". The tab names the file, and the file does not change across a
+    # stretch of one note -- a different note is a different window state.
+    whole = getattr(st, "of", None)
+    if whole is not None and getattr(whole, "title", None):
+        return whole.title
     nh, best = norm(h1), ""
     for t, *_ in (getattr(st, "topwords", None) or []):
         nt = norm(t)
@@ -545,12 +566,21 @@ def obsidian(st, behind=True):
         pad = getattr(st, "_doc_pad", 0) if placed else 0
         wide = getattr(st, "_doc_wide", 0)
         blocks = getattr(st, "_doc_blocks", None) if placed else None
+        # ON A CARD, THE NOTE'S LINE LENGTH AS THE WINDOW'S FULLEST MOMENT
+        # HAD IT, against the pane beside the tree -- the program centres the
+        # note in that pane at a readable width, and the card does the same
+        # (`sn-page`), so the note sits where the frame shows it.
+        card_line = getattr(st, "_card_line", None) if not getattr(st, "shape", None) else None
+        if card_line:
+            wide = round(100 * card_line)
         bits = ([f"padding-top:{pad}px"] if pad else []) + \
                ([f"--sn-line:{wide}%"] if wide and wide < 98 else []) + \
                (["position:relative"] if blocks else [])
         sty_doc = f' style="{";".join(bits)}"' if bits else ""
-        cols.append(f'<div class="sn-doc"{sty_doc}>'
-                    + note_html(st, doc, title, blocks, wide) + "</div>")
+        inner = note_html(st, doc, title, blocks, wide)
+        if card_line:
+            inner = f'<div class="sn-page">{inner}</div>'
+        cols.append(f'<div class="sn-doc"{sty_doc}>' + inner + "</div>")
     # THE PANES ARE AS WIDE AS THE SCREEN HAD THEM. The explorer and the
     # note share the window in the proportion the reader measured - the
     # tree's pane against the rest of the window - not a fixed 38 to 62,
@@ -572,6 +602,11 @@ def obsidian(st, behind=True):
     # ON THE CARD ONLY: a picture's tree stands at the span the frame gave
     # it, and the median across moments moved three pictures off their frames
     share = tree_share_of(st) if (tree and doc and not getattr(st, "shape", None)) else None
+    # ON A CARD, THE TREE'S SHARE AT THE WINDOW'S FULLEST MOMENT, measured
+    # against the window's own box there, so the card splits its columns
+    # where the picture of that moment does.
+    if tree and doc and not getattr(st, "shape", None) and getattr(st, "_card_tree", None):
+        share = st._card_tree
     tp = next((q for q in getattr(st, "parts", []) if q.get("fam") == "tree" and q.get("x0") is not None), None)
     rect = getattr(st, "shape", None) or getattr(st, "rect", None)
     if share:

@@ -42,7 +42,7 @@ def pictures(note):
     heading = ""
     out = []
     for l in open(note, encoding="utf-8").read().split("\n"):
-        if l.startswith("## ") or l.startswith("### "):
+        if l.startswith("## ") or l.startswith("### ") or l.startswith("#### "):
             heading = l.lstrip("# ").strip()
         if l.startswith('<div class="sn-stage">'):
             stamp = heading.split(" - ")[0].split(" to ")[0].strip()

@@ -74,7 +74,7 @@ def parts_of(note_path):
     heading = ""
     pics, cards = [], []
     for i, l in enumerate(open(note_path, encoding="utf-8").read().split("\n"), start=1):
-        if l.startswith("## ") or l.startswith("### "):
+        if l.startswith("## ") or l.startswith("### ") or l.startswith("#### "):
             heading = l.lstrip("# ").strip()
         if l.startswith('<div class="sn-stage">'):
             pics.append((i, heading, l))
