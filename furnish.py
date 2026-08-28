@@ -327,6 +327,13 @@ def finder(st):
                         break
                 if again:
                     break
+        # FINDER APPENDS THE SELECTED ITEM TO THE PATH BAR: with `Dev`
+        # selected under `02 Company A (Info Product)` the bar reads
+        # `... › 02 Company A (Info Product) › Dev`, and every frame with a
+        # selection shows it so.
+        sel_ = next((r for r in rows if r.get("band") and r["cells"] and name_i < len(r["cells"]) and r["cells"][name_i]), None)
+        if sel_ and path_ and norm(path_[-1]) != norm(sel_["cells"][name_i]):
+            path_ = path_ + [sel_["cells"][name_i]]
         crumbs = []
         for k, c in enumerate(path_):
             g = '<span class="sn-g">⊟</span>' if k == 0 and c.lower().startswith("macintosh") else ico("")

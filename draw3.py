@@ -462,7 +462,7 @@ class Table:
             # what was read. `Jun30,2026at5:51PM` stood as a file's name in
             # the memory list.
             r_["cells"][0] = nm_[:m_.start()].strip()
-            date_ = m_.group(1).strip()
+            date_ = tidy_date(m_.group(1).strip()) or m_.group(1).strip()
             if di_ is None:
                 at_ = 1
                 self.header.insert(at_, "Date Modified")
@@ -511,9 +511,19 @@ class Table:
             if len(votes) > 1 and r["cells"] and r["cells"][0]:
                 # a spelling read with its dot or its capital intact ranks
                 # above a barer one on a tie
-                best = max(votes, key=lambda nm: (votes[nm], nm.startswith("."),
-                                                  sum(1 for ch in nm if not ch.isalnum()), sum(ch.isupper() for ch in nm)))
-                if best != r["cells"][0] and votes[best] > votes.get(r["cells"][0], 0):
+                # ONE WORD, HOWEVER SPELT, IS ONE VOTE: `Brand Guide.md` and
+                # `BrandGuide.md` are the same name read with and without
+                # its space, and pooled they outvote a misreading; among the
+                # spellings of the winning word the fullest stands (spaces,
+                # capitals, punctuation survive OCR worst).
+                groups_ = {}
+                for nm_, v_ in votes.items():
+                    groups_.setdefault(norm(nm_), []).append((nm_, v_))
+                gk = max(groups_, key=lambda k: sum(v for _, v in groups_[k]))
+                best = max((nm_ for nm_, _ in groups_[gk]),
+                           key=lambda nm: (sum(1 for ch in nm if not ch.isalnum()), sum(ch.isupper() for ch in nm), len(nm)))
+                cur_ = r["cells"][0]
+                if best != cur_ and (norm(cur_) == gk or sum(v for _, v in groups_[gk]) > sum(v for _, v in groups_.get(norm(cur_), []))):
                     r["cells"][0] = best
                     if r["italic"]:
                         r["italic"][0] = False
@@ -3172,8 +3182,9 @@ def harmonise(states):
                             # `jaredrhodenize`) takes the name the video
                             # spells whole, when exactly one strong name
                             # reads that close
+                            _c0 = lambda ch: {"o": "0", "i": "1", "l": "1"}.get(ch, ch)
                             near = [p_ for p_ in strong_names
-                                    if abs(len(flat(p_)) - len(f)) <= 2 and flat(p_)[:1] == f[:1]
+                                    if abs(len(flat(p_)) - len(f)) <= 2 and _c0(flat(p_)[:1]) == _c0(f[:1])
                                     and difflib.SequenceMatcher(None, flat(p_), f, autojunk=False).ratio() >= 0.85]
                             if len({flat(p_) for p_ in near}) == 1:
                                 b = near[0]
@@ -3325,6 +3336,32 @@ def harmonise(states):
                 continue
             t_ = q["model"]
             ki_ = next((i for i, h in enumerate(t_.header) if h and "Kind" in h), None)
+            # TWO ROWS READ AS ONE NAME: `My Product Opdsations` over a date
+            # cell holding two dates, beside rows `My Product` and
+            # `Operations` - the glue is dropped, both rows stand
+            names_ = [r["cells"][0] for r in t_.rows if r["cells"] and r["cells"][0]]
+            di_ = next((i for i, h in enumerate(t_.header) if h and "Date" in h), None)
+            kept_ = []
+            for r in t_.rows:
+                nm_ = r["cells"][0] if r["cells"] else ""
+                dc_ = r["cells"][di_] if (di_ is not None and di_ < len(r["cells"])) else ""
+                two_ = len(re.findall(r"\d{4}", dc_ or "")) >= 2
+                glued_ = bool(nm_) and " " in nm_ and any(o_ != nm_ and nm_.startswith(o_ + " ") for o_ in names_)
+                if glued_ and two_:
+                    continue
+                kept_.append(r)
+            t_.rows = kept_
+            # A CRUMB FINDER CUT SHORT, ON THE WINDOW'S OWN CARD, IS THE
+            # FOLDER'S WHOLE NAME where the video agrees on exactly one:
+            # `02 Co` under the Assets window is `02 Company A (Info Product)`.
+            # The pictures keep the cut, which is what their frames show.
+            if t_.path:
+                for i_, c_ in enumerate(t_.path):
+                    f_ = flat(c_)
+                    if len(f_) >= 4 and f_ not in agreed:
+                        longer_ = {v for k_, v in agreed.items() if k_.startswith(f_) and len(k_) > len(f_)}
+                        if len({flat(v) for v in longer_}) == 1:
+                            t_.path[i_] = next(iter(longer_))
             for r in t_.rows:
                 if r["cells"] and r["cells"][0]:
                     r["cells"][0] = bare_dot(r["cells"][0])
@@ -3857,6 +3894,54 @@ def state_slice(st, t0, t1):
     return out
 
 
+def respell_from(sl, st):
+    """A stretch's own reading of a name, a title or a tree row takes the
+    window's settled spelling where the two are one word - equal after
+    norm, or a letter or two apart on the same length - because the
+    settled one was voted across every moment and keeps its spaces and
+    punctuation: `03 CompanyB(LandscapeCompany)` reads as `03 Company B
+    (Landscape Company)`, `Opekations` as `Operations`."""
+    def score_(s_):
+        return (sum(1 for ch in s_ if not ch.isalnum()), sum(ch.isupper() for ch in s_), len(s_))
+
+    def close_(a_, b_):
+        x_, y_ = norm(a_), norm(b_)
+        if not x_ or not y_:
+            return False
+        if x_ == y_:
+            return True
+        return len(x_) == len(y_) and len(x_) >= 5 and sum(1 for u, v in zip(x_, y_) if u != v) <= 2
+
+    def pick_(mine_, settled_):
+        if norm(mine_) == norm(settled_):
+            return settled_ if score_(settled_) >= score_(mine_) else mine_
+        return settled_
+    t_, w_ = sl.main_table(), st.main_table()
+    if t_ and w_ and t_ is not w_:
+        for r in t_.rows:
+            nm_ = r["cells"][0] if r["cells"] else ""
+            if not nm_:
+                continue
+            hit_ = next((o["cells"][0] for o in w_.rows if o["cells"] and o["cells"][0] and close_(nm_, o["cells"][0])), None)
+            if hit_ and hit_ != nm_:
+                r["cells"][0] = pick_(nm_, hit_)
+    if sl.title and st.title and sl.title != st.title and close_(sl.title, st.title):
+        sl.title = pick_(sl.title, st.title)
+    a_, b_ = sl.tree(), st.tree()
+    if a_ and b_ and a_ is not b_:
+        new_ = []
+        for t, h in a_.lines:
+            nm_ = row_name(t)
+            hit_ = next((row_name(u) for u, _ in b_.lines if close_(nm_, row_name(u))), None)
+            if hit_ and hit_ != nm_:
+                rep_ = pick_(nm_, hit_)
+                lead_ = t[:len(t) - len(t.lstrip("\u2502 \u02c3\u02c5"))]
+                new_.append((lead_ + rep_, h))
+            else:
+                new_.append((t, h))
+        a_.lines = new_
+
+
 def mend_slice_tree(sl, st):
     """Put this stretch's tree rows back into the shape the window's own
     tree gives them. Run last, after every pass that drops or rewrites a
@@ -3886,7 +3971,19 @@ def mend_slice_tree(sl, st):
                 sl.parts.sort(key=lambda x: x["slot"])
                 return
     if mine is not None and all_of is not None and mine is not all_of:
-        mine.lines = mend_tree(mine.lines, all_of.lines)
+        # THE ROWS THIS STRETCH READ ARE THE ROWS ON ITS SCREEN. The mend
+        # hangs them on the window's whole tree, which also brings in every
+        # row above and below them - at 00:04:10 the explorer stood scrolled
+        # to `feedback_subject_line...` and the picture drew the tree from
+        # its top. The mended tree is cut back to the stretch's own first
+        # and last rows.
+        first_ = fold(flat(row_name(mine.lines[0][0]))) if mine.lines else ""
+        last_ = fold(flat(row_name(mine.lines[-1][0]))) if mine.lines else ""
+        merged_ = mend_tree(mine.lines, all_of.lines)
+        keys_ = [fold(flat(row_name(t))) for t, _ in merged_]
+        i0 = keys_.index(first_) if first_ in keys_ else 0
+        i1 = (len(keys_) - 1 - keys_[::-1].index(last_)) if last_ in keys_ else len(keys_) - 1
+        mine.lines = merged_[i0:i1 + 1] if i1 >= i0 else merged_
 
 
 def row_name(t):
@@ -4337,6 +4434,20 @@ def screens(states, moments):
             marks[(id(st), m["ts"])] = fingerprint(g)
     spans, cur = [], None
 
+    def sel_of(ts):
+        """The names selected on this frame: the leftmost banded cell of
+        each banded row. A stretch of one screen holds one selection; the
+        frames at 00:03:30 and 00:03:40 select two different files and are
+        two screens."""
+        rows_ = {}
+        for p_ in by_ts[ts].get("panes") or []:
+            for it in draw2.items_of(p_):
+                if it.get("band") and it.get("role") == "cell" and it.get("box"):
+                    ky = int(it["box"][1] // 24)
+                    if ky not in rows_ or it["box"][0] < rows_[ky][0]:
+                        rows_[ky] = (it["box"][0], norm(str(it.get("text") or ""))[:24])
+        return {v for _, v in rows_.values() if v}
+
     def place(st, ts):
         return rect_at(st, ts)[1] or [0, 0, 0, 0]
 
@@ -4355,7 +4466,11 @@ def screens(states, moments):
         # moment that read less of a window does not count as a new screen
         put = cur and cur["key"] == key and all(overlap(cur["rects"][k], rects[k]) >= 0.7 for k in rects)
         same = (put and all(alike(v, w) for (a, v), (b, w) in zip(cur["shows"], shows) if a == b))
+        sel_now = sel_of(ts)
+        if same and cur.get("sel") and sel_now and not (cur["sel"] & sel_now):
+            same = False
         if same:
+            cur["sel"] = sel_now or cur.get("sel") or set()
             cur["t1"] = ts
             cur["ts"].append(ts)
             cur["shows"] = shows or cur["shows"]
@@ -4365,7 +4480,7 @@ def screens(states, moments):
         else:
             if cur:
                 spans.append(cur)
-            cur = {"t0": ts, "t1": ts, "ts": [ts], "key": key, "rects": rects,
+            cur = {"t0": ts, "t1": ts, "ts": [ts], "key": key, "rects": rects, "sel": sel_now,
                    "shows": shows, "states": here, "size": by_ts[ts].get("size") or [1920, 1080]}
     if cur:
         spans.append(cur)
@@ -6592,6 +6707,7 @@ def note(records_path, diary_text=None):
                             else:
                                 _fixed.append(c_)
                         _st_t.path = _fixed
+                    respell_from(sl, st)
                     strip_furniture(sl, strip_at)
                     drop_side_prefix(sl)
                     drop_crumb_rows(sl, _all_crumbs)
