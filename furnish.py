@@ -531,7 +531,9 @@ def obsidian(st, behind=True):
         st._tree_min = "min(%dch, 28%%)" % min(44, tree_ch + 2)
     tree_floor = "var(--sn-tree-min, 120px)"
     tree_fr, doc_fr = 38, 62
-    share = tree_share_of(st) if (tree and doc) else None
+    # ON THE CARD ONLY: a picture's tree stands at the span the frame gave
+    # it, and the median across moments moved three pictures off their frames
+    share = tree_share_of(st) if (tree and doc and not getattr(st, "shape", None)) else None
     tp = next((q for q in getattr(st, "parts", []) if q.get("fam") == "tree" and q.get("x0") is not None), None)
     rect = getattr(st, "shape", None) or getattr(st, "rect", None)
     if share:
@@ -586,7 +588,8 @@ def note_html(st, doc, title, blocks=None, wide=0):
     # note's name large under the breadcrumb, then the properties box, then
     # the body; where the note's own lines begin at the properties block the
     # name is known from the tab and is drawn there.
-    if title and not any(norm(t.strip().strip("#*> ")) == norm(title) for t, _ in lines[:2]):
+    if (title and not blocks and not getattr(st, "shape", None)
+            and not any(norm(t.strip().strip("#*> ")) == norm(title) for t, _ in lines[:2])):
         out.append(f'<div class="sn-title">{esc(title)}</div>')
         first = False
     add_property = any(re.search(r"Add\s*property", t) for t, *_ in st.topwords) or any(
