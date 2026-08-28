@@ -21,8 +21,10 @@ import difflib
 import html
 import os
 import re
+import struct
 import sys
 
+import machine
 import draw as old          # HTML line helpers that do not change
 import draw2                 # the geometry: items, tables rebuilt, window groups
 import shapes                # where each window sat, measured off the frame
@@ -121,13 +123,127 @@ def same_line(a, b):
     return difflib.SequenceMatcher(None, a, b, autojunk=False).ratio() >= 0.85
 
 
-def same_name(a, b):
-    """Two readings of one file name: alike, or the same length with at
-    most two letters read differently (0olnbox / ooInbox)."""
-    if same_text(a, b):
+def same_title(a, b):
+    """Two readings of a window's title are the same title when they read
+    the same, or one is the other cut short by Finder's own ellipsis.
+
+    `same_text` was used here and it holds a substring match for anything
+    over eight letters - so `jaredrhodenizer` matched
+    `-Users-jaredrhodenizer-Documents-jarvis...` and the folder opened at
+    00:01:00 was filed as a moment of the folder before it, its two rows
+    drawn under the wrong name and its own card never written. A title is a
+    whole name; a name inside another name is a different folder."""
+    if not a or not b:
+        return False
+    na, nb = norm(a), norm(b)
+    if not na or not nb:
+        return False
+    if na == nb:
         return True
+    for cut, full in ((a, b), (b, a)):
+        c = cut.strip()
+        if c.endswith(("...", "\u2026")):
+            head = norm(c.rstrip(".\u2026"))
+            if len(head) >= 8 and norm(full).startswith(head):
+                return True
+    # the same name with at most two letters read differently - and never a
+    # name found INSIDE another, which is what `same_name` allows through
+    return (len(na) >= 6 and len(na) == len(nb) and len(na) <= 24
+            and sum(1 for x, y in zip(na, nb) if x != y) <= 2)
+
+
+def bare_dot(nm):
+    """A name without the reader's own full stop on its end: `memory.` is
+    `memory`. No name ends in a bare stop, and a file's stop has letters
+    after it."""
+    nm = str(nm or "")
+    if len(nm) > 2 and nm.endswith(".") and not nm.endswith("..") and "." not in nm[:-1].lstrip("."):
+        return nm[:-1]
+    return nm
+
+
+# Finder's kinds are a fixed vocabulary; a reading that matches one letter
+# for letter, spaces aside, is that kind spelt as Finder spells it
+KIND_CANON = ["Folder", "Document", "JSON", "Log File", "Markdo...text file", "Markdown text file",
+              "Application", "PNG image", "JPEG image", "Plain Text", "Text Document", "Alias",
+              "Unix executable", "Zip archive", "Python script", "JavaScript", "Shell script"]
+_KIND_KEY = {re.sub(r"[^a-z0-9]", "", k.lower()): k for k in KIND_CANON}
+
+
+def canon_kind(text):
+    key = re.sub(r"[^a-z0-9]", "", str(text or "").lower())
+    return _KIND_KEY.get(key, text)
+
+
+def fold_twins(table, sni=0):
+    """One row read twice under two spellings of its name is one row: the
+    same date, size and kind cell for cell, and names alike (`clauds son`
+    beside `.claude.json`, `user_review.qdrafts_...` beside
+    `user_review_drafts_...`). The better-confirmed name stands and the
+    band goes with it."""
+    rows = table.rows
+    hdr = getattr(table, "header", None) or []
+    if not (sni < len(hdr) and hdr[sni] and "Name" in hdr[sni]):
+        return                      # a Size or Kind column is never a name
+    out = []
+    for r in rows:
+        nm = r["cells"][sni] if sni < len(r["cells"]) else ""
+        rest = [c for i, c in enumerate(r["cells"]) if i != sni]
+        if not nm or sum(1 for c in rest if c) < 2 or GLUED_SIZE.search(nm) or GLUED_DATE.search(nm):
+            out.append(r)
+            continue
+        twin = None
+        for o in out:
+            om = o["cells"][sni] if sni < len(o["cells"]) else ""
+            orest = [c for i, c in enumerate(o["cells"]) if i != sni]
+            if not om or len(orest) != len(rest):
+                continue
+            if not all(norm(a) == norm(b) for a, b in zip(rest, orest) if a and b) or not any(a and b for a, b in zip(rest, orest)):
+                continue
+            x, y = norm(nm), norm(om)
+            alike = (x == y or (min(len(x), len(y)) >= 5 and abs(len(x) - len(y)) <= 2
+                     and difflib.SequenceMatcher(None, x, y, autojunk=False).ratio() >= 0.75))
+            if alike:
+                twin = o
+                break
+        if twin is None:
+            out.append(r)
+            continue
+        # the name read most often stands (`.claude.json` at three moments
+        # over `clauds son` at one), then the confirmed one, then the fullest
+        def _weight(row_, name_):
+            v_ = row_.get("_names") or {}
+            sure_ = not (row_.get("italic") and row_["italic"][sni])
+            return (sum(v_.values()) if v_ else (2 if sure_ else 1), sure_,
+                    sum(1 for ch in name_ if not ch.isalnum()), len(name_))
+        if _weight(r, nm) > _weight(twin, twin["cells"][sni]):
+            twin["cells"][sni] = nm
+            twin["italic"][sni] = False
+            twin["_names"] = dict(r.get("_names") or {})
+        for i, c in enumerate(r["cells"]):
+            if i < len(twin["cells"]) and c and not twin["cells"][i]:
+                twin["cells"][i] = c
+        if r.get("band") and not twin.get("band"):
+            twin["band"] = r["band"]
+    table.rows = out
+
+
+def same_name(a, b):
+    """Two readings of one file name: the same after norm, or the same
+    length with at most two letters read differently (0olnbox / ooInbox),
+    or a letter dropped or added. NEVER one name inside another:
+    `.claude.json` sits inside `.claude.json.backup`, and `same_text`'s
+    containment rule stitched the two files into one row, whose votes
+    then renamed the first for the second."""
     a, b = norm(a), norm(b)
-    return bool(a) and len(a) == len(b) and len(a) <= 12 and sum(1 for x, y in zip(a, b) if x != y) <= 2
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+    if len(a) == len(b) and len(a) <= 12 and sum(1 for x, y in zip(a, b) if x != y) <= 2:
+        return True
+    return (min(len(a), len(b)) >= 6 and abs(len(a) - len(b)) <= 1
+            and difflib.SequenceMatcher(None, a, b, autojunk=False).ratio() >= 0.9)
 
 
 def stitch(old_items, new_items, key, same=same_text, merge=None):
@@ -216,13 +332,24 @@ class Table:
         self.top_items = []     # (text, centre x) for the title rule
         self.span = None        # the list's x-span
         self.path = []
-        self.paths = []         # every path bar read, latest last
-        self.now = None         # the moment being read, stamped by absorb
-        self.path_at = []       # the moment each entry in `paths` was read
+        # ONE LIST OF (MOMENT, READING), NOT TWO LISTS SIDE BY SIDE. It was
+        # `paths` and `path_at` kept in step by hand, and they came apart: one
+        # table copied `paths` from another without its moments, so the `zip`
+        # pairing them silently kept NOTHING -- two readings lost their moments,
+        # no error and no trace. Measured, one table of forty-seven. A pair
+        # cannot come apart.
+        self.readings = []      # (moment, path bar read), latest last
+        self.now = None         # the moment being read; a cursor, not a store
         self.rh = 0.0           # a row's height in frame pixels
         self.spoiled = 0        # lines dropped: two columns misread at once
         self.bottom = []
         self.banded_names = set()
+
+    @property
+    def paths(self):
+        """Every path bar read, latest last -- read-only, because a list of
+        readings without the moments they were read at is the fault above."""
+        return [p for _, p in self.readings]
 
     STANDARD = {4: ["Name", "Date Modified", "Size", "Kind"], 3: ["Name", "Date Modified", "Kind"],
                 2: ["Name", "Date Modified"], 5: ["Name", "Date Modified", "Size", "Kind", ""]}
@@ -239,6 +366,12 @@ class Table:
             head = self.STANDARD.get(len(head), [""] * len(head))
         if head and not head[0] and sum(1 for h in head if h in FINDER_WORDS) >= 2 and "Name" not in head:
             head[0] = "Name"
+        # A SENTENCE IS NOT A COLUMN HEADING. Finder's tooltip "See folders
+        # you viewed previously" hung over the Name heading at 00:03:40 and
+        # was read as the heading; a heading is one or two words.
+        if head and sum(1 for h in head if h in FINDER_WORDS) >= 1:
+            head = [("Name" if (i == 0 and "Name" not in head) else "") if (h and h not in FINDER_WORDS and h.count(" ") >= 2) else h
+                    for i, h in enumerate(head)]
         # A heading holding SEVERAL of Finder's headings means the reader ran
         # the columns together, and the cells under it are glued too. Where
         # the cells plainly hold a date or a size, the column is cut back
@@ -308,6 +441,13 @@ class Table:
         new_rows = []
         if len(built) > 7 and built[7]:
             self.rh = max(self.rh, float(built[7]))
+        # A LONE CRUMB IS THE PATH BAR, NOT A FILE. Read on a window the
+        # screen cut off, the bar's one visible crumb (`er-Documents-jarvis-demo >`)
+        # came back as a row of the list and was drawn with a folder icon
+        # between two files' sizes.
+        rows = [(cells, icon, band) for cells, icon, band in rows
+                if not (cells and cells[0] and str(cells[0]).rstrip().endswith((">", "\u203a"))
+                        and not any(cells[1:]))]
         for cells, icon, band in rows:
             width = max(len(self.header), max(mapping, default=-1) + 1, len(cells))
             plain = [""] * width
@@ -322,19 +462,88 @@ class Table:
                 plain[j] = (plain[j] + " " + c.replace("*", "")).strip()
                 italics[j] = italics[j] or it
             new_rows.append({"cells": plain, "italic": italics, "band": band, "icon": icon})
+        # A DATE GLUED TO THE END OF A NAME IS THE DATE COLUMN, NOT THE NAME.
+        # Read as one cell, `feedback_lo...kimmers.md Jun30,2026at5:51PM`
+        # matched `feedback_id.andlers.md Jun 30, 2026 at 5:51PM` as the same
+        # row - the shared date made two different files alike enough - and
+        # the list came out with three rows named for one file. The date is
+        # cut off the name here, before any row is matched by its name.
+        di_ = next((k for k, g in enumerate(self.header) if g and "Date Modified" in g), None)
+        for r_ in new_rows:
+            nm_ = r_["cells"][0] if r_["cells"] else ""
+            m_ = GLUED_DATE.search(nm_) if nm_ else None
+            if not m_ or m_.end() < len(nm_.rstrip()) - 1:
+                continue
+            # A NAME THAT IS ONLY A DATE IS A DATE WITH THE NAME MISSED: the
+            # row keeps its size and kind and its name stays blank, which is
+            # what was read. `Jun30,2026at5:51PM` stood as a file's name in
+            # the memory list.
+            r_["cells"][0] = nm_[:m_.start()].strip()
+            date_ = tidy_date(m_.group(1).strip()) or m_.group(1).strip()
+            if di_ is None:
+                at_ = 1
+                self.header.insert(at_, "Date Modified")
+                for q_ in self.rows:
+                    q_["cells"].insert(at_, "")
+                    q_["italic"].insert(at_, False)
+                for q_ in new_rows:
+                    q_["cells"].insert(at_, "")
+                    q_["italic"].insert(at_, False)
+                di_ = at_
+            if di_ < len(r_["cells"]) and not r_["cells"][di_]:
+                r_["cells"][di_] = date_
+                r_["italic"][di_] = False
         def keep(o, n):
+            # EVERY READING OF THE NAME IS COUNTED, and the spelling most
+            # readings agree on wins at `tidy`. Taking the first confirmed
+            # reading left `.Jocal` standing over two later readings of
+            # `.local`, because the wrong one happened to be read first and
+            # confirmed by both engines that once.
+            votes = dict(o.get("_names") or {})
+            if o["cells"] and o["cells"][0] and not votes:
+                votes[bare_dot(o["cells"][0])] = votes.get(bare_dot(o["cells"][0]), 0) + (2 if not (o["italic"] and o["italic"][0]) else 1)
+            if n["cells"] and n["cells"][0]:
+                votes[bare_dot(n["cells"][0])] = votes.get(bare_dot(n["cells"][0]), 0) + (2 if not (n["italic"] and n["italic"][0]) else 1)
             # twins: the confirmed reading stands over the doubtful one,
             # and a cell the old row lacks is filled from the new
             if o["italic"] and o["italic"][0] and n["cells"] and n["cells"][0] and not (n["italic"] and n["italic"][0]):
                 o = {"cells": [n["cells"][0]] + o["cells"][1:], "italic": [False] + o["italic"][1:], "band": o["band"] or n["band"], "icon": o.get("icon") or n.get("icon")}
+            o["_names"] = votes
             cells = list(o["cells"])
             italics = list(o["italic"])
             for i, c in enumerate(n["cells"]):
                 if i < len(cells) and not cells[i] and c:
                     cells[i] = c
                     italics[i] = n["italic"][i] if i < len(n["italic"]) else False
-            return {"cells": cells, "italic": italics, "band": o["band"] or n["band"], "icon": o.get("icon") or n.get("icon")}
+            # THE BAND IS THE LATEST MOMENT'S. A selection is a property of
+            # the moment, and a row read again at a later moment carries
+            # that moment's band or none: kept sticky, `03 Company B` stood
+            # green on a card spanning eight moments because it was selected
+            # at one of them.
+            return {"cells": cells, "italic": italics, "band": n["band"], "icon": o.get("icon") or n.get("icon"),
+                    "_names": votes}
         self.rows = stitch(self.rows, new_rows, key=lambda r: r["cells"][0] if r["cells"] else "", same=same_name, merge=keep)
+        for r in self.rows:
+            votes = r.get("_names") or {}
+            if len(votes) > 1 and r["cells"] and r["cells"][0]:
+                # a spelling read with its dot or its capital intact ranks
+                # above a barer one on a tie
+                # ONE WORD, HOWEVER SPELT, IS ONE VOTE: `Brand Guide.md` and
+                # `BrandGuide.md` are the same name read with and without
+                # its space, and pooled they outvote a misreading; among the
+                # spellings of the winning word the fullest stands (spaces,
+                # capitals, punctuation survive OCR worst).
+                groups_ = {}
+                for nm_, v_ in votes.items():
+                    groups_.setdefault(norm(nm_), []).append((nm_, v_))
+                gk = max(groups_, key=lambda k: sum(v for _, v in groups_[k]))
+                best = max((nm_ for nm_, _ in groups_[gk]),
+                           key=lambda nm: (sum(1 for ch in nm if not ch.isalnum()), sum(ch.isupper() for ch in nm), len(nm)))
+                cur_ = r["cells"][0]
+                if best != cur_ and (norm(cur_) == gk or sum(v for _, v in groups_[gk]) > sum(v for _, v in groups_.get(norm(cur_), []))):
+                    r["cells"][0] = best
+                    if r["italic"]:
+                        r["italic"][0] = False
         # a row whose name was missed folds into the row with the same
         # other cells; a nameless row alone is the window behind
         named = [r for r in self.rows if r["cells"] and r["cells"][0]]
@@ -347,10 +556,28 @@ class Table:
                 kept.append(r)
                 continue
             rest = " ".join(r["cells"][1:]).strip()
-            twin = next((n for n in named if rest and same_text(" ".join(n["cells"][1:]), rest)), None)
+            # THE SAME OTHER CELLS, LETTER FOR LETTER. Judged by likeness, a
+            # row of `Jun 30 ... 60 bytes Markdown` folded into the row of
+            # `Jun 30 ... 59 bytes Markdown` beside it, and a file the
+            # screen showed was gone from the list.
+            def _twin_of(n_):
+                # every cell the nameless row HAS must match; a cell it
+                # lacks was not read, which is no difference
+                if len(n_["cells"]) < len(r["cells"]):
+                    return False
+                return all(not c or norm(c) == norm(n_["cells"][i])
+                           for i, c in enumerate(r["cells"]) if i >= 1)
+            twin = next((n for n in named if rest and _twin_of(n)), None)
             if twin is None and rest and len(named) < 2:
                 kept.append(r)
+            elif twin is None and sum(1 for c in r["cells"][1:] if c) >= 2 and len(named) >= 2:
+                # A ROW WITH ITS DATE, SIZE AND KIND READ AND ITS NAME MISSED
+                # IS A ROW OF THE LIST, not the window behind: Finder gives
+                # every row a name, and this one's was not read. It stands
+                # with its name blank rather than being thrown away.
+                kept.append(r)
         self.rows = kept
+        fold_twins(self, 0)
         new_side = []
         for it in sorted(side, key=lambda it: it["box"][1]):
             t = it["text"].strip("*")
@@ -418,8 +645,7 @@ class Table:
         if len(best) >= len(self.path):
             self.path = best
         if best and best not in self.paths:
-            self.paths.append(best)
-            self.path_at.append(self.now)
+            self.readings.append((self.now, best))
         self.tidy()
 
     def tidy(self):
@@ -428,6 +654,11 @@ class Table:
         Kind cell split out into the Size column -- the column added when the
         reader missed its heading."""
         hdr = self.header
+        for r in self.rows:
+            nm = r["cells"][0] if r["cells"] else ""
+            # the reader's own full stop on a folder's name (`memory.`): no
+            # name ends in a bare stop, and a file's stop has letters after it
+            r["cells"][0] = bare_dot(nm)
         for i, h in enumerate(hdr):
             if any(w in h for w in ("Name", "Date Modified", "Size", "Kind")):
                 hdr[i] = re.sub(r"[*_]", "", h).strip()     # marks are never the header's own
@@ -471,6 +702,9 @@ class Table:
                     if rest and ki is not None and ki < len(cs) and not cs[ki]:
                         cs[ki] = rest
         if ki is not None:
+            for r in self.rows:
+                if ki < len(r["cells"]) and r["cells"][ki]:
+                    r["cells"][ki] = canon_kind(r["cells"][ki])
             usual = collections.Counter(r["cells"][ki] for r in self.rows
                                         if ki < len(r["cells"]) and r["cells"][ki])
             usual = {k for k, n in usual.items() if n >= 2}
@@ -798,9 +1032,21 @@ def bar_across(group, m):
                      for it in its
                      if abs(it["box"][1] - seed["box"][1]) <= 0.01 * H)
         kept, reach = [], None
+        # THE GAP BETWEEN TWO CRUMBS IS A CHEVRON THE READER DID NOT KEEP.
+        # Finder sets `› [icon]` between crumbs, and the engines read the
+        # words and drop the marks; run together, `02 Company A (Info
+        # Product)` and `Dev` became one crumb and the bar lost its last
+        # folder. Two words a whole letter-height apart on one row were
+        # never one crumb: a space inside a folder's name is a fraction of
+        # that.
+        hs = sorted(it["box"][3] - it["box"][1] for it in its
+                    if abs(it["box"][1] - seed["box"][1]) <= 0.01 * H)
+        h_ = hs[len(hs) // 2] if hs else 0
         for x0, x1, txt in row:
             if reach is not None and x0 < reach - 8:
                 continue
+            if reach is not None and h_ and x0 - reach > 1.0 * h_ and not re.search(r"[>\u203a]\s*$", kept[-1] if kept else ""):
+                kept.append("\u203a")
             kept.append(txt)
             reach = x1
         parts = [q.strip() for q in re.split(r"[>\u203a]", "".join(kept)) if q.strip()]
@@ -825,7 +1071,7 @@ def bar_across(group, m):
 
 
 GLUED_DATE = re.compile(
-    r"[a-z]?((?:Today|Yesterday|[A-Z][a-z]{2}\s?\d{1,2},?\s?\d{4})"
+    r"[a-z0-9]?((?:Today|Yesterday|[A-Z][a-z]{2}\s?\d{1,2},?\s?\d{4})"
     r"\s?(?:at)?\s?\d{1,2}:\d{2}\s?[AaPp]\.?[Mm])")
 GLUED_SIZE = re.compile(r"(\d+(?:[.,]\d+)?\s?(?:bytes|byte|KB|MB|GB|TB))", re.I)
 
@@ -1034,9 +1280,221 @@ def flatten_sidebars(states):
             q["model"].lines = fixed
 
 
+def tidy_side(table, house=None, title=None):
+    """A sidebar holds the fixed favorites and the home folder, nothing
+    else: a crumb of the path bar glued into one word and filed as a
+    sidebar name (`Usersjaredrhodeniz`) is not a favorite, and an icon's
+    scrap in front of a name (`(] Desktop`) is not part of it."""
+    import draw2 as _d2
+    if not table or not getattr(table, "side", None):
+        return
+    canon = {norm(n): n for n in _d2.SIDEBAR_WORDS}
+    for h in (house or []):
+        canon.setdefault(norm(h), h)
+    crumbs = {norm(c) for c in (getattr(table, "path", None) or [])}
+    out = []
+    for w in table.side:
+        bare_ = re.sub(r"^[^A-Za-z]+", "", str(w)).strip()
+        key = norm(bare_)
+        hit = canon.get(key) or next((c for k, c in canon.items()
+                                      if len(k) >= 5 and key.endswith(k) and len(key) - len(k) <= 3), None)
+        if not hit and key and (key in crumbs or (title and key == norm(title))) and " " not in bare_:
+            hit = bare_               # the home folder, named after the user
+        if hit and hit not in out:
+            out.append(hit)
+    if len(out) >= 3:
+        table.side = out
+
+
+def sidebar_from_panes(st, house=None):
+    """A Finder window's favorites sidebar, read by the reader as a document
+    or a tree standing left of the list, put back as the window's sidebar.
+
+    At 00:00:00 the left Finder's sidebar came back as an open document -
+    `EC): Recents`, `fH: Movies`, `(] Desktop`, `@® Downloads` - with the
+    rest of its names as loose words on the same pane, and the window was
+    drawn with no sidebar at all while the frame shows one. The names are
+    the fixed macOS favorites, and a column of them standing hard against
+    the list's left edge is the sidebar, whatever the reader filed it as.
+    Only names actually read on the pane are drawn; the order is the house
+    order (the fullest sidebar read anywhere in the video), since the
+    favorites stand in one order in every window."""
+    import draw2 as _d2
+    t = st.main_table()
+    if st.name != "The Finder window" or t is None or getattr(t, "side", None):
+        return False
+    tp = next((q for q in st.parts if q["fam"] == "table" and q["model"] is t), None)
+    if not tp or tp.get("x0") is None:
+        return False
+    canon = {norm(n): n for n in _d2.SIDEBAR_WORDS}
+    for h in (house or []):
+        canon.setdefault(norm(h), h)
+
+    def _name(txt):
+        w = re.sub(r"^[^A-Za-z]+", "", str(txt)).strip()
+        key = norm(w)
+        if not key:
+            return None
+        if key in canon:
+            return canon[key]
+        # icon garbage glued to the front of the name: the name is its tail
+        return next((c for k, c in canon.items()
+                     if len(k) >= 5 and key.endswith(k) and len(key) - len(k) <= 3), None)
+
+    found, used = {}, []
+    share_seen = []
+    for m, g in getattr(st, "pieces", ()):
+        panes_ = g.get("panes") or []
+        # THE LIST PANE OF THIS SAME MOMENT SETS THE LIMIT. A part's x-span
+        # is gathered across moments at different zooms, so it cannot say
+        # where the list stood on any one frame; the list pane cut from this
+        # frame can.
+        lists_ = [p_ for p_ in panes_ if p_.get("kind") == "a list of columns"]
+        if not lists_:
+            continue
+        lx0 = min(p_["box"][0] for p_ in lists_)
+        lx1 = max(p_["box"][2] for p_ in lists_)
+        lim = lx0 + 0.1 * max(1.0, lx1 - lx0)
+        for p in panes_:
+            if p.get("kind") == "a list of columns":
+                continue
+            b = p.get("box")
+            if not b or b[2] > lim or b[0] >= lx0:
+                continue
+            texts = [(it["text"], it["box"][1]) for it in _d2.items_of(p)]
+            for ln in p.get("lines") or []:
+                q_ = ln.strip()
+                if q_.startswith("[also on this pane"):
+                    for w in q_.split("]", 1)[1].split("|"):
+                        texts.append((w.strip(), None))
+                elif q_ and not q_.startswith(("[", "---", "unsettled")):
+                    texts.append((re.split(r"\s+<- ", q_)[0].strip(), None))
+            got = 0
+            for txt, y in texts:
+                c = _name(txt)
+                if c:
+                    got += 1
+                    if c not in found or (found[c] is None and y is not None):
+                        found[c] = y
+            if got >= 3:
+                used.append(p)
+                r_ = g.get("rect")
+                if r_ and r_[2] > r_[0]:
+                    share_seen.append((b[2] - r_[0]) / float(r_[2] - r_[0]))
+    if len(found) < 4:
+        return False
+    order = list(house) if house else sorted(found, key=lambda c: (found[c] is None, found[c] or 0))
+    side = [c for c in order if c in found] + [c for c in found if c not in order]
+    t.side = side
+    # the parts the reader built from those panes were the sidebar, not a
+    # note or a tree standing in the window: they go, so the window is not
+    # drawn with a document column beside its list
+    for p in used:
+        b = p["box"]
+        for q in list(st.parts):
+            if q["fam"] in ("doc", "tree", "words") and q.get("x0") is not None \
+                    and q["x0"] >= b[0] - 4 and (q["x1"] or 0) <= b[2] + 4:
+                st.parts.remove(q)
+    # how wide the sidebar stood, measured off the pane the reader cut,
+    # against the window's own rectangle on that same frame
+    shares = [v for v in share_seen if 0.12 <= v <= 0.45]
+    if shares:
+        st.side_shares = sorted(set(shares) | set(getattr(st, "side_shares", None) or []))   # the card takes the widest window's
+    if shares and not getattr(st, "side_share", None):
+        st.side_share = sorted(shares)[len(shares) // 2]
+    return True
+
+
 def folder_marks(table):
     """The crumbs that name the folder, the generic ones left out."""
     return {norm(c) for c in table.path if norm(c) not in GENERIC and len(norm(c)) >= 3}
+
+
+class Seen:
+    """One window AS IT STOOD AT ONE MOMENT -- the observation, kept apart
+    from the identity that runs through the moments.
+
+    Multiple-object tracking draws exactly this line and its whole discipline
+    rests on it: a DETECTION is what one frame showed, a TRACK is the identity
+    carried across frames. `State` is the track. This is the detection, and it
+    is the ONLY home of anything measured off a single frame.
+
+    WHY IT EXISTS. `State` spans time, and every per-moment fact was hung off
+    it in a side-table keyed by timestamp -- `rects`, `measured`, `_pitch_at`,
+    `_doc_wide_at`, `_h1_read`, and `Table.path_at` beside them. SEVEN of them,
+    one added each time a per-moment fact was caught being read at a moment it
+    did not cover. That is a valid-time index hand-rolled one column at a time,
+    and the faults it produced all rhymed: a title, a path, a selection, a
+    pitch, a width, each taken from the wrong moment. One record per moment
+    ends the class rather than its fifth instance."""
+    __slots__ = ("ts", "rect", "measured", "pitch", "stood", "doc_wide", "h1", "pitch_cut")
+
+    def __init__(self, ts):
+        self.ts = ts
+        self.rect = None        # where the window stood, worked out from what it drew
+        self.measured = False   # the reader measured this window's own edges HERE
+        self.pitch = None       # how far apart its rows really stood, here
+        self.stood = None       # (where its words sat, the edges then, sure?)
+        self.doc_wide = None    # how wide its note ran here, as a share of the pane
+        self.h1 = None          # where its big heading sat here
+        self.pitch_cut = False  # the pitch came off a list the screen cut, read loose
+
+    def __repr__(self):
+        return "Seen(%s%s)" % (self.ts, " measured" if self.measured else "")
+
+
+class _AtView:
+    """A read-only look at one field across the moments, so the old readers
+    keep reading and nothing can WRITE a per-moment fact except through
+    `State.at`. A plain dict here would let a write land on a throwaway copy
+    and vanish silently, which is worse than the fault being replaced."""
+    __slots__ = ("_seen", "_field")
+
+    def __init__(self, seen, field):
+        self._seen, self._field = seen, field
+
+    def _pairs(self):
+        for ts, sn in self._seen.items():
+            v = getattr(sn, self._field)
+            if v is not None and v is not False:
+                yield ts, v
+
+    def __getitem__(self, ts):
+        for t, v in self._pairs():
+            if t == ts:
+                return v
+        raise KeyError(ts)
+
+    def get(self, ts, default=None):
+        try:
+            return self[ts]
+        except KeyError:
+            return default
+
+    def __iter__(self):
+        return (t for t, _ in self._pairs())
+
+    def __contains__(self, ts):
+        return any(t == ts for t, _ in self._pairs())
+
+    def __len__(self):
+        return sum(1 for _ in self._pairs())
+
+    def __bool__(self):
+        return any(True for _ in self._pairs())
+
+    def keys(self):
+        return [t for t, _ in self._pairs()]
+
+    def values(self):
+        return [v for _, v in self._pairs()]
+
+    def items(self):
+        return list(self._pairs())
+
+    def __setitem__(self, ts, v):
+        raise TypeError("a per-moment fact is written through State.at(ts, make=True), "
+                        "never into a view -- see class Seen")
 
 
 class State:
@@ -1060,10 +1518,90 @@ class State:
         self.said = []
         self.theme = None
         self.pieces = []        # (moment, group) it was read from, in order
-        self.rects = {}         # ts -> the window's rect at that moment
-        self.measured = set()   # the moments the reader measured the window itself
-        self._pitch_at = {}     # ts -> how far apart this window's rows really stood
-        self._stood = None      # where its words sat last, and the edges then
+        self._now = None        # the moment being read right now, while absorbing
+        self._seen = {}         # ts -> Seen: the ONE home of every per-moment fact,
+                                # private, so no caller can hand one window's
+                                # moments to another window or to a stretch
+        # `_stood` was here: "where its words sat LAST, and the edges then" --
+        # a per-moment fact with no moment on it, so "last" meant whichever
+        # moment happened to run most recently against this object. It now
+        # lives on the moment that saw it, and the moment before is asked for
+        # by name.
+
+    # ------------------------------------------------------ moment in, moment out
+
+    _TS = re.compile(r"^\d\d:\d\d:\d\d$")
+
+    def __setattr__(self, name, value):
+        """REFUSE A NEW SIDE-TABLE. Folding the seven that existed into `Seen`
+        fixes seven; it does nothing about the eighth, which is what actually
+        happened here -- one was added every time a per-moment fact was caught
+        being read at the wrong moment, and each was reasonable on the day.
+
+        So the SHAPE is refused, not just its instances: an attribute named
+        `..._at`, or any mapping whose keys are timestamps, may not be hung on
+        a window. Both spellings the code actually used are caught. A dict
+        assigned empty and filled later still slips through, which is stated
+        here rather than left to be discovered -- the guard closes the idiom,
+        not the language."""
+        if name.endswith("_at") or (
+                isinstance(value, (dict, set)) and value
+                and all(isinstance(k, str) and State._TS.match(k) for k in value)):
+            raise TypeError(
+                "%r is a per-moment fact hung on a window that spans moments. "
+                "Put it on Seen and reach it with State.at(ts) -- that is what "
+                "the seven side-tables before it should have been." % name)
+        object.__setattr__(self, name, value)
+
+    def at(self, ts, make=False):
+        """This window as it stood at ONE named moment, or None where this
+        window was never seen at that moment.
+
+        None means NOT SEEN HERE and it is not the same thing as "nothing was
+        there" -- a caller that answers it with the window's span-wide value is
+        borrowing another moment's fact, which is the whole class of fault this
+        record exists to make visible. Reaching a per-moment fact without
+        naming a moment is now impossible, which was the point."""
+        got = self._seen.get(ts)
+        if got is None and make:
+            got = self._seen[ts] = Seen(ts)
+        return got
+
+    @property
+    def rects(self):
+        return _AtView(self._seen, "rect")
+
+    @property
+    def measured(self):
+        return _AtView(self._seen, "measured")
+
+    @property
+    def _pitch_at(self):
+        return _AtView(self._seen, "pitch")
+
+    def moments(self):
+        """Every moment this window was seen at, earliest first, with what was
+        seen at each. The public way in, and the only one.
+
+        It replaced two read-through properties that were reached as
+        `getattr(st, "_h1_read", ())`. A default on a getattr swallows any
+        AttributeError raised INSIDE a property and hands back an empty
+        container -- so a broken record would have read as "nothing found",
+        and "nothing found" is a legitimate answer everywhere in this file.
+        That is a check whose failure is indistinguishable from its success,
+        which is the shape that has cost this job the most. A method cannot be
+        reached that way, and a break here is now loud."""
+        return sorted(self._seen.items())
+
+    def stood_before(self, ts):
+        """Where this window's words sat at the LAST MOMENT BEFORE this one,
+        or None if this is the first moment of it that was seen.
+
+        Named, because the thing it replaced was not: a bare cache holding
+        whichever moment ran most recently, which is not a fact about the
+        window at all but about the order the code happened to walk."""
+        earlier = [t for t, sn in self._seen.items() if t < ts and sn.stood]
+        return self._seen[max(earlier)].stood if earlier else None
 
     # --------------------------------------------------------- content in
 
@@ -1083,12 +1621,22 @@ class State:
             if part["fam"] == fam and abs(part["slot"] - slot) <= 1:
                 return part
         model = Table() if fam == "table" else (Lines(kind) if fam in ("tree", "doc", "term") else [])
+        # A READING WITH NO MOMENT ON IT CANNOT BE PLACED IN TIME AT ALL, and
+        # that is worse than a reading placed at the wrong one. `absorb` stamps
+        # the moment onto the parts a window ALREADY has, and then `_absorb`
+        # creates the new ones through here and reads into them straight away
+        # -- so the FIRST reading of every table was recorded blank. Measured
+        # before this line: 23 readings of 38 carried no moment, and the rule
+        # that picks the latest moment's reading skips every one of them.
+        if hasattr(model, "now"):
+            model.now = self._now
         part = {"fam": fam, "slot": slot, "model": model, "x0": None, "x1": None}
         self.parts.append(part)
         self.parts.sort(key=lambda q: q["slot"])
         return part
 
     def absorb(self, group, m):
+        self._now = m["ts"]     # the moment being read; a cursor, not a store
         for q in self.parts:
             if hasattr(q["model"], "now"):
                 q["model"].now = m["ts"]
@@ -1109,13 +1657,12 @@ class State:
             if t_ is not None and len(bar) > len(getattr(t_, "path", None) or []):
                 t_.path = unglue(list(bar))
                 if bar not in t_.paths:
-                    t_.paths.append(list(bar))
-                    t_.path_at.append(m["ts"])
+                    t_.readings.append((m["ts"], list(bar)))
                 # the name rule reads the path, and the path only just
                 # arrived: ask it again now the window has its bar
                 self._title_rule(again=True)
         # where the window stood at this moment, measured from what it drew
-        self.rects[m["ts"]] = content_rect(self, group, m)
+        self.at(m["ts"], make=True).rect = content_rect(self, group, m)
         if group.get("side_share"):
             self.side_share = group["side_share"]
 
@@ -1167,7 +1714,8 @@ class State:
                 part["x1"] = p["box"][2] if part["x1"] is None else max(part["x1"], p["box"][2])
                 part["model"].add(cut)
                 if p.get("_cut_pitch"):
-                    self._pitch_at[m["ts"]] = p["_cut_pitch"]
+                    self.at(m["ts"], make=True).pitch = p["_cut_pitch"]
+                    self.at(m["ts"], make=True).pitch_cut = True
                 # AND THE SCREEN CUT THIS WINDOW'S LEFT EDGE. That is the
                 # whole gate `cut_list` passed, so it is known here and
                 # nowhere else: the window's own corner, its three round
@@ -1207,7 +1755,7 @@ class State:
                     # and the Finder cut off beside it at 81 where its rows
                     # stand at 42.
                     if len(built) > 8 and built[8]:
-                        self._pitch_at[m["ts"]] = built[8]
+                        self.at(m["ts"], make=True).pitch = built[8]
                     if len(tables) > 1 and built[6]:
                         # this list's own span, not the pane's two windows
                         part["x0"], part["x1"] = built[6]
@@ -1389,6 +1937,14 @@ class State:
         others = [q for q in self.parts if q["fam"] in ("tree", "doc", "term")]
         if not self.title and not t and not others:
             return True           # words only: a window behind, showing through
+        # A FINDER WITH ITS OWN PATH BAR, STANDING IN A BOX THE FRAME MEASURED,
+        # IS A WINDOW HOWEVER FEW ROWS ITS FOLDER HOLDS. At 00:01:10 the
+        # `projects` folder lists one item, so its window was a "sliver",
+        # never drawn, and the moment had no picture at all - while the frame
+        # shows a titled Finder with a five-crumb bar under it. A folder with
+        # one file in it is a folder with one file in it.
+        if t and len(getattr(t, "path", None) or []) >= 3 and any(True for _ in self.measured):
+            return False
         return bool(t) and not getattr(self, "title_sure", False) and len(t.rows) < 3 and not others
 
     def has_content(self):
@@ -1418,7 +1974,7 @@ class State:
             # merges states that never stood together. A title read off a cut
             # path bar names a folder the path passes THROUGH, not the one on
             # show, so it can never merge.
-            titles_match = (self.title and other.title and same_text(self.title, other.title)
+            titles_match = (self.title and other.title and same_title(self.title, other.title)
                             and not (getattr(self, "title_from_path", False)
                                      or getattr(other, "title_from_path", False)))
             if titles_match and (min(len(a), len(b)) < 3
@@ -1645,6 +2201,136 @@ def drop_guessed(states):
                 st.fine.append(f"{gone} line{'s' if gone != 1 else ''} of letters the engines guessed at, left out")
 
 
+def list_not_tree(states):
+    """A Finder list that came back as a file tree, put right.
+
+    A window showing only its Name column - the rest of it off the side
+    of the screen or behind another window - has no columns left to
+    tell the reader it is a list, and its rows come back as a tree with
+    a level of nesting that was never on the screen. The same folder
+    names read as a LIST elsewhere in the video say what that window
+    is: one window, one program. Nothing is invented - the names are
+    the ones that were read, and only what KIND of thing they are in
+    changes.
+    """
+    lists = []
+    for st_ in states:
+        t_ = st_.main_table()
+        if st_.name == "The Finder window" and t_ and len(t_.rows) >= 4:
+            lists.append((t_, {fold(flat((r.get("cells") or [""])[0]))
+                               for r in t_.rows if (r.get("cells") or [""])[0]}, st_))
+    if not lists:
+        return
+    own = {id(o_) for _t, _k, o_ in lists}
+    for st_ in states:
+        # ANY window holding a tree whose names are some Finder list's
+        # names. Asking only about windows named for the vault left the
+        # case the naming rules had ALREADY got right: a window named
+        # Finder, drawn with a tree in it and a level of nesting that
+        # was never on the screen. A window that is itself one of the
+        # lists is not converted - it is the witness.
+        if id(st_) in own:
+            continue
+        # EVERY tree part of the window, not the first. A window can
+        # show its own sidebar (a tree of Finder's fixed names, which no
+        # list will ever match) and a Finder list beside it that came
+        # back as a tree too - and asking only about the first left the
+        # second drawn with a level of nesting that was never there.
+        for q in [x for x in st_.parts if x["fam"] == "tree"
+                  and getattr(x["model"], "lines", None)]:
+            _convert_tree(st_, q, lists)
+
+def _convert_tree(st_, q, lists):
+    """One tree part put back as the list it really is."""
+    names = [row_name(t) for t, _h in q["model"].lines]
+    keys = {fold(flat(n)) for n in names if n}
+    if len(keys) < 4:
+        return
+    best, hit, from_ = None, 0, None
+    for t_, ks, o_ in lists:
+        n = len(keys & ks)
+        if n > hit:
+            best, hit, from_ = t_, n, o_
+    if best is None or hit < max(4, 0.6 * len(keys)):
+        return
+    head = list(best.header) or ["Name"]
+    tab = Table()
+    tab.header = head
+    tab.span = best.span
+    tab.rh = best.rh
+    # the same window showing the same folder: its bar and its
+    # sidebar were read whole at that other moment, and this one
+    # only had them hidden
+    tab.path = list(best.path)
+    # the readings come across WITH the moments they were read at, which
+    # is the whole reason they are one list now
+    tab.readings = list(best.readings)
+    tab.side = list(best.side)
+    by = {fold(flat((r.get("cells") or [""])[0])): r for r in best.rows
+          if (r.get("cells") or [""])[0]}
+    for n in names:
+        if not n:
+            return
+        src = by.get(fold(flat(n))) or by.get(fold(flat(n)) + "md")
+        cells = list(src["cells"]) if src else [n] + [""] * (len(head) - 1)
+        if src:
+            cells[0] = src["cells"][0]
+        tab.rows.append({"cells": cells,
+                         "italic": [False] * len(cells),
+                         # NOT the band. A file's date and kind are the
+                         # same at every moment, so taking them from the
+                         # moment this window was read whole is sound -
+                         # but WHICH ROW IS SELECTED is the one thing
+                         # about a list that changes from moment to
+                         # moment. Carried across, it drew `03 Company B
+                         # (Landscape Company)` green at 00:01:20, where
+                         # the reader records no band at all; the band it
+                         # was wearing belongs to 00:02:20. The same
+                         # state-against-moment distinction as the path
+                         # bar, and no measure can catch this one, since
+                         # the green lands on rows the frame drew text
+                         # across.
+                         "band": None,
+                         # a name the list never read whole says nothing
+                         # about folder or file: no icon is claimed for it
+                         "icon": (src or {}).get("icon")})
+    q["fam"] = "table"
+    q["model"] = tab
+    st_.parts.sort(key=lambda x: x["slot"])
+    st_.name = "The Finder window"
+    # and the folder it was showing: the window's own title bar,
+    # read whole at the moment the window stood clear
+    if not st_.title and from_ is not None and from_.title:
+        st_.title = from_.title
+
+
+def _finder_lists(states):
+    """Every Finder list with rows enough to be a witness."""
+    lists = []
+    for st_ in states:
+        t_ = st_.main_table()
+        if st_.name == "The Finder window" and t_ and len(t_.rows) >= 4:
+            lists.append((t_, {fold(flat((r.get("cells") or [""])[0]))
+                               for r in t_.rows if (r.get("cells") or [""])[0]}, st_))
+    return lists
+
+
+def convert_probe(probe, states):
+    """A moment's window read as a tree, put right BEFORE it is matched
+    against the open states - so a Finder whose list came back as a column
+    of names joins the window that already lists that folder, instead of
+    opening a state of its own that `list_not_tree` only converts after the
+    matching is over. Measured: the vault-demo window at 00:00:30 became a
+    second card of the same folder that way."""
+    if probe.main_table() is not None:
+        return
+    lists = _finder_lists(states)
+    if not lists:
+        return
+    for q in [x for x in probe.parts if x["fam"] == "tree" and getattr(x["model"], "lines", None)]:
+        _convert_tree(probe, q, lists)
+
+
 def build_states(moments):
     """Walk the moments; each window group joins the open state showing
     the same thing, or opens a new state."""
@@ -1659,6 +2345,7 @@ def build_states(moments):
             probe.absorb(g, m)
             if not probe.has_content():
                 continue
+            convert_probe(probe, states)
             slot = draw2.group_key(g, W)
             all_repeat = all(p.get("since") or p.get("same_as") for p in g["panes"])
             # the open state in this slot first (a repeat is judged against
@@ -1689,7 +2376,9 @@ def build_states(moments):
                     # settled list, which is what the rule was for.
                     if not any(mm is m for mm, _g in cur.pieces):
                         cur.pieces.append((m, g))
-                cur.rects.setdefault(m["ts"], content_rect(cur, g, m))
+                _sn = cur.at(m["ts"], make=True)
+                if _sn.rect is None:
+                    _sn.rect = content_rect(cur, g, m)
                 st = cur
             else:
                 st = probe
@@ -1712,8 +2401,24 @@ def build_states(moments):
     # left alone, as is any name whose last stop belongs to an extension
     # (`Vault Index.md` ends in `d`).
     for st in states:
-        if st.title and len(st.title) > 1 and st.title.endswith("."):
+        if st.title and re.search(r"\.{2,}$", st.title):
+            # Finder cuts a long title with an ellipsis, which the engines
+            # read as two, three or four dots: the screen showed one mark
+            st.title = re.sub(r"\.{2,}$", "\u2026", st.title)
+        elif st.title and len(st.title) > 1 and st.title.endswith("."):
             st.title = st.title.rstrip(".") or st.title
+        # THE BACK AND FORWARD ARROWS BESIDE THE TITLE, read as `<>` in front
+        # of it, and the dot-plus-letter the reader hangs on a moving frame's
+        # title (`projects.Q`, `>jaredrhodenizer.Q`): neither is a letter of
+        # the folder's name. The dot-letter is taken off only where what is
+        # left is a crumb of the window's own path bar - the bar spells the
+        # folder, so the two readings confirm each other.
+        if st.title:
+            st.title = re.sub(r"^[<>\u3002\s]+", "", st.title) or st.title
+            m_ = re.match(r"^(.+)\.[A-Za-z]$", st.title)
+            t_ = st.main_table()
+            if m_ and t_ and any(crumb_same(m_.group(1), c) for c in (t_.path or [])):
+                st.title = m_.group(1)
     drop_guessed(states)
     if moments:
         W, H = (moments[0].get("size") or [1920, 1080])[:2]
@@ -1917,12 +2622,40 @@ def crumb_same(a, b):
         return False
     if fa == fb:
         return True
+    # A GENERIC CRUMB IS ONLY EVER ITSELF. `Users` opens `-Users-jaredrh`
+    # and the prefix rule below called them one crumb, so the bar under the
+    # memory window was respelt with a folder three levels down standing
+    # at its root. The disk, Users, Documents and the home folder are whole
+    # names every bar carries; nothing is a longer spelling of them.
+    ga, gb = norm(a) in GENERIC, norm(b) in GENERIC
+    if ga or gb:
+        # the one thing a generic crumb can be besides itself is ITSELF CUT
+        # SHORT by Finder or by the reading - `Docur` for `Documents`,
+        # `jaredr` for `jaredrhodenizer` - never the head of something longer
+        # the generic name is the whole; the other must be SHORTER than it
+        if ga and gb:
+            g, o = (fa, fb) if len(fa) >= len(fb) else (fb, fa)
+        elif ga:
+            g, o = fa, fb
+        else:
+            g, o = fb, fa
+        if len(o) >= len(g) or len(o) < 4:
+            return False
+        return sum(1 for x, y in zip(o, g[:len(o)]) if x != y) <= (0 if len(o) < 5 else 1)
+    # A FOLDER AND THE NOTE INSIDE IT NAMED ALIKE ARE TWO CRUMBS. `memory`
+    # and `MEMORY.md` flatten to `memory` and `memorymd`, one opening the
+    # other, and the rule below took them for one crumb read twice - so the
+    # bar under the memory window lost the folder and kept the file, twice.
+    if (fa.endswith("md") and fa[:-2] == fb) or (fb.endswith("md") and fb[:-2] == fa):
+        return False
     if min(len(fa), len(fb)) >= 4 and abs(len(fa) - len(fb)) <= 10 and (fa.startswith(fb) or fb.startswith(fa)):
         return True
     if (min(len(fa), len(fb)) >= 4 and abs(len(fa) - len(fb)) <= 6 and fa[:3] == fb[:3]
             and difflib.SequenceMatcher(None, fa, fb, autojunk=False).ratio() >= 0.7):
         return True
     k = min(len(fa), len(fb))
+    if k >= 12 and (fa.startswith(fb) or fb.startswith(fa)):
+        return True             # Finder cuts a long crumb short: `-Users-jaredrh` for `-Users-jaredrhodenizer-Documents-jarvis-demo`
     return k >= 5 and abs(len(fa) - len(fb)) <= 12 and sum(1 for x, y in zip(fa[:k], fb[:k]) if x != y) <= 1
 
 
@@ -1957,6 +2690,14 @@ def align_crumbs(mine, whole):
     out = []
     for c in mine:
         f = flat(c)
+        # `Users`, `Documents`, the disk: whole names every bar carries. One
+        # of them was "corrected" to `-Users-jaredrh` because that crumb
+        # opens with the same letters and the other reading had glued
+        # `Users` to the disk - a crumb the video spells the same way
+        # everywhere is never a worse spelling of something else.
+        if norm(c) in GENERIC:
+            out.append(c)
+            continue
         if len(f) >= 4 and not any(crumb_same(c, w) for w in whole):
             fits = {w for w in whole if len(flat(w)) > len(f) and flat(w)[:3] == f[:3]
                     and not any(crumb_same(w, m) for m in mine)}
@@ -2048,6 +2789,17 @@ def unglue(path):
             head = c[:len(c) - len(nxt)].strip(" -/>")
             if len(head) >= 3:
                 c = head
+        if out and flat(out[-1]) == flat(c):
+            continue                # the same crumb twice running: once
+        # the reader's own full stop on the end of a crumb (`memory.`),
+        # never part of a folder's name; `...` marks a cut and stays
+        if len(c) > 2 and c.endswith(".") and not c.endswith(".."):
+            c = c[:-1]
+        # and its dot-plus-capital (`projects.Q`), read off a moving frame:
+        # no folder in this video ends in a one-letter capital extension
+        m_ = re.match(r"^(.{4,})\.[A-Z]$", c)
+        if m_:
+            c = m_.group(1)
         out.append(c)
     return out
 
@@ -2240,6 +2992,18 @@ def harmonise(states):
     # alike, the one with the most of its letters intact (capitals, dots,
     # spaces survive OCR worst, so the fullest form is the truest)
     strong_flats = {flat(s) for s in strong}
+    title_flats = {flat(st.title) for st in states if st.title}
+    crumb_flats = {flat(c) for st in states for q in st.parts
+                   if q["fam"] == "table" for c in (q["model"].path or [])}
+    # how many WINDOWS spell a crumb this way: a spelling two bars agree on
+    # is the folder's name; one bar's own reading proves nothing about itself
+    _voices = {}
+    for st in states:
+        for q in st.parts:
+            if q["fam"] == "table":
+                for f_ in {flat(c) for c in (q["model"].path or [])}:
+                    _voices.setdefault(f_, set()).add((st.name, flat(st.title or "")))
+    crumb_votes = {f_: len(v_) for f_, v_ in _voices.items()}
     # every name any list actually carried: a crumb spelt like one of these
     # is already the folder's own name and must not be grown into a longer
     # one, or a second reading would stretch it again
@@ -2387,11 +3151,65 @@ def harmonise(states):
                 # the path bar's crumbs completed from the same pool (Finder
                 # cuts long crumbs short; the folder's real name stands)
                 for path in [table.path] + table.paths:
+                    # ONE ENGINE GLUES `Users` TO THE FOLDER AFTER IT, and the
+                    # completion below then "finishes" `Usersjaredrhodenizer`
+                    # into the longest name that opens with those letters -
+                    # a folder three levels down. The glue is cut first: a
+                    # crumb opening with a generic crumb whose remainder is a
+                    # name the video knows whole is those two crumbs.
+                    known_flat = strong_flats | row_flats | {flat(c_) for c_ in clean}
+                    settled_flat = strong_flats | row_flats
+                    split_ = []
+                    for c in path:
+                        f = flat(c)
+                        done = False
+                        # ...UNLESS THIS WINDOW'S OWN BAR READ THE CRUMB LONGER
+                        # at another moment: `-Users-jaredrh` is Finder's own
+                        # cut of `-Users-jaredrhodenizer-Documents-jarvis-demo`,
+                        # read whole at 00:01:30, and splitting it into `Users`
+                        # and `jaredrh` threw the folder away for good.
+                        own_longer = any(crumb_same(c, w) and len(flat(w)) > len(f)
+                                         for p_ in (getattr(table, "paths", None) or []) for w in p_)
+                        if f not in settled_flat and len(f) >= 10 and not own_longer:
+                            for g_ in ("users", "documents", "desktop", "downloads"):
+                                rest_ = f[len(g_):]
+                                if f.startswith(g_) and rest_ in known_flat and len(rest_) >= 4:
+                                    split_.append(g_.capitalize())
+                                    split_.append(canon.get(rest_) or canon_fold.get(fold(rest_)) or c[len(g_):])
+                                    done = True
+                                    break
+                        # ...AND A CHEVRON THE READER DROPPED leaves two crumbs
+                        # in one, `.claude projects`: two names the video knows
+                        # whole with a space between them are two crumbs.
+                        if not done and " " in c.strip() and f not in settled_flat:
+                            bits_ = c.split()
+                            if len(bits_) >= 2 and all(flat(x_) in known_flat for x_ in bits_):
+                                split_.extend(bits_)
+                                done = True
+                        if not done:
+                            split_.append(c)
+                    path[:] = split_
                     for i, c in enumerate(path):
                         c = mend_numbered(c, strong_names)    # o3 is a nought
                         path[i] = c
                         f = flat(c)
                         b = exact_fix(c)
+                        # A CRUMB SOME WINDOW'S TITLE BAR OR ANOTHER BAR SPELLS
+                        # THIS WAY IS NOT A MISREADING: `projects` stood in a
+                        # title and in every bar, and was "corrected" into the
+                        # one row that read `projerts`.
+                        if (not b and len(f) >= 6 and f not in strong_flats and f not in row_flats
+                                and f not in title_flats and crumb_votes.get(f, 0) < 2):
+                            # a crumb misread by a letter or two (`prjects`,
+                            # `jaredrhodenize`) takes the name the video
+                            # spells whole, when exactly one strong name
+                            # reads that close
+                            _c0 = lambda ch: {"o": "0", "i": "1", "l": "1"}.get(ch, ch)
+                            near = [p_ for p_ in strong_names
+                                    if abs(len(flat(p_)) - len(f)) <= 2 and _c0(flat(p_)[:1]) == _c0(f[:1])
+                                    and difflib.SequenceMatcher(None, flat(p_), f, autojunk=False).ratio() >= 0.85]
+                            if len({flat(p_) for p_ in near}) == 1:
+                                b = near[0]
                         if (not b and len(f) >= 4 and f not in strong_flats
                                 and f not in row_flats and canon.get(f, c) == c):
                             # Finder cuts a long crumb short: the folder's
@@ -2402,13 +3220,26 @@ def harmonise(states):
                                 if len(fp) <= len(f) or len(fp) - len(f) > 16:
                                     return False
                                 head = fp[:len(f)]
-                                return sum(1 for x, y in zip(head, f) if x != y) <= (0 if len(f) < 6 else 1)
+                                return sum(1 for x, y in zip(head, f) if x != y) <= (0 if len(f) < 5 else 1)
                             # only a name read whole somewhere can finish a
                             # crumb, and the shortest such name is the folder
                             # Finder cut short -- a longer one is a different file
                             starts = [p for p in strong_names if opens(p)]
                             exact = [p for p in starts if flat(p).startswith(f)]
                             starts = exact or starts      # a clean opening beats a slipped one
+                            # A GENERIC CRUMB IS NEVER COMPLETED INTO A FOLDER
+                            # BELOW IT. `Users` opens `-Users-jaredrh`; the only
+                            # completion a generic crumb may take is the generic
+                            # name it was cut from (`jaredr` -> `jaredrhodenizer`).
+                            if norm(c) in GENERIC:
+                                starts = [p for p in starts if norm(p) in GENERIC]
+                            elif len(f) <= 7:
+                                # a short crumb completes only into a folder
+                                # some window was seen standing in - a title
+                                # or another bar's crumb - never into a file
+                                # name that happens to open the same way
+                                starts = [p for p in starts
+                                          if flat(p) in title_flats or flat(p) in crumb_flats]
                             if starts:
                                 b = min(starts, key=lambda p: len(flat(p)))
                         if b:
@@ -2426,8 +3257,8 @@ def harmonise(states):
                 # prjects > Documents > vault-demo > 02 Company A` - a path
                 # that never existed. So chain within the LATEST moment that
                 # read a bar, and let that bar stand alone.
-                late = [p for p, t in zip(table.paths, table.path_at)
-                        if t is not None and t == max((x for x in table.path_at if x is not None),
+                late = [p for t, p in table.readings
+                        if t is not None and t == max((x for x, _ in table.readings if x is not None),
                                                       default=None)]
                 table.path = chain_paths(late if late else [table.path] + table.paths)
                 # The latest bar is spelt the way this window's own reads
@@ -2450,6 +3281,13 @@ def harmonise(states):
                 # too: this path was chained and re-spelt after `Table.add`
                 # saw it, so a glue can be reassembled on the way through.
                 table.path = unglue(table.path)
+                # THE BAR ENDS AT THE FOLDER THE TITLE BAR NAMES, and it is
+                # put there HERE because this is where the bar is rebuilt
+                # from its readings: every later pass that rebuilt it threw
+                # the folder away again, so `Assets` stood in the window's
+                # title and never at the end of its bar.
+                if st.title and not getattr(st, "title_from_path", False) and st.name == "The Finder window":
+                    table.path = end_at_folder(table.path, st.title)
                 # a date cell no engine read whole, whose digits are a clean
                 # date's digits, is that date; a kind cell read twice over
                 # keeps one telling of itself
@@ -2498,6 +3336,99 @@ def harmonise(states):
                                 r["italic"][ki] = False
             elif q["fam"] == "doc":
                 mend_doc(q["model"], st, clean)
+    # EVERY LIST, ON EVERY PASS: a name loses the reader's full stop, a kind
+    # is spelt as Finder spells it, a row read twice is one row, and a row
+    # name one letter off a folder name the video agrees on - a title, or a
+    # crumb two windows' bars spell alike - takes that spelling. `projerts`
+    # stood in the .claude list under a bar and a title that both read
+    # `projects`.
+    agreed = {}
+    _c0a = lambda ch: {"o": "0", "i": "1", "l": "1"}.get(ch, ch)
+    for st in states:
+        if st.title:
+            agreed.setdefault(flat(st.title), st.title)
+    for st in states:
+        for q in st.parts:
+            if q["fam"] == "table":
+                for c_ in (q["model"].path or []):
+                    if crumb_votes.get(flat(c_), 0) >= 2:
+                        agreed.setdefault(flat(c_), c_)
+    def _agreed_form(text_):
+        """The agreed spelling of a name that is the agreed name after flat
+        (`(info Product)` for `(Info Product)`): the one with its capitals."""
+        k_ = flat(text_)
+        v_ = agreed.get(k_)
+        if v_ and v_ != text_ and sum(ch.isupper() for ch in v_) > sum(ch.isupper() for ch in text_):
+            return v_
+        return text_
+
+    def _agreed_near(text_):
+        """An agreed folder name one or two letters off this one, O and 0,
+        l and 1 counted alike; None where none or more than one."""
+        f_ = flat(text_)
+        if len(f_) < 6 or f_ in agreed:
+            return None
+        near_ = {v for k_, v in agreed.items() if len(k_) == len(f_) and _c0a(k_[:1]) == _c0a(f_[:1])
+                 and sum(1 for u, w in zip(k_, f_) if _c0a(u) != _c0a(w)) <= 2}
+        return next(iter(near_)) if len({flat(v) for v in near_}) == 1 else None
+    for st in states:
+        if st.title:
+            st.title = _agreed_form(st.title)
+        for q in st.parts:
+            if q["fam"] == "tree" and getattr(q["model"], "lines", None):
+                # a tree row one letter off an agreed folder name is that folder
+                new_ = []
+                for t, h in q["model"].lines:
+                    nm_ = row_name(t)
+                    rep_ = _agreed_near(nm_) or _agreed_form(nm_)
+                    if rep_ and rep_ != nm_:
+                        lead_ = t[:len(t) - len(t.lstrip("\u2502 \u02c3\u02c5"))]
+                        new_.append((lead_ + rep_, h))
+                    else:
+                        new_.append((t, h))
+                q["model"].lines = new_
+            if q["fam"] != "table":
+                continue
+            t_ = q["model"]
+            if t_.path:
+                t_.path = [_agreed_form(c_) for c_ in t_.path]
+            ki_ = next((i for i, h in enumerate(t_.header) if h and "Kind" in h), None)
+            # TWO ROWS READ AS ONE NAME: `My Product Opdsations` over a date
+            # cell holding two dates, beside rows `My Product` and
+            # `Operations` - the glue is dropped, both rows stand
+            drop_glued(t_)
+            # A CRUMB FINDER CUT SHORT, ON THE WINDOW'S OWN CARD, IS THE
+            # FOLDER'S WHOLE NAME where the video agrees on exactly one:
+            # `02 Co` under the Assets window is `02 Company A (Info Product)`.
+            # The pictures keep the cut, which is what their frames show.
+            if t_.path:
+                for i_, c_ in enumerate(t_.path):
+                    f_ = flat(c_)
+                    if len(f_) >= 4 and f_ not in agreed:
+                        longer_ = {v for k_, v in agreed.items() if k_.startswith(f_) and len(k_) > len(f_)}
+                        if len({flat(v) for v in longer_}) == 1:
+                            t_.path[i_] = next(iter(longer_))
+                            continue
+                        # `O2CompanyA(InfoProduct)` for `02 Company A (Info Product)`:
+                        # one letter the reader cannot tell from a digit
+                        near_ = {v for k_, v in agreed.items() if len(k_) == len(f_) and _c0a(k_[:1]) == _c0a(f_[:1])
+                                 and sum(1 for u, w in zip(k_, f_) if u != w) <= 2}
+                        if len({flat(v) for v in near_}) == 1:
+                            t_.path[i_] = next(iter(near_))
+            for r in t_.rows:
+                if r["cells"] and r["cells"][0]:
+                    r["cells"][0] = _agreed_form(bare_dot(r["cells"][0]))
+                    f_ = flat(r["cells"][0])
+                    if len(f_) >= 6 and f_ not in agreed and "." not in r["cells"][0]:
+                        near_ = [v for k_, v in agreed.items() if abs(len(k_) - len(f_)) <= 1 and _c0a(k_[:1]) == _c0a(f_[:1])
+                                 and difflib.SequenceMatcher(None, k_, f_, autojunk=False).ratio() >= 0.85]
+                        if len({flat(v) for v in near_}) == 1:
+                            r["cells"][0] = near_[0]
+                            if r.get("italic"):
+                                r["italic"][0] = False
+                if ki_ is not None and ki_ < len(r["cells"]) and r["cells"][ki_]:
+                    r["cells"][ki_] = canon_kind(r["cells"][ki_])
+            fold_twins(t_, 0)
     complete_docs(states)
 
 
@@ -2507,6 +3438,77 @@ def harmonise(states):
 # window where it sat, the one being shown filled with what it held over
 # that stretch of time, the others as empty outlines. Its content comes
 # only from the moments inside the stretch, so it stays an honest still.
+
+def card_shot(html, ratio, share=None, tree_min=None):
+    """A rebuilt window given the SHAPE it really had, as a floor.
+
+    The moment pictures bind every window to its own measured width; the
+    per-window sections below carried no such constraint at all - page width,
+    and whatever height the content needed - so one window stood at 0.86,
+    3.74, 3.74 and 0.48 across its four sections, a spread of 7.8x, each of
+    them 2.2 to 3.5 times off the shape it really had (Run 19x).
+
+    The window's real proportion is a FLOOR here and never a ceiling. These
+    sections exist to be read, and they hold everything gathered across every
+    moment the window showed the same thing - which is legitimately more than
+    the window held at once. So a card may be taller than its window's shape
+    and must never be shorter, and it is never clipped: clipping is what would
+    make "rebuilt to read" a lie.
+
+    The regex takes the window's opening tag only where it has no style
+    attribute of its own. ONE STYLE ATTRIBUTE, NOT TWO - a second one is
+    silently ignored by every browser, which cost three afternoons of changes
+    that scored exactly identical.
+    """
+    if not ratio or ratio <= 0 or "sn-window" not in html:
+        return html
+    # THE SHAPE IS A RATIO, NOT A PIXEL COUNT. It was written as
+    # `min-height:673px`, worked out against a 960px card - so the moment the
+    # reading pane stopped being 960 wide, every proportion was wrong: at
+    # 1500px that same card stands at 0.45 where the window stood at 0.70.
+    # A floor in pixels is only correct at one width, and the width is the
+    # reader's to choose.
+    #
+    # `--sn-ratio` is height over width, and the stylesheet turns it into a
+    # floor with a percentage-padding pseudo-element, because PERCENTAGE
+    # PADDING RESOLVES AGAINST WIDTH. That gives height >= ratio x width at
+    # ANY width, while content taller than the shape still makes the card
+    # taller -- which is the rule these sections run on: the window's
+    # proportion is a floor and never a ceiling, and nothing is ever clipped.
+    # `aspect-ratio` was the obvious tool and is the wrong one: it fixes the
+    # height outright, and `.sn-window` sets `overflow:hidden`, so anything
+    # past the shape would be silently cut off.
+    #
+    # `max-width` is the window's own share of the SCREEN. A window that took
+    # a third of the desktop was being drawn as wide as one that filled it,
+    # which is the same fault as the height and reads worse, because side by
+    # side the two look like the same window.
+    bits = ["--sn-ratio:%.4f" % ratio]
+    # THE SHARE BELONGS TO A PICTURE, NOT TO A CARD. Capping a card at its
+    # window's share of the screen was measured, was correct, and made the
+    # cards WORSE -- because it answers a question a card does not ask. On a
+    # screen, relative size is information: two windows side by side, one twice
+    # the other, and the picture has to show that. A card holds ONE window with
+    # nothing beside it to compare against, so the share buys nothing there and
+    # spends the only thing a card is for, which is room to read. Computed and
+    # deliberately unused here; the picture is where it belongs.
+    _unused_share = share
+    if tree_min:
+        # THE FILE TREE, WIDE ENOUGH TO READ -- ON THE CARD ONLY. Its column is
+        # a share of the window measured off the frame, and that share is
+        # right: at 00:00:00 Obsidian stands full screen with its sidebar at
+        # 392 of 3840 pixels, a true 10%. But 10% of a 3840px screen is 392px
+        # and shows every name, where 10% of a 700px card is 70px and shows
+        # none. The picture keeps the true share; the card, which exists to be
+        # READ, floors the column at the width its own longest row needs.
+        bits.append("--sn-tree-min:%s" % tree_min)
+    return re.sub(r'^(<div class="sn-window[^"]*")(?=>)',
+                  r'\1 style="%s"' % ";".join(bits),
+                  html, count=1)
+
+
+CARD_W = 960          # the canvas the note's own stylesheet is drawn against
+
 
 def frame_of(m):
     return shapes.frame_of(m)
@@ -2657,7 +3659,7 @@ def settle_rects(state, W, H):
             near = sum((abs(r[0] - big[0]) <= 0.02 * W, abs(r[2] - big[2]) <= 0.02 * W,
                         abs(r[1] - big[1]) <= 0.02 * H, abs(r[3] - big[3]) <= 0.02 * H))
             if near >= 3:
-                state.rects[t] = list(big)
+                state.at(t, make=True).rect = list(big)
                 break
 
 
@@ -2690,9 +3692,9 @@ def settle_across(states, order, W, H):
                     near = sum((abs(r[0] - big[0]) <= 0.02 * W, abs(r[2] - big[2]) <= 0.02 * W,
                                 abs(r[1] - big[1]) <= 0.02 * H, abs(r[3] - big[3]) <= 0.02 * H))
                     if near >= 3:
-                        st.rects[ts] = list(big)
-                        st.measured.add(ts)
-                        r = st.rects[ts]
+                        _sn = st.at(ts, make=True)
+                        _sn.rect, _sn.measured = list(big), True
+                        r = _sn.rect
 
 
 def content_rect(state, group, m):
@@ -2720,7 +3722,7 @@ def content_rect(state, group, m):
         wi = filed.most_common(1)[0][0]
         for w in m.get("windows") or []:
             if w.get("wi") == wi and w.get("rect"):
-                state.measured.add(m["ts"])
+                state.at(m["ts"], make=True).measured = True
                 return [float(v) for v in w["rect"]]
     for w in m.get("windows") or []:
         r = w.get("rect")
@@ -2730,7 +3732,7 @@ def content_rect(state, group, m):
                      if r[0] - 20 <= it["box"][0] and it["box"][2] <= r[2] + 20
                      and r[1] - 20 <= it["box"][1] and it["box"][3] <= r[3] + 20)
         if inside >= 0.6 * len(items):
-            state.measured.add(m["ts"])
+            state.at(m["ts"], make=True).measured = True
             return [float(v) for v in r]
     rh = max(12.0, (sum(it["box"][3] - it["box"][1] for it in items) / len(items)) * 1.6)
     plain = [min(it["box"][0] for it in items), min(it["box"][1] for it in items),
@@ -2738,11 +3740,17 @@ def content_rect(state, group, m):
     # a window whose words sit where they sat a moment ago has not moved, so
     # its edges are the edges already measured: the picture of the screen is
     # only read again when something about the window actually changed
-    was = getattr(state, "_stood", None)
+    # THE MOMENT BEFORE THIS ONE, ASKED FOR BY NAME. This used to read a bare
+    # `_stood` on the window, which held whatever moment ran last against that
+    # object -- so the same frame got a different answer during the main build
+    # than during a stretch's replay, because the two visit moments in
+    # different company. A window has not moved if its words sit where they sat
+    # AT THE MOMENT BEFORE, and that is now what is compared.
+    was = state.stood_before(m["ts"])
     if was and all(abs(a - b) <= 0.015 * W for a, b in zip(plain[::2], was[0][::2])) \
             and all(abs(a - b) <= 0.015 * H for a, b in zip(plain[1::2], was[0][1::2])):
         if was[2]:
-            state.measured.add(m["ts"])
+            state.at(m["ts"], make=True).measured = True
         return list(was[1])
     own, own_strong = box_texts(state)
     mine = [it for it in items if fold(it["text"]) in own] if own else []
@@ -2766,8 +3774,8 @@ def content_rect(state, group, m):
                 drawn = [drawn[0], min(it["box"][1] for it in caps) - 0.01 * H,
                          drawn[2], drawn[3]]
         if sure:
-            state.measured.add(m["ts"])
-        state._stood = (plain, drawn, sure)
+            state.at(m["ts"], make=True).measured = True
+        state.at(m["ts"], make=True).stood = (plain, drawn, sure)
         return drawn
     spans = [(q["x0"], q["x1"]) for q in state.parts if q.get("x0") is not None and q.get("x1") is not None]
     if spans:
@@ -2784,8 +3792,40 @@ def content_rect(state, group, m):
     top_pad = 2.6 * rh if heads else 1.4 * rh
     box = [max(0.0, x0 - 0.7 * rh), max(0.0, y0 - top_pad),
            min(float(W), x1 + 0.7 * rh), min(float(H), y1 + 0.9 * rh)]
-    state._stood = (plain, box, False)
+    state.at(m["ts"], make=True).stood = (plain, box, False)
     return box
+
+
+BORROWED = collections.Counter()    # where a shape came from another moment
+
+
+def rect_at(st, ts):
+    """Where this window stood at ONE moment, AND WHERE THE ANSWER CAME FROM.
+
+        ("measured", box)  the reader measured this window's own edges here
+        ("read", box)      worked out from what the window drew at this moment
+        ("borrowed", box)  NOTHING WAS RECORDED FOR THIS MOMENT -- the box is
+                           another moment's, carried in
+        (None, None)       nothing to give
+
+    THE THIRD ONE IS THE POINT. Every site that wanted a shape used to write
+    `st.rects.get(ts) or st.rect`, and that `or` silently answered "what did
+    this window look like at 00:01:20" with the shape it had at 00:00:00.
+    Measured on the memory-files video, that fallback answers 18 times, so it
+    is not a theoretical hole. Text encoding has drawn this line since TEI P5:
+    a GAP -- not read here, carrying its reason -- is a different thing from a
+    reading, and neither may be quietly turned into the other. Occupancy grids
+    draw it a second way and never let unobserved collapse into free.
+
+    The borrow still happens where a site chooses it; what it may no longer do
+    is happen invisibly."""
+    sn = st.at(ts)
+    if sn is not None and sn.rect:
+        return ("measured" if sn.measured else "read"), sn.rect
+    if st.rect:
+        BORROWED[ts] += 1
+        return "borrowed", st.rect
+    return None, None
 
 
 def overlap(a, b):
@@ -2803,7 +3843,7 @@ def span_rect(st, ts):
     measurement stands as it is. Otherwise a window does not shrink because
     less of its text was read at one moment, so readings that start and end
     at the same edges are joined into one shape."""
-    here = st.rects.get(ts) or st.rect
+    _how, here = rect_at(st, ts)
     if not here:
         return None
     if ts in getattr(st, "measured", set()):
@@ -2907,6 +3947,87 @@ def state_slice(st, t0, t1):
     return out
 
 
+def drop_glued(t_):
+    """Two rows read as one name - `My Product Opdsations` over a date cell
+    holding two dates, beside rows `My Product` and `Operations` - the glue
+    is dropped and both rows stand."""
+    names_ = [r["cells"][0] for r in t_.rows if r["cells"] and r["cells"][0]]
+    di_ = next((i for i, h in enumerate(t_.header) if h and "Date" in h), None)
+    kept_ = []
+    for r in t_.rows:
+        nm_ = r["cells"][0] if r["cells"] else ""
+        dc_ = r["cells"][di_] if (di_ is not None and di_ < len(r["cells"])) else ""
+        two_ = len(re.findall(r"\d{4}", dc_ or "")) >= 2
+        heads_ = [o_ for o_ in names_ if o_ != nm_ and nm_.startswith(o_ + " ")]
+        tail_ok = False
+        for h_ in heads_:
+            tail_ = norm(nm_[len(h_):])
+            tail_ok = tail_ok or any(o_ != nm_ and o_ != h_ and len(norm(o_)) >= 5 and abs(len(norm(o_)) - len(tail_)) <= 2
+                                     and difflib.SequenceMatcher(None, norm(o_), tail_, autojunk=False).ratio() >= 0.7
+                                     for o_ in names_)
+        if heads_ and (two_ or tail_ok):
+            continue
+        kept_.append(r)
+    t_.rows = kept_
+
+
+def respell_from(sl, st):
+    """A stretch's own reading of a name, a title or a tree row takes the
+    window's settled spelling where the two are one word - equal after
+    norm, or a letter or two apart on the same length - because the
+    settled one was voted across every moment and keeps its spaces and
+    punctuation: `03 CompanyB(LandscapeCompany)` reads as `03 Company B
+    (Landscape Company)`, `Opekations` as `Operations`."""
+    def score_(s_):
+        return (sum(1 for ch in s_ if not ch.isalnum()), sum(ch.isupper() for ch in s_), len(s_))
+
+    def close_(a_, b_, same_rest=False):
+        x_, y_ = norm(a_), norm(b_)
+        if not x_ or not y_:
+            return False
+        if x_ == y_:
+            return True
+        if min(len(x_), len(y_)) < 5 or abs(len(x_) - len(y_)) > 2:
+            return False
+        ratio_ = difflib.SequenceMatcher(None, x_, y_, autojunk=False).ratio()
+        return ratio_ >= (0.8 if same_rest else 0.88)
+
+    def pick_(mine_, settled_):
+        if norm(mine_) == norm(settled_):
+            return settled_ if score_(settled_) >= score_(mine_) else mine_
+        return settled_
+    t_, w_ = sl.main_table(), st.main_table()
+    named_ = bool(t_ and t_.header and t_.header[0] and "Name" in t_.header[0])
+    if t_ and w_ and t_ is not w_ and named_:
+        for r in t_.rows:
+            nm_ = r["cells"][0] if r["cells"] else ""
+            if not nm_ or GLUED_SIZE.search(nm_) or GLUED_DATE.search(nm_):
+                continue
+            def _rest_same(o_):
+                a_ = [norm(c) for c in r["cells"][1:] if c]
+                b_ = [norm(c) for c in o_["cells"][1:] if c]
+                return len(a_) >= 2 and all(c in b_ for c in a_)
+            hit_ = next((o["cells"][0] for o in w_.rows if o["cells"] and o["cells"][0]
+                         and close_(nm_, o["cells"][0], _rest_same(o))), None)
+            if hit_ and hit_ != nm_:
+                r["cells"][0] = pick_(nm_, hit_)
+    if sl.title and st.title and sl.title != st.title and close_(sl.title, st.title):
+        sl.title = pick_(sl.title, st.title)
+    a_, b_ = sl.tree(), st.tree()
+    if a_ and b_ and a_ is not b_:
+        new_ = []
+        for t, h in a_.lines:
+            nm_ = row_name(t)
+            hit_ = next((row_name(u) for u, _ in b_.lines if close_(nm_, row_name(u))), None)
+            if hit_ and hit_ != nm_:
+                rep_ = pick_(nm_, hit_)
+                lead_ = t[:len(t) - len(t.lstrip("\u2502 \u02c3\u02c5"))]
+                new_.append((lead_ + rep_, h))
+            else:
+                new_.append((t, h))
+        a_.lines = new_
+
+
 def mend_slice_tree(sl, st):
     """Put this stretch's tree rows back into the shape the window's own
     tree gives them. Run last, after every pass that drops or rewrites a
@@ -2936,7 +4057,19 @@ def mend_slice_tree(sl, st):
                 sl.parts.sort(key=lambda x: x["slot"])
                 return
     if mine is not None and all_of is not None and mine is not all_of:
-        mine.lines = mend_tree(mine.lines, all_of.lines)
+        # THE ROWS THIS STRETCH READ ARE THE ROWS ON ITS SCREEN. The mend
+        # hangs them on the window's whole tree, which also brings in every
+        # row above and below them - at 00:04:10 the explorer stood scrolled
+        # to `feedback_subject_line...` and the picture drew the tree from
+        # its top. The mended tree is cut back to the stretch's own first
+        # and last rows.
+        first_ = fold(flat(row_name(mine.lines[0][0]))) if mine.lines else ""
+        last_ = fold(flat(row_name(mine.lines[-1][0]))) if mine.lines else ""
+        merged_ = mend_tree(mine.lines, all_of.lines)
+        keys_ = [fold(flat(row_name(t))) for t, _ in merged_]
+        i0 = keys_.index(first_) if first_ in keys_ else 0
+        i1 = (len(keys_) - 1 - keys_[::-1].index(last_)) if last_ in keys_ else len(keys_) - 1
+        mine.lines = merged_[i0:i1 + 1] if i1 >= i0 else merged_
 
 
 def row_name(t):
@@ -3101,6 +4234,38 @@ def name_fits(short, full_name):
     return False
 
 
+def fold_nameless(table, sni=0):
+    """A row read without its name folds into the named row it is: the
+    same date, size and kind cell for cell, where it has them. At 00:00:10
+    the selected `.claude` row was read as a grey band with no name; the
+    stretch kept it as a blank row AND drew `.claude` filled in from the
+    other moments, so the list stood one row too long. The band is the
+    moment's own and goes with it. Two blank rows alike are one."""
+    rows = table.rows
+    named = [r for r in rows if sni < len(r["cells"]) and r["cells"][sni]]
+
+    def _fits(r, n):
+        if len(n["cells"]) < len(r["cells"]):
+            return False
+        return any(c for i, c in enumerate(r["cells"]) if i != sni) and all(
+            not c or norm(c) == norm(n["cells"][i]) for i, c in enumerate(r["cells"]) if i != sni)
+    out, blanks = [], []
+    for r in rows:
+        if sni < len(r["cells"]) and r["cells"][sni]:
+            out.append(r)
+            continue
+        twin = next((n for n in named if _fits(r, n)), None)
+        if twin is not None:
+            if r.get("band") and not twin.get("band"):
+                twin["band"] = r["band"]
+            continue
+        if any(_fits(r, b) and _fits(b, r) for b in blanks):
+            continue
+        blanks.append(r)
+        out.append(r)
+    table.rows = out
+
+
 def mend_cells(sl, full):
     """A stretch shows the same window the whole state shows, so what the
     stretch's own frames had mangled or covered is taken from the window's
@@ -3187,37 +4352,78 @@ def mend_cells(sl, full):
             if j is None or j >= len(fr["cells"]) or not fr["cells"][j]:
                 continue
             bad = not r["cells"][i] or (h == "Date Modified" and not tidy_date(r["cells"][i]))
+            if not bad and h.startswith("Kind"):
+                # a kind read cut (`Folde`) or mangled (`Marko Markd`) where
+                # the window's settled row reads a kind: the settled one
+                mine_, theirs_ = flat(r["cells"][i]), flat(fr["cells"][j])
+                kindish_ = re.compile(r"(folder|document|textfile|json|logfile|application|image|alias)")
+                bad = bool(theirs_) and (theirs_.startswith(mine_) and len(mine_) < len(theirs_)
+                                         or (not kindish_.search(mine_) and bool(kindish_.search(theirs_))))
             if bad:
                 r["cells"][i] = fr["cells"][j]
                 if i < len(r["italic"]):
                     r["italic"][i] = False
-    # rows the stretch skips between rows it holds
-    if len(st_.rows) >= 2 and st_.header == ft.header:
-        idxs, walk, ok = [], 0, True
+    # rows the stretch skips between rows it holds. A list is contiguous:
+    # where the stretch read row A and row C, and the window's settled list
+    # puts B between them, B stood on the screen too and only the reading
+    # dropped it. Measured at 00:00:10: `.claude` (the selected row) and
+    # `.claude.json` sit between `.CFUserTextEncoding` and
+    # `.claude.json.backup`, all four on the frame, and the stretch's reading
+    # carried neither. The columns are matched BY HEADING, not by the two
+    # tables having identical headers - a stretch that read three of the
+    # four columns is still the same list. Nothing is added past the
+    # stretch's last row: what follows may be past the fold.
+    if len(st_.rows) >= 2:
+        def _ni(hdr):
+            return next((i for i, h in enumerate(hdr) if h == "Name"), 0)
+        fni, sni = _ni(ft.header), _ni(st_.header)
+        if os.environ.get("SN_MEND"):
+            print("MEND %s hdr=%s full=%s names=%s" % (getattr(sl, "times", "?"), st_.header, ft.header,
+                  [r["cells"][sni] if sni < len(r["cells"]) else "" for r in st_.rows]), file=sys.stderr)
+        # ONE ROW THE TWO LISTS SPELL DIFFERENTLY DOES NOT STOP THE WALK. The
+        # settled list carried `.Jocal` where this stretch read `.local`, and
+        # the walk gave up at that row: no row was filled anywhere, and the
+        # two rows the stretch had dropped stayed dropped. A row that matches
+        # no settled row is kept where it is; the walk goes on from the last
+        # row that did match, and only the gaps BETWEEN two matched rows fill.
+        def _row_same(a_, b_):
+            # the whole name, or the same name with a letter or two read
+            # differently - NEVER one name inside another: `.claude` sits
+            # inside `.claude.json.backup`, and matching them put the backup
+            # in the hovered row's place and drew it twice
+            if name_fits(a_, b_):
+                return True
+            x_, y_ = norm(a_), norm(b_)
+            return (len(x_) >= 4 and len(x_) == len(y_)
+                    and sum(1 for u, v in zip(x_, y_) if u != v) <= 2)
+        idxs, walk = [], 0
         for r in st_.rows:
-            name = r["cells"][0] if r["cells"] else ""
+            name = r["cells"][sni] if sni < len(r["cells"]) else ""
             hit = next((k for k in range(walk, len(ft.rows))
-                        if ft.rows[k]["cells"] and name and name_fits(name, ft.rows[k]["cells"][0])), None)
-            if hit is None:
-                ok = False
-                break
+                        if fni < len(ft.rows[k]["cells"]) and name
+                        and _row_same(name, ft.rows[k]["cells"][fni])), None)
             idxs.append(hit)
-            walk = hit + 1
+            if hit is not None:
+                walk = hit + 1
+        ok = sum(1 for k in idxs if k is not None) >= 2
         if ok:
+            def _as_mine(fr):
+                cells, its = [], []
+                for i, h in enumerate(st_.header):
+                    j = fni if i == sni else (ft.header.index(h) if h and h in ft.header else None)
+                    cells.append(fr["cells"][j] if j is not None and j < len(fr["cells"]) else "")
+                    its.append(bool(fr.get("italic") and j is not None and j < len(fr["italic"]) and fr["italic"][j]))
+                return {**fr, "cells": cells, "italic": its, "band": None}
             merged, prev = [], None
             for r, k in zip(st_.rows, idxs):
-                if prev is not None and k > prev + 1:
+                if k is not None and prev is not None and k > prev + 1:
                     for j in range(prev + 1, k):
-                        fr = ft.rows[j]
-                        merged.append({**fr, "cells": list(fr["cells"]),
-                                       "italic": list(fr.get("italic") or []), "band": None})
+                        merged.append(_as_mine(ft.rows[j]))
                 merged.append(r)
-                prev = k
-            for j in range(prev + 1, len(ft.rows)):
-                fr = ft.rows[j]
-                merged.append({**fr, "cells": list(fr["cells"]),
-                               "italic": list(fr.get("italic") or []), "band": None})
+                if k is not None:
+                    prev = k
             st_.rows = merged
+        fold_nameless(st_, sni)
 
 
 def frag_owner(frag, shown):
@@ -3278,7 +4484,7 @@ def near_windows(states, spans, order):
             if pick is None:
                 continue
             ts = order[pick]
-            box = st.rects.get(ts) or st.rect
+            box = rect_at(st, ts)[1]
             if box:
                 near.append((st, list(box), "before" if pick < lo else "after"))
         out[s["t0"] + s["t1"]] = near
@@ -3314,8 +4520,22 @@ def screens(states, moments):
             marks[(id(st), m["ts"])] = fingerprint(g)
     spans, cur = [], None
 
+    def sel_of(ts):
+        """The names selected on this frame: the leftmost banded cell of
+        each banded row. A stretch of one screen holds one selection; the
+        frames at 00:03:30 and 00:03:40 select two different files and are
+        two screens."""
+        rows_ = {}
+        for p_ in by_ts[ts].get("panes") or []:
+            for it in draw2.items_of(p_):
+                if it.get("band") and it.get("role") == "cell" and it.get("box"):
+                    ky = int(it["box"][1] // 24)
+                    if ky not in rows_ or it["box"][0] < rows_[ky][0]:
+                        rows_[ky] = (it["box"][0], norm(str(it.get("text") or ""))[:24])
+        return {v for _, v in rows_.values() if v}
+
     def place(st, ts):
-        return st.rects.get(ts) or st.rect or [0, 0, 0, 0]
+        return rect_at(st, ts)[1] or [0, 0, 0, 0]
 
     for ts in order:
         here = present[ts]
@@ -3332,7 +4552,11 @@ def screens(states, moments):
         # moment that read less of a window does not count as a new screen
         put = cur and cur["key"] == key and all(overlap(cur["rects"][k], rects[k]) >= 0.7 for k in rects)
         same = (put and all(alike(v, w) for (a, v), (b, w) in zip(cur["shows"], shows) if a == b))
+        sel_now = sel_of(ts)
+        if same and cur.get("sel") and sel_now and not (cur["sel"] & sel_now):
+            same = False
         if same:
+            cur["sel"] = sel_now or cur.get("sel") or set()
             cur["t1"] = ts
             cur["ts"].append(ts)
             cur["shows"] = shows or cur["shows"]
@@ -3342,7 +4566,7 @@ def screens(states, moments):
         else:
             if cur:
                 spans.append(cur)
-            cur = {"t0": ts, "t1": ts, "ts": [ts], "key": key, "rects": rects,
+            cur = {"t0": ts, "t1": ts, "ts": [ts], "key": key, "rects": rects, "sel": sel_now,
                    "shows": shows, "states": here, "size": by_ts[ts].get("size") or [1920, 1080]}
     if cur:
         spans.append(cur)
@@ -3479,6 +4703,26 @@ def desktop_bar(moments):
     return words_at, clock_at, strip_at
 
 
+def drop_crumb_rows(st, crumbs):
+    """A row holding one cell that is the tail of a path crumb is the path
+    bar, read off a window the screen cut down its left edge
+    (`er-Documents-jarvis-demo` for `-Users-jaredrhodenizer-Documents-jarvis-demo`)."""
+    tails = [flat(c) for c in crumbs if len(flat(c)) >= 10]
+    for q in st.parts:
+        if q["fam"] != "table":
+            continue
+        t = q["model"]
+        kept = []
+        for r in t.rows:
+            cells = r.get("cells") or []
+            nm = flat(cells[0]) if cells and cells[0] else ""
+            lone = bool(nm) and not any(cells[1:])
+            if lone and len(nm) >= 8 and any(c.endswith(nm) and c != nm for c in tails):
+                continue
+            kept.append(r)
+        t.rows = kept
+
+
 def drop_side_prefix(st):
     """A sidebar name left sitting in front of a file's name.
 
@@ -3583,7 +4827,7 @@ def behind_for(slice_st, span, subject):
     out = []
     strip = furnish.browser_behind(slice_st)
     if strip:
-        rect = subject.rects.get(span["t0"]) or subject.rect or [0, 0, 0, 0]
+        rect = rect_at(subject, span["t0"])[1] or [0, 0, 0, 0]
         tops = [t for t in slice_st.topwords]
         if tops:
             W = span["size"][0] if "size" in span else 3840
@@ -3727,6 +4971,87 @@ def masked_rows(path):
     return hid / float(h)
 
 
+# A REGION READ AS EMPTY AND A REGION NOT READ ARE DIFFERENT CLAIMS, and the
+# bars that tell them apart. Measured by sweeping both over every picture in
+# this video: anywhere from 3% to 7% of the frame, and 0.008 to 0.012 ink,
+# marks exactly one region and no other -- a broad plateau, so these sit in the
+# middle of it rather than on an edge. Below 0.008 the menu-bar strip joins in
+# (it is 12.6% of the frame at 0.004 ink, on eight moments); above 0.012
+# nothing is marked at all.
+GAP_AREA, GAP_INK = 0.05, 0.010
+_GAPS = {}
+
+
+class Gap:
+    """A region the reader LOOKED AT and read nothing on, at one moment.
+
+    TEI P5 has separated these since the nineties -- `<gap>`, material left out
+    because it could not be read, carrying a REASON and an EXTENT, against
+    `<unclear>`, text that WAS read and is doubtful -- and occupancy grids draw
+    it again, never letting unobserved collapse into free.
+
+    THE RECORD ALREADY HELD THE GAP. Run 19v said the difference between NOT
+    READ and NOT THERE "exists in the record only as prose inside the `text`
+    field" and that "there is no structured field for it anywhere". That was
+    wrong, and this supersedes it: the reader writes `quiet` -- the panes it
+    looked at and could read nothing on -- and states the rule in its own
+    words, that refusal is an answer and silence is not. The DRAWING never
+    opened it, along with `rendered`, `unwritten`, `standing`, `wins` and
+    `lone_panels`: six structured fields written at one end of the pipe and
+    read at neither.
+
+    WHAT WAS MISSING IS THE REASON AND THE EXTENT, not the gap. `quiet` holds
+    pane indices and nothing else, so "blank wallpaper" and "content I could
+    not read" arrive as the same value -- and 65 of this video's 66 quiet
+    regions are the first kind. Read as-is it would say nothing useful: the
+    unread SHARE does not track picture quality at all (62% on a good picture,
+    12% on a bad one). The frame settles it, because the regions can be found
+    again and the ink inside them measured."""
+    __slots__ = ("ts", "pi", "box", "area", "ink")
+
+    def __init__(self, ts, pi, box, area, ink):
+        self.ts, self.pi, self.box, self.area, self.ink = ts, pi, box, area, ink
+
+    @property
+    def unread(self):
+        """True where something was THERE and did not come back."""
+        return self.area >= GAP_AREA and self.ink >= GAP_INK
+
+
+def gaps_of(m):
+    """Every region looked at and not read at this moment, measured.
+
+    No try/except swallowing the answer: a frame that cannot be opened must
+    say so, because "nothing was hidden" is a legitimate answer everywhere
+    this is read and a silent failure would wear it."""
+    ts = m.get("ts")
+    if ts in _GAPS:
+        return _GAPS[ts]
+    quiet = set(m.get("quiet") or [])
+    if not quiet:
+        _GAPS[ts] = []
+        return _GAPS[ts]
+    import cv2
+    path = frame_of(m)
+    img = cv2.imread(path) if path else None
+    if img is None:
+        raise IOError("cannot open the frame for %s at %r -- the gap for this "
+                      "moment cannot be measured, and must not read as none" % (ts, path))
+    Hh, Ww = img.shape[:2]
+    out = []
+    for pi, b in enumerate(panes.frame_regions(img) or []):
+        if pi not in quiet:
+            continue
+        x0, y0, x1, y1 = (int(v) for v in b)
+        crop = img[y0:y1, x0:x1]
+        ink = (float((cv2.Canny(cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY), 60, 160) > 0).mean())
+               if crop.size else 0.0)
+        out.append(Gap(ts, pi, [x0, y0, x1, y1],
+                       (x1 - x0) * (y1 - y0) / float(Hh * Ww), ink))
+    _GAPS[ts] = out
+    return out
+
+
 def note(records_path, diary_text=None):
     header, moments, footer = old.load(records_path)
     title = header.get("title") or os.path.basename(os.path.dirname(records_path))
@@ -3779,6 +5104,7 @@ def note(records_path, diary_text=None):
             frac = sum(b.size for b in sm.get_matching_blocks()) / max(1, len(ct))
             if longest >= 40 or (len(ct) >= 12 and frac >= 0.6):
                 c.name = w.name
+                c._same_as = w          # the window whose note this is: the cards fold on it
                 break
     states = [st for st in all_states if st.window_html() and not st.fragment()]
     frags = [st for st in all_states if st not in states and st.has_content() and st.rects]
@@ -3816,7 +5142,9 @@ def note(records_path, diary_text=None):
         # so only readings taken while this state was on the screen count.
         # The same note read at some other moment says nothing about how far
         # this window had been scrolled now.
-        st._h1_read = [(t_, list(b_)) for _, b_, t_ in hit if t_ in st.times]
+        for _, b_, t_ in hit:
+            if t_ in st.times:
+                st.at(t_, make=True).h1 = list(b_)
     real = [st for st in states if is_real_window(st.name)]
     shown = real if real else states          # a video with no named window shows its screens
     windows = []                               # names in order of first appearance
@@ -3869,6 +5197,19 @@ def note(records_path, diary_text=None):
         fixed = []
         for c in t.path:
             f = flat(c)
+            # ONE ENGINE GLUES `Users` TO THE FOLDER AFTER IT. `unglue`
+            # catches the pair when the next crumb is the glued tail; here
+            # the bar read `Macintosh HD > Usersjaredrhodenizer > .claude`
+            # with no such next crumb, so the glue stood in two pictures. A
+            # crumb that opens with a generic crumb and whose remainder is a
+            # name the video knows whole is those two crumbs.
+            if f not in known and len(f) >= 10:
+                for g_ in ("users", "documents", "desktop", "downloads"):
+                    if f.startswith(g_) and f[len(g_):] in known:
+                        fixed.append(g_.capitalize())
+                        c = known[f[len(g_):]]
+                        f = flat(c)
+                        break
             # a crumb every other bar also carries is spelt the way the
             # video keeps spelling it; only a crumb read once, and never
             # read as a whole name anywhere, can be a cut-short reading
@@ -3885,11 +5226,21 @@ def note(records_path, diary_text=None):
                     c = fits.pop()
             fixed.append(c)
         t.path = fixed
+    # ONLY A BAR ON THE SAME FOLDER, OR ON AN ANCESTOR OF IT, MAY FILL
+    # ANOTHER'S GAPS. Mended from every Finder window's bar, a window in
+    # `.claude/projects` took crumbs from the window in `vault-demo`, and
+    # the bar under the memory window read three folders it never stood
+    # in. Ancestors are shared by construction; a sibling folder's bar is
+    # another path.
+    def _prefix(a, b):
+        return len(a) <= len(b) and all(crumb_same(x, y) for x, y in zip(a, b))
     for w in {st.name for st in states}:
         pool = [t for st in states if st.name == w
                 for t in [st.main_table()] if t and t.path]
         for t in pool:
-            t.path = mend_path(t.path, [o.path for o in pool if o is not t])
+            kin = [o.path for o in pool if o is not t
+                   and (crumb_same(o.path[-1], t.path[-1]) or _prefix(o.path, t.path) or _prefix(t.path, o.path))]
+            t.path = mend_path(t.path, kin)
     # Folder or file, settled once for the whole video. A name whose Kind was
     # read at any moment is that kind at every moment, so a row read without
     # its Kind column borrows the answer rather than guessing at the shape of
@@ -4026,6 +5377,8 @@ def note(records_path, diary_text=None):
         vals = sorted(vals)
         return vals[len(vals) // 2]
 
+    fit_side = {}      # t0 -> (whole words the fit stood on, its x anchors, its y anchors)
+
     def fit_map(ts_list):
         """Scale and shift carrying the base moment's places onto these
         moments, fitted on words read in both. A line read cut still
@@ -4049,6 +5402,9 @@ def note(records_path, diary_text=None):
         kv = [(q[2] - q[0]) / max(1.0, p[2] - p[0]) for p, q in exact if p[2] - p[0] >= 8]
         kv += [(q[3] - q[1]) / max(1.0, p[3] - p[1]) for p, q in exact if p[3] - p[1] >= 10]
         kv += [(q[3] - q[1]) / max(1.0, p[3] - p[1]) for p, q, _ in cuts if p[3] - p[1] >= 10]
+        # THREE WORDS READ WHOLE ON BOTH FRAMES, not three numbers: one word
+        # gives a width and a height, so two words passed as three votes
+        # and 00:04:00 was fitted at 2.18 where its tree rows say 1.76.
         if len(kv) < 3:
             return None
         k = med(kv)
@@ -4057,6 +5413,8 @@ def note(records_path, diary_text=None):
         xs = [(p[0], q[0]) for p, q in exact] + [(p[2], q[2]) for p, q in exact]
         xs += [(p[2], q[2]) if side == "tail" else (p[0], q[0]) for p, q, side in cuts]
         ys = [(p[1], q[1]) for p, q in exact] + [(p[1], q[1]) for p, q, _ in cuts]
+        if ts_list:
+            fit_side[ts_list[0]] = (len(exact), list(xs), list(ys))
         for _ in range(2):
             dx = med([qx - k * px for px, qx in xs])
             dy = med([qy - k * py for py, qy in ys])
@@ -4083,6 +5441,77 @@ def note(records_path, diary_text=None):
         return bool(T) and abs(T[0] - 1) < 0.08 and abs(T[1]) < 0.01 * Wf and abs(T[2]) < 0.01 * Hf
 
     span_T = {s["t0"]: fit_map(s["ts"]) for s in spans}
+
+    # TWO WORDS ARE NOT THREE WITNESSES. One matched word gives the fit a
+    # width and a height, so two words passed the three-vote test and
+    # 00:04:00 was fitted at a zoom of 2.18 where the frame's own tree rows
+    # stand 85 px apart against 40.5 at 00:04:10 - a zoom of 1.75. Where the
+    # fit stood on fewer than three whole words, the zoom is taken from the
+    # tree's row pitch on this frame against a neighbouring moment whose fit
+    # stood on enough, and the shift is refitted on the same anchors. The
+    # pitch is recorded in the pane image's own pixels, and the reader works
+    # a pane at one, two or three times its size, so it is put back to frame
+    # pixels by the image's width over the pane's.
+    def _png_width(path):
+        try:
+            with open(path, "rb") as fh:
+                fh.read(16)
+                return struct.unpack(">I", fh.read(4))[0]
+        except Exception:
+            return None
+
+    def tree_pitch_at(t):
+        m_ = next((mm for mm in moments if mm["ts"] == t), None)
+        best = None
+        for p_ in (m_ or {}).get("panes") or []:
+            d_ = p_.get("data") or {}
+            rp = d_.get("row_pitch")
+            box = p_.get("box") or []
+            if not rp or "tree" not in str(p_.get("kind") or "") or len(box) != 4 or box[2] - box[0] <= 0:
+                continue
+            w_ = _png_width(machine.here(str(d_.get("source") or "")))
+            fac = (w_ / float(box[2] - box[0])) if w_ else 1.0
+            val = float(rp) / max(0.5, fac)
+            keys_ = {fold(flat(str(l_).strip("\u2502 \u02c3\u02c5\u25b8\u25be")))
+                     for l_ in (p_.get("lines") or []) if not str(l_).startswith("[")}
+            keys_ = {k_ for k_ in keys_ if len(k_) >= 4}
+            if best is None or len(keys_) > len(best[1]):
+                best = (val, keys_)
+        return best
+
+    for i_, s_ in enumerate(spans):
+        T_, side_ = span_T.get(s_["t0"]), fit_side.get(s_["t0"])
+        if not T_ or not side_ or side_[0] >= 3:
+            continue
+        got_ = tree_pitch_at(s_["t0"])
+        if not got_:
+            continue
+        pitch, keys_here = got_
+        ref = None
+        # THE SAME TREE, told by its own rows: a Finder's favorites read as
+        # a tree at 00:03:50 stand at another pitch altogether
+        for j_ in sorted(range(len(spans)), key=lambda j: (abs(j - i_), j)):
+            if j_ == i_ or abs(j_ - i_) > 3:
+                continue
+            Tj, sj = span_T.get(spans[j_]["t0"]), fit_side.get(spans[j_]["t0"])
+            if not Tj or not sj or sj[0] < 3:
+                continue
+            gj = tree_pitch_at(spans[j_]["t0"])
+            if gj and len(gj[1] & keys_here) >= 3:
+                ref = (Tj[0], gj[0], spans[j_]["t0"])
+                break
+        if not ref:
+            continue
+        k_new = ref[0] * pitch / ref[1]
+        if not 0.4 <= k_new <= 4.0:
+            continue
+        _n, xs_, ys_ = side_
+        dx_ = med([qx - k_new * px for px, qx in xs_]) if xs_ else T_[1]
+        dy_ = med([qy - k_new * py for py, qy in ys_]) if ys_ else T_[2]
+        if os.environ.get("SN_PITCH"):
+            print("PITCH %s: zoom %.2f -> %.2f from tree row pitch %.1f against %.1f at %s (%d whole words)"
+                  % (s_["t0"], T_[0], k_new, pitch, ref[1], ref[2], side_[0]), file=sys.stderr)
+        span_T[s_["t0"]] = (k_new, dx_, dy_)
 
     _frame_rects = {}
 
@@ -4373,6 +5802,14 @@ def note(records_path, diary_text=None):
                 k_ = key_(r_)
                 if len(k_) >= 3:
                     want.add(k_)
+        # A NOTE WINDOW IS PLACED BY ITS OWN LINES as a list window is by its
+        # rows: with no table, Obsidian at 00:04:00 had nothing to vote with
+        # and its box was carried in from another zoom, 2.6 times too big.
+        for m_ in (st.tree(), st.main_doc()):
+            for t_, _h in (getattr(m_, "lines", None) or []):
+                k_ = "".join(ch for ch in str(t_).lower() if ch.isalnum())
+                if len(k_) >= 6:
+                    want.add(k_)
         if not want:
             return None
         spots = []
@@ -4634,104 +6071,6 @@ def note(records_path, diary_text=None):
             if best != mine:
                 st_.title = best
 
-    def list_not_tree(states):
-        """A Finder list that came back as a file tree, put right.
-
-        A window showing only its Name column - the rest of it off the side
-        of the screen or behind another window - has no columns left to
-        tell the reader it is a list, and its rows come back as a tree with
-        a level of nesting that was never on the screen. The same folder
-        names read as a LIST elsewhere in the video say what that window
-        is: one window, one program. Nothing is invented - the names are
-        the ones that were read, and only what KIND of thing they are in
-        changes.
-        """
-        lists = []
-        for st_ in states:
-            t_ = st_.main_table()
-            if st_.name == "The Finder window" and t_ and len(t_.rows) >= 4:
-                lists.append((t_, {fold(flat((r.get("cells") or [""])[0]))
-                                   for r in t_.rows if (r.get("cells") or [""])[0]}, st_))
-        if not lists:
-            return
-        own = {id(o_) for _t, _k, o_ in lists}
-        for st_ in states:
-            # ANY window holding a tree whose names are some Finder list's
-            # names. Asking only about windows named for the vault left the
-            # case the naming rules had ALREADY got right: a window named
-            # Finder, drawn with a tree in it and a level of nesting that
-            # was never on the screen. A window that is itself one of the
-            # lists is not converted - it is the witness.
-            if id(st_) in own:
-                continue
-            # EVERY tree part of the window, not the first. A window can
-            # show its own sidebar (a tree of Finder's fixed names, which no
-            # list will ever match) and a Finder list beside it that came
-            # back as a tree too - and asking only about the first left the
-            # second drawn with a level of nesting that was never there.
-            for q in [x for x in st_.parts if x["fam"] == "tree"
-                      and getattr(x["model"], "lines", None)]:
-                _convert_tree(st_, q, lists)
-
-    def _convert_tree(st_, q, lists):
-        """One tree part put back as the list it really is."""
-        names = [row_name(t) for t, _h in q["model"].lines]
-        keys = {fold(flat(n)) for n in names if n}
-        if len(keys) < 4:
-            return
-        best, hit, from_ = None, 0, None
-        for t_, ks, o_ in lists:
-            n = len(keys & ks)
-            if n > hit:
-                best, hit, from_ = t_, n, o_
-        if best is None or hit < max(4, 0.6 * len(keys)):
-            return
-        head = list(best.header) or ["Name"]
-        tab = Table()
-        tab.header = head
-        tab.span = best.span
-        tab.rh = best.rh
-        # the same window showing the same folder: its bar and its
-        # sidebar were read whole at that other moment, and this one
-        # only had them hidden
-        tab.path = list(best.path)
-        tab.paths = list(best.paths)
-        tab.side = list(best.side)
-        by = {fold(flat((r.get("cells") or [""])[0])): r for r in best.rows
-              if (r.get("cells") or [""])[0]}
-        for n in names:
-            if not n:
-                return
-            src = by.get(fold(flat(n)))
-            cells = list(src["cells"]) if src else [n] + [""] * (len(head) - 1)
-            if src:
-                cells[0] = src["cells"][0]
-            tab.rows.append({"cells": cells,
-                             "italic": [False] * len(cells),
-                             # NOT the band. A file's date and kind are the
-                             # same at every moment, so taking them from the
-                             # moment this window was read whole is sound -
-                             # but WHICH ROW IS SELECTED is the one thing
-                             # about a list that changes from moment to
-                             # moment. Carried across, it drew `03 Company B
-                             # (Landscape Company)` green at 00:01:20, where
-                             # the reader records no band at all; the band it
-                             # was wearing belongs to 00:02:20. The same
-                             # state-against-moment distinction as the path
-                             # bar, and no measure can catch this one, since
-                             # the green lands on rows the frame drew text
-                             # across.
-                             "band": None,
-                             "icon": (src or {}).get("icon", "green")})
-        q["fam"] = "table"
-        q["model"] = tab
-        st_.parts.sort(key=lambda x: x["slot"])
-        st_.name = "The Finder window"
-        # and the folder it was showing: the window's own title bar,
-        # read whole at the moment the window stood clear
-        if not st_.title and from_ is not None and from_.title:
-            st_.title = from_.title
-
     def words_in(box, st_, times):
         """How many of this window's OWN words were read inside that box."""
         keys = own_words.get(id(st_)) or set()
@@ -4786,6 +6125,15 @@ def note(records_path, diary_text=None):
         return out
 
     list_not_tree(states)
+    _all_crumbs = [c for st in states for q in st.parts if q["fam"] == "table"
+                   for c in (q["model"].path or [])]
+    for st in states:
+        sidebar_from_panes(st, house_side)
+        tidy_side(st.main_table(), house_side, st.title)
+        drop_crumb_rows(st, _all_crumbs)
+    house_side = max((furnish.side_words_of(st) for st in states
+                      if st.name == "The Finder window"), key=len, default=house_side)
+    house_keys = {fold(flat(w)) for w in house_side if len(flat(w)) >= 5}
     mend_prose(all_states)
     title_from_bar(states)
     heal_titles(states)
@@ -4843,9 +6191,9 @@ def note(records_path, diary_text=None):
                 if 0.2 <= span / pw <= 1.0:
                     wide.append(span / pw)
                     at[m["ts"]] = span / pw
+                    st.at(m["ts"], make=True).doc_wide = span / pw
         if wide:
             st._doc_wide = round(100 * med(sorted(wide)))
-            st._doc_wide_at = at
 
     # A NOTE'S LINE LENGTH BELONGS TO THE PROGRAM, NOT TO ONE READING OF IT.
     # A note is set to a readable line length and that does not change from
@@ -4869,7 +6217,7 @@ def note(records_path, diary_text=None):
             st._doc_wide_borrowed = True
 
     for st in states:
-        for t_, b_ in getattr(st, "_h1_read", ()):
+        for t_, b_ in [(t, sn.h1) for t, sn in st.moments() if sn.h1]:
             s_ = next((x for x in spans if t_ in x["ts"]), None)
             T_ = (span_T.get(s_["t0"]) if s_ else None) or fit_map([t_])
             hb = home_at(st, t_)
@@ -5141,8 +6489,120 @@ def note(records_path, diary_text=None):
                   "the reader measured a window's edges those are the edges drawn, otherwise they are taken from "
                   "where that window's own words sat.", ""]
         last_T = None
+        at_idx = {m["ts"]: i for i, m in enumerate(moments)}
+
+        def _agree(a, b):
+            return all(abs(a[i] - b[i]) <= (0.04 * Wf if i % 2 == 0 else 0.04 * Hf) for i in range(4))
+
+        _all_words = {}
+
+        def all_words_of(t):
+            """Every reading on that moment's panes, as (key, box) - a size
+            or a kind read on sixteen rows is sixteen readings, and a window
+            showing only sizes and kinds is placed by them."""
+            if t not in _all_words:
+                m_ = next((mm for mm in moments if mm["ts"] == t), None)
+                got = []
+                for p_ in (m_ or {}).get("panes") or []:
+                    for it in draw2.items_of(p_):
+                        key = fold(flat(it["text"]))
+                        if len(key) >= 5:
+                            got.append((key, it["box"]))
+                _all_words[t] = got
+            return _all_words[t]
+
+        def any_words_in(box, st_, times):
+            """How many of this window's own words - any of them, the
+            sidebar's fixed names and the sizes in its list included - were
+            read inside that box at these moments."""
+            keys = {fold(flat(w)) for w in state_texts(st_) if len(flat(w)) >= 5}
+            n = 0
+            for t in times:
+                for key, b in all_words_of(t):
+                    if not (key in keys or (len(key) >= 6 and any(key in sk for sk in keys))):
+                        continue
+                    cx, cy = (b[0] + b[2]) / 2, (b[1] + b[3]) / 2
+                    if box[0] <= cx <= box[2] and box[1] <= cy <= box[3]:
+                        n += 1
+            return n
+
+        def measured_rects_at(t):
+            return [st_.rects[t] for st_ in states if t in st_.measured and st_.rects.get(t)]
+
+        def still_here(own, s_, base_, extra_):
+            """The place a window stood at this stretch, where the frames
+            either side measured it in the same place and its own words are
+            read inside that place now - the window stood still and the
+            reader merely failed to close it here. Returns (box, the moment
+            to draw it from) or None.
+
+            At 00:00:50 the video's black bands cut every edge of the
+            vault-demo Finder, so no rectangle closed and the picture showed
+            one window where the screen held three. The same window was
+            measured at 00:00:30 and at 00:01:00 at the same place, the
+            Finder beside it stands where it stood, and its favorites are
+            read inside its box at 00:00:50. Tristan's puzzle-piece rule
+            fills what was hidden from a moment it stood clear."""
+            why = os.environ.get("SN_STILL") == "2"
+            meas = sorted(t for t in own.measured if own.rects.get(t))
+            if not meas:
+                return None
+            i0, i1 = at_idx.get(s_["t0"], 0), at_idx.get(s_["t1"], 0)
+            before = [t for t in meas if t < s_["t0"] and i0 - at_idx.get(t, -99) <= 5]
+            after = [t for t in meas if t > s_["t1"] and at_idx.get(t, 99) - i1 <= 5]
+            tb, ta = (before[-1] if before else None), (after[0] if after else None)
+            if tb is None and ta is None:
+                if why:
+                    print("STILL? %s %s: no measured neighbour (meas %s; i0 %s i1 %s idx %s)"
+                          % (s_["t0"], label_for(own), meas, i0, i1, [at_idx.get(t) for t in meas]), file=sys.stderr)
+                return None
+            rb, ra = (own.rects[tb] if tb else None), (own.rects[ta] if ta else None)
+            if rb and ra and not _agree(rb, ra):
+                if why:
+                    print("STILL? %s %s: moved %s -> %s" % (s_["t0"], label_for(own), rb, ra), file=sys.stderr)
+                return None
+            box = [(x + y) / 2 for x, y in zip(rb, ra)] if (rb and ra) else list(rb or ra)
+            anchor = tb if tb else ta
+            # the same zoom: some other window measured on both frames, at
+            # the same place on both - the screen did not move between them
+            # ANY window measured on both frames at the same place will do:
+            # the Finder beside it is a different state at 00:00:30 (folder
+            # `jaredrhodenizer`) and at 00:00:50 (folder `.claude`), and it
+            # is the same rectangle on both frames
+            zoom_ok = any(_agree(r1, r2)
+                          for r1 in measured_rects_at(anchor)
+                          for r2 in measured_rects_at(s_["t0"]))
+            if not zoom_ok:
+                if why:
+                    print("STILL? %s %s: zoom changed since %s" % (s_["t0"], label_for(own), anchor), file=sys.stderr)
+                return None
+            hits = any_words_in(box, own, s_["ts"])
+            if hits < (3 if (tb and ta) else 4):
+                if why:
+                    print("STILL? %s %s: only %d own words inside %s" % (s_["t0"], label_for(own), hits, [round(v) for v in box]), file=sys.stderr)
+                return None
+            # not where a window already drawn full stands - a window of ITS
+            # OWN SIZE. `overlap` measures the share of the smaller box, so
+            # a Finder standing on a maximised Obsidian scored 1.0 against
+            # it and was refused for standing where it always stands: on
+            # top of the editor. The cut-off Finder at 00:03:50 and the
+            # vault-demo Finder at 00:00:50 were both lost to that. A window
+            # covers this place only when it is not far bigger than it.
+            # The place is TAKEN when another window of the same program
+            # stands on it, or when the frame measured some window at that
+            # very box. Obsidian's editor read to the right of the Finder is
+            # the backdrop the Finder stands on, not a window in its place.
+            for b in base_ + extra_:
+                r_ = s_["rects"].get(id(b)) or pin.get(id(b))
+                if r_ and overlap(box, r_) > 0.5 and (b.name == own.name or _agree(box, r_)):
+                    if why:
+                        print("STILL? %s %s: %s stands there" % (s_["t0"], label_for(own), label_for(b)), file=sys.stderr)
+                    return None
+            return box, anchor
+
         for s in spans:
             subjects = []
+            still = {}        # a window carried from the moment it stood still at
             settled = set()   # states whose box the frame itself measured
             # A WINDOW THE FRAME DREW IN FULL, THAT NO FOCUS WINDOW COVERS,
             # IS A TOP-LAYER WINDOW AND MUST BE FILLED, not merely outlined.
@@ -5264,10 +6724,31 @@ def note(records_path, diary_text=None):
                     # measured rectangle, the same ground the focus windows
                     # stand on.
                     pin[id(pick)] = [float(v) for v in r]
+            if os.environ.get("SN_STILL") == "2":
+                print("STILL@ %s base %s extra %s" % (s["t0"], [label_for(b) for b in base], [label_for(b) for b in extra]), file=sys.stderr)
+            for own in states:
+                if own in base or own in extra or not own.has_content() or not is_real_window(own.name):
+                    continue
+                got = still_here(own, s, base, extra)
+                if got is None:
+                    continue
+                box, anchor = got
+                extra.append(own)
+                pin[id(own)] = [float(v) for v in box]
+                still[id(own)] = anchor
+                if os.environ.get("SN_STILL"):
+                    print("STILL %s %s carried from %s at %s" % (s["t0"], label_for(own), anchor,
+                                                                 [round(v) for v in box]), file=sys.stderr)
             for st in base + extra:
                 if st not in shown:
                     continue
-                sl = state_slice(st, s["t0"], s["t1"]) or st
+                sl = state_slice(st, s["t0"], s["t1"])
+                if sl is None and id(st) in still:
+                    # drawn as it stood at the moment beside this one where
+                    # it stood clear - the puzzle piece, never the window's
+                    # whole gathered content
+                    sl = state_slice(st, still[id(st)], still[id(st)])
+                sl = sl or st
                 if sl is not st:
                     # the desk's chrome stands all video; a stretch that did
                     # not re-read it still lives under it
@@ -5275,9 +6756,61 @@ def note(records_path, diary_text=None):
                                                  if not any(same_text(t[0], u[0]) for u in sl.topwords)]
                     polish(sl, states)
                     drop_guessed([sl])
+                    # THE STRETCH'S LIST READ AS A TREE IS STILL ITS LIST. The
+                    # whole window had this put right by `list_not_tree`; a
+                    # stretch is rebuilt from its own panes and needs it again,
+                    # or the vault-demo Finder at 00:00:30 draws its names with
+                    # no columns, no path bar and no settled spelling.
+                    if sl.main_table() is None and st.main_table() is not None:
+                        _wt = st.main_table()
+                        _wk = {fold(flat((r.get("cells") or [""])[0])) for r in _wt.rows
+                               if (r.get("cells") or [""])[0]}
+                        for q in [x for x in sl.parts if x["fam"] == "tree"
+                                  and getattr(x["model"], "lines", None)]:
+                            _convert_tree(sl, q, [(_wt, _wk, st)])
+                    sidebar_from_panes(sl, house_side)
+                    tidy_side(sl.main_table(), house_side, sl.title)
+                    respell_from(sl, st)      # so the mend's walk meets the settled names
                     mend_cells(sl, st)
+                    if sl.main_table():
+                        fold_twins(sl.main_table(), 0)
+                        drop_glued(sl.main_table())
+                    # the bar ends at the folder the window shows, and the
+                    # title bar names it: a stretch whose reading of the bar
+                    # stopped short (`... > 02 Co` under a window titled
+                    # `Assets`) gets the folder back on the end
+                    _st_t = sl.main_table()
+                    if _st_t and _st_t.path and sl.title and not getattr(st, "title_from_path", False):
+                        _st_t.path = end_at_folder(_st_t.path, sl.title)
+                    # A CRUMB THE STRETCH MISREAD TAKES THE SETTLED SPELLING;
+                    # a crumb Finder itself cut short (`-Users-jaredrh`) is
+                    # what the frame shows and stays. `prjects` stood on the
+                    # 00:01:40 bar under a settled bar reading `projects`.
+                    _whole_t = st.main_table()
+                    if _st_t and _st_t.path and _whole_t and _whole_t.path:
+                        _fixed = []
+                        for c_ in _st_t.path:
+                            f_ = flat(c_)
+                            def _md_pair(x_, y_):
+                                return (x_.endswith("md") and x_[:-2] == y_) or (y_.endswith("md") and y_[:-2] == x_)
+                            hit_ = next((w_ for w_ in _whole_t.path if crumb_same(c_, w_)
+                                         or (len(f_) >= 5 and f_[:1] == flat(w_)[:1] and abs(len(f_) - len(flat(w_))) <= 2
+                                             and not _md_pair(f_, flat(w_))
+                                             and difflib.SequenceMatcher(None, f_, flat(w_), autojunk=False).ratio() >= 0.85)), None)
+                            _caps = lambda x_: sum(ch.isupper() for ch in x_)
+                            if hit_ is not None and f_ != flat(hit_) and not flat(hit_).startswith(f_):
+                                _fixed.append(hit_)
+                            elif hit_ is not None and f_ == flat(hit_) and hit_ != c_ and _caps(hit_) > _caps(c_):
+                                _fixed.append(hit_)         # `(info Product)` takes the settled `(Info Product)`
+                            else:
+                                _fixed.append(c_)
+                        if os.environ.get("SN_PATH") and _fixed != list(_st_t.path):
+                            print("PATHFIX %s %s: %s -> %s" % (s["t0"], label_for(st), _st_t.path, _fixed), file=sys.stderr)
+                        _st_t.path = _fixed
+                    respell_from(sl, st)
                     strip_furniture(sl, strip_at)
                     drop_side_prefix(sl)
+                    drop_crumb_rows(sl, _all_crumbs)
                     if bar_title(sl, s["size"][1]):
                         sl.title = None
                     sl.title = sl.title or st.title
@@ -5340,11 +6873,18 @@ def note(records_path, diary_text=None):
                 sl._doc_pad = getattr(st, "_doc_pad", 0)
                 # the line length this stretch's own moments measured, so a
                 # picture shows the note as wide as it ran THEN
-                mine = [v for t_, v in getattr(st, "_doc_wide_at", {}).items()
-                        if t_ in s["ts"]]
+                mine = [sn.doc_wide for t_, sn in st.moments()
+                        if sn.doc_wide is not None and t_ in s["ts"]]
                 sl._doc_wide = (round(100 * med(sorted(mine))) if mine
                                 else getattr(st, "_doc_wide", 0))
-                sl.rects, sl.measured = st.rects, st.measured
+                # THE FAULT, DELETED. This line read `sl.rects, sl.measured =
+                # st.rects, st.measured`: the stretch was handed the WHOLE
+                # window's per-moment tables, so a picture of 00:01:00 could be
+                # shaped by an edge measured at 00:03:50. A stretch already
+                # holds its own moments -- `state_slice` replays them through
+                # `absorb`, which records a rect and a measured flag for each --
+                # so there was never anything to borrow, only something to
+                # overwrite it with.
                 # The shape the window really had. Where the reader measured
                 # its edges off the frame, those edges stand. Otherwise the
                 # window's own place - every reading of it carried home and
@@ -5600,8 +7140,8 @@ def note(records_path, diary_text=None):
             S_now = max(0.05, kz_now * furnish.UI_TXT / furnish.CSS_TXT)
 
             def span_pad(st_, top):
-                seen = next((b_ for t_, b_ in getattr(st_, "_h1_read", ())
-                             if t_ in s["ts"]), None)
+                seen = next((sn.h1 for t_, sn in st_.moments()
+                             if sn.h1 and t_ in s["ts"]), None)
                 if seen is None:
                     return getattr(st_, "_doc_pad", 0)
                 pad = (seen[1] - top) * furnish.CANVAS_W / Wf / S_now - 60
@@ -5724,6 +7264,10 @@ def note(records_path, diary_text=None):
                     sl._row_step = own * furnish.CANVAS_W / Wf
                     sl._step_sure = False      # and no median may replace it
                     sl._pitch_measured = True
+                if os.environ.get("SN_PITCH"):
+                    print("PITCH %s %-28s shape=%s own=%s step=%.1f sure=%s cut=%s/%s"
+                          % (s["t0"], label_for(stx, s["t0"]), [round(v) for v in shape] if shape else None,
+                             own, sl._row_step, sl._step_sure, cut_x, cut_y), file=sys.stderr)
 
             # Two windows of the same program standing on one screen set
             # their rows at the SAME pitch: the pitch belongs to the screen,
@@ -5733,12 +7277,30 @@ def note(records_path, diary_text=None):
             # beside it that the frame shows whole.
             sure = {}
             for stx, sl, _ in subjects:
-                if getattr(sl, "_step_sure", False) and getattr(sl, "_row_step", 0):
+                _snx = (sl.at(s["t0"]) or stx.at(s["t0"]))
+                whole_ = getattr(sl, "_pitch_measured", False) and not (_snx is not None and _snx.pitch_cut)
+                if (getattr(sl, "_step_sure", False) or whole_) and getattr(sl, "_row_step", 0):
                     sure.setdefault(stx.name, []).append(sl._row_step)
             for stx, sl, _ in subjects:
                 had = sure.get(stx.name)
-                if had and not getattr(sl, "_pitch_measured", False):
+                if not had:
+                    continue
+                if not getattr(sl, "_pitch_measured", False):
                     sl._row_step = med(sorted(had))
+                    continue
+                # A PITCH MEASURED ON A LIST THE SCREEN CUT OFF IS A WEAK
+                # MEASUREMENT: read loose, its two columns come back as
+                # separate rows and the gaps halve. Run 19c measured 42 against
+                # 81 on one screen and wrote it up as Finder's per-window
+                # density; the frame itself shows both lists at one pitch (64
+                # frame pixels, 00:03:00, checked by eye). Where a neighbour
+                # measured whole on the same frame disagrees by more than a
+                # quarter, the neighbour's pitch is the screen's.
+                _sn = (sl.at(s["t0"]) or stx.at(s["t0"]))
+                if _sn is not None and _sn.pitch_cut:
+                    med_ = med(sorted(had))
+                    if abs(med_ - sl._row_step) > 0.25 * med_:
+                        sl._row_step = med_
 
             # which windows behind were read through or around the front ones
             seen_here = set()
@@ -6134,7 +7696,7 @@ def note(records_path, diary_text=None):
                             for x in subjects]
             fine = []
             for stx, sl, shape in subjects:
-                if shape and not is_window(shape):
+                if shape and not is_window(shape) and id(stx) not in settled:
                     app = label_for(stx, s["t0"]).split(":")[0].strip()
                     if any(t.split(":")[0].strip() == app
                            or app in t for t, _b in behinds):
@@ -6228,7 +7790,8 @@ def note(records_path, diary_text=None):
                                   if getattr(sl_, "_row_step", 0)), 0.0),
                 ghosts=ghost_list(s, sub_states, carded),
                 camera=(cam, cam_pic) if cam else None,
-                sure=all(any(t in st.measured for t in s["ts"]) for st, _, _ in subjects),
+                sure=all(any(t in st.measured for t in s["ts"]) or id(st) in settled
+                         for st, _, _ in subjects),
                 kz=(T[0] if T else 1.0)))
             parts.append(_shot)
             parts.append("")
@@ -6265,9 +7828,30 @@ def note(records_path, diary_text=None):
             _m0 = next((mm for mm in moments if mm["ts"] == s["t0"]), None)
             _hid = masked_share(frame_of(_m0)) if _m0 is not None else 0.0
             if _hid >= 0.05:
-                parts += ["*The recording blacks out %.0f%% of this screen's height here. Any window "
-                          "standing behind those bands is not drawn, because the video does not "
-                          "carry it.*" % (100 * _hid), ""]
+                if still:
+                    parts += ["*The recording blacks out %.0f%% of this screen's height here. The windows "
+                              "under those bands stood still from the moment before to the moment after, "
+                              "and are drawn as they stood then; anything else behind the bands is not drawn, "
+                              "because the video does not carry it.*" % (100 * _hid), ""]
+                else:
+                    parts += ["*The recording blacks out %.0f%% of this screen's height here. Any window "
+                              "standing behind those bands is not drawn, because the video does not "
+                              "carry it.*" % (100 * _hid), ""]
+            # AND WHAT WAS LOOKED AT AND NOT READ, which is a different claim
+            # from what was not there. Only a region carrying ink counts: most
+            # of what the reader passes over is desktop with nothing on it, and
+            # saying so of blank wallpaper would be noise on every picture.
+            _gaps = gaps_of(_m0) if _m0 is not None else []
+            _lost = [g for g in _gaps if g.unread]
+            if _lost:
+                _blank = len(_gaps) - len(_lost)
+                parts += ["*%s of this screen, %s of it, %s looked at and could not be read, so nothing "
+                          "is drawn there.%s*"
+                          % ("One part" if len(_lost) == 1 else "%d parts" % len(_lost),
+                             " and ".join("%.0f%%" % (100 * g.area) for g in _lost),
+                             "was" if len(_lost) == 1 else "were",
+                             (" Everything else the reader passed over was blank."
+                              if _blank else "")), ""]
             seen_said = set()
             for _, sl, _ in subjects:
                 for ln in sl.said_html():
@@ -6361,10 +7945,161 @@ def note(records_path, diary_text=None):
         # showed, never nested under a physical window as an "earlier
         # state" - which was the opposite of the rule, naming the physical
         # window as the thing and the folders as its history.
+        # ONE PROPORTION PER WINDOW, NOT PER SECTION. A window's sections are
+        # its folder views - the same window, so they must stand in the same
+        # shape as each other, or a reader scrolling from one to the next
+        # watches it change. The shape comes from the moments the reader
+        # MEASURED that window, which are the moments it stood clear.
+        shape_of = {}
+        for g in groups:
+            sure, any_ = [], []
+            for o in g:
+                for t_ in (getattr(o, "times", None) or []):
+                    r_ = (getattr(o, "rects", None) or {}).get(t_)
+                    if not r_ or r_[2] - r_[0] <= 0 or r_[3] - r_[1] <= 0:
+                        continue
+                    (sure if t_ in (getattr(o, "measured", None) or ()) else any_).append(r_)
+            use = sure or any_
+            if use:
+                ws = sorted(r_[2] - r_[0] for r_ in use)
+                hs = sorted(r_[3] - r_[1] for r_ in use)
+                w_, h_ = ws[len(ws) // 2], hs[len(hs) // 2]
+                if w_ > 0:
+                    # THE SCREEN IT STOOD ON, not the page it is drawn on. A
+                    # window that took a third of the desktop is drawn a third
+                    # as wide as one that filled it, so two cards side by side
+                    # carry their real difference in size. The floor of 0.35
+                    # is there because these sections must stay readable: a
+                    # sliver of a window is still a window someone has to read.
+                    screen_w = max((mm.get("size") or [0])[0] for mm in moments) if moments else 0
+                    for o in g:
+                        shape_of[id(o)] = (h_ / w_,
+                                           min(1.0, max(0.35, w_ / screen_w)) if screen_w else None)
+        # A CARD THAT ADDS NOTHING IS NOT A VIEW OF THE WINDOW. One window can
+        # end up with four cards where two of them are an empty frame around a
+        # stray line -- measured on this video, the Obsidian window's second
+        # card holds no tree, no list, and 25 words of which 100% already stand
+        # in another of its cards, and the third holds four words. A reader
+        # scrolls past two window frames that say nothing, which is the layout
+        # reading as wrong even though every part of it is true.
+        #
+        # So a state with NO STRUCTURE OF ITS OWN -- no tree rows, no list rows
+        # -- whose words are already carried by another card of the same
+        # window is not drawn again. Its moments are added to the card that
+        # does carry them, so nothing about WHEN the window stood that way is
+        # lost. The test is containment against the other cards' own text, not
+        # a size threshold: a small card holding something new is kept.
+        def _card_words(st_):
+            h = st_.window_html() or ""
+            h = re.sub(r"&[a-z]+;|&#\d+;", " ", re.sub(r"<[^>]+>", " ", h))
+            return set(x.lower() for x in re.findall(r"[A-Za-z][A-Za-z']{3,}", h))
+
+        def _has_structure(st_):
+            h = st_.window_html() or ""
+            return ('<div class="sn-tree">' in h and "<div>" in h.split('<div class="sn-tree">')[1][:4000]) \
+                or "<tr>" in h
+
+        folded = {}
+        for g in groups:
+            if len(g) < 2:
+                continue
+            words = {id(o): _card_words(o) for o in g}
+            for o in g:
+                if _has_structure(o):
+                    continue
+                mine = words[id(o)]
+                others = set().union(*[words[id(x)] for x in g if x is not o]) or set()
+                # a word cut at the edge (`ther` for `there`) is carried by
+                # the whole word another card holds
+                carried = {w_ for w_ in mine if w_ in others
+                           or (len(w_) >= 4 and any(x_.startswith(w_) for x_ in others))}
+                if mine and (len(carried) == len(mine) or (len(mine) >= 8 and len(carried) >= 0.9 * len(mine))):
+                    keep = max((x for x in g if x is not o), key=lambda x: len(words[id(x)]))
+                    folded.setdefault(id(keep), []).extend(o.times)
+                    folded[id(o)] = None
+        # A WINDOW CUT OFF BY THE SCREEN'S EDGE IS THE WINDOW IT IS, not a
+        # window of its own. From 00:01:50 the memory Finder stood pushed off
+        # the left edge with only its Size and Kind columns in view and its
+        # bar reading `…er-Documents-jarvis-demo › m…`; read without a Name
+        # column it became a state of its own and a card of sixteen sizes.
+        # Its bar names the folder whose card already stands - the same file
+        # scrolled is the same card - so its moments join that card. Its
+        # sixteen nameless rows are a stretch of the list never read whole
+        # and cannot be placed among the named rows, so they are not drawn.
+        def _cut_of(frag, whole):
+            ft_, wt_ = frag.main_table(), whole.main_table()
+            if not (ft_ and wt_ and wt_.path) or frag.title or not whole.title:
+                return False
+            if any(h and "Name" in h for h in ft_.header) or set(frag.times) & set(whole.times):
+                return False
+            reads = [w_ for p_ in (getattr(ft_, "paths", None) or []) for w_ in p_] + list(ft_.path or [])
+            reads = [flat(w_).rstrip("›>") for w_ in reads if len(flat(w_)) >= 8]
+            whole_flats = [flat(c_) for c_ in wt_.path]
+            if reads and not all(any(wf == r_ or wf.endswith(r_) for wf in whole_flats) for r_ in reads):
+                return False
+            # the bar the window itself kept, or - read as loose words when
+            # no bar closed - a word of its own that is the tail of one of
+            # the folder's long crumbs (`er-Documents-jarvis-demo`)
+            tails = [(flat(w_).rstrip("›>"), str(w_).rstrip().endswith((">", "\u203a")))
+                     for w_ in frag.words() if len(flat(w_)) >= 8]
+            if reads:
+                return True
+            for t_, cont in tails:
+                for k_, wf in enumerate(whole_flats):
+                    if len(wf) >= 12 and wf != t_ and wf.endswith(t_):
+                        # `er-Documents-jarvis-demo >`: the chevron says the
+                        # bar went on, so the folder on show sits UNDER this
+                        # crumb - the window whose bar ends here is its parent
+                        if cont and k_ == len(whole_flats) - 1:
+                            continue
+                        return True
+            return False
+        _all = [s_ for g in groups for s_ in g]
+        for o in _all:
+            if id(o) in folded and folded[id(o)] is None:
+                continue
+            whole = next((x for x in _all if x is not o and _cut_of(o, x)), None)
+            if whole is not None:
+                folded.setdefault(id(whole), []).extend(o.times)
+                folded[id(o)] = None
+        # THE SAME NOTE, READ FROM BEHIND THE FINDERS, IS THE SAME CARD. A
+        # state named for this window because its words matched the
+        # window's own note (`_same_as`, set where the rest-of-the-screen
+        # states are named) is that note seen through a gap, never a card
+        # of its own: its moments join the fullest card of the window.
+        def _fullness(x_):
+            d_, t_ = x_.main_doc(), x_.tree()
+            return (len(d_.lines) if d_ else 0) + (len(t_.lines) if t_ else 0)
+        for o in _all:
+            if id(o) in folded and folded[id(o)] is None:
+                continue
+            if getattr(o, "_same_as", None) is None:
+                continue
+            kin = [x for x in _all if x is not o and x.name == o.name
+                   and not (id(x) in folded and folded[id(x)] is None)]
+            if not kin:
+                continue
+            base = max(kin + [o], key=_fullness)
+            if base is o:
+                continue
+            folded.setdefault(id(base), []).extend(o.times + (folded.get(id(o)) or []))
+            folded[id(o)] = None
+
         for st in sorted((s for g in groups for s in g), key=lambda s: s.times[0]):
-            parts.append(f"## {w} - as at {span_of(st)}" + (f", {st.title}" if st.title else ""))
+            if id(st) in folded and folded[id(st)] is None:
+                continue
+            _extra = [t for t in (folded.get(id(st)) or []) if t not in st.times]
+            _when = span_of(st)
+            if _extra:
+                _all = sorted(set(st.times) | set(_extra))
+                _when = _all[0] if len(_all) == 1 else (
+                    "%s and %s" % (_all[0], _all[1]) if len(_all) == 2
+                    else "%s to %s" % (_all[0], _all[-1]))
+            parts.append(f"## {w} - as at {_when}" + (f", {st.title}" if st.title else ""))
             parts.append("")
-            parts.append(st.window_html())
+            _sh = shape_of.get(id(st)) or (None, None)
+            _html = st.window_html()
+            parts.append(card_shot(_html, _sh[0], _sh[1], getattr(st, "_tree_min", None)))
             parts.append("")
             for ln in st.said_html():
                 parts.append(ln)
