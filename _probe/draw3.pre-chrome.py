@@ -1217,25 +1217,6 @@ class State:
                 self.fine.extend(fine)
                 for r in (p.get("data") or {}).get("remainder") or []:
                     if r.get("where") == "above" and r.get("text"):
-                        # A BROWSER'S ADDRESS BAR IS NOT THIS WINDOW'S FURNITURE.
-                        # At 00:04:00 the whole of the browser standing behind
-                        # Obsidian was read as one phrase - `Ask Google or type a
-                        # URL` - filed as a remainder above a tree, and dropped
-                        # here. `furnish.browser_behind` accepts an address-only
-                        # strip and draws the chrome from it, but it reads a
-                        # state's TOP WORDS and nothing carried the address to
-                        # them. Run 19j named exactly this remedy: route a
-                        # reading filed under no window to the window it belongs
-                        # to. Only an address bar, and only one read in the
-                        # frame's own top strip - anything else stays furniture.
-                        box = r.get("box")
-                        Hf = (m.get("size") or [0, 2160])[1]
-                        if (box and len(box) == 4 and box[3] <= 0.09 * Hf
-                                and re.search(r"type a URL|https?://", str(r["text"]))):
-                            if not any(same_text(r["text"], t[0]) for t in self.topwords):
-                                self.topwords.append((r["text"], box[0], box[1], box[2], box[3],
-                                                      bool(r.get("confirmed"))))
-                            continue
                         self.furniture.append(r["text"])
             elif k == "an open document":
                 pairs, fine = doc_pairs(p)
