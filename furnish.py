@@ -463,8 +463,6 @@ def browser_behind(st):
         k = _tabkey(t)
         if any(_tabkey(o) != k and _tabkey(o).startswith(k) for o in cleaned):
             continue                          # a shorter reading of a tab kept whole
-        if any(_tabkey(o) != k and k.startswith(_tabkey(o)) and len(k) - len(_tabkey(o)) <= 2 for o in keep):
-            continue                          # the whole plus a scrap: the whole stands
         keep.append(t)
     tabs = keep
     out = ['<div class="sn-browser">']

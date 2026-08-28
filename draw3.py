@@ -4684,6 +4684,26 @@ def desktop_bar(moments):
                     and 1 <= len(k) - len(b) <= 2]
             if len(full) == 1:
                 ws[i] = full[0] if w == b else "<i>" + full[0] + "</i>"
+    # A MENU NAME IS ONE OF A SMALL SET. The bar is set in the smallest type
+    # on the screen and `Insert` came back as `inserf` from both engines at
+    # one moment. The names a menu bar can carry are few and shared by every
+    # program, so a reading a letter or two off one of them is that name --
+    # the first of the per-program vocabularies, and the one every program
+    # has in common.
+    MENU_NAMES = ("File", "Edit", "View", "Go", "Window", "Help", "Insert", "Format",
+                  "History", "Bookmarks", "Tools", "Selection", "Run", "Terminal",
+                  "Navigate", "Code", "Refactor", "Debug", "Profile", "Tab", "Arrange",
+                  "Image", "Layer", "Type", "Select", "Filter", "Share", "Store",
+                  "Playback", "Audio", "Modify", "Sequence", "Clip", "Graphics", "Effects")
+    for ts_, ws in words_at.items():
+        for i, w in enumerate(ws):
+            b = bare(w)
+            if b in MENU_NAMES or len(b) < 3 or i == 0:
+                continue
+            near = [n for n in MENU_NAMES
+                    if difflib.SequenceMatcher(None, b.lower(), n.lower(), autojunk=False).ratio() >= 0.8]
+            if len(near) == 1:
+                ws[i] = near[0] if w == b else "<i>" + near[0] + "</i>"
     last_w, last_c = [], ""
     for m in moments:
         got = words_at.get(m["ts"]) or []
@@ -7808,6 +7828,20 @@ def note(records_path, diary_text=None):
                             y1_ = hb_[3]
                     return [max(0.0, x0_), max(0.0, y0_), min(float(Wf), x1_), min(float(Hf), y1_)]
 
+                def _whole_home_named(label_, hbox_):
+                    """The same, for an outline that carries only a label."""
+                    app_ = furnish._app_of(label_)
+                    best_ = None
+                    for o_ in states:
+                        if not app_ or furnish._app_of(o_.name) != app_:
+                            continue
+                        hb2 = home_at(o_, s["t0"])
+                        if not hb2 or furnish._within(hbox_, hb2) < 0.8 or _area(hb2) < 1.3 * _area(hbox_):
+                            continue
+                        if best_ is None or _area(hb2) < _area(best_):
+                            best_ = hb2
+                    return best_
+
                 _subj = []
                 for stx, sl, shape in subjects:
                     if shape:
@@ -7816,13 +7850,17 @@ def note(records_path, diary_text=None):
                         # a strip of a window the crop cut off is that window
                         if not hb_ or _area(hb_) < 1.3 * _area(raw_):
                             hb_ = _whole_home(stx, raw_) or hb_
+                        if os.environ.get("SN_ZOOM"):
+                            print("  subject %s: frame %s -> home %s, whole %s" % (
+                                label_for(stx, s["t0"]), [round(v) for v in shape],
+                                [round(v) for v in raw_], hb_ and [round(v) for v in hb_]), file=sys.stderr)
                         shape = _home_box(shape, hb_)
                         sl.rect = shape
                     if getattr(sl, "_row_step", 0):
                         sl._row_step = sl._row_step / _k
                     _subj.append((stx, sl, shape))
                 subjects = _subj
-                behinds = [(t_, _home_box(b_)) for t_, b_ in behinds]
+                behinds = [(t_, _home_box(b_, _whole_home_named(t_, back(T, list(b_))))) for t_, b_ in behinds]
                 _ghosts = [(_home_box(b_) if b_ else b_, t_, k_) for b_, t_, k_ in ghost_list(s, sub_states, carded)]
                 if cam:
                     cam = _home_box(cam)
