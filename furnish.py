@@ -132,6 +132,47 @@ def side_share_card(st):
     return best
 
 
+def col_shares(st, head):
+    """Where the list's columns began, as shares of the list's width,
+    measured off the frame: each heading's own left edge, at the reading
+    that found every heading, widest list first. Laid out by the browser
+    instead, the Name column took whatever its longest name wanted and the
+    dates and sizes landed wherever was left -- proportions the frame never
+    had. None where a heading was never placed."""
+    names = [h for h in head if h]
+    if len(names) < 2:
+        return None
+    best, best_w = None, 0.0
+    for m_, g_ in (getattr(st, "pieces", None) or ()):
+        for p_ in (g_.get("panes") or []):
+            if p_.get("kind") != "a list of columns" or len(p_.get("box") or []) != 4:
+                continue
+            b = p_["box"]
+            W = float(b[2] - b[0])
+            if W <= 0 or W <= best_w:
+                continue
+            xs = {}
+            for it in draw2.items_of(p_):
+                t = re.sub(r"\s+", " ", it["text"].strip())
+                for i, h in enumerate(head):
+                    if not h or i in xs:
+                        continue
+                    hk = h.split()[0]
+                    if t == h or t.split()[0] == hk and (len(h.split()) == 1 or t.startswith(h[:6])):
+                        xs[i] = float(it["box"][0])
+            if len(xs) < len(names):
+                continue
+            order = [i for i in range(len(head)) if head[i]]
+            bounds = [b[0]] + [xs[i] for i in order[1:]] + [b[2]]
+            if any(bounds[k + 1] <= bounds[k] for k in range(len(bounds) - 1)):
+                continue
+            shares = [(bounds[k + 1] - bounds[k]) / W for k in range(len(bounds) - 1)]
+            if min(shares) < 0.03:
+                continue
+            best, best_w = dict(zip(order, shares)), W
+    return best
+
+
 def finder(st):
     table = st.main_table()
     side_words = side_words_of(st)
@@ -240,7 +281,15 @@ def finder(st):
     # cut down its left edge shows only those, and laid out from the left
     # over the whole window they land where the Name column was and the
     # strip the frame showed comes out empty. They hug the right edge.
-    out = ['<table class="sn-list"%s>' % (' style="width:auto"' if not has_name else "")]
+    shares = col_shares(st, head) if has_name else None
+    out = ['<table class="sn-list%s%s">' % (" sn-tail" if not has_name else "", " sn-fixed" if shares else "")]
+    if shares:
+        # THE COLUMNS WHERE THE FRAME HAD THEM. `sn-fixed` fixes the layout so
+        # the widths are kept and a name too long for its column ends in an
+        # ellipsis, the way Finder's does.
+        out.append("<colgroup>" + "".join(
+            '<col style="width:%.1f%%">' % (100.0 * shares[i]) if i in shares else "<col>"
+            for i in range(n)) + "</colgroup>")
     if any(head):
         cells = []
         for i, h in enumerate(head):
