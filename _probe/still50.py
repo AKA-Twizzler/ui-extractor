@@ -17,3 +17,7 @@ for t0 in ("00:03:30", "00:03:50"):
     i0 = at_idx.get(t0, 0)
     before = [t for t in meas if t < t0 and i0 - at_idx.get(t, -99) <= 3]
     print(t0, "i0", i0, "before", before, [(t, at_idx.get(t)) for t in meas])
+
+for st in states:
+    if st.name == "The Obsidian window":
+        print("Obsidian", st.times[0], st.times[-1], {t: [round(v) for v in r] for t, r in st.rects.items() if t in ("00:00:50", "00:01:10", "00:03:50", "00:00:30", "00:03:30")})
