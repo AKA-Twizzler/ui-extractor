@@ -2532,14 +2532,16 @@ def card_shot(html, ratio):
     if not ratio or ratio <= 0 or "sn-window" not in html:
         return html
     tall = max(1, int(round(CARD_W * ratio)))
-    out = re.sub(r'^(<div class="sn-window[^"]*")(?=>)',
-                 r'\1 style="min-height:calc(%d * var(--sn-u, 1px))"' % tall,
-                 html, count=1)
-    if out == html:
-        return html                     # it already carries a style; leave it
-    return ('<div class="sn-card" style="container-type:inline-size">'
-            '<div class="sn-shot" style="--sn-u:calc(100cqw / %d)">' % CARD_W
-            + out + "</div></div>")
+    # PLAIN PIXELS, AND NO CONTAINER WRAPPER. The obvious build wrapped the
+    # card in `container-type: inline-size` so the floor could be written in
+    # `cqw` and scale with the reading pane - and size containment takes the
+    # content out of the element's intrinsic width, so in a shrink-to-fit
+    # parent every card collapsed from 960 pixels wide to 60. The cards
+    # already render at the stylesheet's default unit of one pixel, so the
+    # floor is stated in the same unit they are already drawn in.
+    return re.sub(r'^(<div class="sn-window[^"]*")(?=>)',
+                  r'\1 style="min-height:%dpx"' % tall,
+                  html, count=1)
 
 
 CARD_W = 960          # the canvas the note's own stylesheet is drawn against
