@@ -7966,7 +7966,11 @@ def note(records_path, diary_text=None):
                         # box; against the whole window at home it is a
                         # smaller share (12% of the maximised Obsidian at
                         # 00:04:00, not the 32% of the strip the crop showed)
-                        if getattr(sl, "_tree_fr", 0) and home_[2] > home_[0]:
+                        # ...set here whether or not the frame-space pass set
+                        # it: left unset, the drawing fell back to the tree
+                        # pane's FRAME edges against the HOME box (25% of the
+                        # window for a tree that took 12%)
+                        if home_[2] > home_[0]:
                             tr_ = None
                             for m_, g_ in getattr(stx, "pieces", ()):
                                 if m_["ts"] not in s["ts"]:
