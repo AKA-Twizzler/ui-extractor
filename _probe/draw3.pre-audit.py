@@ -152,74 +152,6 @@ def same_title(a, b):
             and sum(1 for x, y in zip(na, nb) if x != y) <= 2)
 
 
-def bare_dot(nm):
-    """A name without the reader's own full stop on its end: `memory.` is
-    `memory`. No name ends in a bare stop, and a file's stop has letters
-    after it."""
-    nm = str(nm or "")
-    if len(nm) > 2 and nm.endswith(".") and not nm.endswith("..") and "." not in nm[:-1].lstrip("."):
-        return nm[:-1]
-    return nm
-
-
-# Finder's kinds are a fixed vocabulary; a reading that matches one letter
-# for letter, spaces aside, is that kind spelt as Finder spells it
-KIND_CANON = ["Folder", "Document", "JSON", "Log File", "Markdo...text file", "Markdown text file",
-              "Application", "PNG image", "JPEG image", "Plain Text", "Text Document", "Alias",
-              "Unix executable", "Zip archive", "Python script", "JavaScript", "Shell script"]
-_KIND_KEY = {re.sub(r"[^a-z0-9]", "", k.lower()): k for k in KIND_CANON}
-
-
-def canon_kind(text):
-    key = re.sub(r"[^a-z0-9]", "", str(text or "").lower())
-    return _KIND_KEY.get(key, text)
-
-
-def fold_twins(table, sni=0):
-    """One row read twice under two spellings of its name is one row: the
-    same date, size and kind cell for cell, and names alike (`clauds son`
-    beside `.claude.json`, `user_review.qdrafts_...` beside
-    `user_review_drafts_...`). The better-confirmed name stands and the
-    band goes with it."""
-    rows = table.rows
-    out = []
-    for r in rows:
-        nm = r["cells"][sni] if sni < len(r["cells"]) else ""
-        rest = [c for i, c in enumerate(r["cells"]) if i != sni]
-        if not nm or sum(1 for c in rest if c) < 2:
-            out.append(r)
-            continue
-        twin = None
-        for o in out:
-            om = o["cells"][sni] if sni < len(o["cells"]) else ""
-            orest = [c for i, c in enumerate(o["cells"]) if i != sni]
-            if not om or len(orest) != len(rest):
-                continue
-            if not all(norm(a) == norm(b) for a, b in zip(rest, orest) if a and b) or not any(a and b for a, b in zip(rest, orest)):
-                continue
-            x, y = norm(nm), norm(om)
-            alike = (x == y or (min(len(x), len(y)) >= 5 and abs(len(x) - len(y)) <= 2
-                     and difflib.SequenceMatcher(None, x, y, autojunk=False).ratio() >= 0.75))
-            if alike:
-                twin = o
-                break
-        if twin is None:
-            out.append(r)
-            continue
-        # the confirmed spelling stands; a reading in doubt (italic) yields
-        r_sure = not (r.get("italic") and r["italic"][sni])
-        t_sure = not (twin.get("italic") and twin["italic"][sni])
-        if r_sure and not t_sure:
-            twin["cells"][sni] = nm
-            twin["italic"][sni] = False
-        for i, c in enumerate(r["cells"]):
-            if i < len(twin["cells"]) and c and not twin["cells"][i]:
-                twin["cells"][i] = c
-        if r.get("band") and not twin.get("band"):
-            twin["band"] = r["band"]
-    table.rows = out
-
-
 def same_name(a, b):
     """Two readings of one file name: alike, or the same length with at
     most two letters read differently (0olnbox / ooInbox)."""
@@ -484,9 +416,9 @@ class Table:
             # confirmed by both engines that once.
             votes = dict(o.get("_names") or {})
             if o["cells"] and o["cells"][0] and not votes:
-                votes[bare_dot(o["cells"][0])] = votes.get(bare_dot(o["cells"][0]), 0) + (2 if not (o["italic"] and o["italic"][0]) else 1)
+                votes[o["cells"][0]] = votes.get(o["cells"][0], 0) + (2 if not (o["italic"] and o["italic"][0]) else 1)
             if n["cells"] and n["cells"][0]:
-                votes[bare_dot(n["cells"][0])] = votes.get(bare_dot(n["cells"][0]), 0) + (2 if not (n["italic"] and n["italic"][0]) else 1)
+                votes[n["cells"][0]] = votes.get(n["cells"][0], 0) + (2 if not (n["italic"] and n["italic"][0]) else 1)
             # twins: the confirmed reading stands over the doubtful one,
             # and a cell the old row lacks is filled from the new
             if o["italic"] and o["italic"][0] and n["cells"] and n["cells"][0] and not (n["italic"] and n["italic"][0]):
@@ -550,7 +482,6 @@ class Table:
                 # with its name blank rather than being thrown away.
                 kept.append(r)
         self.rows = kept
-        fold_twins(self, 0)
         new_side = []
         for it in sorted(side, key=lambda it: it["box"][1]):
             t = it["text"].strip("*")
@@ -631,7 +562,8 @@ class Table:
             nm = r["cells"][0] if r["cells"] else ""
             # the reader's own full stop on a folder's name (`memory.`): no
             # name ends in a bare stop, and a file's stop has letters after it
-            r["cells"][0] = bare_dot(nm)
+            if len(nm) > 2 and nm.endswith(".") and not nm.endswith("..") and "." not in nm[:-1].lstrip("."):
+                r["cells"][0] = nm[:-1]
         for i, h in enumerate(hdr):
             if any(w in h for w in ("Name", "Date Modified", "Size", "Kind")):
                 hdr[i] = re.sub(r"[*_]", "", h).strip()     # marks are never the header's own
@@ -675,9 +607,6 @@ class Table:
                     if rest and ki is not None and ki < len(cs) and not cs[ki]:
                         cs[ki] = rest
         if ki is not None:
-            for r in self.rows:
-                if ki < len(r["cells"]) and r["cells"][ki]:
-                    r["cells"][ki] = canon_kind(r["cells"][ki])
             usual = collections.Counter(r["cells"][ki] for r in self.rows
                                         if ki < len(r["cells"]) and r["cells"][ki])
             usual = {k for k, n in usual.items() if n >= 2}
@@ -1373,7 +1302,6 @@ def sidebar_from_panes(st, house=None):
     shares = [v for v in share_seen if 0.12 <= v <= 0.45]
     if shares and not getattr(st, "side_share", None):
         st.side_share = sorted(shares)[len(shares) // 2]
-        st.side_shares = sorted(shares)      # the card takes the widest window's
     return True
 
 
@@ -3302,42 +3230,6 @@ def harmonise(states):
                                 r["italic"][ki] = False
             elif q["fam"] == "doc":
                 mend_doc(q["model"], st, clean)
-    # EVERY LIST, ON EVERY PASS: a name loses the reader's full stop, a kind
-    # is spelt as Finder spells it, a row read twice is one row, and a row
-    # name one letter off a folder name the video agrees on - a title, or a
-    # crumb two windows' bars spell alike - takes that spelling. `projerts`
-    # stood in the .claude list under a bar and a title that both read
-    # `projects`.
-    agreed = {}
-    for st in states:
-        if st.title:
-            agreed.setdefault(flat(st.title), st.title)
-    for st in states:
-        for q in st.parts:
-            if q["fam"] == "table":
-                for c_ in (q["model"].path or []):
-                    if crumb_votes.get(flat(c_), 0) >= 2:
-                        agreed.setdefault(flat(c_), c_)
-    for st in states:
-        for q in st.parts:
-            if q["fam"] != "table":
-                continue
-            t_ = q["model"]
-            ki_ = next((i for i, h in enumerate(t_.header) if h and "Kind" in h), None)
-            for r in t_.rows:
-                if r["cells"] and r["cells"][0]:
-                    r["cells"][0] = bare_dot(r["cells"][0])
-                    f_ = flat(r["cells"][0])
-                    if len(f_) >= 6 and f_ not in agreed and "." not in r["cells"][0]:
-                        near_ = [v for k_, v in agreed.items() if abs(len(k_) - len(f_)) <= 1 and k_[:1] == f_[:1]
-                                 and difflib.SequenceMatcher(None, k_, f_, autojunk=False).ratio() >= 0.85]
-                        if len({flat(v) for v in near_}) == 1:
-                            r["cells"][0] = near_[0]
-                            if r.get("italic"):
-                                r["italic"][0] = False
-                if ki_ is not None and ki_ < len(r["cells"]) and r["cells"][ki_]:
-                    r["cells"][ki_] = canon_kind(r["cells"][ki_])
-            fold_twins(t_, 0)
     complete_docs(states)
 
 
@@ -6576,21 +6468,6 @@ def note(records_path, diary_text=None):
                     _st_t = sl.main_table()
                     if _st_t and _st_t.path and sl.title and not getattr(st, "title_from_path", False):
                         _st_t.path = end_at_folder(_st_t.path, sl.title)
-                    # A CRUMB THE STRETCH MISREAD TAKES THE SETTLED SPELLING;
-                    # a crumb Finder itself cut short (`-Users-jaredrh`) is
-                    # what the frame shows and stays. `prjects` stood on the
-                    # 00:01:40 bar under a settled bar reading `projects`.
-                    _whole_t = st.main_table()
-                    if _st_t and _st_t.path and _whole_t and _whole_t.path:
-                        _fixed = []
-                        for c_ in _st_t.path:
-                            f_ = flat(c_)
-                            hit_ = next((w_ for w_ in _whole_t.path if crumb_same(c_, w_)), None)
-                            if hit_ is not None and f_ != flat(hit_) and not flat(hit_).startswith(f_):
-                                _fixed.append(hit_)
-                            else:
-                                _fixed.append(c_)
-                        _st_t.path = _fixed
                     strip_furniture(sl, strip_at)
                     drop_side_prefix(sl)
                     drop_crumb_rows(sl, _all_crumbs)

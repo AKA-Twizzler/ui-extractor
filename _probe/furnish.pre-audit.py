@@ -325,12 +325,6 @@ def finder(st):
         # a sidebar the frame MEASURED is drawn at the width it was; the
         # card's fixed one stands for every Finder that was never measured
         share = getattr(st, "side_share", None)
-        # ON A CARD, THE WIDEST WINDOW'S SHARE. Finder's sidebar is a fixed
-        # width, so its share shrinks as the window widens; the median over
-        # moments where the window stood narrow gave the vault-demo card a
-        # sidebar of half its width and clipped the Kind column and the bar.
-        if not getattr(st, "shape", None) and getattr(st, "side_shares", None):
-            share = st.side_shares[0]
         cols = (f' style="grid-template-columns: {share * 100:.1f}% 1fr"'
                 if share else "")
         grid = (cols[:-1] + ';flex:1 1 auto;min-height:0"') if cols else \
@@ -617,12 +611,6 @@ def note_html(st, doc, title, blocks=None, wide=0):
                 if k.strip():
                     rows.append(f'<div class="sn-prop"><span class="sn-g">☰</span><span class="sn-key">{esc(k.strip())}</span><span class="sn-val">{esc(v.strip())}</span></div>')
             out.append('<div class="sn-props"><div class="sn-props-head">Properties</div>' + "".join(rows)
-                       + ('<div class="sn-prop sn-addprop">+ Add property</div>' if add_property else "") + "</div>")
-            props_done = True
-            continue
-        if plain == "Properties" and not props_done:
-            # the box's own header, read as a line: the box, never a heading
-            out.append('<div class="sn-props"><div class="sn-props-head">Properties</div>'
                        + ('<div class="sn-prop sn-addprop">+ Add property</div>' if add_property else "") + "</div>")
             props_done = True
             continue
