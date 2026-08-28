@@ -5162,28 +5162,33 @@ def note(records_path, diary_text=None):
             w_ = _png_width(machine.here(str(d_.get("source") or "")))
             fac = (w_ / float(box[2] - box[0])) if w_ else 1.0
             val = float(rp) / max(0.5, fac)
-            n_ = len(p_.get("lines") or [])
-            if best is None or n_ > best[1]:
-                best = (val, n_)
-        return best[0] if best else None
+            keys_ = {fold(flat(str(l_).strip("\u2502 \u02c3\u02c5\u25b8\u25be")))
+                     for l_ in (p_.get("lines") or []) if not str(l_).startswith("[")}
+            keys_ = {k_ for k_ in keys_ if len(k_) >= 4}
+            if best is None or len(keys_) > len(best[1]):
+                best = (val, keys_)
+        return best
 
     for i_, s_ in enumerate(spans):
         T_, side_ = span_T.get(s_["t0"]), fit_side.get(s_["t0"])
         if not T_ or not side_ or side_[0] >= 3:
             continue
-        pitch = tree_pitch_at(s_["t0"])
-        if not pitch:
+        got_ = tree_pitch_at(s_["t0"])
+        if not got_:
             continue
+        pitch, keys_here = got_
         ref = None
+        # THE SAME TREE, told by its own rows: a Finder's favorites read as
+        # a tree at 00:03:50 stand at another pitch altogether
         for j_ in sorted(range(len(spans)), key=lambda j: (abs(j - i_), j)):
             if j_ == i_ or abs(j_ - i_) > 3:
                 continue
             Tj, sj = span_T.get(spans[j_]["t0"]), fit_side.get(spans[j_]["t0"])
             if not Tj or not sj or sj[0] < 3:
                 continue
-            pj = tree_pitch_at(spans[j_]["t0"])
-            if pj:
-                ref = (Tj[0], pj, spans[j_]["t0"])
+            gj = tree_pitch_at(spans[j_]["t0"])
+            if gj and len(gj[1] & keys_here) >= 3:
+                ref = (Tj[0], gj[0], spans[j_]["t0"])
                 break
         if not ref:
             continue
