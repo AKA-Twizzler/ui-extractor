@@ -21,10 +21,8 @@ import difflib
 import html
 import os
 import re
-import struct
 import sys
 
-import machine
 import draw as old          # HTML line helpers that do not change
 import draw2                 # the geometry: items, tables rebuilt, window groups
 import shapes                # where each window sat, measured off the frame
@@ -5067,8 +5065,6 @@ def note(records_path, diary_text=None):
         vals = sorted(vals)
         return vals[len(vals) // 2]
 
-    fit_side = {}      # t0 -> (whole words the fit stood on, its x anchors, its y anchors)
-
     def fit_map(ts_list):
         """Scale and shift carrying the base moment's places onto these
         moments, fitted on words read in both. A line read cut still
@@ -5103,8 +5099,6 @@ def note(records_path, diary_text=None):
         xs = [(p[0], q[0]) for p, q in exact] + [(p[2], q[2]) for p, q in exact]
         xs += [(p[2], q[2]) if side == "tail" else (p[0], q[0]) for p, q, side in cuts]
         ys = [(p[1], q[1]) for p, q in exact] + [(p[1], q[1]) for p, q, _ in cuts]
-        if ts_list:
-            fit_side[ts_list[0]] = (len(exact), list(xs), list(ys))
         for _ in range(2):
             dx = med([qx - k * px for px, qx in xs])
             dy = med([qy - k * py for py, qy in ys])
@@ -5131,72 +5125,6 @@ def note(records_path, diary_text=None):
         return bool(T) and abs(T[0] - 1) < 0.08 and abs(T[1]) < 0.01 * Wf and abs(T[2]) < 0.01 * Hf
 
     span_T = {s["t0"]: fit_map(s["ts"]) for s in spans}
-
-    # TWO WORDS ARE NOT THREE WITNESSES. One matched word gives the fit a
-    # width and a height, so two words passed the three-vote test and
-    # 00:04:00 was fitted at a zoom of 2.18 where the frame's own tree rows
-    # stand 85 px apart against 40.5 at 00:04:10 - a zoom of 1.75. Where the
-    # fit stood on fewer than three whole words, the zoom is taken from the
-    # tree's row pitch on this frame against a neighbouring moment whose fit
-    # stood on enough, and the shift is refitted on the same anchors. The
-    # pitch is recorded in the pane image's own pixels, and the reader works
-    # a pane at one, two or three times its size, so it is put back to frame
-    # pixels by the image's width over the pane's.
-    def _png_width(path):
-        try:
-            with open(path, "rb") as fh:
-                fh.read(16)
-                return struct.unpack(">I", fh.read(4))[0]
-        except Exception:
-            return None
-
-    def tree_pitch_at(t):
-        m_ = next((mm for mm in moments if mm["ts"] == t), None)
-        best = None
-        for p_ in (m_ or {}).get("panes") or []:
-            d_ = p_.get("data") or {}
-            rp = d_.get("row_pitch")
-            box = p_.get("box") or []
-            if not rp or "tree" not in str(p_.get("kind") or "") or len(box) != 4 or box[2] - box[0] <= 0:
-                continue
-            w_ = _png_width(machine.here(str(d_.get("source") or "")))
-            fac = (w_ / float(box[2] - box[0])) if w_ else 1.0
-            val = float(rp) / max(0.5, fac)
-            n_ = len(p_.get("lines") or [])
-            if best is None or n_ > best[1]:
-                best = (val, n_)
-        return best[0] if best else None
-
-    for i_, s_ in enumerate(spans):
-        T_, side_ = span_T.get(s_["t0"]), fit_side.get(s_["t0"])
-        if not T_ or not side_ or side_[0] >= 3:
-            continue
-        pitch = tree_pitch_at(s_["t0"])
-        if not pitch:
-            continue
-        ref = None
-        for j_ in sorted(range(len(spans)), key=lambda j: (abs(j - i_), j)):
-            if j_ == i_ or abs(j_ - i_) > 3:
-                continue
-            Tj, sj = span_T.get(spans[j_]["t0"]), fit_side.get(spans[j_]["t0"])
-            if not Tj or not sj or sj[0] < 3:
-                continue
-            pj = tree_pitch_at(spans[j_]["t0"])
-            if pj:
-                ref = (Tj[0], pj, spans[j_]["t0"])
-                break
-        if not ref:
-            continue
-        k_new = ref[0] * pitch / ref[1]
-        if not 0.4 <= k_new <= 4.0:
-            continue
-        _n, xs_, ys_ = side_
-        dx_ = med([qx - k_new * px for px, qx in xs_]) if xs_ else T_[1]
-        dy_ = med([qy - k_new * py for py, qy in ys_]) if ys_ else T_[2]
-        if os.environ.get("SN_PITCH"):
-            print("PITCH %s: zoom %.2f -> %.2f from tree row pitch %.1f against %.1f at %s (%d whole words)"
-                  % (s_["t0"], T_[0], k_new, pitch, ref[1], ref[2], side_[0]), file=sys.stderr)
-        span_T[s_["t0"]] = (k_new, dx_, dy_)
 
     _frame_rects = {}
 
