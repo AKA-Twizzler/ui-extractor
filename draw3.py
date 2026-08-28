@@ -4240,6 +4240,38 @@ def whole_name_key(name):
     return fold(flat(_ELL.sub("...", name or "")))
 
 
+def unglue_like(whole, head, tail):
+    """A whole read glued ("03CompanyB(LandscapeCompany)") spaced the way the
+    cut reading spaces its own two ends, and in the middle neither showed,
+    the way Finder's names are spaced: before a bracket, and where a small
+    letter meets a capital."""
+    if " " in whole or not (head or tail):
+        return whole
+    nh, nt = len(flat(head)), len(flat(tail))
+    i = 0
+    seen = 0
+    while i < len(whole) and seen < nh:
+        if whole[i].isalnum():
+            seen += 1
+        i += 1
+    j = len(whole)
+    seen = 0
+    while j > 0 and seen < nt:
+        j -= 1
+        if whole[j].isalnum():
+            seen += 1
+    if j < i:
+        return whole
+    mid = whole[i:j]
+    mid = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", mid)
+    mid = re.sub(r"(?<=[^\s(])(?=\()", " ", mid)
+    out = head + mid + tail
+    out = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", out) if not head.endswith(" ") and mid[:1].isupper() and head[-1:].islower() else out
+    if tail and mid and mid[-1:].isalnum() and tail[:1].isupper() and not mid.endswith(" "):
+        out = head + mid + " " + tail
+    return re.sub(r"\s{2,}", " ", out).strip()
+
+
 def complete_name(name, pool, heads):
     """The whole name behind a cut one, or None. First a name read with no
     cut anywhere that opens with the head and closes with the tail (Obsidian
@@ -4263,7 +4295,7 @@ def complete_name(name, pool, heads):
             if len(cf) > len(hf) + len(tf) and cf.startswith(hf) and cf.endswith(tf):
                 fits.add(cand)
     if len(fits) == 1:
-        return fits.pop()
+        return unglue_like(fits.pop(), head, tail)
     if fits or not tail:
         return None
     joined = set()
@@ -4375,6 +4407,17 @@ def mend_cells(sl, full):
             walk = hit + 1
         else:
             st_.side = list(ft.side)
+    # a name the window knows whole (`_whole_names`), read glued or spaced
+    # oddly by this stretch, is spelt as the whole spells it
+    wholes = {fold(flat(w)): w for w in (getattr(full, "_whole_names", None) or {}).values()}
+    if wholes:
+        for r in st_.rows:
+            if r["cells"] and r["cells"][0] and not cut_ends(r["cells"][0]):
+                w = wholes.get(fold(flat(r["cells"][0])))
+                if w and w != r["cells"][0]:
+                    r["cells"][0] = w
+                    if r["italic"]:
+                        r["italic"][0] = False
     # single cells, matched by name even when the stretch read it cut
     fulls = [(r["cells"][0], r) for r in ft.rows if r["cells"] and r["cells"][0]]
     def settled_for(name):
@@ -5302,6 +5345,10 @@ def note(records_path, diary_text=None):
                             and len(flat(v)) > len(f)}
                 if len(fits) == 1:
                     c = fits.pop()
+            # a crumb the video knows as a whole name, spelt another way
+            # here ("(info Product)"), is spelt as the video knows it
+            elif len(f) >= 6 and f in known and c != known[f]:
+                c = known[f]
             fixed.append(c)
         t.path = fixed
     # ONLY A BAR ON THE SAME FOLDER, OR ON AN ANCESTOR OF IT, MAY FILL
