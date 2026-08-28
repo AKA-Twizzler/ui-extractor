@@ -1157,6 +1157,29 @@ class State:
 
     # ------------------------------------------------------ moment in, moment out
 
+    _TS = re.compile(r"^\d\d:\d\d:\d\d$")
+
+    def __setattr__(self, name, value):
+        """REFUSE A NEW SIDE-TABLE. Folding the seven that existed into `Seen`
+        fixes seven; it does nothing about the eighth, which is what actually
+        happened here -- one was added every time a per-moment fact was caught
+        being read at the wrong moment, and each was reasonable on the day.
+
+        So the SHAPE is refused, not just its instances: an attribute named
+        `..._at`, or any mapping whose keys are timestamps, may not be hung on
+        a window. Both spellings the code actually used are caught. A dict
+        assigned empty and filled later still slips through, which is stated
+        here rather than left to be discovered -- the guard closes the idiom,
+        not the language."""
+        if name.endswith("_at") or (
+                isinstance(value, (dict, set)) and value
+                and all(isinstance(k, str) and State._TS.match(k) for k in value)):
+            raise TypeError(
+                "%r is a per-moment fact hung on a window that spans moments. "
+                "Put it on Seen and reach it with State.at(ts) -- that is what "
+                "the seven side-tables before it should have been." % name)
+        object.__setattr__(self, name, value)
+
     def at(self, ts, make=False):
         """This window as it stood at ONE named moment, or None where this
         window was never seen at that moment.
