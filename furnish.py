@@ -240,7 +240,7 @@ def finder(st):
     # cut down its left edge shows only those, and laid out from the left
     # over the whole window they land where the Name column was and the
     # strip the frame showed comes out empty. They hug the right edge.
-    out = ['<table class="sn-list"%s>' % (' style="margin-left:auto;width:auto"' if not has_name else "")]
+    out = ['<table class="sn-list"%s>' % (' style="width:auto"' if not has_name else "")]
     if any(head):
         cells = []
         for i, h in enumerate(head):
@@ -314,6 +314,10 @@ def finder(st):
     for _ in range(2):
         out.append(f'<tr class="sn-empty"><td colspan="{n}">&nbsp;</td></tr>')
     out.append("</table>")
+    if not has_name:
+        # placed by a flex row, because a table's own auto margin was
+        # ignored inside the window's column layout and the list stayed left
+        out = ['<div style="display:flex;justify-content:flex-end">'] + out + ["</div>"]
     body = '<div class="sn-body">' + "".join(out) + "</div>"
     # the path bar
     foot = ""
