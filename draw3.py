@@ -459,7 +459,11 @@ class Table:
                 kept.append(r)
                 continue
             rest = " ".join(r["cells"][1:]).strip()
-            twin = next((n for n in named if rest and same_text(" ".join(n["cells"][1:]), rest)), None)
+            # THE SAME OTHER CELLS, LETTER FOR LETTER. Judged by likeness, a
+            # row of `Jun 30 ... 60 bytes Markdown` folded into the row of
+            # `Jun 30 ... 59 bytes Markdown` beside it, and a file the
+            # screen showed was gone from the list.
+            twin = next((n for n in named if rest and norm(" ".join(n["cells"][1:])) == norm(rest)), None)
             if twin is None and rest and len(named) < 2:
                 kept.append(r)
             elif twin is None and sum(1 for c in r["cells"][1:] if c) >= 2 and len(named) >= 2:
