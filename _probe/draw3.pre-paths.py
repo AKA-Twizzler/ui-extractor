@@ -1211,7 +1211,7 @@ class Seen:
     and the faults it produced all rhymed: a title, a path, a selection, a
     pitch, a width, each taken from the wrong moment. One record per moment
     ends the class rather than its fifth instance."""
-    __slots__ = ("ts", "rect", "measured", "pitch", "stood", "doc_wide", "h1", "pitch_cut")
+    __slots__ = ("ts", "rect", "measured", "pitch", "stood", "doc_wide", "h1")
 
     def __init__(self, ts):
         self.ts = ts
@@ -1221,7 +1221,6 @@ class Seen:
         self.stood = None       # (where its words sat, the edges then, sure?)
         self.doc_wide = None    # how wide its note ran here, as a share of the pane
         self.h1 = None          # where its big heading sat here
-        self.pitch_cut = False  # the pitch came off a list the screen cut, read loose
 
     def __repr__(self):
         return "Seen(%s%s)" % (self.ts, " measured" if self.measured else "")
@@ -1499,7 +1498,6 @@ class State:
                 part["model"].add(cut)
                 if p.get("_cut_pitch"):
                     self.at(m["ts"], make=True).pitch = p["_cut_pitch"]
-                    self.at(m["ts"], make=True).pitch_cut = True
                 # AND THE SCREEN CUT THIS WINDOW'S LEFT EDGE. That is the
                 # whole gate `cut_list` passed, so it is known here and
                 # nowhere else: the window's own corner, its three round
@@ -2414,8 +2412,6 @@ def crumb_same(a, b):
             and difflib.SequenceMatcher(None, fa, fb, autojunk=False).ratio() >= 0.7):
         return True
     k = min(len(fa), len(fb))
-    if k >= 12 and (fa.startswith(fb) or fb.startswith(fa)):
-        return True             # Finder cuts a long crumb short: `-Users-jaredrh` for `-Users-jaredrhodenizer-Documents-jarvis-demo`
     return k >= 5 and abs(len(fa) - len(fb)) <= 12 and sum(1 for x, y in zip(fa[:k], fb[:k]) if x != y) <= 1
 
 
@@ -2894,28 +2890,6 @@ def harmonise(states):
                 # the path bar's crumbs completed from the same pool (Finder
                 # cuts long crumbs short; the folder's real name stands)
                 for path in [table.path] + table.paths:
-                    # ONE ENGINE GLUES `Users` TO THE FOLDER AFTER IT, and the
-                    # completion below then "finishes" `Usersjaredrhodenizer`
-                    # into the longest name that opens with those letters -
-                    # a folder three levels down. The glue is cut first: a
-                    # crumb opening with a generic crumb whose remainder is a
-                    # name the video knows whole is those two crumbs.
-                    known_flat = strong_flats | row_flats | {flat(c_) for c_ in clean}
-                    split_ = []
-                    for c in path:
-                        f = flat(c)
-                        done = False
-                        if f not in known_flat and len(f) >= 10:
-                            for g_ in ("users", "documents", "desktop", "downloads"):
-                                rest_ = f[len(g_):]
-                                if f.startswith(g_) and rest_ in known_flat:
-                                    split_.append(g_.capitalize())
-                                    split_.append(canon.get(rest_) or canon_fold.get(fold(rest_)) or c[len(g_):])
-                                    done = True
-                                    break
-                        if not done:
-                            split_.append(c)
-                    path[:] = split_
                     for i, c in enumerate(path):
                         c = mend_numbered(c, strong_names)    # o3 is a nought
                         path[i] = c
@@ -2924,10 +2898,9 @@ def harmonise(states):
                         # A CRUMB THE VIDEO SPELLS THE SAME WAY EVERYWHERE IS
                         # NEVER COMPLETED. `Users` opens `-Users-jaredrh` and
                         # was "completed" to it, which put a folder at the
-                        # root of a path the screen never showed. Its
-                        # spelling is still put right (`MacintoshHD`).
+                        # root of a path the screen never showed.
                         if norm(c) in GENERIC:
-                            pass
+                            b = None
                         elif not b and len(f) >= 6 and f not in strong_flats and f not in row_flats:
                             # a crumb misread by a letter or two (`prjects`)
                             # takes the name the video spells whole, when
@@ -4653,21 +4626,11 @@ def note(records_path, diary_text=None):
                     c = fits.pop()
             fixed.append(c)
         t.path = fixed
-    # ONLY A BAR ON THE SAME FOLDER, OR ON AN ANCESTOR OF IT, MAY FILL
-    # ANOTHER'S GAPS. Mended from every Finder window's bar, a window in
-    # `.claude/projects` took crumbs from the window in `vault-demo`, and
-    # the bar under the memory window read three folders it never stood
-    # in. Ancestors are shared by construction; a sibling folder's bar is
-    # another path.
-    def _prefix(a, b):
-        return len(a) <= len(b) and all(crumb_same(x, y) for x, y in zip(a, b))
     for w in {st.name for st in states}:
         pool = [t for st in states if st.name == w
                 for t in [st.main_table()] if t and t.path]
         for t in pool:
-            kin = [o.path for o in pool if o is not t
-                   and (crumb_same(o.path[-1], t.path[-1]) or _prefix(o.path, t.path) or _prefix(t.path, o.path))]
-            t.path = mend_path(t.path, kin)
+            t.path = mend_path(t.path, [o.path for o in pool if o is not t])
     # Folder or file, settled once for the whole video. A name whose Kind was
     # read at any moment is that kind at every moment, so a row read without
     # its Kind column borrows the answer rather than guessing at the shape of
@@ -6448,24 +6411,8 @@ def note(records_path, diary_text=None):
                     sure.setdefault(stx.name, []).append(sl._row_step)
             for stx, sl, _ in subjects:
                 had = sure.get(stx.name)
-                if not had:
-                    continue
-                if not getattr(sl, "_pitch_measured", False):
+                if had and not getattr(sl, "_pitch_measured", False):
                     sl._row_step = med(sorted(had))
-                    continue
-                # A PITCH MEASURED ON A LIST THE SCREEN CUT OFF IS A WEAK
-                # MEASUREMENT: read loose, its two columns come back as
-                # separate rows and the gaps halve. Run 19c measured 42 against
-                # 81 on one screen and wrote it up as Finder's per-window
-                # density; the frame itself shows both lists at one pitch (64
-                # frame pixels, 00:03:00, checked by eye). Where a neighbour
-                # measured whole on the same frame disagrees by more than a
-                # quarter, the neighbour's pitch is the screen's.
-                _sn = (sl.at(s["t0"]) or stx.at(s["t0"]))
-                if _sn is not None and _sn.pitch_cut:
-                    med_ = med(sorted(had))
-                    if abs(med_ - sl._row_step) > 0.25 * med_:
-                        sl._row_step = med_
 
             # which windows behind were read through or around the front ones
             seen_here = set()

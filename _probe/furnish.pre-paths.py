@@ -82,29 +82,7 @@ def side_words_of(st):
             import draw3
             side_words = draw3.stitch(side_words, strip, key=lambda w: w) if side_words else strip
             break
-    return canon_side(side_words, st)
-
-
-def canon_side(words, st=None):
-    """The favorites as macOS spells them: an icon's scrap read in front of
-    a name (`(] Desktop`) is not part of it, and a word that is neither a
-    favorite nor the window's own home folder was never in the sidebar."""
-    canon = {norm(n): n for n in draw2.SIDEBAR_WORDS}
-    canon.update({norm(n): n for n in SECTIONS})
-    table = st.main_table() if st is not None else None
-    crumbs = {norm(c) for c in (getattr(table, "path", None) or [])}
-    title = norm(getattr(st, "title", "") or "")
-    out = []
-    for w in words:
-        bare = re.sub(r"^[^A-Za-z]+", "", str(w)).strip()
-        key = norm(bare)
-        hit = canon.get(key) or next((c for k, c in canon.items()
-                                      if len(k) >= 5 and key.endswith(k) and len(key) - len(k) <= 3), None)
-        if not hit and key and " " not in bare and (key in crumbs or key == title or bare.islower()):
-            hit = bare               # the home folder, named after the user
-        if hit and hit not in out:
-            out.append(hit)
-    return out
+    return side_words
 
 
 def finder(st):
