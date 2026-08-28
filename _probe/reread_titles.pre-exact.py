@@ -155,12 +155,7 @@ def main():
                 # strips proves nothing about them
                 solid = (len(key) >= 5 and re.search(r"[aeiouy]", key)
                          and len(set(re.sub(r"[^a-z]", "", key))) >= 3)
-                # A SHORT WORD THAT IS, LETTER FOR LETTER, A CRUMB OF THIS
-                # WINDOW'S OWN PATH BAR is the folder's name however short:
-                # `Dev` at 00:03:06 is three letters, ends its own bar, and
-                # stands in the title strip - and the solid-word test threw
-                # it out for its length alone.
-                if not solid and not (len(key) >= 3 and key in known_keys and key in own):
+                if not solid:
                     continue
                 elsewhere = key in other_keys
                 inside = key in known_keys
