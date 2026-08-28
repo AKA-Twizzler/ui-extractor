@@ -1,4 +1,6 @@
 import os, sys
+sys.path.insert(0, r"G:\AI\Ethereal\ui-extractor")
+import os, sys
 import shapes
 D = r"G:\Images\Move Memory Files Out of Claude Code Into Obsidian\Images"
 for ts in ("00-02-50", "00-03-00", "00-03-30", "00-03-50"):
