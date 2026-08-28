@@ -402,40 +402,6 @@ def browser_behind(st):
     return "".join(out)
 
 
-def tab_title(st, doc):
-    """The name on the tab: the window's own reading first, else the short
-    name the H1 opens with, read among the window's top words (`Vault
-    Index` for `Vault Index: the map of the brain`), else the H1."""
-    h1 = doc.title() if doc else ""
-    if getattr(st, "title", None):
-        return st.title
-    nh, best = norm(h1), ""
-    for t, *_ in (getattr(st, "topwords", None) or []):
-        nt = norm(t)
-        if 4 <= len(nt) < len(nh) and nh.startswith(nt) and len(nt) > len(norm(best)):
-            best = str(t).strip()
-    return best or h1
-
-
-def tree_share_of(st):
-    """How much of the window the file tree took, measured moment by
-    moment where the frame measured both the tree pane and the window, the
-    median. A span unioned across moments met a box from one moment and
-    never fitted inside it, so the card fell back to a guess of 38%."""
-    shares = []
-    for m_, g_ in (getattr(st, "pieces", None) or ()):
-        rect = (getattr(st, "rects", None) or {}).get(m_.get("ts"))
-        if not rect or rect[2] - rect[0] <= 0:
-            continue
-        for p_ in (g_.get("panes") or []):
-            if "tree" in str(p_.get("kind") or "") and p_.get("box") and len(p_["box"]) == 4:
-                b = p_["box"]
-                if rect[0] - 40 <= b[0] and b[2] <= rect[2] + 40 and b[2] > b[0]:
-                    shares.append((b[2] - b[0]) / float(rect[2] - rect[0]))
-    shares.sort()
-    return shares[len(shares) // 2] if shares else None
-
-
 def obsidian(st, behind=True):
     tree = st.tree()
     doc = st.main_doc()
@@ -443,7 +409,7 @@ def obsidian(st, behind=True):
         return None
     title = ""
     if doc:
-        title = tab_title(st, doc)
+        title = doc.title()
     strip = browser_behind(st) if behind else ""
     toolbar = ('<div class="sn-toolbar sn-obsidian-bar"><span class="sn-lights"></span>'
                '<span class="sn-btn">▱</span><span class="sn-btn">⌕</span><span class="sn-btn">☆</span>'
@@ -525,19 +491,12 @@ def obsidian(st, behind=True):
     # card could be read. `card_shot` sets `--sn-tree-min` on cards only; a
     # picture never sets it and falls back to the 120px it always had.
     if tree_ch:
-        # readable, and no wider than that: at 45% the floor tripled the
-        # tree's true share of the window; the names it cuts end in an
-        # ellipsis as Obsidian's own do
-        st._tree_min = "min(%dch, 28%%)" % min(44, tree_ch + 2)
+        st._tree_min = "min(%dch, 45%%)" % min(44, tree_ch + 2)
     tree_floor = "var(--sn-tree-min, 120px)"
     tree_fr, doc_fr = 38, 62
-    share = tree_share_of(st) if (tree and doc) else None
     tp = next((q for q in getattr(st, "parts", []) if q.get("fam") == "tree" and q.get("x0") is not None), None)
     rect = getattr(st, "shape", None) or getattr(st, "rect", None)
-    if share:
-        tree_fr = max(8, round(100.0 * share))
-        doc_fr = 100 - tree_fr
-    elif tree and doc and tp and rect and rect[2] > tp["x1"] > tp["x0"] >= rect[0] - 4:
+    if tree and doc and tp and rect and rect[2] > tp["x1"] > tp["x0"] >= rect[0] - 4:
         tree_fr = max(8, round(100.0 * (tp["x1"] - tp["x0"]) / max(1.0, rect[2] - rect[0])))
         doc_fr = 100 - tree_fr
     # THE TREE NARROWS; NOTHING ELSE MOVES. Setting the note's column from
@@ -582,13 +541,6 @@ def note_html(st, doc, title, blocks=None, wide=0):
         out.append(f'<div class="sn-crumb">‹ &nbsp;› &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{esc(title)}</div>')
     lines = [(t, h) for t, h in doc.lines if re.search(r"[A-Za-z0-9]", t) or t.startswith("---")]
     first = True
-    # THE INLINE TITLE STANDS ABOVE THE PROPERTIES. Obsidian draws the
-    # note's name large under the breadcrumb, then the properties box, then
-    # the body; where the note's own lines begin at the properties block the
-    # name is known from the tab and is drawn there.
-    if title and not any(norm(t.strip().strip("#*> ")) == norm(title) for t, _ in lines[:2]):
-        out.append(f'<div class="sn-title">{esc(title)}</div>')
-        first = False
     add_property = any(re.search(r"Add\s*property", t) for t, *_ in st.topwords) or any(
         re.search(r"Add\s*property", w) for w in st.words())
     props_done = False
