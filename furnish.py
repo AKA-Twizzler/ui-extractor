@@ -214,11 +214,13 @@ def col_shares(st, head):
     tightly anywhere takes the median of its tight readings, and a heading
     never read tightly takes the HIGHEST left edge over its readings: a
     loose box always contains its word, so every left edge is a lower bound
-    and the highest is the closest. Readings come from the stretch first,
+    and the highest is the closest. Readings come in tiers -- the stretch,
     then the whole window, then every other window of the program (the
-    columns do not change when a Finder window is navigated), but only from
-    readings that agree with this stretch on its tightly read headings
-    within 10%, so a moment never inherits a layout it never showed. The
+    columns do not change when a Finder window is navigated) -- and the
+    first tier that read the heading tightly decides, so another window
+    never outvotes this one's own word; a tier only lends readings that
+    agree with this stretch on its tightly read headings within 10%, so a
+    moment never inherits a layout it never showed. The
     pane box stays the basis because the sidebar's share is measured off
     the same boundary, so the headings land where the frame had them
     however the reader drew that boundary. None where a heading was never
@@ -235,30 +237,32 @@ def col_shares(st, head):
     med = {i: _median([r[i][0] for r in main]) for i in keys}
     tight = {i: [r[i][0] for r in main if r[i][1]] for i in keys}
     tm = {i: (_median(tight[i]) if tight[i] else None) for i in keys}
-    kin = None
+    tiers = None
     pos = {}
     for i in keys:
         if tight[i]:
             pos[i] = _median(tight[i])
             continue
-        if kin is None:
+        if tiers is None:
             whole = getattr(st, "_parent", None)
             seen = {id(st), id(whole)}
-            pool = ([whole] if whole is not None else []) + [
-                o for o in STATES if id(o) not in seen and getattr(o, "name", None) == getattr(whole or st, "name", None)]
+            kin = [o for o in STATES if id(o) not in seen and getattr(o, "name", None) == getattr(whole or st, "name", None)]
+            tiers = [_col_readings(whole, head) if whole is not None else [],
+                     [r for o in kin for r in _col_readings(o, head)]]
             others = {}
             for j in keys:
                 others[j] = [k for k in keys if k != j and tm[k] is not None] or [k for k in keys if k != j]
-            kin = []
-            for o in pool:
-                for r in _col_readings(o, head):
-                    kin.append(r)
-        ok = [r for r in kin if all(abs(r[j][0] - (tm[j] if tm[j] is not None else med[j])) <= 0.10 for j in others[i])]
-        vs = [r[i][0] for r in ok if r[i][1]]
-        if vs:
-            pos[i] = _median(vs)
+        agree = lambda r: all(abs(r[j][0] - (tm[j] if tm[j] is not None else med[j])) <= 0.10 for j in others[i])
+        loose = [r[i][0] for r in main]
+        for tier in tiers:
+            ok = [r for r in tier if agree(r)]
+            vs = [r[i][0] for r in ok if r[i][1]]
+            if vs:
+                pos[i] = _median(vs)
+                break
+            loose += [r[i][0] for r in ok]
         else:
-            pos[i] = max([r[i][0] for r in main] + [r[i][0] for r in ok])
+            pos[i] = max(loose)
     bounds = [0.0] + [pos[i] for i in keys] + [1.0]
     if any(bounds[k + 1] <= bounds[k] for k in range(len(bounds) - 1)):
         return None
