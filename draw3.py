@@ -2741,7 +2741,14 @@ def card_shot(html, ratio, share=None):
     # side the two look like the same window.
     bits = ["--sn-ratio:%.4f" % ratio]
     if share and 0 < share <= 1:
-        bits.append("max-width:%.1f%%" % (100.0 * share))
+        # A CUSTOM PROPERTY, NOT `max-width` DIRECTLY. The stylesheet forces
+        # `.screen-note .markdown-preview-sizer > div { width:100% !important }`
+        # so every card fills the pane -- and `!important` beats an inline
+        # declaration, so an inline `max-width` here is written, parsed, and
+        # silently ignored. Measured: the computed value came back `100%` on a
+        # card whose own style attribute said `48.6%`. A custom property is not
+        # in that fight; the stylesheet reads it back with its own !important.
+        bits.append("--sn-max:%.1f%%" % (100.0 * share))
     return re.sub(r'^(<div class="sn-window[^"]*")(?=>)',
                   r'\1 style="%s"' % ";".join(bits),
                   html, count=1)
