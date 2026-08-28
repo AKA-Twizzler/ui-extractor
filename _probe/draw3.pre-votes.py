@@ -363,21 +363,10 @@ class Table:
                 italics[j] = italics[j] or it
             new_rows.append({"cells": plain, "italic": italics, "band": band, "icon": icon})
         def keep(o, n):
-            # EVERY READING OF THE NAME IS COUNTED, and the spelling most
-            # readings agree on wins at `tidy`. Taking the first confirmed
-            # reading left `.Jocal` standing over two later readings of
-            # `.local`, because the wrong one happened to be read first and
-            # confirmed by both engines that once.
-            votes = dict(o.get("_names") or {})
-            if o["cells"] and o["cells"][0] and not votes:
-                votes[o["cells"][0]] = votes.get(o["cells"][0], 0) + (2 if not (o["italic"] and o["italic"][0]) else 1)
-            if n["cells"] and n["cells"][0]:
-                votes[n["cells"][0]] = votes.get(n["cells"][0], 0) + (2 if not (n["italic"] and n["italic"][0]) else 1)
             # twins: the confirmed reading stands over the doubtful one,
             # and a cell the old row lacks is filled from the new
             if o["italic"] and o["italic"][0] and n["cells"] and n["cells"][0] and not (n["italic"] and n["italic"][0]):
                 o = {"cells": [n["cells"][0]] + o["cells"][1:], "italic": [False] + o["italic"][1:], "band": o["band"] or n["band"], "icon": o.get("icon") or n.get("icon")}
-            o["_names"] = votes
             cells = list(o["cells"])
             italics = list(o["italic"])
             for i, c in enumerate(n["cells"]):
@@ -389,19 +378,8 @@ class Table:
             # that moment's band or none: kept sticky, `03 Company B` stood
             # green on a card spanning eight moments because it was selected
             # at one of them.
-            return {"cells": cells, "italic": italics, "band": n["band"], "icon": o.get("icon") or n.get("icon"),
-                    "_names": votes}
+            return {"cells": cells, "italic": italics, "band": n["band"], "icon": o.get("icon") or n.get("icon")}
         self.rows = stitch(self.rows, new_rows, key=lambda r: r["cells"][0] if r["cells"] else "", same=same_name, merge=keep)
-        for r in self.rows:
-            votes = r.get("_names") or {}
-            if len(votes) > 1 and r["cells"] and r["cells"][0]:
-                # a spelling read with its dot or its capital intact ranks
-                # above a barer one on a tie
-                best = max(votes, key=lambda nm: (votes[nm], nm.startswith("."), sum(ch.isupper() for ch in nm)))
-                if best != r["cells"][0] and votes[best] > votes.get(r["cells"][0], 0):
-                    r["cells"][0] = best
-                    if r["italic"]:
-                        r["italic"][0] = False
         # a row whose name was missed folds into the row with the same
         # other cells; a nameless row alone is the window behind
         named = [r for r in self.rows if r["cells"] and r["cells"][0]]
@@ -494,12 +472,6 @@ class Table:
         Kind cell split out into the Size column -- the column added when the
         reader missed its heading."""
         hdr = self.header
-        for r in self.rows:
-            nm = r["cells"][0] if r["cells"] else ""
-            # the reader's own full stop on a folder's name (`memory.`): no
-            # name ends in a bare stop, and a file's stop has letters after it
-            if len(nm) > 2 and nm.endswith(".") and not nm.endswith("..") and "." not in nm[:-1].lstrip("."):
-                r["cells"][0] = nm[:-1]
         for i, h in enumerate(hdr):
             if any(w in h for w in ("Name", "Date Modified", "Size", "Kind")):
                 hdr[i] = re.sub(r"[*_]", "", h).strip()     # marks are never the header's own
@@ -3950,23 +3922,17 @@ def mend_cells(sl, full):
         if os.environ.get("SN_MEND"):
             print("MEND %s hdr=%s full=%s names=%s" % (getattr(sl, "times", "?"), st_.header, ft.header,
                   [r["cells"][sni] if sni < len(r["cells"]) else "" for r in st_.rows]), file=sys.stderr)
-        # ONE ROW THE TWO LISTS SPELL DIFFERENTLY DOES NOT STOP THE WALK. The
-        # settled list carried `.Jocal` where this stretch read `.local`, and
-        # the walk gave up at that row: no row was filled anywhere, and the
-        # two rows the stretch had dropped stayed dropped. A row that matches
-        # no settled row is kept where it is; the walk goes on from the last
-        # row that did match, and only the gaps BETWEEN two matched rows fill.
-        idxs, walk = [], 0
+        idxs, walk, ok = [], 0, True
         for r in st_.rows:
             name = r["cells"][sni] if sni < len(r["cells"]) else ""
             hit = next((k for k in range(walk, len(ft.rows))
                         if fni < len(ft.rows[k]["cells"]) and name
-                        and (name_fits(name, ft.rows[k]["cells"][fni])
-                             or same_name(name, ft.rows[k]["cells"][fni]))), None)
+                        and name_fits(name, ft.rows[k]["cells"][fni])), None)
+            if hit is None:
+                ok = False
+                break
             idxs.append(hit)
-            if hit is not None:
-                walk = hit + 1
-        ok = sum(1 for k in idxs if k is not None) >= 2
+            walk = hit + 1
         if ok:
             def _as_mine(fr):
                 cells, its = [], []
@@ -3977,12 +3943,11 @@ def mend_cells(sl, full):
                 return {**fr, "cells": cells, "italic": its, "band": None}
             merged, prev = [], None
             for r, k in zip(st_.rows, idxs):
-                if k is not None and prev is not None and k > prev + 1:
+                if prev is not None and k > prev + 1:
                     for j in range(prev + 1, k):
                         merged.append(_as_mine(ft.rows[j]))
                 merged.append(r)
-                if k is not None:
-                    prev = k
+                prev = k
             st_.rows = merged
 
 
@@ -6538,9 +6503,7 @@ def note(records_path, diary_text=None):
             # beside it that the frame shows whole.
             sure = {}
             for stx, sl, _ in subjects:
-                _snx = (sl.at(s["t0"]) or stx.at(s["t0"]))
-                whole_ = getattr(sl, "_pitch_measured", False) and not (_snx is not None and _snx.pitch_cut)
-                if (getattr(sl, "_step_sure", False) or whole_) and getattr(sl, "_row_step", 0):
+                if getattr(sl, "_step_sure", False) and getattr(sl, "_row_step", 0):
                     sure.setdefault(stx.name, []).append(sl._row_step)
             for stx, sl, _ in subjects:
                 had = sure.get(stx.name)
