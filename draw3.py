@@ -5434,7 +5434,7 @@ def note(records_path, diary_text=None):
         xs += [(p[2], q[2]) if side == "tail" else (p[0], q[0]) for p, q, side in cuts]
         ys = [(p[1], q[1]) for p, q in exact] + [(p[1], q[1]) for p, q, _ in cuts]
         if ts_list:
-            fit_side[ts_list[0]] = (len(exact), list(xs), list(ys))
+            fit_side[ts_list[0]] = (len(exact), list(xs), list(ys), list(kv))
         for _ in range(2):
             dx = med([qx - k * px for px, qx in xs])
             dy = med([qy - k * py for py, qy in ys])
@@ -5503,6 +5503,15 @@ def note(records_path, diary_text=None):
         T_, side_ = span_T.get(s_["t0"]), fit_side.get(s_["t0"])
         if not T_ or not side_ or side_[0] >= 3:
             continue
+        # FOUR VOTES THAT AGREE ARE WITNESSES ENOUGH. Two whole words give
+        # four sizes (a width and a height each); where those four stand
+        # within 15% of one another the zoom they name is sound, and the
+        # row-pitch guess below is what was wrong: at 00:04:00 it read 1.75
+        # against the words' 2.1 to 2.3, and the whole desktop was drawn a
+        # fifth too large. It stands in only where the words disagree.
+        kv_ = side_[3] if len(side_) > 3 else []
+        if len(kv_) >= 4 and max(kv_) / max(0.01, min(kv_)) <= 1.15:
+            continue
         got_ = tree_pitch_at(s_["t0"])
         if not got_:
             continue
@@ -5517,7 +5526,11 @@ def note(records_path, diary_text=None):
             if not Tj or not sj or sj[0] < 3:
                 continue
             gj = tree_pitch_at(spans[j_]["t0"])
-            if gj and len(gj[1] & keys_here) >= 3:
+            # ...and the same tree shares most of this frame's rows, not
+            # three of them: a Finder list of the same folder names (Assets,
+            # Dev, My Product) shared four rows with Obsidian's tree and
+            # lent it a Finder's row pitch
+            if gj and len(gj[1] & keys_here) >= 3 and len(gj[1] & keys_here) >= 0.4 * len(keys_here):
                 ref = (Tj[0], gj[0], spans[j_]["t0"])
                 break
         if not ref:
@@ -5525,7 +5538,7 @@ def note(records_path, diary_text=None):
         k_new = ref[0] * pitch / ref[1]
         if not 0.4 <= k_new <= 4.0:
             continue
-        _n, xs_, ys_ = side_
+        _n, xs_, ys_ = side_[0], side_[1], side_[2]
         dx_ = med([qx - k_new * px for px, qx in xs_]) if xs_ else T_[1]
         dy_ = med([qy - k_new * py for py, qy in ys_]) if ys_ else T_[2]
         if os.environ.get("SN_PITCH"):
