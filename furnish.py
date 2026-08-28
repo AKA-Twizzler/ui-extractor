@@ -438,6 +438,30 @@ def browser_behind(st):
                 out.append(w)
         return out
     tabs, right = fold(tabs), fold(right)
+    # ONE TAB, HOWEVER MANY TIMES IT WAS READ. The strip is read at every
+    # moment, and a zoomed moment reads the same tab at another place on
+    # the frame, so the same tab arrived twice, once as `Liked videos -
+    # You` and once whole, and the two were glued into `Liked videos -
+    # YouTubes - YouTube`. A reading that is the start of a fuller reading
+    # of the same tab is that tab; the close mark and a scrap read past it
+    # (`New Tabxa`) are not part of a name.
+    def _tabkey(t):
+        return re.sub(r"[^a-z0-9]", "", t.lower())
+    cleaned = []
+    for t in tabs:
+        t = re.sub(r"\s*[x×]\s*[a-z]?\s*$", "", t.strip())
+        t = re.sub(r"\s*×\s*$", "", t)
+        if t and t not in cleaned:
+            cleaned.append(t)
+    keep = []
+    for t in cleaned:
+        k = _tabkey(t)
+        if any(_tabkey(o) != k and _tabkey(o).startswith(k) for o in cleaned):
+            continue                          # a shorter reading of a tab kept whole
+        if any(_tabkey(o) != k and k.startswith(_tabkey(o)) and len(k) - len(_tabkey(o)) <= 2 for o in keep):
+            continue                          # the whole plus a scrap: the whole stands
+        keep.append(t)
+    tabs = keep
     out = ['<div class="sn-browser">']
     if tabs:
         out.append('<div class="sn-tabs">' + "".join(

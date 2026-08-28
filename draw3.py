@@ -8213,17 +8213,40 @@ def note(records_path, diary_text=None):
     # the screen belongs to the program at the front, so the video shows one
     # bar per program; each is drawn once with the clock as it read while
     # that bar stood, first reading to last.
+    # ONE BAR PER PROGRAM, NOT PER READING. The same bar comes back read in
+    # two pieces in the wrong order at one moment (`Window Help Obsidian
+    # File Edit...`) and with a menu misread at another (`inserf`); those
+    # are the one bar. Two readings are the same bar when most of their
+    # words agree, and the fullest reading that puts the program's name
+    # first stands for all of them.
     bars = []
+
+    def _bare(w_):
+        return w_[3:-4] if (w_.startswith("<i>") and w_.endswith("</i>")) else w_
+
+    def _same_bar(a, b):
+        hits = sum(1 for w_ in a if any(same_text(_bare(w_), _bare(x)) for x in b))
+        return hits * 10 >= 6 * min(len(a), len(b))
+
+    def _first_is_app(ws):
+        first = _bare(ws[0])
+        return first[:1].isupper() and not same_text(first, "File") and not same_text(first, "Window") \
+            and not same_text(first, "Help") and not same_text(first, "Edit") and not same_text(first, "View")
+
     for m in moments:
         ws = tuple(bar_at.get(m["ts"]) or ())
         if len(ws) < 3:
             continue
         c = clock_at.get(m["ts"], "")
-        hit = next((b for b in bars if b[0] == ws), None)
+        hit = next((b for b in bars if _same_bar(ws, b[0])), None)
         if hit is None:
             bars.append([ws, c, c])
-        else:
-            hit[2] = c or hit[2]
+            continue
+        hit[2] = c or hit[2]
+        if (_first_is_app(ws) and not _first_is_app(hit[0])) or \
+                (_first_is_app(ws) == _first_is_app(hit[0]) and
+                 sum(1 for w_ in ws if not w_.startswith("<i>")) > sum(1 for w_ in hit[0] if not w_.startswith("<i>"))):
+            hit[0] = ws
     if bars:
         parts += ["### The desktop bar", "",
                   "The menu bar along the top of the screen, as each program at the front set it, "
