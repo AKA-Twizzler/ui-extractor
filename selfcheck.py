@@ -72,9 +72,15 @@ def check(path, frames=None):
             bad("one line per picture", f"line {k}",
                 "a picture runs over several lines, so Obsidian shows the source")
 
-    # 3. the desktop bar belongs in the pictures, not loose in the document
+    # 3. the desktop bar belongs in the pictures, not loose in the document --
+    # except in its own part of the window section, which Tristan asked for
+    # by name ("a subsection per window type (... top bar of the desktop)"):
+    # there it stands once per program, with the clock span, and nowhere else.
+    heading = ""
     for k, ln in enumerate(lines, 1):
-        if "sn-menubar" in ln and "sn-screen" not in ln:
+        if ln.startswith("#"):
+            heading = ln.lstrip("# ").strip()
+        if "sn-menubar" in ln and "sn-screen" not in ln and heading != "The desktop bar":
             bad("no loose menu bar", f"line {k}",
                 "the desktop bar is repeated outside a screen picture")
 
