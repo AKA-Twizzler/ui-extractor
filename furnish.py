@@ -195,6 +195,9 @@ def _layouts(readings, keys, tol=0.10):
     return groups
 
 
+STATES = []     # every window drawn this run, set by draw3; col_shares borrows across them
+
+
 def col_shares(st, head):
     """Where the list's columns began, as shares of the list's width,
     measured off the frame: each heading's own left edge, over the readings
@@ -207,16 +210,19 @@ def col_shares(st, head):
     group is the window's; a median over both groups once put the Size
     column at 6%. The reader's box round a heading is sometimes the word and
     sometimes a loose band that starts well left of it; one loose "Kind" at
-    00:00:30 put the Size column at 7% and cut "31 bytes". So each heading's
-    position is the median over the group, and only the readings whose box
-    is the word's own size vote while any such exist. A heading the stretch
-    never read tightly borrows from the whole window's other moments, but
-    only from readings that agree with this stretch on its tightly read
-    headings within 10%, so a moment never inherits a layout it never
-    showed. The pane box stays the basis because the sidebar's share is
-    measured off the same boundary, so the headings land where the frame
-    had them however the reader drew that boundary. None where a heading
-    was never placed."""
+    00:00:30 put the Size column at 7% and cut "31 bytes". So a heading read
+    tightly anywhere takes the median of its tight readings, and a heading
+    never read tightly takes the HIGHEST left edge over its readings: a
+    loose box always contains its word, so every left edge is a lower bound
+    and the highest is the closest. Readings come from the stretch first,
+    then the whole window, then every other window of the program (the
+    columns do not change when a Finder window is navigated), but only from
+    readings that agree with this stretch on its tightly read headings
+    within 10%, so a moment never inherits a layout it never showed. The
+    pane box stays the basis because the sidebar's share is measured off
+    the same boundary, so the headings land where the frame had them
+    however the reader drew that boundary. None where a heading was never
+    placed."""
     names = [h for h in head if h]
     if len(names) < 2:
         return None
@@ -229,20 +235,30 @@ def col_shares(st, head):
     med = {i: _median([r[i][0] for r in main]) for i in keys}
     tight = {i: [r[i][0] for r in main if r[i][1]] for i in keys}
     tm = {i: (_median(tight[i]) if tight[i] else None) for i in keys}
-    parent = None
+    kin = None
     pos = {}
     for i in keys:
-        vs = list(tight[i])
-        if not vs and getattr(st, "_parent", None) is not None:
-            if parent is None:
-                parent = _col_readings(st._parent, head)
-            others = [j for j in keys if j != i and tm[j] is not None] or [j for j in keys if j != i]
-            for r in parent:
-                if r[i][1] and others and all(abs(r[j][0] - (tm[j] if tm[j] is not None else med[j])) <= 0.10 for j in others):
-                    vs.append(r[i][0])
-        if not vs:
-            vs = [r[i][0] for r in main]
-        pos[i] = _median(vs)
+        if tight[i]:
+            pos[i] = _median(tight[i])
+            continue
+        if kin is None:
+            whole = getattr(st, "_parent", None)
+            seen = {id(st), id(whole)}
+            pool = ([whole] if whole is not None else []) + [
+                o for o in STATES if id(o) not in seen and getattr(o, "name", None) == getattr(whole or st, "name", None)]
+            others = {}
+            for j in keys:
+                others[j] = [k for k in keys if k != j and tm[k] is not None] or [k for k in keys if k != j]
+            kin = []
+            for o in pool:
+                for r in _col_readings(o, head):
+                    kin.append(r)
+        ok = [r for r in kin if all(abs(r[j][0] - (tm[j] if tm[j] is not None else med[j])) <= 0.10 for j in others[i])]
+        vs = [r[i][0] for r in ok if r[i][1]]
+        if vs:
+            pos[i] = _median(vs)
+        else:
+            pos[i] = max([r[i][0] for r in main] + [r[i][0] for r in ok])
     bounds = [0.0] + [pos[i] for i in keys] + [1.0]
     if any(bounds[k + 1] <= bounds[k] for k in range(len(bounds) - 1)):
         return None
