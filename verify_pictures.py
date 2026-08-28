@@ -266,8 +266,16 @@ def check_picture(stamp, stage, frame_path, fav_boxes=(), read_whole=()):
             read as one item all along. Twenty letters, so a short token
             cannot excuse a long glue."""
             k = _norm_tok(c)
-            return any(len(w) >= 20 and (w.startswith(k) or k.startswith(w))
-                       for w in read_whole)
+            for w in read_whole:
+                if len(w) >= 20 and (w.startswith(k) or k.startswith(w)):
+                    # A GATE WITH A SILENT EXCEPTION IS A GATE NOBODY CAN
+                    # AUDIT. Every crumb excused says so out loud, with the
+                    # reading that excused it, so a session that widens this
+                    # by accident is caught by the line rather than by luck.
+                    EXCUSED.append((stamp, c.strip()[:44], w[:44], len(w),
+                                    (read_whole.get(w) if isinstance(read_whole, dict) else "?")))
+                    return True
+            return False
 
         for c in crumbs:
             # a crumb that itself contains a run of a path is two crumbs glued
@@ -328,6 +336,9 @@ MENUS = ("file", "edit", "view", "go", "window", "help", "format", "insert",
          "shortcuts", "bookmarks", "history", "profiles", "tab", "develop")
 
 
+EXCUSED = []       # every crumb this run let through the mangled test, and why
+
+
 def _norm_tok(t):
     return re.sub(r"[^a-z0-9]", "", str(t).lower())
 
@@ -352,13 +363,13 @@ def whole_words_read(records):
     import draw as old
     import draw2
     hdr, moments, ftr = old.load(records)
-    got = set()
+    got = {}
     for m in moments:
         for p in m.get("panes") or []:
             for it in draw2.items_of(p):
                 k = _norm_tok(it.get("text") or "")
                 if len(k) >= 12 and not k.startswith("macintoshhd"):
-                    got.add(k)
+                    got.setdefault(k, m["ts"])
     return got
 
 
@@ -670,6 +681,11 @@ def main():
         print("FAIL note-level")
         print("     " + f)
         total += 1
+    if EXCUSED:
+        print("\nBREADCRUMB EXEMPTIONS GRANTED THIS RUN (a gate's exception, said out loud):")
+        for st_, crumb, tok, n, at in EXCUSED:
+            print("  %s  %-44s excused by a whole reading at %s: %r (%d letters)"
+                  % (st_, '"' + crumb + '"', at, tok, n))
     side_note = "" if fav else " (sidebar-completeness skipped: pass the records path as a 3rd arg to enable it)"
     print("\nMACHINE-CHECKED over %d picture(s): window presence, top-layer fill, "
           "each window a box of its own that agrees with it, placeholder labels, "
