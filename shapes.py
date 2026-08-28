@@ -136,7 +136,12 @@ def _across(shelf, pos, a, b, slack, part, outward, corner=False):
     # against a side at x=147 - so the window was closed on one frame and
     # lost on three, from nine pixels of wobble in a real edge. Overshoot
     # keeps the strict tolerance; undershoot gets the width-proportional one.
-    short = max(ends, 0.08 * (b - a))
+    # ...and it is a SMALL, FIXED allowance, not a proportional one. Measured
+    # in this working space the wobble in a real edge is about nine pixels
+    # whatever the window's width, so scaling it by the span gave a 529-wide
+    # window 42 pixels of slack and split it into two rectangles - one real,
+    # one closed against the screen's edge - at 00:00:10.
+    short = max(ends, 12.0)
     best = None
     lines, step = shelf
     lo, hi = int(pos - slack) // step, int(pos + slack) // step
