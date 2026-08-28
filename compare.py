@@ -87,12 +87,16 @@ def stamp_of(heading):
     return heading.split(" - ")[0].split(" to ")[0].strip()
 
 
-def render_page(out, name, cells, cell_h, css):
-    """One page, one item per fixed-height cell, one browser launch."""
+def render_page(out, name, cells, cell_h, css, scale=1):
+    """One page, one item per fixed-height cell, one browser launch. At
+    `scale` 2 the page is laid out twice as wide and tall, so a picture
+    of the whole desktop still has the pixels to be judged on the part
+    of it the video zoomed in on."""
     html_dir = os.path.join(out, "html")
     os.makedirs(html_dir, exist_ok=True)
+    cell_h = cell_h * scale
     body = "".join("<div class='cell' style='height:%dpx'><div class='markdown-preview-view screen-note' "
-                   "style='width:960px'><div class='markdown-preview-sizer'>%s</div></div></div>" % (cell_h, c)
+                   "style='width:%dpx'><div class='markdown-preview-sizer'>%s</div></div></div>" % (cell_h, 960 * scale, c)
                    for c in cells)
     page = ("<!doctype html><html><head><meta charset='utf-8'><style>" + VARS + css + "</style></head><body>"
             + body + "</body></html>")
@@ -103,7 +107,7 @@ def render_page(out, name, cells, cell_h, css):
         os.remove(png)
     subprocess.run([EDGE, "--headless=new", "--disable-gpu", "--hide-scrollbars", "--no-first-run",
                     "--user-data-dir=" + win_path(os.path.join(out, "edge-profile")),
-                    "--window-size=1000,%d" % (cell_h * len(cells)),
+                    "--window-size=%d,%d" % (1000 * scale, cell_h * len(cells)),
                     "--screenshot=" + win_path(png), file_url(hp)],
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=300)
     if not os.path.exists(png):
@@ -230,8 +234,10 @@ def main():
 
     pics, cards = parts_of(note)
     rows, worst = [], 1.0
+    shots = []
+    for start in range(0, len(pics), 6):
+        shots += render_page(out, "pictures-%d" % (start // 6), [p[2] for p in pics[start:start + 6]], PIC_CELL, css, scale=2)
     if pics:
-        shots = render_page(out, "pictures", [p[2] for p in pics], PIC_CELL, css)
         for (line, heading, stage), shot in zip(pics, shots):
             stamp = stamp_of(heading)
             name = "pic-" + stamp.replace(":", "-")

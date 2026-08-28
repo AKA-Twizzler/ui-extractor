@@ -7798,18 +7798,32 @@ def note(records_path, diary_text=None):
                 def _area(b_):
                     return max(0.0, b_[2] - b_[0]) * max(0.0, b_[3] - b_[1])
 
-                def _whole_home(stx_, hbox_):
-                    """The window this cut strip is part of: the smallest
-                    same-program window standing round it at this time."""
-                    best_ = None
+                def _cut_sides(b_):
+                    """Which sides of a frame box the crop cut: left, top, right, bottom."""
+                    return (b_[0] <= 0.04 * Wf, b_[1] <= 0.04 * Hf, b_[2] >= 0.96 * Wf, b_[3] >= 0.96 * Hf)
+
+                def _whole_home(stx_, hbox_, cut_):
+                    """The window this cut strip is part of: a same-program
+                    window standing round it at this time whose sides AGREE
+                    with the strip's on every side the crop did not cut.
+                    Chosen by that agreement, not by size -- the smallest
+                    box round the strip was a stray cluster whose right edge
+                    sat 46 px inside the strip's own."""
+                    best_, best_off = None, None
                     for o_ in states:
                         if o_ is stx_ or o_.name != stx_.name:
                             continue
                         hb2 = home_at(o_, s["t0"])
                         if not hb2 or furnish._within(hbox_, hb2) < 0.8 or _area(hb2) < 1.3 * _area(hbox_):
                             continue
-                        if best_ is None or _area(hb2) < _area(best_):
-                            best_ = hb2
+                        off_ = 0.0
+                        for i_, cut1 in enumerate(cut_):
+                            if not cut1:
+                                off_ += abs(hb2[i_] - hbox_[i_]) / (Wf if i_ % 2 == 0 else Hf)
+                        if off_ > 0.12:
+                            continue
+                        if best_ is None or off_ < best_off:
+                            best_, best_off = hb2, off_
                     return best_
 
                 def _home_box(b_, hb_=None):
@@ -7828,18 +7842,24 @@ def note(records_path, diary_text=None):
                             y1_ = hb_[3]
                     return [max(0.0, x0_), max(0.0, y0_), min(float(Wf), x1_), min(float(Hf), y1_)]
 
-                def _whole_home_named(label_, hbox_):
+                def _whole_home_named(label_, hbox_, cut_):
                     """The same, for an outline that carries only a label."""
                     app_ = furnish._app_of(label_)
-                    best_ = None
+                    best_, best_off = None, None
                     for o_ in states:
                         if not app_ or furnish._app_of(o_.name) != app_:
                             continue
                         hb2 = home_at(o_, s["t0"])
                         if not hb2 or furnish._within(hbox_, hb2) < 0.8 or _area(hb2) < 1.3 * _area(hbox_):
                             continue
-                        if best_ is None or _area(hb2) < _area(best_):
-                            best_ = hb2
+                        off_ = 0.0
+                        for i_, cut1 in enumerate(cut_):
+                            if not cut1:
+                                off_ += abs(hb2[i_] - hbox_[i_]) / (Wf if i_ % 2 == 0 else Hf)
+                        if off_ > 0.12:
+                            continue
+                        if best_ is None or off_ < best_off:
+                            best_, best_off = hb2, off_
                     return best_
 
                 _subj = []
@@ -7848,8 +7868,9 @@ def note(records_path, diary_text=None):
                         hb_ = home_at(stx, s["t0"])
                         raw_ = back(T, list(shape))
                         # a strip of a window the crop cut off is that window
-                        if not hb_ or _area(hb_) < 1.3 * _area(raw_):
-                            hb_ = _whole_home(stx, raw_) or hb_
+                        cut_ = _cut_sides(shape)
+                        if any(cut_) and (not hb_ or _area(hb_) < 1.3 * _area(raw_)):
+                            hb_ = _whole_home(stx, raw_, cut_) or hb_
                         if os.environ.get("SN_ZOOM"):
                             print("  subject %s: frame %s -> home %s, whole %s" % (
                                 label_for(stx, s["t0"]), [round(v) for v in shape],
@@ -7860,7 +7881,8 @@ def note(records_path, diary_text=None):
                         sl._row_step = sl._row_step / _k
                     _subj.append((stx, sl, shape))
                 subjects = _subj
-                behinds = [(t_, _home_box(b_, _whole_home_named(t_, back(T, list(b_))))) for t_, b_ in behinds]
+                behinds = [(t_, _home_box(b_, _whole_home_named(t_, back(T, list(b_)), _cut_sides(b_))
+                                          if any(_cut_sides(b_)) else None)) for t_, b_ in behinds]
                 _ghosts = [(_home_box(b_) if b_ else b_, t_, k_) for b_, t_, k_ in ghost_list(s, sub_states, carded)]
                 if cam:
                     cam = _home_box(cam)

@@ -454,7 +454,7 @@ def browser_behind(st):
         return re.sub(r"[^a-z0-9]", "", t.lower())
     cleaned = []
     for t in tabs:
-        t = re.sub(r"\s*[x×]\s*[a-z]?\s*$", "", t.strip())
+        t = re.sub(r"(?<=[a-z\-.…])\s*[xX×]\s*[a-z]?\s*$", "", t.strip())
         t = re.sub(r"\s*×\s*$", "", t)
         if t and t not in cleaned:
             cleaned.append(t)
