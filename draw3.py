@@ -1140,13 +1140,24 @@ def sidebar_from_panes(st, house=None):
                      if len(k) >= 5 and key.endswith(k) and len(key) - len(k) <= 3), None)
 
     found, used = {}, []
-    lim = tp["x0"] + 0.1 * max(1.0, (tp["x1"] or tp["x0"]) - tp["x0"])
+    share_seen = []
     for m, g in getattr(st, "pieces", ()):
-        for p in g.get("panes") or []:
+        panes_ = g.get("panes") or []
+        # THE LIST PANE OF THIS SAME MOMENT SETS THE LIMIT. A part's x-span
+        # is gathered across moments at different zooms, so it cannot say
+        # where the list stood on any one frame; the list pane cut from this
+        # frame can.
+        lists_ = [p_ for p_ in panes_ if p_.get("kind") == "a list of columns"]
+        if not lists_:
+            continue
+        lx0 = min(p_["box"][0] for p_ in lists_)
+        lx1 = max(p_["box"][2] for p_ in lists_)
+        lim = lx0 + 0.1 * max(1.0, lx1 - lx0)
+        for p in panes_:
             if p.get("kind") == "a list of columns":
                 continue
             b = p.get("box")
-            if not b or b[2] > lim or b[0] >= tp["x0"]:
+            if not b or b[2] > lim or b[0] >= lx0:
                 continue
             texts = [(it["text"], it["box"][1]) for it in _d2.items_of(p)]
             for ln in p.get("lines") or []:
@@ -1165,6 +1176,9 @@ def sidebar_from_panes(st, house=None):
                         found[c] = y
             if got >= 3:
                 used.append(p)
+                r_ = g.get("rect")
+                if r_ and r_[2] > r_[0]:
+                    share_seen.append((b[2] - r_[0]) / float(r_[2] - r_[0]))
     if len(found) < 4:
         return False
     order = list(house) if house else sorted(found, key=lambda c: (found[c] is None, found[c] or 0))
@@ -1179,13 +1193,11 @@ def sidebar_from_panes(st, house=None):
             if q["fam"] in ("doc", "tree", "words") and q.get("x0") is not None \
                     and q["x0"] >= b[0] - 4 and (q["x1"] or 0) <= b[2] + 4:
                 st.parts.remove(q)
-    # how wide the sidebar stood, measured off the pane the reader cut
-    rect = st.best_shape() if hasattr(st, "best_shape") else None
-    if used and rect and rect[2] > rect[0]:
-        x1 = max(p["box"][2] for p in used)
-        share = (x1 - rect[0]) / float(rect[2] - rect[0])
-        if 0.12 <= share <= 0.45 and not getattr(st, "side_share", None):
-            st.side_share = share
+    # how wide the sidebar stood, measured off the pane the reader cut,
+    # against the window's own rectangle on that same frame
+    shares = [v for v in share_seen if 0.12 <= v <= 0.45]
+    if shares and not getattr(st, "side_share", None):
+        st.side_share = sorted(shares)[len(shares) // 2]
     return True
 
 
@@ -2416,7 +2428,13 @@ def crumb_same(a, b):
         # the one thing a generic crumb can be besides itself is ITSELF CUT
         # SHORT by Finder or by the reading - `Docur` for `Documents`,
         # `jaredr` for `jaredrhodenizer` - never the head of something longer
-        g, o = (fa, fb) if len(fa) >= len(fb) else (fb, fa)
+        # the generic name is the whole; the other must be SHORTER than it
+        if ga and gb:
+            g, o = (fa, fb) if len(fa) >= len(fb) else (fb, fa)
+        elif ga:
+            g, o = fa, fb
+        else:
+            g, o = fb, fa
         if len(o) >= len(g) or len(o) < 4:
             return False
         return sum(1 for x, y in zip(o, g[:len(o)]) if x != y) <= (0 if len(o) < 5 else 1)
