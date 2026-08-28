@@ -4246,7 +4246,7 @@ def unglue_like(whole, head, tail):
     the way Finder's names are spaced: before a bracket, and where a small
     letter meets a capital. A reading with no space in it says nothing about
     spacing, and the whole stands as read."""
-    if " " in whole or " " not in (head + tail):
+    if " " not in (head + tail):
         return whole
     nh, nt = len(flat(head)), len(flat(tail))
     i, seen = 0, 0
@@ -5423,7 +5423,9 @@ def note(records_path, diary_text=None):
                 if c is None:
                     # a name that stops at "_" or "." was clipped by the
                     # pane's edge with no dots to say so
-                    if len(nm) >= 6 and " " not in nm and not nm.endswith(("_", "-", ".")):
+                    # a row or a tree line is a name by construction, spaces
+                    # and all ("02 Company A (Info Product)")
+                    if len(nm) >= 6 and not nm.endswith(("_", "-", ".", ":")) and len(nm.split()) <= 6:
                         pool.add(nm)
                 elif c[0] and not c[1] and len(c[0]) >= 8:
                     heads.add(c[0])
