@@ -2740,15 +2740,15 @@ def card_shot(html, ratio, share=None, tree_min=None):
     # which is the same fault as the height and reads worse, because side by
     # side the two look like the same window.
     bits = ["--sn-ratio:%.4f" % ratio]
-    if share and 0 < share <= 1:
-        # A CUSTOM PROPERTY, NOT `max-width` DIRECTLY. The stylesheet forces
-        # `.screen-note .markdown-preview-sizer > div { width:100% !important }`
-        # so every card fills the pane -- and `!important` beats an inline
-        # declaration, so an inline `max-width` here is written, parsed, and
-        # silently ignored. Measured: the computed value came back `100%` on a
-        # card whose own style attribute said `48.6%`. A custom property is not
-        # in that fight; the stylesheet reads it back with its own !important.
-        bits.append("--sn-max:%.1f%%" % (100.0 * share))
+    # THE SHARE BELONGS TO A PICTURE, NOT TO A CARD. Capping a card at its
+    # window's share of the screen was measured, was correct, and made the
+    # cards WORSE -- because it answers a question a card does not ask. On a
+    # screen, relative size is information: two windows side by side, one twice
+    # the other, and the picture has to show that. A card holds ONE window with
+    # nothing beside it to compare against, so the share buys nothing there and
+    # spends the only thing a card is for, which is room to read. Computed and
+    # deliberately unused here; the picture is where it belongs.
+    _unused_share = share
     if tree_min:
         # THE FILE TREE, WIDE ENOUGH TO READ -- ON THE CARD ONLY. Its column is
         # a share of the window measured off the frame, and that share is
