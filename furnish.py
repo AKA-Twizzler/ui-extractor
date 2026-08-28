@@ -254,9 +254,17 @@ def col_shares(st, head):
                 others[j] = [k for k in keys if k != j and tm[k] is not None] or [k for k in keys if k != j]
         agree = lambda r: all(abs(r[j][0] - (tm[j] if tm[j] is not None else med[j])) <= 0.10 for j in others[i])
         loose = [r[i][0] for r in main]
+        # A LOOSE BOX IS A FLOOR THE BORROWED VALUE MUST CLEAR. The stretch's
+        # own loose left edge lies at or before its word, so a tight reading
+        # from another moment that sits BEFORE it is of another layout: the
+        # jaredrhodenizer window is wider at 00:00:30 than at 00:00:00, and
+        # Finder gave the extra width to the Name column (Date at 42% of the
+        # list, not 37%); the 00:00:00 tight reading, borrowed, put every
+        # column 30 px left of its place.
+        floor_ = max(loose) - 0.005
         for tier in tiers:
             ok = [r for r in tier if agree(r)]
-            vs = [r[i][0] for r in ok if r[i][1]]
+            vs = [r[i][0] for r in ok if r[i][1] and r[i][0] >= floor_]
             if vs:
                 pos[i] = _median(vs)
                 break
