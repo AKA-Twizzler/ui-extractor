@@ -5168,6 +5168,7 @@ def note(records_path, diary_text=None):
                 st.at(t_, make=True).h1 = list(b_)
     real = [st for st in states if is_real_window(st.name)]
     shown = real if real else states          # a video with no named window shows its screens
+    import furnish
     furnish.STATES = list(shown)               # so a list can borrow its columns from the same window elsewhere
     windows = []                               # names in order of first appearance
     for st in shown:
