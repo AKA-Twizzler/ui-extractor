@@ -7295,7 +7295,11 @@ def note(records_path, diary_text=None):
                     # cut off both ways: the window's width at home carried
                     # forward on the zoom the frame itself gives
                     hb_now = home_at(stx, s["t0"])
-                    kzf = (span_T.get(s["t0"]) or [1.0])[0] or 1.0
+                    # the stretch's own fit, with the no-zoom rule applied
+                    # the same way as everywhere else -- the raw 0.83 here
+                    # against a home box carried as itself drew the window
+                    # a sixth too narrow and its rows a sixth too small
+                    kzf = (T[0] if T else 1.0) or 1.0
                     wide = (hb_now[2] - hb_now[0]) * kzf if hb_now else 0.0
                     span_now = share * wide
                 sl._row_step = span_now * furnish.CANVAS_W / Wf
