@@ -2508,43 +2508,6 @@ def harmonise(states):
 # that stretch of time, the others as empty outlines. Its content comes
 # only from the moments inside the stretch, so it stays an honest still.
 
-def card_shot(html, ratio):
-    """A rebuilt window given the SHAPE it really had, as a floor.
-
-    The moment pictures bind every window to its own measured width; the
-    per-window sections below carried no such constraint at all - page width,
-    and whatever height the content needed - so one window stood at 0.86,
-    3.74, 3.74 and 0.48 across its four sections, a spread of 7.8x, each of
-    them 2.2 to 3.5 times off the shape it really had (Run 19x).
-
-    The window's real proportion is a FLOOR here and never a ceiling. These
-    sections exist to be read, and they hold everything gathered across every
-    moment the window showed the same thing - which is legitimately more than
-    the window held at once. So a card may be taller than its window's shape
-    and must never be shorter, and it is never clipped: clipping is what would
-    make "rebuilt to read" a lie.
-
-    The regex takes the window's opening tag only where it has no style
-    attribute of its own. ONE STYLE ATTRIBUTE, NOT TWO - a second one is
-    silently ignored by every browser, which cost three afternoons of changes
-    that scored exactly identical.
-    """
-    if not ratio or ratio <= 0 or "sn-window" not in html:
-        return html
-    tall = max(1, int(round(CARD_W * ratio)))
-    out = re.sub(r'^(<div class="sn-window[^"]*")(?=>)',
-                 r'\1 style="min-height:calc(%d * var(--sn-u, 1px))"' % tall,
-                 html, count=1)
-    if out == html:
-        return html                     # it already carries a style; leave it
-    return ('<div class="sn-card" style="container-type:inline-size">'
-            '<div class="sn-shot" style="--sn-u:calc(100cqw / %d)">' % CARD_W
-            + out + "</div></div>")
-
-
-CARD_W = 960          # the canvas the note's own stylesheet is drawn against
-
-
 def frame_of(m):
     return shapes.frame_of(m)
 
@@ -6398,32 +6361,10 @@ def note(records_path, diary_text=None):
         # showed, never nested under a physical window as an "earlier
         # state" - which was the opposite of the rule, naming the physical
         # window as the thing and the folders as its history.
-        # ONE PROPORTION PER WINDOW, NOT PER SECTION. A window's sections are
-        # its folder views - the same window, so they must stand in the same
-        # shape as each other, or a reader scrolling from one to the next
-        # watches it change. The shape comes from the moments the reader
-        # MEASURED that window, which are the moments it stood clear.
-        shape_of = {}
-        for g in groups:
-            sure, any_ = [], []
-            for o in g:
-                for t_ in (getattr(o, "times", None) or []):
-                    r_ = (getattr(o, "rects", None) or {}).get(t_)
-                    if not r_ or r_[2] - r_[0] <= 0 or r_[3] - r_[1] <= 0:
-                        continue
-                    (sure if t_ in (getattr(o, "measured", None) or ()) else any_).append(r_)
-            use = sure or any_
-            if use:
-                ws = sorted(r_[2] - r_[0] for r_ in use)
-                hs = sorted(r_[3] - r_[1] for r_ in use)
-                w_, h_ = ws[len(ws) // 2], hs[len(hs) // 2]
-                if w_ > 0:
-                    for o in g:
-                        shape_of[id(o)] = h_ / w_
         for st in sorted((s for g in groups for s in g), key=lambda s: s.times[0]):
             parts.append(f"## {w} - as at {span_of(st)}" + (f", {st.title}" if st.title else ""))
             parts.append("")
-            parts.append(card_shot(st.window_html(), shape_of.get(id(st))))
+            parts.append(st.window_html())
             parts.append("")
             for ln in st.said_html():
                 parts.append(ln)
