@@ -8520,6 +8520,8 @@ def note(records_path, diary_text=None):
                             # the reader called it: Obsidian's tree, a Finder's
                             # sidebar, each with a thumb of its own
                             kd = "tree" if stx.name == "The Obsidian window" else "side"
+                        if kd == "tree" and stx.name == "The Finder window":
+                            kd = "side"       # a Finder has no tree: its sidebar
                         if kd == "text" or kd in th:
                             continue
                         t_ = shapes.scroll_thumb(fp, pb)
