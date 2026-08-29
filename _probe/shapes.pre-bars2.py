@@ -672,110 +672,32 @@ def scroll_thumb(path, rect, reach=None):
             runs.append(cur)
             cur = [c]
     runs.append(cur)
-    # a zoomed frame draws a thumb wide: a thumb is never wider than about
-    # one part in eighty of the frame, whatever the pane's own width
-    widest = max(24, int(0.012 * W), int(0.05 * w))
-    dark = strip < bg - 25
+    widest = max(24, int(0.05 * w))      # a zoomed frame draws a thumb wide
     best = None
     for r in runs:
         if not 5 <= len(r) <= widest:
             continue          # a window's border is four pixels; a thumb is never that thin
         rows = lit[:, r].mean(axis=1) > 0.5
-        # A FRAME CAUGHT MID-SCROLL HAS BLACK BANDS ACROSS IT, and a band
-        # across the thumb cuts it in two: the rows the band blacks out are
-        # unknown, neither thumb nor track, and a thumb runs on through
-        # them. A run counts only for the lit rows it holds.
-        unk = dark[:, r].mean(axis=1) > 0.5
-        top, bot, lit_n = _longest_run(rows, unk)
-        if top is None or (bot - top + 1) < 0.08 * h or lit_n < 0.03 * h:
+        # the longest unbroken run of lit rows: the thumb itself, not the
+        # thumb plus whatever else stands in the same columns lower down
+        top = bot = None
+        y = 0
+        n = len(rows)
+        while y < n:
+            if rows[y]:
+                y2 = y
+                while y2 + 1 < n and rows[y2 + 1]:
+                    y2 += 1
+                if top is None or (y2 - y) > (bot - top):
+                    top, bot = y, y2
+                y = y2 + 1
+            else:
+                y += 1
+        if top is None or (bot - top + 1) < 0.08 * h:
             continue          # too short for a thumb: a mark, an icon's edge
-        if top <= 0.06 * h and bot >= 0.94 * h:
+        if top <= 0.12 * h and bot >= 0.88 * h:
             continue          # a border or a divider: a thumb never touches both ends of its track
         cand = (top / float(h), (bot - top + 1) / float(h))
-        if best is None or cand[1] > best[1]:
-            best = cand
-    return best
-
-
-def _longest_run(on, unk):
-    """The longest run of rows that are on or unknown, trimmed to its on
-    ends: (top, bot, count of on rows), or (None, None, 0)."""
-    n = len(on)
-    top = bot = None
-    lit_n = 0
-    y = 0
-    while y < n:
-        if on[y] or unk[y]:
-            y2 = y
-            while y2 + 1 < n and (on[y2 + 1] or unk[y2 + 1]):
-                y2 += 1
-            # trim the unknown rows off the ends: a band beside a thumb is
-            # not the thumb, and a run of nothing but unknown is no thumb
-            a, b = y, y2
-            while a <= b and not on[a]:
-                a += 1
-            while b >= a and not on[b]:
-                b -= 1
-            if a <= b:
-                cnt = int(on[a:b + 1].sum())
-                if top is None or (b - a) > (bot - top):
-                    top, bot, lit_n = a, b, cnt
-            y = y2 + 1
-        else:
-            y += 1
-    return top, bot, lit_n
-
-
-def scroll_thumb_h(path, rect):
-    """The horizontal scroll thumb a pane shows along the bottom of the
-    region given, read off the frame the same way: a light, thin, flat bar
-    as long as the share of the content in view and standing where that
-    share begins. Returns (left_share, width_share) of the region's width,
-    or None where no bar shows."""
-    try:
-        g = _THUMB_FRAMES.get(path)
-        if g is None:
-            g = np.asarray(Image.open(path).convert("L"), dtype=np.float32)
-            if len(_THUMB_FRAMES) > 4:
-                _THUMB_FRAMES.clear()
-            _THUMB_FRAMES[path] = g
-    except Exception:
-        return None
-    H, W = g.shape
-    x0, y0, x1, y1 = [int(round(float(v))) for v in rect]
-    x0, x1, y0, y1 = max(0, x0), min(W, x1), max(0, y0), min(H, y1)
-    w, h = x1 - x0, y1 - y0
-    if w < 80 or h < 20:
-        return None
-    band = g[y0:y1, x0:x1]
-    bg = float(np.median(band))
-    lit = band > bg + 25
-    dark = band < bg - 25
-    row = lit.mean(axis=1)
-    rows = [int(r) for r in np.where((row > 0.04) & (row < 0.98))[0]]
-    if not rows:
-        return None
-    runs, cur = [], [rows[0]]
-    for r in rows[1:]:
-        if r == cur[-1] + 1:
-            cur.append(r)
-        else:
-            runs.append(cur)
-            cur = [r]
-    runs.append(cur)
-    thickest = max(24, int(0.012 * H))
-    best = None
-    for r in runs:
-        if not 5 <= len(r) <= thickest:
-            continue
-        cols = lit[r, :].mean(axis=0) > 0.5
-        unk = dark[r, :].mean(axis=0) > 0.5
-        left, right, lit_n = _longest_run(cols, unk)
-        if left is None or (right - left + 1) < 0.08 * w or lit_n < 0.03 * w:
-            continue
-        if left <= 0.03 * w and right >= 0.97 * w:
-            continue          # a border along the bottom, not a bar
-        cand = (left / float(w), (right - left + 1) / float(w))
         if best is None or cand[1] > best[1]:
             best = cand
     return best
