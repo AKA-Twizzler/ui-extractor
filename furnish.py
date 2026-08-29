@@ -357,6 +357,36 @@ def finder(st):
     rows = [r for r in rows
             if not (r.get("cells") and not r["cells"][0]
                     and tuple(str(c) for c in r["cells"][1:]) in _named)]
+    # A NAMELESS ROW BESIDE A NAMED ROW WHOSE OTHER CELLS READ AS NOTHING is
+    # that row read twice, once with its name lost and once with its cells
+    # mangled (reference_brand_voice_guide.md at 00:01:30 and 00:01:40): the
+    # name from the one, the cells from the other, one row
+    def _clean_cells(r_):
+        return any(tidy_date(c) or tidy_size(c) for c in (r_.get("cells") or [])[1:])
+    _out, _skip = [], set()
+    for i_, r in enumerate(rows):
+        if i_ in _skip:
+            continue
+        c_ = r.get("cells") or []
+        if c_ and not c_[0]:
+            for j_ in (i_ - 1, i_ + 1):
+                if 0 <= j_ < len(rows) and j_ not in _skip:
+                    o_ = rows[j_].get("cells") or []
+                    if o_ and o_[0] and not _clean_cells(rows[j_]) and _clean_cells(r):
+                        merged = dict(rows[j_])
+                        merged["cells"] = [o_[0]] + list(c_[1:])
+                        merged["italic"] = [(rows[j_].get("italic") or [False])[0]] + list((r.get("italic") or [False] * len(c_))[1:])
+                        if j_ < i_:
+                            _out[-1] = merged
+                        else:
+                            _out.append(merged)
+                        _skip.add(j_)
+                        break
+            else:
+                _out.append(r)
+            continue
+        _out.append(r)
+    rows = _out
     if on_card and os.environ.get("SN_NAMES"):
         for r in rows:
             if r.get("cells") and not r["cells"][0]:
