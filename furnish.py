@@ -208,23 +208,29 @@ def flat_(s):
 _FOLD_ = str.maketrans({"0": "o", "1": "l", "i": "l"})
 
 
-def scroll_bar(shown, total, first=0, measured=None):
-    """A scroll bar where the window had one: the thumb as tall as the
-    share of the content showing, standing where the showing part begins.
-    Nothing where everything shows. The reader never reports a scroll bar,
-    but the note knows what the window holds and what one moment showed,
-    which is exactly what a scroll bar says."""
-    if measured:
-        # the thumb as the frame showed it, read off the picture
-        top = max(0.0, min(1.0, float(measured[0])))
-        h = max(0.04, min(1.0 - top, float(measured[1])))
-    elif not total or not shown or shown >= total:
+def scroll_bar(measured):
+    """A scroll bar where the frame showed one, and only there: the thumb
+    as the frame drew it, read off the picture. Never worked out from
+    counts: a count says what the note gathered, not what the screen
+    drew, and a thumb the screen never showed is a guess in a bar's
+    clothing. Nothing where the frame showed nothing."""
+    if not measured:
         return ""
-    else:
-        top = max(0.0, min(1.0, float(first) / total))
-        h = max(0.04, min(1.0 - top, float(shown) / total))
+    top = max(0.0, min(1.0, float(measured[0])))
+    h = max(0.04, min(1.0 - top, float(measured[1])))
     return ('<div class="sn-scroll"><div class="sn-thumb" style="top:%.1f%%;height:%.1f%%"></div></div>'
             % (100 * top, 100 * h))
+
+
+def hscroll_bar(measured):
+    """The sideways bar along a list's foot, where the frame showed one:
+    (left_share, width_share) of the list's width."""
+    if not measured:
+        return ""
+    left = max(0.0, min(1.0, float(measured[0])))
+    w = max(0.04, min(1.0 - left, float(measured[1])))
+    return ('<div class="sn-hscroll"><div class="sn-hthumb" style="left:%.1f%%;width:%.1f%%"></div></div>'
+            % (100 * left, 100 * w))
 
 
 def seen_at_once(st, kind):
@@ -418,7 +424,7 @@ def finder(st):
             else:
                 g = SIDE_GLYPH.get(w, "⌂" if w.lower() == (st.title or "").lower() or w.islower() else "▱")
                 items.append(f'<div class="sn-item"><span class="sn-g">{g}</span>{esc(w)}</div>')
-        side_bar = scroll_bar(0, 0, 0, measured=(getattr(st, "_thumbs", None) or {}).get("side"))
+        side_bar = scroll_bar((getattr(st, "_thumbs", None) or {}).get("side"))
         side = '<div class="sn-side">' + "".join(items) + side_bar + "</div>"
     # the toolbar: back and forward, the folder's name, the view and action buttons, search
     title = st.title or ""
@@ -570,21 +576,10 @@ def finder(st):
         # placed by a flex row, because a table's own auto margin was
         # ignored inside the window's column layout and the list stayed left
         out = ['<div style="display:flex;justify-content:flex-end">'] + out + ["</div>"]
-    # A SCROLL BAR WHERE THE WINDOW HAD ONE: in a picture, the rows this
-    # moment showed against the rows the window holds; on a card, the most
-    # the real window ever showed at once against all of them
-    parent = getattr(st, "_parent", None)
-    names_here = [str((r.get("cells") or [""])[0] or "") for r in rows]
-    thumb_ = (getattr(st, "_thumbs", None) or {}).get("list")
-    if thumb_:
-        bar = scroll_bar(0, 0, 0, measured=thumb_)
-    elif parent is not None and parent.main_table() and parent.main_table().rows:
-        whole_rows = [str((r.get("cells") or [""])[0] or "") for r in parent.main_table().rows]
-        bar = scroll_bar(len(rows), len(whole_rows), first_index(names_here, whole_rows))
-    elif on_card and rows:
-        bar = scroll_bar(seen_at_once(st, "a list of columns"), len(rows), 0)
-    else:
-        bar = ""
+    # THE BARS THE FRAME SHOWED, read off it: the list's thumb at its right
+    # edge and the sideways bar along its foot, never worked out from counts
+    _th = getattr(st, "_thumbs", None) or {}
+    bar = scroll_bar(_th.get("list")) + hscroll_bar(_th.get("list_h"))
     body = '<div class="sn-body">' + "".join(out) + bar + "</div>"
     # the path bar
     foot = ""
@@ -862,16 +857,7 @@ def obsidian(st, behind=True):
         parent = getattr(st, "_parent", None)
         ptree = parent.tree() if parent is not None else None
         shown_txt = [t.strip("│ ˃˅") for t, _h in tree.lines]
-        thumb_t = (getattr(st, "_thumbs", None) or {}).get("tree")
-        if thumb_t:
-            tree_bar = scroll_bar(0, 0, 0, measured=thumb_t)
-        elif ptree and ptree.lines:
-            whole_txt = [t.strip("│ ˃˅") for t, _h in ptree.lines]
-            tree_bar = scroll_bar(len(tree.lines), len(ptree.lines), first_index(shown_txt, whole_txt))
-        elif not getattr(st, "shape", None):
-            tree_bar = scroll_bar(seen_at_once(st, "a file tree"), len(tree.lines), 0)
-        else:
-            tree_bar = ""
+        tree_bar = scroll_bar((getattr(st, "_thumbs", None) or {}).get("tree"))
         explorer = ('<div class="sn-explorer"><div class="sn-explorer-head"><span class="sn-g">✎</span><span class="sn-g">▱+</span>'
                     '<span class="sn-g">⇅</span><span class="sn-g">⊟</span><span class="sn-g">⌃</span></div>'
                     + (f'<div class="sn-count">{esc(count)}</div>' if count else "")
@@ -906,17 +892,7 @@ def obsidian(st, behind=True):
             inner = f'<div class="sn-page">{inner}</div>'
         parent = getattr(st, "_parent", None)
         pdoc = parent.main_doc() if parent is not None else None
-        thumb_d = (getattr(st, "_thumbs", None) or {}).get("doc")
-        if thumb_d:
-            doc_bar = scroll_bar(0, 0, 0, measured=thumb_d)
-        elif pdoc and pdoc.lines and doc.lines:
-            shown_d = [t for t, _h in doc.lines]
-            whole_d = [t for t, _h in pdoc.lines]
-            doc_bar = scroll_bar(len(doc.lines), len(pdoc.lines), first_index(shown_d, whole_d))
-        elif not getattr(st, "shape", None) and doc.lines:
-            doc_bar = scroll_bar(seen_at_once(st, "an open document"), len(doc.lines), 0)
-        else:
-            doc_bar = ""
+        doc_bar = scroll_bar((getattr(st, "_thumbs", None) or {}).get("doc"))
         cols.append(f'<div class="sn-doc"{sty_doc}>' + inner + doc_bar + "</div>")
     # THE PANES ARE AS WIDE AS THE SCREEN HAD THEM. The explorer and the
     # note share the window in the proportion the reader measured - the
