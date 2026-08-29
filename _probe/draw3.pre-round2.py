@@ -5621,26 +5621,6 @@ def note(records_path, diary_text=None):
         st._whole_names = whole_names
         if os.environ.get("SN_NAMES") and (whole_names or st.name == "The Finder window"):
             print("NAMES %s %s: %s" % (st.name, st.title, whole_names), file=sys.stderr)
-    # A SECOND ROUND WITH THE NAMES THE FIRST COMPLETED: a cut the first
-    # round could not close closes against a whole the first round found in
-    # another window ("feedback_m...he_page.md" on the Dev card against the
-    # memory list's completed feedback_match_the_ad_to_the_page.md)
-    _found = {w for st in states for w in (getattr(st, "_whole_names", None) or {}).values()}
-    if _found:
-        _pool2 = list(pool) + sorted(_found)
-        for st in states:
-            wn = getattr(st, "_whole_names", None) or {}
-            for tb in tables_of(st):
-                for row in tb.rows:
-                    cells = row.get("cells") or []
-                    if not cells or not cells[0] or not cut_ends(cells[0]) or whole_name_key(cells[0]) in wn:
-                        continue
-                    whole = complete_name(cells[0], _pool2, heads)
-                    if whole and whole != cells[0]:
-                        wn[whole_name_key(cells[0])] = whole
-                        if os.environ.get("SN_NAMES"):
-                            print("NAMES2 %s %s: %s -> %s" % (st.name, st.title, cells[0], whole), file=sys.stderr)
-            st._whole_names = wn
     _trace_rows('after names pass', states)
     # A TREE LINE SPELT THE WAY THE NAME IS KNOWN. Obsidian's tree carried
     # the same glued spelling ("˃ 03 CompanyB(LandscapeCompany)"), and a
@@ -8504,31 +8484,23 @@ def note(records_path, diary_text=None):
                         wb = None
                     for p_ in sorted((g_.get("panes") or []),
                                      key=lambda q_: -((q_.get("box") or [0, 0, 0, 0])[2] - (q_.get("box") or [0, 0, 0, 0])[0])):
-                        kd = _kinds.get(p_.get("kind")) or ("text" if p_.get("kind") == "text, not a tree" else None)
+                        kd = _kinds.get(p_.get("kind"))
                         pb = p_.get("box")
                         if not kd or not pb or len(pb) != 4:
                             continue
                         if wb and furnish._within(pb, wb) < 0.8:
                             continue
-                        if wb and (pb[2] - pb[0]) < 0.35 * (wb[2] - wb[0]) and abs(pb[0] - wb[0]) < 0.05 * (wb[2] - wb[0]):
-                            # a narrow pane at the window's left edge, whatever
-                            # the reader called it: Obsidian's tree, a Finder's
-                            # sidebar, each with a thumb of its own
-                            kd = "tree" if stx.name == "The Obsidian window" else "side"
-                        if kd == "text" or kd in th:
+                        if kd == "doc" and wb and (pb[2] - pb[0]) < 0.25 * (wb[2] - wb[0]) \
+                                and abs(pb[0] - wb[0]) < 0.05 * (wb[2] - wb[0]):
+                            kd = "tree"       # the tree pane, read as a column of text
+                        if kd in th:
                             continue
                         t_ = shapes.scroll_thumb(fp, pb)
                         if t_:
                             th[kd] = t_
                 sl._thumbs = th
-                if os.environ.get("SN_ZOOM"):
-                    if th:
-                        print("THUMB %s %s: %s" % (s["t0"], label_for(stx, s["t0"]), th), file=sys.stderr)
-                    else:
-                        _tried = [(p_.get("kind"), [round(v) for v in (p_.get("box") or [])]) for m_, g_ in getattr(stx, "pieces", ())
-                                  if m_["ts"] == s["t0"] for p_ in (g_.get("panes") or []) if p_.get("box")]
-                        print("THUMB none %s %s: wb=%s panes=%s" % (s["t0"], label_for(stx, s["t0"]),
-                                                                    [round(v) for v in (wb or [])], _tried[:8]), file=sys.stderr)
+                if th and os.environ.get("SN_ZOOM"):
+                    print("THUMB %s %s: %s" % (s["t0"], label_for(stx, s["t0"]), th), file=sys.stderr)
             # ONE WINDOW CARRIES ITS CONTENT; EVERY OTHER STANDS AS A NAMED
             # OUTLINE. Tristan's choice, B, after content everywhere was on
             # the table: the cards below hold every window whole, so the
@@ -9062,32 +9034,6 @@ def note(records_path, diary_text=None):
             parts.append(f"#### {w} - as at {_when}" + (f", {st.title}" if st.title else ""))
             parts.append("")
             _sh = shape_of.get(id(st)) or (None, None)
-            # A CARD CARRIES THE THUMB THE FRAME SHOWED at the moment that
-            # read the most rows: a window the video never scrolled to its
-            # end held more than the card knows, and the thumb says so
-            # (the .claude list: eight rows read, the thumb a quarter of the
-            # track near its foot)
-            if not getattr(st, "_thumbs", None) and getattr(st, "pieces", None) and st.name == "The Finder window":
-                import furnish as _fz
-                best_ = None
-                for m_, g_ in st.pieces:
-                    try:
-                        wb_ = rect_at(st, m_["ts"])[1]
-                    except Exception:
-                        wb_ = None
-                    for p_ in (g_.get("panes") or []):
-                        pb_ = p_.get("box")
-                        if p_.get("kind") != "a list of columns" or not pb_ or len(pb_) != 4:
-                            continue
-                        if wb_ and _fz._within(pb_, wb_) < 0.8:
-                            continue
-                        n_ = len(p_.get("lines") or [])
-                        if best_ is None or n_ > best_[0]:
-                            best_ = (n_, m_, pb_)
-                if best_:
-                    t_ = shapes.scroll_thumb(frame_of(best_[1]), best_[2])
-                    if t_:
-                        st._thumbs = {"list": t_}
             _trace_rows('at card', [st])
             _html = st.window_html()
             parts.append(card_shot(_html, _sh[0], _sh[1], getattr(st, "_tree_min", None)))

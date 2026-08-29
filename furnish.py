@@ -418,7 +418,10 @@ def finder(st):
             else:
                 g = SIDE_GLYPH.get(w, "⌂" if w.lower() == (st.title or "").lower() or w.islower() else "▱")
                 items.append(f'<div class="sn-item"><span class="sn-g">{g}</span>{esc(w)}</div>')
-        side = '<div class="sn-side">' + "".join(items) + "</div>"
+        side_bar = ""
+        if getattr(st, "shape", None):
+            side_bar = scroll_bar(0, 0, 0, measured=(getattr(st, "_thumbs", None) or {}).get("side"))
+        side = '<div class="sn-side">' + "".join(items) + side_bar + "</div>"
     # the toolbar: back and forward, the folder's name, the view and action buttons, search
     title = st.title or ""
     # A WINDOW THE SCREEN CUT OFF DOWN ITS LEFT EDGE HAS NO CORNER ON SHOW.
