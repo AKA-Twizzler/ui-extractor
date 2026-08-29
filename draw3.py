@@ -3101,7 +3101,13 @@ def harmonise(states):
             _seen.add(k_)
             _one.append((sc_, c_))
         scored = _one
-        if scored and scored[0][0] >= 0.5 and (len(scored) == 1 or scored[0][0] - scored[1][0] >= 0.08):
+        # a mangled reading that half resembles ONE pool name and nothing
+        # else is that name: at 0.47 against reference_brand_voice_guide
+        # with the next name at 0.35, "rafaranra hrand unira aida md" is
+        # no other file in the folder
+        _top = scored[0][0] if scored else 0.0
+        _gap = (scored[0][0] - scored[1][0]) if len(scored) > 1 else 1.0
+        if scored and ((_top >= 0.5 and _gap >= 0.08) or (_top >= 0.42 and _gap >= 0.1)):
             c = scored[0][1]
             if re.search(r"(\.md|\bmd)$", name.strip()) and not c.lower().endswith(".md"):
                 c += ".md"

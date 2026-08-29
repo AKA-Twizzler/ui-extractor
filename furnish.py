@@ -17,6 +17,7 @@ labels) is drawn from what the program always shows.
 The classes are the vault's screen-notes style sheet, nothing else."""
 import html as H
 import os
+import sys
 import re
 
 import draw2
