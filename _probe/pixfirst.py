@@ -66,7 +66,7 @@ def divider(g, wb):
     none found, the window's own left edge (the crop cut the sidebar off)."""
     x0, y0, x1, y1 = wb
     band = g[y0 + int(0.2 * (y1 - y0)):y1 - int(0.1 * (y1 - y0)), x0:x0 + int(0.45 * (x1 - x0))]
-    col = band.mean(axis=0)
+    col = np.median(band, axis=0)          # the median: icons and words are sparse, the background is not
     sm = np.convolve(col, np.ones(9) / 9, mode="same")
     st = [(i, d) for i, d in steps(sm, 2.5) if d < 0 and i > 8]
     if not st:
@@ -105,7 +105,27 @@ def find_header(rgb, xl, x1, wb):
         texts = [w[4].strip() for w in words]
         joined = " ".join(texts).lower()
         if "name" in joined or "modified" in joined or "kind" in joined:
-            cols = [(xl + int(w[0]), w[4].strip()) for w in sorted(words, key=lambda w: w[0]) if len(w[4].strip()) > 1 and w[4].strip().lower() not in ("v", "^")]
+            # the column lefts from the header's own ink: runs of columns
+            # holding light pixels, split at gaps of thirty or more
+            band = rgb[a:b, xl:x1]
+            ink = (band.min(axis=2) > 90).sum(axis=0)
+            groups, start = [], None
+            for i, v in enumerate(ink):
+                if v > 0 and start is None:
+                    start = i
+                elif v == 0 and start is not None:
+                    groups.append([start, i]); start = None
+            if start is not None:
+                groups.append([start, len(ink)])
+            merged = []
+            for s_, e_ in groups:
+                if merged and s_ - merged[-1][1] < 30:
+                    merged[-1][1] = e_
+                else:
+                    merged.append([s_, e_])
+            merged = [(s_, e_) for s_, e_ in merged if e_ - s_ >= 20]
+            names = [w[4].strip() for w in sorted(words, key=lambda w: w[0])]
+            cols = [(xl + s_, names[k] if k < len(names) else "") for k, (s_, e_) in enumerate(merged)]
             return a, b, cols
     return None, None, []
 
