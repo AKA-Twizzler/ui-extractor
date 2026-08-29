@@ -693,9 +693,11 @@ def scroll_thumb(path, rect, reach=None, stop=None):
         # unknown, neither thumb nor track, and a thumb runs on through
         # them. A run counts only for the lit rows it holds.
         unk = dark[:, r].mean(axis=1) > 0.5
-        top, bot, lit_n = _longest_run(rows, unk)
-        if top is None or (bot - top + 1) < 0.08 * h or lit_n < 0.03 * h:
-            continue          # too short for a thumb: a mark, an icon's edge
+        top, bot, lit_n, cut = _longest_run(rows, unk)
+        # too short for a thumb (a mark, an icon's edge), unless a band cut
+        # it: what shows of a thumb above a band is the thumb, drawn as seen
+        if top is None or lit_n < 0.03 * h or ((bot - top + 1) < 0.08 * h and not cut):
+            continue
         if top <= 0.06 * h and bot >= 0.94 * h:
             continue          # a border or a divider: a thumb never touches both ends of its track
         cand = (top / float(h), (bot - top + 1) / float(h))
@@ -717,6 +719,7 @@ def _longest_run(on, unk):
         unk[:-s_] |= src[s_:]
     top = bot = None
     lit_n = 0
+    cut = False
     y = 0
     while y < n:
         if on[y] or unk[y]:
@@ -734,10 +737,11 @@ def _longest_run(on, unk):
                 cnt = int(on[a:b + 1].sum())
                 if top is None or (b - a) > (bot - top):
                     top, bot, lit_n = a, b, cnt
+                    cut = (a > y) or (b < y2)     # a band took the rest of it
             y = y2 + 1
         else:
             y += 1
-    return top, bot, lit_n
+    return top, bot, lit_n, cut
 
 
 def scroll_thumb_h(path, rect):
@@ -784,7 +788,7 @@ def scroll_thumb_h(path, rect):
             continue
         cols = lit[r, :].mean(axis=0) > 0.5
         unk = dark[r, :].mean(axis=0) > 0.5
-        left, right, lit_n = _longest_run(cols, unk)
+        left, right, lit_n, _cut = _longest_run(cols, unk)
         if left is None or (right - left + 1) < 0.08 * w or lit_n < 0.03 * w:
             continue
         if left <= 0.03 * w and right >= 0.97 * w:
