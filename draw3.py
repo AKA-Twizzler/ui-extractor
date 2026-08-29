@@ -4144,7 +4144,15 @@ def moment_thumbs(stx, m_, g_, wb, W):
     # which the tree's first line stands a head row below
     col_top = None
     if obsid and ref:
-        tops = [b[1] for b in boxed if _narrow(b)]
+        # the tree's first LINE, not its pane's box: the box starts at the
+        # ribbon's first icon, a tenth of the window above the tree
+        tops = []
+        for p_ in panes:
+            b_ = p_.get("box")
+            if not b_ or len(b_) != 4 or not _narrow(b_):
+                continue
+            its = [it["box"][1] for it in draw2.items_of(p_) if it.get("box")]
+            tops.append(min(its) if its else b_[1])
         col_top = max(ref[1], min(tops) - 0.045 * rh) if tops else ref[1] + 0.04 * rh
     list_pb = None
     saw_side = False
