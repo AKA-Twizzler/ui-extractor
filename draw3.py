@@ -3083,8 +3083,16 @@ def harmonise(states):
         looks like a file name at all is up for rescue."""
         if "_" in name or "..." in name or " " not in name:
             return None
-        if flat(name) in {flat(c) for c in clean}:
-            return None           # a name the pool already holds needs no rescue
+        def _mangled(c_):
+            # three or more lowercase words, no underscore, no extension:
+            # a reading of a file name and not a file name
+            return (" " in c_ and "_" not in c_ and "..." not in c_ and not re.search(r"\.\w{1,5}$", c_)
+                    and re.search(r"[a-z]{3,} [a-z]{3,} [a-z]{3,}", c_) is not None)
+        # a name the pool already holds needs no rescue -- held as a name,
+        # not as this same mangled reading, which every list row puts in the
+        # pool and which guarded the rescue against itself
+        if any(flat(c) == flat(name) and not _mangled(c) for c in clean):
+            return None
         f = re.sub(r"(md|m d)$", "", flat(name))
         if len(f) < 8:
             return None
