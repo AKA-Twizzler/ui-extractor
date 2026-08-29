@@ -661,7 +661,7 @@ def scroll_thumb(path, rect, reach=None, stop=None):
     # rows from `stop` down are off limits (the camera stands there): read
     # as track, with the share still of the whole rect
     k = h if stop is None else max(0, min(h, int(round(float(stop))) - y0))
-    bg = float(np.median(strip[:k])) if k > 0 else float(np.median(strip))
+    bg = _track(strip[:k] if k > 0 else strip)
     lit = strip > bg + 25
     if k < h:
         lit[k:, :] = False
@@ -709,6 +709,16 @@ def scroll_thumb(path, rect, reach=None, stop=None):
         if best is None or cand[1] > best[1]:
             best = cand
     return best
+
+
+def _track(strip):
+    """The track's own brightness: the median of what is not black. A frame
+    caught mid-scroll is black across most of a band, and the plain median
+    then says the track is black and everything else is lit."""
+    nb = strip[strip > 12]
+    if nb.size >= 0.2 * strip.size:
+        return float(np.median(nb))
+    return float(np.median(strip))
 
 
 def _longest_run(on, unk):
@@ -771,7 +781,7 @@ def scroll_thumb_h(path, rect):
     if w < 80 or h < 20:
         return None
     band = g[y0:y1, x0:x1]
-    bg = float(np.median(band))
+    bg = _track(band)
     lit = band > bg + 25
     dark = band < max(bg - 25, 0.5 * bg)
     row = lit.mean(axis=1)
