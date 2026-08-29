@@ -1138,6 +1138,84 @@ def _hole(short, long_):
     return bool(a2 and b2 and b2 != a2 and b2.endswith(a2))
 
 
+def word_vote(text, raw, need=3):
+    """The line's WORDS by the vote of its readings: a word changes only
+    when at least `need` moments read the whole word another way and more
+    of them than read it as drawn (the drawn line itself counting one). A
+    letter vote corrupted real words ("notes" to "noaes") because two
+    misread moments outvote a line's own single letter wherever they
+    happen to align; a whole word misread the same way by a majority of
+    moments is the truth, and nothing less is touched. Each reading is laid
+    over the stretch of the line's letters it matches best (within a tenth
+    of its letters), one vote a moment a word, and only a word of the same
+    length is a candidate. The spacing and the markup around the word stay."""
+    pl = plain_line(text)
+    if len(pl) < 12:
+        return text
+    # the drawn words, as spans of the letter string
+    words, k = [], 0
+    for m in re.finditer(r"[A-Za-z0-9\u2019']+", text):
+        w = m.group(0)
+        wn = norm(w)
+        if wn:
+            words.append((m.start(), m.end(), k, k + len(wn), wn))
+            k += len(wn)
+    if k != len(pl):
+        return text                        # the letters and the words disagree; leave it
+    tally = [dict() for _ in words]
+    seen = set()
+    for mi, r in raw:
+        rf = plain_line(r)
+        if not 6 <= len(rf) <= len(pl):
+            continue
+        if len(rf) >= 8 and not any(rf[i:i + 8] in pl for i in (0, len(rf) // 2 - 4, len(rf) - 8)):
+            continue
+        best, best_d = None, None
+        lim = max(1, len(rf) // 10)
+        for off in range(0, len(pl) - len(rf) + 1):
+            d = 0
+            for j in range(len(rf)):
+                if pl[off + j] != rf[j]:
+                    d += 1
+                    if d > lim:
+                        break
+            if d <= lim and (best_d is None or d < best_d):
+                best, best_d = off, d
+                if d == 0:
+                    break
+        if best is None:
+            continue
+        for wi, (_a, _b, s, e, wn) in enumerate(words):
+            if s < best or e > best + len(rf) or (wi, mi) in seen:
+                continue
+            seen.add((wi, mi))
+            v = rf[s - best:e - best]
+            tally[wi][v] = tally[wi].get(v, 0) + 1
+    out, h_swaps = text, []
+    for wi in range(len(words) - 1, -1, -1):
+        a, b, s, e, wn = words[wi]
+        votes = tally[wi]
+        own = votes.get(wn, 0) + 1
+        other = [(v, n) for v, n in votes.items() if v != wn and len(v) == len(wn)]
+        if not other:
+            continue
+        v, n = max(other, key=lambda vn: vn[1])
+        if n < need or n <= own:
+            continue
+        old = text[a:b]
+        new, j = [], 0
+        for ch in old:
+            if norm(ch):
+                new.append(v[j].upper() if ch.isupper() else v[j])
+                j += 1
+            else:
+                new.append(ch)
+        new = "".join(new)
+        out = out[:a] + new + out[b:]
+        h_swaps.append((old, new))
+    return out if not h_swaps else (out, h_swaps)
+
+
 def mend_prose(states):
     """A line of a note that something covered, filled from a reading of the
     SAME line taken when nothing did.
