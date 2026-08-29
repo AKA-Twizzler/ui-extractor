@@ -347,6 +347,14 @@ def finder(st):
     if on_card and home and len(home[0] or ()) > len(side_words):
         side_words = list(home[0])
     rows = table.rows if (table and table.rows) else []
+    # A ROW WITH NO NAME WHOSE OTHER CELLS ARE ANOTHER ROW'S IS THAT ROW READ
+    # AGAIN with its name lost (the memory list at 00:01:30 read one row as
+    # a date, a size and a kind and nothing before them); it folds away
+    _named = {tuple(str(c) for c in (r.get("cells") or [])[1:]) for r in rows
+              if r.get("cells") and r["cells"][0] and any(c for c in r["cells"][1:])}
+    rows = [r for r in rows
+            if not (r.get("cells") and not r["cells"][0]
+                    and tuple(str(c) for c in r["cells"][1:]) in _named)]
     # A FINDER'S LIST READ AS A TREE IS STILL ITS LIST. With only its Name
     # column in view, a file list comes back as a plain column of names and
     # the reader files it as a file tree. At 00:00:30 the vault-demo window's
