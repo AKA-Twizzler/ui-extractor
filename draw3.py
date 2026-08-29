@@ -1744,6 +1744,26 @@ class State:
                             if c and c[0]}
                     got = {norm(c[0]) for c, _i, _b in loose[3] if c and c[0]}
                     if len(have - got) <= 1:
+                        # THE ONE NAME THE REBUILD LOST IS CARRIED OVER, at its
+                        # own height. The rebuild from word positions dropped
+                        # the row every engine mangled ("rafaranra hrand unira
+                        # aida md" for reference_brand_voice_guide.md), whose
+                        # scattered words form no row for it, and the list
+                        # then held that file only as the nameless reading of
+                        # another moment; a row the blocks read is a row.
+                        lost = [row for row in (built[3] if built else [])
+                                if row[0] and row[0][0] and norm(row[0][0]) not in got]
+                        if lost:
+                            rows_ = list(loose[3])
+                            for row in lost:
+                                y_ = row[2][1] if (len(row) > 2 and row[2] and len(row[2]) == 4) else None
+                                at_ = len(rows_)
+                                if y_ is not None:
+                                    at_ = next((i for i, rr in enumerate(rows_)
+                                                if len(rr) > 2 and rr[2] and len(rr[2]) == 4 and rr[2][1] > y_), len(rows_))
+                                rows_.insert(at_, row)
+                            loose = list(loose)
+                            loose[3] = rows_
                         built = loose
                 if built:
                     part["model"].add(built)
