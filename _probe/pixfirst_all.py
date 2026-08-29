@@ -1,0 +1,113 @@
+"""Every frame of the memory window read pixels-first, then merged into one
+card. Run under the Windows venv:
+    python _probe/pixfirst_all.py <frames_dir_unc> <out_dir> [limit]
+"""
+import glob, json, os, re, sys
+from collections import Counter, defaultdict
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import pixfirst
+
+def norm(s):
+    return re.sub(r"[^a-z0-9]", "", (s or "").lower())
+
+def same_name(a, b):
+    """Two readings of one name: equal once folded, or one the other cut with dots."""
+    na, nb = norm(a), norm(b)
+    if not na or not nb:
+        return False
+    if na == nb:
+        return True
+    for cut, whole in ((a, b), (b, a)):
+        if ".." in cut:
+            head, tail = cut.split("..", 1)
+            head, tail = norm(head.rstrip(".")), norm(tail.lstrip("."))
+            w = norm(whole)
+            if head and tail and w.startswith(head) and w.endswith(tail) and len(w) >= len(head) + len(tail):
+                return True
+    # a letter or two off (the engine's own wobble)
+    if abs(len(na) - len(nb)) <= 2:
+        diff = sum(1 for x, y in zip(na, nb) if x != y) + abs(len(na) - len(nb))
+        return diff <= max(1, len(na) // 12)
+    return False
+
+def merge(records):
+    groups = []          # each: {"names": Counter, "rows": [...]}
+    for rec in records:
+        for r in rec["rows"]:
+            if r["cut"] or not r["cells"] or not r["cells"][0].strip():
+                if not r["cells"] or not r["cells"][0].strip():
+                    continue
+            name = r["cells"][0].strip()
+            hit = None
+            for gp in groups:
+                if any(same_name(name, n) for n in gp["names"]):
+                    hit = gp; break
+            if hit is None:
+                hit = {"names": Counter(), "rows": []}; groups.append(hit)
+            hit["names"][name] += 1
+            hit["rows"].append(dict(r, frame=rec["frame"]))
+    out = []
+    for gp in groups:
+        full = [r for r in gp["rows"] if not r["cut"]]
+        pool = full or gp["rows"]
+        whole = Counter(r["cells"][0] for r in pool if ".." not in r["cells"][0])
+        name = (whole.most_common(1)[0][0] if whole else Counter(r["cells"][0] for r in pool).most_common(1)[0][0])
+        cells = [name]
+        ncol = max(len(r["cells"]) for r in pool)
+        for k in range(1, ncol):
+            c = Counter(r["cells"][k].strip() for r in pool if k < len(r["cells"]) and r["cells"][k].strip())
+            cells.append(c.most_common(1)[0][0] if c else "")
+        icon = Counter(r["icon"] for r in pool).most_common(1)[0][0]
+        sel = any(r["selected"] for r in full)
+        out.append({"name": name, "cells": cells, "icon": icon, "selected": sel, "seen": len(gp["rows"]), "full": len(full)})
+    # the order: every frame's own sequence stitched together
+    order = []
+    def key_of(row):
+        for i, g in enumerate(out):
+            if same_name(row["cells"][0], g["name"]):
+                return i
+        return None
+    seqs = []
+    for rec in records:
+        seq = [key_of(r) for r in rec["rows"] if r["cells"] and r["cells"][0].strip()]
+        seqs.append([k for k in seq if k is not None])
+    seqs.sort(key=len, reverse=True)
+    for seq in seqs:
+        prev = None
+        for k in seq:
+            if k in order:
+                prev = k; continue
+            if prev is None:
+                order.insert(0, k)
+            else:
+                order.insert(order.index(prev) + 1, k)
+            prev = k
+    ordered = [out[k] for k in order] + [g for i, g in enumerate(out) if i not in order]
+    return ordered
+
+if __name__ == "__main__":
+    fdir, out = sys.argv[1], sys.argv[2]
+    limit = int(sys.argv[3]) if len(sys.argv) > 3 else 0
+    frames = sorted(glob.glob(os.path.join(fdir, "*.png")))
+    extra = [r"G:\Images\Move Memory Files Out of Claude Code Into Obsidian\Images\00-01-%s.png" % s for s in ("20", "30", "40")]
+    frames = extra + frames
+    if limit:
+        frames = frames[:limit]
+    recs = []
+    for i, f in enumerate(frames):
+        stem = os.path.splitext(os.path.basename(f))[0]
+        jp = os.path.join(out, stem + ".json")
+        if os.path.exists(jp):
+            recs.append(json.load(open(jp, encoding="utf-8"))); continue
+        try:
+            rec = pixfirst.read_frame(f, out, "memory")
+        except Exception as e:
+            print("FAILED", stem, e); continue
+        recs.append(rec)
+        print("%d/%d %s rows=%d full=%d thumb=%s side=%s" % (i + 1, len(frames), stem, len(rec["rows"]), sum(1 for r in rec["rows"] if not r["cut"]), rec["thumb"], rec["side_thumb"]), flush=True)
+    merged = merge(recs)
+    json.dump(merged, open(os.path.join(out, "merged.json"), "w", encoding="utf-8"), indent=1)
+    print("MERGED", len(merged), "rows")
+    for g in merged:
+        print(("SEL " if g["selected"] else "    ") + g["icon"].ljust(6), "%2d/%2d" % (g["full"], g["seen"]), " | ".join(g["cells"]))
+    print("PIXFIRST DONE")

@@ -136,8 +136,8 @@ def find_header(rgb, xl, x1, wb):
             merged = [(s_, e_) for s_, e_ in merged if e_ - s_ >= 35]     # a sort chevron is no column
             cols = []
             for s_, e_ in merged:
-                txt, _sc, _bl = read_cell(rgb, a - 2, b + 2, xl + s_ - 4, xl + e_ + 4)
-                cols.append((xl + s_, txt))
+                got = ocr(rgb[max(0, a - 6):b + 6, max(0, xl + s_ - 10):xl + e_ + 10], 3.0)
+                cols.append((xl + s_, " ".join(w[4] for w in sorted(got, key=lambda w: w[0])).strip()))
             return a, b, cols
     return None, None, []
 
@@ -174,7 +174,7 @@ def word_crops(rgb, ya, yb, ca, cb, gap=10):
             merged.append([s_, e_])
     return [(ca + s_, ca + e_) for s_, e_ in merged if e_ - s_ >= 4]
 
-def read_cell(rgb, ya, yb, ca, cb):
+def read_cell(rgb, ya, yb, ca, cb, twice=False):
     """A cell's text, one reading per word, joined with spaces: each word
     cropped with fourteen columns of margin and six rows, read at three
     times its size (four for a word under forty columns). Returns (text,
@@ -184,6 +184,12 @@ def read_cell(rgb, ya, yb, ca, cb):
     for wa, wb_ in word_crops(rgb, ya, yb, ca, cb):
         crop = rgb[max(0, ya - 6):min(H, yb + 6), max(ca, wa - 14):min(cb, wb_ + 14)]
         got = ocr(crop, 3.0 if (wb_ - wa) > 40 else 4.0)
+        if twice and (wb_ - wa) > 120:
+            # a long word (a file name) reads differently at two sizes; the
+            # engine's own confidence picks between them
+            got2 = ocr(crop, 2.0)
+            if got2 and (not got or np.mean([w[5] for w in got2]) > np.mean([w[5] for w in got])):
+                got = got2
         txt = "".join(w[4] for w in sorted(got, key=lambda w: w[0])).strip()
         if txt:
             words.append(txt); scores.extend(w[5] for w in got)
@@ -236,7 +242,7 @@ def read_frame(path, out_dir, title_hint="memory"):
     for (a, b) in bands_:
         cy = (a + b) / 2.0
         ry0, ry1 = int(cy - pitch / 2.0), int(cy + pitch / 2.0)
-        cut = (a - list_top <= 4) or (list_bot - b <= 4) or ((b - a) < 0.6 * band_h)
+        cut = (a - list_top <= 12) or (list_bot - b <= 12) or ((b - a) < 0.75 * band_h)
         sel_c = rgb[max(a, ry0):min(b, ry1), xl + 200:x1 - 80].astype(np.float32)
         sel = bool(((sel_c[:, :, 1] - np.maximum(sel_c[:, :, 0], sel_c[:, :, 2])) > 25).mean() > 0.4) if sel_c.size else False
         icon, n = icon_of(rgb, max(list_top, ry0), min(list_bot, ry1), ic0, ic1)
@@ -250,10 +256,10 @@ def read_frame(path, out_dir, title_hint="memory"):
                 cb = x1 - 60
             if cb - ca < 30 or yb - ya < 8:
                 cells.append(""); continue
-            txt, sc, blank = read_cell(rgb, ya, yb, ca, cb)
+            txt, sc, blank = read_cell(rgb, ya, yb, ca, cb, twice=(k == 0))
             cells.append(txt); scores.append(sc); blanks += blank
         conf = float(np.mean([s for s in scores if s > 0])) if any(s > 0 for s in scores) else 0.0
-        if conf < 0.6:
+        if conf < 0.7:
             cut = True                     # read too poorly to stand: a row the edge or the pointer spoiled
         out_rows.append({"y": [int(ry0), int(ry1)], "ink": [int(a), int(b)], "selected": sel, "cut": bool(cut), "icon": icon,
                          "cells": cells, "conf": round(conf, 3), "blank": blanks})
