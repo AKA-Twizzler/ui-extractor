@@ -8,7 +8,7 @@ bar -- and only then are the words read, row by row, into that structure.
 Run under the Windows venv (cv2, rapidocr):
     python _probe/pixfirst.py <frame.png> <out_dir> [<title>]
 """
-import json, os, sys
+import json, os, re, sys
 import numpy as np
 from PIL import Image, ImageDraw
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -191,11 +191,45 @@ def read_cell(rgb, ya, yb, ca, cb, twice=False):
             if got2 and (not got or np.mean([w[5] for w in got2]) > np.mean([w[5] for w in got])):
                 got = got2
         txt = "".join(w[4] for w in sorted(got, key=lambda w: w[0])).strip()
+        if twice and (wb_ - wa) > 120:
+            # THE SECOND ENGINE ON A FILE NAME: the first drops underscores
+            # and reads a stroke as a dot; tesseract keeps them. Where the
+            # two agree once folded and only the second has the underscores,
+            # the second stands.
+            alt = tess_word(crop)
+            fa, fb = re.sub(r"[^a-z0-9]", "", alt.lower()), re.sub(r"[^a-z0-9]", "", txt.lower())
+            if alt and (not txt or ("_" in alt and "_" not in txt and _close(fa, fb))):
+                txt = alt
         if txt:
             words.append(txt); scores.extend(w[5] for w in got)
         else:
             blank += 1
     return " ".join(words), (float(np.mean(scores)) if scores else 0.0), blank
+
+def _close(a, b):
+    if not a or not b:
+        return False
+    if abs(len(a) - len(b)) > max(2, len(a) // 8):
+        return False
+    n = min(len(a), len(b))
+    diff = sum(1 for x, y in zip(a[:n], b[:n]) if x != y) + abs(len(a) - len(b))
+    return diff <= max(2, len(a) // 6)
+
+def tess_word(rgb_crop):
+    """One word read by the second engine: enlarged four times, turned to
+    dark writing on light paper, one line (psm 7)."""
+    try:
+        import cv2, verify_names
+    except Exception:
+        return ""
+    im = Image.fromarray(rgb_crop).convert("L")
+    im = im.resize((im.width * 4, im.height * 4), Image.LANCZOS)
+    g = np.asarray(im)
+    ink = (255 - g) if float(np.median(g)) < 128 else g
+    try:
+        return verify_names._tess_line(np.ascontiguousarray(ink), psm=7)
+    except Exception:
+        return ""
 
 def icon_of(rgb, y0, y1, x0, x1):
     """What the icon at a row's head is, by its colour: folder (green), md
