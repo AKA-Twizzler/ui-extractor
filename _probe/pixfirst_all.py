@@ -120,9 +120,18 @@ def merge(records):
             for s2 in seqs:
                 if s2 is seq:
                     continue
-                for a in range(len(s2) - 2):
-                    if prev_ is not None and next_ is not None and s2[a] == prev_ and s2[a + 2] == next_:
-                        between[s2[a + 1]] += 1
+                if prev_ is not None and next_ is not None:
+                    for a in range(len(s2) - 2):
+                        if s2[a] == prev_ and s2[a + 2] == next_:
+                            between[s2[a + 1]] += 1
+                elif next_ is not None:               # the stray heads its frame: the row before next_ elsewhere
+                    for a in range(1, len(s2)):
+                        if s2[a] == next_:
+                            between[s2[a - 1]] += 1
+                elif prev_ is not None:               # the stray ends its frame: the row after prev_ elsewhere
+                    for a in range(len(s2) - 1):
+                        if s2[a] == prev_:
+                            between[s2[a + 1]] += 1
             if between:
                 x, n = between.most_common(1)[0]
                 if x != i and out[x]["seen"] >= 3:
