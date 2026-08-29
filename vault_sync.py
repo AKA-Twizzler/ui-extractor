@@ -48,11 +48,11 @@ def main():
             old_lines = open(target, encoding="utf-8").read().splitlines()
             if old_lines[:1] == ["---"] and "---" in old_lines[1:]:
                 end = old_lines.index("---", 1)
-                kept = old_lines[:end]
+                front = old_lines[:end]
                 # a kept front matter still names its master
-                if not any(ln.startswith("source:") for ln in kept):
-                    kept.append(f"source: G:\\Images\\{title}\\{title}.md")
-                head = kept + ["---", ""]
+                if not any(ln.startswith("source:") for ln in front):
+                    front.append(f"source: G:\\Images\\{title}\\{title}.md")
+                head = front + ["---", ""]
         for i, ln in enumerate(body):
             if ln.startswith("# "):
                 body.insert(i + 1, "")
