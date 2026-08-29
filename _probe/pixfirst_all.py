@@ -2,7 +2,7 @@
 card. Run under the Windows venv:
     python _probe/pixfirst_all.py <frames_dir_unc> <out_dir> [limit]
 """
-import glob, json, os, re, sys
+import difflib, glob, json, os, re, sys
 from collections import Counter, defaultdict
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import pixfirst
@@ -11,7 +11,9 @@ def norm(s):
     return re.sub(r"[^a-z0-9]", "", (s or "").lower())
 
 def same_name(a, b):
-    """Two readings of one name: equal once folded, or one the other cut with dots."""
+    """Two readings of one name: equal once folded; one the other cut with
+    dots; or close enough once folded that only the engine's wobble
+    separates them (a letter dropped, an underscore read as a dot)."""
     na, nb = norm(a), norm(b)
     if not na or not nb:
         return False
@@ -24,11 +26,11 @@ def same_name(a, b):
             w = norm(whole)
             if head and tail and w.startswith(head) and w.endswith(tail) and len(w) >= len(head) + len(tail):
                 return True
-    # a letter or two off (the engine's own wobble)
-    if abs(len(na) - len(nb)) <= 2:
-        diff = sum(1 for x, y in zip(na, nb) if x != y) + abs(len(na) - len(nb))
-        return diff <= max(1, len(na) // 12)
-    return False
+    if min(len(na), len(nb)) >= 8 and difflib.SequenceMatcher(None, na, nb).ratio() >= 0.86:
+        return True
+    # a reading that lost its head (the pointer over it): the tail of the other
+    short, long_ = (na, nb) if len(na) < len(nb) else (nb, na)
+    return len(short) >= 0.6 * len(long_) and long_.endswith(short)
 
 def merge(records):
     """The rows of every frame folded into one list: a full row (not cut,
@@ -42,6 +44,9 @@ def merge(records):
             if any(same_name(name, n) for n in gp["names"]):
                 return gp
         return None
+    # a frame of another folder (the two rows of the parent before the
+    # memory folder opened) is not this window: fewer than five rows
+    records = [rec for rec in records if len(rec["rows"]) >= 5]
     for pass_ in ("full", "cut"):
         for rec in records:
             for r in rec["rows"]:
