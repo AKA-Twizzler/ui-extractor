@@ -206,21 +206,16 @@ def flat_(s):
 _FOLD_ = str.maketrans({"0": "o", "1": "l", "i": "l"})
 
 
-def scroll_bar(shown, total, first=0, measured=None):
+def scroll_bar(shown, total, first=0):
     """A scroll bar where the window had one: the thumb as tall as the
     share of the content showing, standing where the showing part begins.
     Nothing where everything shows. The reader never reports a scroll bar,
     but the note knows what the window holds and what one moment showed,
     which is exactly what a scroll bar says."""
-    if measured:
-        # the thumb as the frame showed it, read off the picture
-        top = max(0.0, min(1.0, float(measured[0])))
-        h = max(0.04, min(1.0 - top, float(measured[1])))
-    elif not total or not shown or shown >= total:
+    if not total or not shown or shown >= total:
         return ""
-    else:
-        top = max(0.0, min(1.0, float(first) / total))
-        h = max(0.04, min(1.0 - top, float(shown) / total))
+    top = max(0.0, min(1.0, float(first) / total))
+    h = max(0.04, min(1.0 - top, float(shown) / total))
     return ('<div class="sn-scroll"><div class="sn-thumb" style="top:%.1f%%;height:%.1f%%"></div></div>'
             % (100 * top, 100 * h))
 
@@ -560,10 +555,7 @@ def finder(st):
     # the real window ever showed at once against all of them
     parent = getattr(st, "_parent", None)
     names_here = [str((r.get("cells") or [""])[0] or "") for r in rows]
-    thumb_ = (getattr(st, "_thumbs", None) or {}).get("list")
-    if thumb_:
-        bar = scroll_bar(0, 0, 0, measured=thumb_)
-    elif parent is not None and parent.main_table() and parent.main_table().rows:
+    if parent is not None and parent.main_table() and parent.main_table().rows:
         whole_rows = [str((r.get("cells") or [""])[0] or "") for r in parent.main_table().rows]
         bar = scroll_bar(len(rows), len(whole_rows), first_index(names_here, whole_rows))
     elif on_card and rows:
@@ -847,10 +839,7 @@ def obsidian(st, behind=True):
         parent = getattr(st, "_parent", None)
         ptree = parent.tree() if parent is not None else None
         shown_txt = [t.strip("│ ˃˅") for t, _h in tree.lines]
-        thumb_t = (getattr(st, "_thumbs", None) or {}).get("tree")
-        if thumb_t:
-            tree_bar = scroll_bar(0, 0, 0, measured=thumb_t)
-        elif ptree and ptree.lines:
+        if ptree and ptree.lines:
             whole_txt = [t.strip("│ ˃˅") for t, _h in ptree.lines]
             tree_bar = scroll_bar(len(tree.lines), len(ptree.lines), first_index(shown_txt, whole_txt))
         elif not getattr(st, "shape", None):
@@ -878,10 +867,7 @@ def obsidian(st, behind=True):
         # (`sn-page`), so the note sits where the frame shows it.
         card_line = getattr(st, "_card_line", None) if not getattr(st, "shape", None) else None
         if card_line:
-            # the line length the note really ran to, with a floor for the
-            # card: a column a third of the pane reads on a 4K screen and
-            # not on a card ("looks like it's all stuffed")
-            wide = max(round(100 * card_line), 55)
+            wide = round(100 * card_line)
         bits = ([f"padding-top:{pad}px"] if pad else []) + \
                ([f"--sn-line:{wide}%"] if wide and wide < 98 else []) + \
                (["position:relative"] if blocks else [])
@@ -891,10 +877,7 @@ def obsidian(st, behind=True):
             inner = f'<div class="sn-page">{inner}</div>'
         parent = getattr(st, "_parent", None)
         pdoc = parent.main_doc() if parent is not None else None
-        thumb_d = (getattr(st, "_thumbs", None) or {}).get("doc")
-        if thumb_d:
-            doc_bar = scroll_bar(0, 0, 0, measured=thumb_d)
-        elif pdoc and pdoc.lines and doc.lines:
+        if pdoc and pdoc.lines and doc.lines:
             shown_d = [t for t, _h in doc.lines]
             whole_d = [t for t, _h in pdoc.lines]
             doc_bar = scroll_bar(len(doc.lines), len(pdoc.lines), first_index(shown_d, whole_d))
@@ -918,9 +901,7 @@ def obsidian(st, behind=True):
         # readable, and no wider than that: at 45% the floor tripled the
         # tree's true share of the window; the names it cuts end in an
         # ellipsis as Obsidian's own do
-        # the card shows its names whole where they are known whole: the
-        # tree may take up to a third of the card for them
-        st._tree_min = "min(%dch, 32%%)" % min(44, tree_ch + 2)
+        st._tree_min = "min(%dch, 20%%)" % min(44, tree_ch + 2)
     # IN THE WINDOW'S OWN UNIT, so a picture drawn small keeps the tree at its
     # share: a bare 120px floor stood at a quarter of the maximised Obsidian at
     # 00:04:00, where the frame had the tree at an eighth. A card sets no unit

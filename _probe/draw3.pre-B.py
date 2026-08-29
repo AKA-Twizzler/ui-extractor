@@ -6935,7 +6935,6 @@ def note(records_path, diary_text=None):
                     return None
             return box, anchor
 
-        _prev_shapes = {}     # where every window stood in the last picture
         for s in spans:
             subjects = []
             still = {}        # a window carried from the moment it stood still at
@@ -8363,88 +8362,6 @@ def note(records_path, diary_text=None):
                         s["t0"], T[0], T[1], T[2], [round(v) for v in zoom_box]), file=sys.stderr)
             else:
                 _ghosts = ghost_list(s, sub_states, carded)
-            # THE SCROLL THUMBS READ OFF THE FRAME: for each window drawn
-            # full, the thumb its list, tree or note pane showed at this
-            # moment (shapes.scroll_thumb); the drawing puts it where it was
-            _kinds = {"a list of columns": "list", "a file tree": "tree", "an open document": "doc"}
-            for stx, sl, shape in subjects:
-                th = {}
-                for m_, g_ in getattr(stx, "pieces", ()):
-                    if m_["ts"] != s["t0"]:
-                        continue
-                    fp = frame_of(m_)
-                    wb = None
-                    try:
-                        wb = rect_at(stx, s["t0"])[1]
-                    except Exception:
-                        wb = None
-                    for p_ in sorted((g_.get("panes") or []),
-                                     key=lambda q_: -((q_.get("box") or [0, 0, 0, 0])[2] - (q_.get("box") or [0, 0, 0, 0])[0])):
-                        kd = _kinds.get(p_.get("kind"))
-                        pb = p_.get("box")
-                        if not kd or not pb or len(pb) != 4 or kd in th:
-                            continue
-                        if wb and furnish._within(pb, wb) < 0.8:
-                            continue
-                        t_ = shapes.scroll_thumb(fp, pb)
-                        if t_:
-                            th[kd] = t_
-                sl._thumbs = th
-                if th and os.environ.get("SN_ZOOM"):
-                    print("THUMB %s %s: %s" % (s["t0"], label_for(stx, s["t0"]), th), file=sys.stderr)
-            # ONE WINDOW CARRIES ITS CONTENT; EVERY OTHER STANDS AS A NAMED
-            # OUTLINE. Tristan's choice, B, after content everywhere was on
-            # the table: the cards below hold every window whole, so the
-            # picture says which window the moment was about and where the
-            # rest stood. The window the moment is about: the one the video
-            # zoomed in on; else one no other window stands over; else one
-            # that appeared or moved since the last picture; else the one
-            # read fullest; else the biggest.
-            _now_shapes = {id(stx): list(shape) for stx, _, shape in subjects if shape}
-            if len(subjects) > 1:
-                _zb = zoom_box
-                _W = float(s["size"][0])
-
-                def _about(x):
-                    stx, sl, shape = x
-                    if not shape:
-                        return (-1, 0, 0, 0, 0)
-                    i = subjects.index(x)
-                    inzoom = 1 if (_zb and furnish._within(shape, _zb) > 0.6) else 0
-                    over = max((furnish._within(shape, y[2]) for y in subjects[i + 1:] if y[2]), default=0.0)
-                    prev = _prev_shapes.get(id(stx))
-                    fresh = 1 if (prev is None or max(abs(a - b) for a, b in zip(prev, shape)) > 0.05 * _W) else 0
-                    t_ = sl.main_table()
-                    read = len(t_.rows) if t_ else sum(len(q["model"].lines) for q in sl.parts
-                                                       if q["fam"] in ("tree", "doc", "term") and hasattr(q["model"], "lines"))
-                    area = (shape[2] - shape[0]) * (shape[3] - shape[1])
-                    return (inzoom, 1 if over < 0.3 else 0, fresh, read, area)
-                lead = max(subjects, key=_about)
-                for x in subjects:
-                    if x is not lead and x[2]:
-                        behinds.append((label_for(x[0], s["t0"]), list(x[2])))
-                if os.environ.get("SN_ZOOM"):
-                    print("LEAD %s: %s, of %d" % (s["t0"], label_for(lead[0], s["t0"]), len(subjects)), file=sys.stderr)
-                subjects = [lead]
-            _prev_shapes = _now_shapes
-            # ONE WINDOW OF A PROGRAM THE VIDEO ONLY EVER HAD ONE OF IS ONE
-            # OUTLINE: the crop's own reading of Obsidian at 00:03:10 stood
-            # as a second Obsidian box inside the whole one
-            def _app_(t_):
-                return (t_ or "").split(":")[0].split(",")[0].strip()
-            _apps = [label_for(x_).split(":")[0].strip() for x_ in states if is_real_window(x_.name)]
-            _single = {a_ for a_ in set(_apps) if _apps.count(a_) == 1}
-            _marks = [(b_, t_, "behind", None) for t_, b_ in behinds if b_] + \
-                     [(b_, t_, "ghost", k_) for b_, t_, k_ in (_ghosts or ()) if b_]
-            _marks.sort(key=lambda mk: -((mk[0][2] - mk[0][0]) * (mk[0][3] - mk[0][1])))
-            _kept = []
-            for b_, t_, src_, k_ in _marks:
-                if _app_(t_) in _single and any(_app_(t2) == _app_(t_) and furnish._within(b_, b2) > 0.9
-                                                for b2, t2, _s2, _k2 in _kept):
-                    continue
-                _kept.append((b_, t_, src_, k_))
-            behinds = [(t_, b_) for b_, t_, src_, k_ in _kept if src_ == "behind"]
-            _ghosts = [(b_, t_, k_) for b_, t_, src_, k_ in _kept if src_ == "ghost"]
             _shot = (furnish.screen_shot(
                 {"t0": s["t0"], "t1": s["t1"]},
                 [(sl, shape) for _, sl, shape in subjects],
@@ -8842,12 +8759,7 @@ def note(records_path, diary_text=None):
                     if not 0.04 <= t_ <= 0.5 or tr["box"][2] > dc["box"][0]:
                         continue
                     xs = [it["box"] for it in draw2.items_of(dc) if it["box"][2] - it["box"][0] > 20]
-                    # the editor ends at the screen's edge where the window
-                    # runs past it: measured against the window's own right
-                    # edge off the screen, the note's column came out a
-                    # quarter of the pane when the frame shows a third
-                    _fw = float((m_.get("size") or [rect[2]])[0])
-                    editor = float(min(rect[2], _fw) - tr["box"][2])
+                    editor = float(rect[2] - tr["box"][2])
                     if len(xs) >= 3 and editor > 0:
                         span = max(b[2] for b in xs) - min(b[0] for b in xs)
                         l_ = span / editor
