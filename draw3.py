@@ -4091,10 +4091,12 @@ _THUMB_KINDS = {"a list of columns": "list", "a file tree": "tree", "an open doc
 
 def moment_thumbs(stx, m_, g_, wb, W):
     """The thumbs a window's panes show at one moment, read off the frame:
-    {"list"|"tree"|"doc"|"side": (top_share, height_share)}. A narrow pane
-    at the window's left edge is the tree in Obsidian and the sidebar in
-    Finder whatever the reader called it; a sidebar's band reaches to the
-    next pane's first word; a pane's band is read above the camera only."""
+    {"list"|"tree"|"doc"|"side": (top_share, height_share), "list_h":
+    (left_share, width_share)}. A narrow pane at the window's left edge is
+    the tree in Obsidian and the sidebar in Finder whatever the reader
+    called it; a sidebar's band reaches to the next pane's first word; a
+    pane's band is read above the camera only; the share is of the column
+    the bar is drawn in, not of the pane's words."""
     import furnish
     th = {}
     fp = frame_of(m_)
@@ -4102,8 +4104,13 @@ def moment_thumbs(stx, m_, g_, wb, W):
         cam_ = shapes.camera_box(fp)
     except Exception:
         cam_ = None
+    trace = os.environ.get("SN_THUMBS")
+    W = float(W)
+    wh = (wb[3] - wb[1]) if wb else None
+    who = label_for(stx, m_.get("ts")) if trace else ""
     panes = sorted((g_.get("panes") or []),
                    key=lambda q_: -((q_.get("box") or [0, 0, 0, 0])[2] - (q_.get("box") or [0, 0, 0, 0])[0]))
+    list_pb = None
     for p_ in panes:
         kd = _THUMB_KINDS.get(p_.get("kind")) or ("text" if p_.get("kind") == "text, not a tree" else None)
         pb = p_.get("box")
@@ -4112,17 +4119,14 @@ def moment_thumbs(stx, m_, g_, wb, W):
         pb = list(pb)
         _vo = (min(pb[3], wb[3]) - max(pb[1], wb[1])) / max(1.0, pb[3] - pb[1]) if wb else 1.0
         if wb and furnish._within(pb, wb) < 0.8 and furnish._within(wb, pb) < 0.5 \
-                and not ((wb[2] - wb[0]) >= 0.6 * float(W) and pb[0] >= wb[0] - 0.05 * float(W) and _vo >= 0.4):
+                and not ((wb[2] - wb[0]) >= 0.6 * W and pb[0] >= wb[0] - 0.05 * W and _vo >= 0.4):
             continue
-        if cam_ and pb[2] + 0.05 * (pb[2] - pb[0]) > cam_[0] and pb[2] - 0.03 * (pb[2] - pb[0]) < cam_[2] \
-                and pb[3] > cam_[1] and pb[1] < cam_[3]:
-            pb = [pb[0], pb[1], pb[2], min(pb[3], cam_[1])]
-            if pb[3] - pb[1] < 0.2 * (wb[3] - wb[1] if wb else pb[3] - pb[1]):
-                continue
         if wb and (pb[2] - pb[0]) < 0.35 * (wb[2] - wb[0]) and abs(pb[0] - wb[0]) < 0.05 * (wb[2] - wb[0]):
             kd = "tree" if stx.name == "The Obsidian window" else "side"
         if kd == "tree" and stx.name == "The Finder window":
             kd = "side"
+        if kd == "list" and stx.name == "The Finder window" and list_pb is None:
+            list_pb = list(pb)
         if kd == "text" or kd in th:
             continue
         reach_ = None
@@ -4141,9 +4145,50 @@ def moment_thumbs(stx, m_, g_, wb, W):
             if x_end and x_end > pb[2] + 8:
                 reach_ = (x_end - pb[2]) + 28
                 pb = [pb[0], pb[1], x_end - 4, pb[3]]
-        t_ = shapes.scroll_thumb(fp, pb, reach=reach_)
+            # THE SHARE IS OF THE COLUMN THE BAR IS DRAWN IN, not of the
+            # pane's words: a Finder's sidebar runs the window's full height
+            # and Obsidian's explorer runs from under the tabs to the foot,
+            # where the pane's box stops at its last read line, and a thumb
+            # measured against the short box stood too low and too tall
+            if wb:
+                if kd == "side":
+                    pb = [pb[0], wb[1], pb[2], wb[3]]
+                else:
+                    pb = [pb[0], max(wb[1], pb[1] - 0.045 * wh), pb[2], wb[3]]
+        # the band is read above the camera only
+        stop_ = None
+        if cam_ and pb[2] + 0.05 * (pb[2] - pb[0]) > cam_[0] and pb[2] - 0.03 * (pb[2] - pb[0]) < cam_[2] \
+                and pb[3] > cam_[1] and pb[1] < cam_[3]:
+            stop_ = cam_[1]
+            if stop_ - pb[1] < 0.2 * (pb[3] - pb[1]):
+                continue
+        t_ = shapes.scroll_thumb(fp, pb, reach=reach_, stop=stop_)
+        if trace:
+            print("THUMB %s %s %s box=%s reach=%s stop=%s -> %s" % (
+                m_.get("ts"), who, kd, [int(v) for v in pb], reach_, stop_, t_), file=sys.stderr)
         if t_:
             th[kd] = t_
+    # A FINDER THE CROP CUT DOWN ITS LEFT SIDE keeps its sidebar's bar just
+    # inside the frame's edge, though the sidebar's words are off the frame:
+    # the band runs from the frame's edge to the list's first column
+    if stx.name == "The Finder window" and "side" not in th and wb and list_pb and wb[0] < 0.02 * W:
+        x1 = list_pb[0] - 6
+        if x1 > 40:
+            pb = [0, wb[1], x1, wb[3]]
+            t_ = shapes.scroll_thumb(fp, pb, reach=x1)
+            if trace:
+                print("THUMB %s %s side(cut) box=%s reach=%s -> %s" % (
+                    m_.get("ts"), who, [int(v) for v in pb], x1, t_), file=sys.stderr)
+            if t_:
+                th["side"] = t_
+    # the list's sideways bar, along the window's foot
+    if stx.name == "The Finder window" and wb and list_pb:
+        pb = [list_pb[0], wb[3] - 0.12 * wh, wb[2], wb[3]]
+        t_ = shapes.scroll_thumb_h(fp, pb)
+        if trace:
+            print("THUMB %s %s list_h box=%s -> %s" % (m_.get("ts"), who, [int(v) for v in pb], t_), file=sys.stderr)
+        if t_:
+            th["list_h"] = t_
     return th
 
 
@@ -8662,6 +8707,39 @@ def note(records_path, diary_text=None):
             if len(subjects) > 1:
                 _zb = zoom_box
                 _W, _H = float(s["size"][0]), float(s["size"][1])
+                # A WINDOW THE CROP CUT TO A STRIP IS THE WHOLE WINDOW, CUT.
+                # The reader boxed only the strip in view, and a strip is
+                # drawn as a bare outline where the picture before drew the
+                # same window whole and clipped at the crop. One style for
+                # every zoomed picture: the window's box from the picture
+                # before, anchored on the edge the crop did not cut, and the
+                # crop clips it as it clips the others. Tristan: "it must be
+                # only one style and pick it throughout the rest of the
+                # zoomed in windows".
+                if _zb:
+                    _fixed = []
+                    for stx, sl, shape in subjects:
+                        prev = _prev_shapes.get(id(stx))
+                        if (shape and prev and (shape[2] - shape[0] < 0.15 * _W or shape[3] - shape[1] < 0.12 * _H)
+                                and prev[2] - prev[0] >= 0.15 * _W and prev[3] - prev[1] >= 0.12 * _H):
+                            pw, ph = prev[2] - prev[0], prev[3] - prev[1]
+                            nb = list(shape)
+                            if abs(shape[0] - _zb[0]) < 0.015 * _W:
+                                nb[0] = shape[2] - pw
+                            elif abs(shape[2] - _zb[2]) < 0.015 * _W:
+                                nb[2] = shape[0] + pw
+                            if abs(shape[1] - _zb[1]) < 0.015 * _H:
+                                nb[1] = shape[3] - ph
+                            elif abs(shape[3] - _zb[3]) < 0.015 * _H:
+                                nb[3] = shape[1] + ph
+                            if nb != list(shape):
+                                if os.environ.get("SN_ZOOM"):
+                                    print("STRIP %s: %s %s -> %s" % (s["t0"], label_for(stx, s["t0"]),
+                                          [int(v) for v in shape], [int(v) for v in nb]), file=sys.stderr)
+                                shape = nb
+                                _now_shapes[id(stx)] = list(nb)
+                        _fixed.append((stx, sl, shape))
+                    subjects = _fixed
 
                 def _area(b_):
                     return max(0.0, (b_[2] - b_[0]) * (b_[3] - b_[1]))

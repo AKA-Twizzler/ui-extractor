@@ -629,7 +629,7 @@ def camera_box(path):
 _THUMB_FRAMES = {}
 
 
-def scroll_thumb(path, rect, reach=None):
+def scroll_thumb(path, rect, reach=None, stop=None):
     """The scroll thumb a pane shows, read off the frame: a light, thin,
     vertical bar hugging the pane's right edge, as tall as the share of the
     content in view and standing where that share begins. Returns
@@ -658,8 +658,13 @@ def scroll_thumb(path, rect, reach=None):
     strip = g[y0:y1, bx0:bx1]
     if strip.size == 0:
         return None
-    bg = float(np.median(strip))
+    # rows from `stop` down are off limits (the camera stands there): read
+    # as track, with the share still of the whole rect
+    k = h if stop is None else max(0, min(h, int(round(float(stop))) - y0))
+    bg = float(np.median(strip[:k])) if k > 0 else float(np.median(strip))
     lit = strip > bg + 25
+    if k < h:
+        lit[k:, :] = False
     col = lit.mean(axis=0)
     cols = [int(c) for c in np.where((col > 0.04) & (col < 0.95))[0]]
     if not cols:
@@ -676,6 +681,8 @@ def scroll_thumb(path, rect, reach=None):
     # one part in eighty of the frame, whatever the pane's own width
     widest = max(24, int(0.012 * W), int(0.05 * w))
     dark = strip < bg - 25
+    if k < h:
+        dark[k:, :] = False
     best = None
     for r in runs:
         if not 5 <= len(r) <= widest:
