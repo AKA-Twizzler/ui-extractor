@@ -1138,6 +1138,62 @@ def _hole(short, long_):
     return bool(a2 and b2 and b2 != a2 and b2.endswith(a2))
 
 
+def vote_line(text, raw):
+    """The line's letters by the vote of its readings, its spacing kept.
+    Each reading of the line (`same_doc_line`) is laid over the stretch of
+    the line's letters it matches best -- the offset with the fewest
+    letters different, at most a tenth of it -- and every position takes
+    the letter most readings put there, the drawn line's own letter
+    counting once. Nothing but a substitution can come of it: the count of
+    letters never changes."""
+    pl = plain_line(text)
+    if len(pl) < 12:
+        return text
+    votes = [{} for _ in pl]
+    for i, ch in enumerate(pl):
+        votes[i][ch] = 1
+    n = 0
+    for r in raw:
+        if not same_doc_line(r, text):
+            continue
+        rf = plain_line(r)
+        if not 6 <= len(rf) <= len(pl):
+            continue
+        best, best_d = None, None
+        for off in range(0, len(pl) - len(rf) + 1):
+            d = 0
+            lim = max(1, len(rf) // 10)
+            for k in range(len(rf)):
+                if pl[off + k] != rf[k]:
+                    d += 1
+                    if d > lim:
+                        break
+            if d <= lim and (best_d is None or d < best_d):
+                best, best_d = off, d
+                if d == 0:
+                    break
+        if best is None:
+            continue
+        n += 1
+        for k in range(len(rf)):
+            votes[best + k][rf[k]] = votes[best + k].get(rf[k], 0) + 1
+    if not n:
+        return text
+    won = "".join(max(v.items(), key=lambda kv: (kv[1], kv[0] == pl[i]))[0] for i, v in enumerate(votes))
+    if won == pl:
+        return text
+    out, k = [], 0
+    for ch in text:
+        if ch.isalnum():
+            w = won[k] if k < len(won) else ch
+            out.append(w.upper() if ch.isupper() else w)
+            k += 1
+        else:
+            out.append(ch)
+    t2 = "".join(out)
+    return t2 if plain_line(t2) == won else text
+
+
 def mend_prose(states):
     """A line of a note that something covered, filled from a reading of the
     SAME line taken when nothing did.
@@ -6447,9 +6503,10 @@ def note(records_path, diary_text=None):
     # here and there: "02 Company A/ : the first business" was read ten
     # times with the 0 (glued) and eight times with a 6 (spaced), and the
     # spaced reading stood, 6 and all, because the merge prefers words to
-    # glue. The letters are the majority's; the spacing stays the drawn
-    # line's own. Only a pure substitution is taken (the same letters
-    # count), so a fragment or a re-wrapped reading changes nothing.
+    # glue. A drawn line is the joined whole of wrapped readings, so the
+    # vote is per letter: each reading is laid over the stretch of the
+    # drawn line it matches best, and every position takes the letter most
+    # readings put there. The spacing stays the drawn line's own.
     for st in all_states:
         raw = []
         for m_, g_ in (getattr(st, "pieces", None) or ()):
@@ -6463,44 +6520,16 @@ def note(records_path, diary_text=None):
                 continue
             fixed = []
             for t_, h_ in q["model"].lines:
-                pl = plain_line(t_)
-                if len(pl) < 12:
+                t2 = vote_line(t_, raw)
+                if t2 == t_:
                     fixed.append((t_, h_))
                     continue
-                tally = {}
-                for r_ in raw:
-                    if same_doc_line(r_, t_):
-                        k_ = plain_line(r_)
-                        tally[k_] = tally.get(k_, 0) + 1
-                if not tally:
-                    fixed.append((t_, h_))
-                    continue
-                win = max(tally.items(), key=lambda kv: (kv[1], kv[0] == pl))[0]
-                if win == pl or len(win) != len(pl) or tally[win] <= tally.get(pl, 0):
-                    fixed.append((t_, h_))
-                    continue
-                # the drawn line's letters replaced in place, its spacing kept
-                out, k = [], 0
-                for ch in t_:
-                    if ch.isalnum():
-                        out.append(win[k] if ch.islower() or ch.isdigit() else win[k].upper())
-                        k += 1
-                    else:
-                        out.append(ch)
-                t2 = "".join(out)
-                if plain_line(t2) != win:
-                    fixed.append((t_, h_))
-                    continue
-                # the html carries the same letters somewhere; swap the
-                # differing stretch, and only where it stands once
                 i0 = 0
                 while i0 < min(len(t_), len(t2)) and t_[i0] == t2[i0]:
                     i0 += 1
                 j0 = 0
                 while j0 < min(len(t_), len(t2)) - i0 and t_[-1 - j0] == t2[-1 - j0]:
                     j0 += 1
-                a_, b_ = t_[i0:len(t_) - j0], t2[i0:len(t2) - j0]
-                # widen to whole words so the swap is unambiguous in the html
                 while i0 > 0 and t_[i0 - 1].isalnum():
                     i0 -= 1
                 while j0 > 0 and t_[len(t_) - j0].isalnum():
@@ -6509,7 +6538,7 @@ def note(records_path, diary_text=None):
                 ea, eb = esc(a_), esc(b_)
                 h2 = h_.replace(ea, eb) if isinstance(h_, str) and h_.count(ea) == 1 else h_
                 if os.environ.get("SN_NAMES"):
-                    print("DOC %s: %r -> %r (%d vs %d)" % (st.name, a_, b_, tally[win], tally.get(pl, 0)), file=sys.stderr)
+                    print("DOC %s: %r -> %r" % (st.name, a_, b_), file=sys.stderr)
                 fixed.append((t2, h2))
             q["model"].lines = fixed
     title_from_bar(states)
