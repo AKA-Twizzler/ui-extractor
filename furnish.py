@@ -1519,16 +1519,13 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
             cut_ = (rect[0] < zoom[0] - 0.01 * W or rect[2] > zoom[2] + 0.01 * W
                     or rect[1] < zoom[1] - 0.01 * H or rect[3] > zoom[3] + 0.01 * H)
             if cut_ and vis[2] > vis[0] and vis[3] > vis[1]:
-                vw, vh = vis[2] - vis[0], vis[3] - vis[1]
-                inner = re.sub(r'^(<div class="sn-slot" style=")[^"]*"',
-                               lambda m_: m_.group(1) + (
-                                   f"left:{100.0 * (rect[0] - vis[0]) / vw:.2f}%;top:{100.0 * (rect[1] - vis[1]) / vh:.2f}%;"
-                                   f"width:{100.0 * (rect[2] - rect[0]) / vw:.2f}%;height:{100.0 * (rect[3] - rect[1]) / vh:.2f}%;"
-                                   f"z-index:{3 + z}") + '"', slot_html, count=1)
-                slot_html = (f'<div class="sn-cut" style="position:absolute;overflow:hidden;'
-                             f"left:{100.0 * vis[0] / W:.2f}%;top:{100.0 * vis[1] / H:.2f}%;"
-                             f"width:{100.0 * vw / W:.2f}%;height:{100.0 * vh / H:.2f}%;z-index:{3 + z}\">"
-                             + inner + "</div>")
+                # the slot keeps its true box (the gates read it) and clips
+                # its own drawing to the part the crop showed
+                rw, rh = max(1.0, rect[2] - rect[0]), max(1.0, rect[3] - rect[1])
+                ins = (100.0 * (vis[1] - rect[1]) / rh, 100.0 * (rect[2] - vis[2]) / rw,
+                       100.0 * (rect[3] - vis[3]) / rh, 100.0 * (vis[0] - rect[0]) / rw)
+                slot_html = slot_html.replace('<div class="sn-slot" style="',
+                                              '<div class="sn-slot" style="clip-path:inset(%.2f%% %.2f%% %.2f%% %.2f%%);' % ins, 1)
         out.append(slot_html)
     # THE ONE WINDOW THAT MAY SHOW ITS CONTENT FROM BEHIND. Tristan's
     # exception, in his own words: "if a screen never shows up at all and
