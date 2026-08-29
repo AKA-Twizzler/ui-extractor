@@ -1087,6 +1087,12 @@ def note_html(st, doc, title, blocks=None, wide=0):
                    'padding:0 calc(26 * var(--sn-u, 1px));%s'
                    'top:calc(%d * var(--sn-u, 1px))">%s</div>'
                    % (span, blocks[bi][0], "".join(groups[bi])))
+    # THE NAME, WHATEVER PATH THE LINES TOOK: a note marked as block-drawn
+    # with no block placed fell through both title rules at 00:04:20
+    if title and not any("sn-title" in x for x in out) \
+            and not any(norm(t.strip().strip("#*> ")) == norm(title) for t, _ in lines[:2]):
+        at_ = 1 if (out and "sn-crumb" in out[0]) else 0
+        out.insert(at_, f'<div class="sn-title">{esc(title)}</div>')
     if st.covered:
         out.append('<span class="sn-covered">the camera picture covered this corner of the window</span>')
     return "".join(out)
