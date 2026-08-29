@@ -4125,7 +4125,13 @@ def moment_thumbs(stx, m_, g_, wb, W):
     if ref and boxed:
         # run out to the panes that are the window's own (a loose pane
         # below a window is not its foot)
-        own = [b for b in boxed if not wb or furnish._within(b, wb) >= 0.5]
+        def _own(b_):
+            if not wb:
+                return True
+            xo = (min(b_[2], wb[2]) - max(b_[0], wb[0])) / max(1.0, b_[2] - b_[0])
+            yo = (min(b_[3], wb[3]) - max(b_[1], wb[1])) / max(1.0, b_[3] - b_[1])
+            return xo >= 0.8 and yo >= 0.3          # a note pane running on under the camera is the window's; a pane below the window is not
+        own = [b for b in boxed if _own(b)]
         if own:
             ref[1] = min(ref[1], min(b[1] for b in own))
             ref[3] = max(ref[3], max(b[3] for b in own))
