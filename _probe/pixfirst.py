@@ -68,7 +68,9 @@ def divider(g, wb):
     band = g[y0 + int(0.2 * (y1 - y0)):y1 - int(0.1 * (y1 - y0)), x0:x0 + int(0.45 * (x1 - x0))]
     col = np.median(band, axis=0)          # the median: icons and words are sparse, the background is not
     sm = np.convolve(col, np.ones(9) / 9, mode="same")
-    st = [(i, d) for i, d in steps(sm, 2.5) if d < 0 and i > 8]
+    # a step down from a sidebar's shade (not from a column of icons,
+    # which is far brighter than any background)
+    st = [(i, d) for i, d in steps(sm, 2.5) if d < 0 and i > 8 and 35 <= sm[max(0, i - 6)] <= 90]
     if not st:
         return x0
     i, d = min(st, key=lambda s: s[1])
@@ -78,9 +80,11 @@ def ink_bands(rgb, xl, x1, y0, y1, least=2):
     """The rows of writing on the list side, from the ink itself: runs of
     rows holding light pixels (text and white icons; a green band's own
     colour is not ink). [(top, bottom)] in frame pixels."""
-    c = rgb[y0:y1, xl + 20:x1 - 20]
+    # the bar at the right edge is not ink: stop sixty short of it
+    c = rgb[y0:y1, xl + 20:x1 - 60]
     ink = c.min(axis=2) > 100
     cnt = ink.sum(axis=1)
+    least = max(least, 12)
     out, start = [], None
     for i, v in enumerate(cnt):
         if v > least and start is None:
@@ -150,20 +154,22 @@ def header_columns(rgb, xl, x1, hdr_top, hdr_bot):
     return cols
 
 def icon_of(rgb, y0, y1, x0, x1):
-    """What colour the icon at a row's head is: folder (green), md (orange), file (white), or none."""
+    """What the icon at a row's head is, by its colour: folder (green), md
+    (a cream page with an orange fold), file (a white page), or none."""
     c = rgb[y0 + 4:y1 - 4, x0:x1].astype(np.float32)
     if c.size == 0:
         return "none", 0
     r, gg, b = c[:, :, 0], c[:, :, 1], c[:, :, 2]
-    lit = (c.max(axis=2) > 90)
-    if lit.mean() < 0.02:
-        return "none", 0
-    rr, gm, bm = r[lit].mean(), gg[lit].mean(), b[lit].mean()
-    if gm > rr + 30 and gm > bm + 30:
-        return "folder", int(lit.sum())
-    if rr > gm + 30 and rr > bm + 40:
-        return "md", int(lit.sum())
-    return "file", int(lit.sum())
+    lit = c.max(axis=2) > 90
+    green = int(((gg > r + 40) & (gg > b + 40) & (gg > 110)).sum())
+    orange = int(((r > 170) & (gg > 70) & (gg < 190) & (b < 110)).sum())
+    if green >= 30:
+        return "folder", green
+    if orange >= 15:
+        return "md", orange
+    if lit.mean() > 0.05:
+        return "file", int(lit.sum())
+    return "none", 0
 
 def read_frame(path, out_dir, title_hint="memory"):
     rgb, g = load(path)
