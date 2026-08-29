@@ -2941,15 +2941,13 @@ def _trace_rows(tag, states):
     if not os.environ.get("SN_NAMES"):
         return
     for st in states:
-        if str(getattr(st, "title", "")) != "memory":
-            continue
         for q in st.parts:
             if q["fam"] != "table":
                 continue
             for r in q["model"].rows:
-                nm = (r.get("cells") or [""])[0]
-                if not nm or "brand" in nm or "rafaranra" in nm:
-                    print("ROWTRACE %s: %r" % (tag, r.get("cells")), file=sys.stderr)
+                nm = (r.get("cells") or [""])[0] or ""
+                if "brand" in nm or "rafaranra" in nm or (not nm and "60 bytes" in str(r.get("cells"))):
+                    print("ROWTRACE %s [%s %s]: %r" % (tag, st.name, getattr(st, "title", ""), r.get("cells")), file=sys.stderr)
 
 
 def harmonise(states):
@@ -5331,6 +5329,7 @@ def note(records_path, diary_text=None):
                 c._same_as = w          # the window whose note this is: the cards fold on it
                 break
     states = [st for st in all_states if st.window_html() and not st.fragment()]
+    _trace_rows('after states filter', states)
     frags = [st for st in all_states if st not in states and st.has_content() and st.rects]
     # a note's big heading is read as large loose words, never as a doc
     # line; when such a reading opens the window's own title, it is the
@@ -5588,6 +5587,7 @@ def note(records_path, diary_text=None):
         st._whole_names = whole_names
         if os.environ.get("SN_NAMES") and (whole_names or st.name == "The Finder window"):
             print("NAMES %s %s: %s" % (st.name, st.title, whole_names), file=sys.stderr)
+    _trace_rows('after names pass', states)
     # A TREE LINE SPELT THE WAY THE NAME IS KNOWN. Obsidian's tree carried
     # the same glued spelling ("˃ 03 CompanyB(LandscapeCompany)"), and a
     # tree is drawn on every card of its window.
@@ -6520,7 +6520,9 @@ def note(records_path, diary_text=None):
             return list(box)
         return out
 
+    _trace_rows('before list_not_tree', states)
     list_not_tree(states)
+    _trace_rows('after list_not_tree', states)
     _all_crumbs = [c for st in states for q in st.parts if q["fam"] == "table"
                    for c in (q["model"].path or [])]
     for st in states:
