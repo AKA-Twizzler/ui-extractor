@@ -4096,7 +4096,8 @@ def moment_thumbs(stx, m_, g_, wb, W):
     the tree in Obsidian and the sidebar in Finder whatever the reader
     called it; a sidebar's band reaches to the next pane's first word; a
     pane's band is read above the camera only; the share is of the column
-    the bar is drawn in, not of the pane's words."""
+    the bar is drawn in, not of the pane's words; a Finder whose sidebar
+    the reader did not box is read at the sidebar's edge all the same."""
     import furnish
     th = {}
     fp = frame_of(m_)
@@ -4106,11 +4107,37 @@ def moment_thumbs(stx, m_, g_, wb, W):
         cam_ = None
     trace = os.environ.get("SN_THUMBS")
     W = float(W)
-    wh = (wb[3] - wb[1]) if wb else None
     who = label_for(stx, m_.get("ts")) if trace else ""
+    finder = stx.name == "The Finder window"
+    obsid = stx.name == "The Obsidian window"
     panes = sorted((g_.get("panes") or []),
                    key=lambda q_: -((q_.get("box") or [0, 0, 0, 0])[2] - (q_.get("box") or [0, 0, 0, 0])[0]))
+    boxed = [list(p_["box"]) for p_ in panes if p_.get("box") and len(p_["box"]) == 4]
+    # THE COLUMN A BAR IS DRAWN IN is the window's box, run out to the
+    # panes' own reach where the window's box came up short: a box cut at
+    # the camera, or none at all for a window the crop cut
+    if wb:
+        ref = list(wb)
+    elif boxed:
+        ref = [min(b[0] for b in boxed), min(b[1] for b in boxed), max(b[2] for b in boxed), max(b[3] for b in boxed)]
+    else:
+        ref = None
+    if ref and boxed:
+        ref[1] = min(ref[1], min(b[1] for b in boxed))
+        ref[3] = max(ref[3], max(b[3] for b in boxed))
+    rw = (ref[2] - ref[0]) if ref else None
+    rh = (ref[3] - ref[1]) if ref else None
+
+    def _narrow(b_):
+        return bool(ref) and (b_[2] - b_[0]) < 0.35 * rw and abs(b_[0] - ref[0]) < 0.05 * rw
+    # where Obsidian's explorer and note columns begin: under the tabs,
+    # which the tree's first line stands a head row below
+    col_top = None
+    if obsid and ref:
+        tops = [b[1] for b in boxed if _narrow(b)]
+        col_top = max(ref[1], min(tops) - 0.045 * rh) if tops else ref[1] + 0.04 * rh
     list_pb = None
+    saw_side = False
     for p_ in panes:
         kd = _THUMB_KINDS.get(p_.get("kind")) or ("text" if p_.get("kind") == "text, not a tree" else None)
         pb = p_.get("box")
@@ -4121,11 +4148,13 @@ def moment_thumbs(stx, m_, g_, wb, W):
         if wb and furnish._within(pb, wb) < 0.8 and furnish._within(wb, pb) < 0.5 \
                 and not ((wb[2] - wb[0]) >= 0.6 * W and pb[0] >= wb[0] - 0.05 * W and _vo >= 0.4):
             continue
-        if wb and (pb[2] - pb[0]) < 0.35 * (wb[2] - wb[0]) and abs(pb[0] - wb[0]) < 0.05 * (wb[2] - wb[0]):
-            kd = "tree" if stx.name == "The Obsidian window" else "side"
-        if kd == "tree" and stx.name == "The Finder window":
+        if _narrow(pb):
+            kd = "tree" if obsid else "side"
+        if kd == "tree" and finder:
             kd = "side"
-        if kd == "list" and stx.name == "The Finder window" and list_pb is None:
+        if kd == "side":
+            saw_side = True
+        if kd == "list" and finder and list_pb is None:
             list_pb = list(pb)
         if kd == "text" or kd in th:
             continue
@@ -4145,16 +4174,15 @@ def moment_thumbs(stx, m_, g_, wb, W):
             if x_end and x_end > pb[2] + 8:
                 reach_ = (x_end - pb[2]) + 28
                 pb = [pb[0], pb[1], x_end - 4, pb[3]]
-            # THE SHARE IS OF THE COLUMN THE BAR IS DRAWN IN, not of the
-            # pane's words: a Finder's sidebar runs the window's full height
-            # and Obsidian's explorer runs from under the tabs to the foot,
-            # where the pane's box stops at its last read line, and a thumb
-            # measured against the short box stood too low and too tall
-            if wb:
-                if kd == "side":
-                    pb = [pb[0], wb[1], pb[2], wb[3]]
-                else:
-                    pb = [pb[0], max(wb[1], pb[1] - 0.045 * wh), pb[2], wb[3]]
+            # the share is of the column: a Finder's sidebar runs the
+            # window's full height, Obsidian's explorer from under the tabs
+            # to the foot, where the pane's box stops at its last read line
+            if ref:
+                pb = [pb[0], ref[1] if kd == "side" else col_top, pb[2], ref[3]]
+        elif kd == "doc" and obsid and ref:
+            # the note's bar hugs the window's right edge, not the text's
+            pb = [pb[0], col_top, ref[2] - 2, ref[3]]
+            reach_ = max(28, int(0.012 * W))
         # the band is read above the camera only
         stop_ = None
         if cam_ and pb[2] + 0.05 * (pb[2] - pb[0]) > cam_[0] and pb[2] - 0.03 * (pb[2] - pb[0]) < cam_[2] \
@@ -4168,22 +4196,35 @@ def moment_thumbs(stx, m_, g_, wb, W):
                 m_.get("ts"), who, kd, [int(v) for v in pb], reach_, stop_, t_), file=sys.stderr)
         if t_:
             th[kd] = t_
-    # A FINDER THE CROP CUT DOWN ITS LEFT SIDE keeps its sidebar's bar just
-    # inside the frame's edge, though the sidebar's words are off the frame:
-    # the band runs from the frame's edge to the list's first column
-    if stx.name == "The Finder window" and "side" not in th and wb and list_pb and wb[0] < 0.02 * W:
-        x1 = list_pb[0] - 6
-        if x1 > 40:
-            pb = [0, wb[1], x1, wb[3]]
-            t_ = shapes.scroll_thumb(fp, pb, reach=x1)
+    if finder and ref:
+        share = getattr(stx, "side_share", None) or furnish.side_share_card(stx) or 0.25
+        x_side = ref[0] + share * rw + 10
+        if "side" not in th and not saw_side:
+            # A FINDER WHOSE SIDEBAR THE READER DID NOT BOX (cut by the crop
+            # to its last few pixels, or a frame caught mid-scroll) keeps
+            # the sidebar's bar at the sidebar's right edge all the same:
+            # the list's first column where a list was read, else the
+            # sidebar's known share of the window
+            x1 = (list_pb[0] - 6) if list_pb else x_side
+            x0 = max(0.0, ref[0])
+            if x1 - x0 > 40:
+                pb = [x0, ref[1], x1, ref[3]]
+                t_ = shapes.scroll_thumb(fp, pb, reach=(x1 - x0) if list_pb else max(60.0, 0.08 * rw))
+                if trace:
+                    print("THUMB %s %s side(edge) box=%s -> %s" % (m_.get("ts"), who, [int(v) for v in pb], t_), file=sys.stderr)
+                if t_:
+                    th["side"] = t_
+        if "list" not in th and not boxed:
+            # nothing boxed at all: the list's bar at the window's right edge
+            pb = [x_side, ref[1], ref[2], ref[3]]
+            t_ = shapes.scroll_thumb(fp, pb)
             if trace:
-                print("THUMB %s %s side(cut) box=%s reach=%s -> %s" % (
-                    m_.get("ts"), who, [int(v) for v in pb], x1, t_), file=sys.stderr)
+                print("THUMB %s %s list(edge) box=%s -> %s" % (m_.get("ts"), who, [int(v) for v in pb], t_), file=sys.stderr)
             if t_:
-                th["side"] = t_
-    # the list's sideways bar, along the window's foot
-    if stx.name == "The Finder window" and wb and list_pb:
-        pb = [list_pb[0], wb[3] - 0.12 * wh, wb[2], wb[3]]
+                th["list"] = t_
+        # the list's sideways bar, along the window's foot
+        lx = list_pb[0] if list_pb else x_side
+        pb = [lx, ref[3] - 0.12 * rh, ref[2], ref[3]]
         t_ = shapes.scroll_thumb_h(fp, pb)
         if trace:
             print("THUMB %s %s list_h box=%s -> %s" % (m_.get("ts"), who, [int(v) for v in pb], t_), file=sys.stderr)
@@ -8678,14 +8719,31 @@ def note(records_path, diary_text=None):
             for stx, sl, shape in subjects:
                 th = {}
                 wb = None
+                hit_ = False
                 for m_, g_ in getattr(stx, "pieces", ()):
                     if m_["ts"] != s["t0"]:
                         continue
+                    hit_ = True
                     try:
                         wb = rect_at(stx, s["t0"])[1]
                     except Exception:
                         wb = None
                     th = moment_thumbs(stx, m_, g_, wb, float(s["size"][0]))
+                if not hit_ and shape and stx.name == "The Finder window":
+                    # A WINDOW DRAWN FROM ITS STRETCH WITH NOTHING READ AT
+                    # THIS MOMENT (a frame caught mid-scroll) still shows
+                    # its bars on the frame: read them at the box the
+                    # picture draws it in, carried into the frame's space
+                    m0 = next((m2 for st2 in states for m2, _g2 in (getattr(st2, "pieces", None) or ())
+                               if m2.get("ts") == s["t0"]), None)
+                    T_ = span_T.get(s["t0"])
+                    if m0 is not None:
+                        if T_ and not flatT(T_):
+                            k_, dx_, dy_ = T_
+                            fb = [shape[0] * k_ + dx_, shape[1] * k_ + dy_, shape[2] * k_ + dx_, shape[3] * k_ + dy_]
+                        else:
+                            fb = list(shape)
+                        th = moment_thumbs(stx, m0, {"panes": []}, fb, float(s["size"][0]))
                 sl._thumbs = th
                 if os.environ.get("SN_ZOOM"):
                     if th:
