@@ -2970,7 +2970,7 @@ def harmonise(states):
             if q["fam"] == "tree":
                 for t, _ in q["model"].lines:
                     n = t.lstrip("│ ˃˅")
-                    if len(n) >= 6 and "..." not in n and "…" not in n and n not in clean and " " not in n[:1]:
+                    if len(n) >= 6 and not _ELL.search(n) and n not in clean and " " not in n[:1]:
                         clean.append(n)
             if q["fam"] == "doc":
                 dt = q["model"].title()
@@ -2984,7 +2984,7 @@ def harmonise(states):
             for r in q["model"].rows:
                 if r["cells"] and r["cells"][0] and not (r["italic"] and r["italic"][0]):
                     n = r["cells"][0]
-                    if len(n) >= 3 and "..." not in n and n not in clean:
+                    if len(n) >= 3 and not _ELL.search(n) and n not in clean:
                         clean.append(n)
                         strong.add(n)
 
