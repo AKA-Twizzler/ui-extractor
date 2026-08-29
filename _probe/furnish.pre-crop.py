@@ -1505,31 +1505,9 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
         # it did in the video. Drawing the card at reading size and cutting
         # it off at the box shows a corner of a window at the wrong scale,
         # which is not a picture of that screen.
-        slot_html = scaled(html, clip_box(rect, W, H, bar=barred), W, kz=kz,
-                           extra=f'{slot_style(rect, W, H, bar=barred)};z-index:{3 + z}',
-                           step=getattr(st, "_row_step", 0.0))
-        # A WINDOW THE CROP CUTS IS DRAWN AS FAR AS THE FRAME SHOWS IT. Tristan:
-        # "FILL IN THE CONTENT OR MAKE IT OUTLINED INSTEAD" -- a sliver at the
-        # crop's edge was drawn as a whole window with a sidebar and a title
-        # bar the frame never showed. The window keeps its place and scale;
-        # what lies past the crop is not drawn, as it was not shown.
-        if zoom and rect:
-            vis = [max(rect[0], zoom[0], 0.0), max(rect[1], zoom[1], 0.0),
-                   min(rect[2], zoom[2], float(W)), min(rect[3], zoom[3], float(H))]
-            cut_ = (rect[0] < zoom[0] - 0.01 * W or rect[2] > zoom[2] + 0.01 * W
-                    or rect[1] < zoom[1] - 0.01 * H or rect[3] > zoom[3] + 0.01 * H)
-            if cut_ and vis[2] > vis[0] and vis[3] > vis[1]:
-                vw, vh = vis[2] - vis[0], vis[3] - vis[1]
-                inner = re.sub(r'^(<div class="sn-slot" style=")[^"]*"',
-                               lambda m_: m_.group(1) + (
-                                   f"left:{100.0 * (rect[0] - vis[0]) / vw:.2f}%;top:{100.0 * (rect[1] - vis[1]) / vh:.2f}%;"
-                                   f"width:{100.0 * (rect[2] - rect[0]) / vw:.2f}%;height:{100.0 * (rect[3] - rect[1]) / vh:.2f}%;"
-                                   f"z-index:{3 + z}") + '"', slot_html, count=1)
-                slot_html = (f'<div class="sn-cut" style="position:absolute;overflow:hidden;'
-                             f"left:{100.0 * vis[0] / W:.2f}%;top:{100.0 * vis[1] / H:.2f}%;"
-                             f"width:{100.0 * vw / W:.2f}%;height:{100.0 * vh / H:.2f}%;z-index:{3 + z}\">"
-                             + inner + "</div>")
-        out.append(slot_html)
+        out.append(scaled(html, clip_box(rect, W, H, bar=barred), W, kz=kz,
+                          extra=f'{slot_style(rect, W, H, bar=barred)};z-index:{3 + z}',
+                          step=getattr(st, "_row_step", 0.0)))
     # THE ONE WINDOW THAT MAY SHOW ITS CONTENT FROM BEHIND. Tristan's
     # exception, in his own words: "if a screen never shows up at all and
     # only part of the screen (like browser did with obsidian) than that can
@@ -1583,14 +1561,7 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
         # may run past the desktop's edge, and the box says so
         zs = (f"left:{100.0 * zoom[0] / W:.2f}%;top:{100.0 * zoom[1] / H:.2f}%;"
               f"width:{100.0 * (zoom[2] - zoom[0]) / W:.2f}%;height:{100.0 * (zoom[3] - zoom[1]) / H:.2f}%")
-        # the crop's true box, for the gates and the compare (unseen); the
-        # box a reader sees stops at the screen's edge -- Tristan: "how can
-        # a ZOOM be OFF SCREEN IN THE NOTE"
-        out.append(f'<div class="sn-zoom" style="position:absolute;{zs};display:none"></div>')
-        zc = [max(0.0, zoom[0]), max(0.0, zoom[1]), min(float(W), zoom[2]), min(float(H), zoom[3])]
-        zcs = (f"left:{100.0 * zc[0] / W:.2f}%;top:{100.0 * zc[1] / H:.2f}%;"
-               f"width:{100.0 * (zc[2] - zc[0]) / W:.2f}%;height:{100.0 * (zc[3] - zc[1]) / H:.2f}%")
-        out.append(f'<div class="sn-zoom-shown" style="position:absolute;{zcs};'
+        out.append(f'<div class="sn-zoom" style="position:absolute;{zs};'
                    f'z-index:45;border:2px dashed #e0b040;box-sizing:border-box;pointer-events:none">'
                    f'<span class="sn-zoom-tag" style="position:absolute;right:4px;bottom:2px;'
                    f'font-size:10px;color:#e0b040;background:rgba(0,0,0,0.55);padding:1px 5px;'

@@ -3538,7 +3538,7 @@ def harmonise(states):
 # that stretch of time, the others as empty outlines. Its content comes
 # only from the moments inside the stretch, so it stays an honest still.
 
-def card_shot(html, ratio, share=None, tree_min=None, card_w=None):
+def card_shot(html, ratio, share=None, tree_min=None):
     """A rebuilt window given the SHAPE it really had, as a floor.
 
     The moment pictures bind every window to its own measured width; the
@@ -3592,13 +3592,6 @@ def card_shot(html, ratio, share=None, tree_min=None, card_w=None):
     # spends the only thing a card is for, which is room to read. Computed and
     # deliberately unused here; the picture is where it belongs.
     _unused_share = share
-    if card_w:
-        # THE CARD AT THE WINDOW'S OWN SHAPE, LARGE ENOUGH TO HOLD EVERYTHING
-        # GATHERED. A tree of 78 lines made the Obsidian card a tall thin
-        # strip at the pane's width (Tristan: "TOO THIN"); the card takes the
-        # width at which the window's proportion holds all of it, and the
-        # page scrolls sideways to read it
-        bits.append("--sn-card-w:%dpx" % int(card_w))
     if tree_min:
         # THE FILE TREE, WIDE ENOUGH TO READ -- ON THE CARD ONLY. Its column is
         # a share of the window measured off the frame, and that share is
@@ -4076,38 +4069,6 @@ def drop_glued(t_):
             continue
         kept_.append(r)
     t_.rows = kept_
-
-
-def complete_doc_lines(sl, st):
-    """A note line the moment read in part takes the whole line the window
-    read at a moment it stood clear -- revealed, never invented. At 00:04:20
-    the camera covers the right of the note, and the picture drew "it only
-    knows it) doesn't even know" where the card, from 00:00:00, had the
-    whole sentence. The title goes back too when the moment read only the
-    crumb above it."""
-    a_, b_ = sl.main_doc(), st.main_doc()
-    if not a_ or not b_ or a_ is b_ or not a_.lines or not b_.lines:
-        return
-    whole = [(plain_line(t), t, h) for t, h in b_.lines]
-    out, seen = [], set()
-    for t, h in a_.lines:
-        pt = plain_line(t)
-        pick = (t, h)
-        if len(pt) >= 12:
-            head_ = pt[:24]
-            cands = [(pu, u, hu) for pu, u, hu in whole
-                     if len(pu) > len(pt) + 3 and (pu.startswith(head_) or head_ in pu)]
-            if len(cands) == 1:
-                pick = (cands[0][1], cands[0][2])
-        if pick[0] in seen:
-            continue
-        seen.add(pick[0])
-        out.append(pick)
-    # the title above the first line, where the whole has one and the moment did not
-    first = whole[0] if whole else None
-    if first and isinstance(first[2], str) and "sn-title" in first[2] and not any("sn-title" in (h or "") for _t, h in out):
-        out.insert(0, (first[1], first[2]))
-    a_.lines = out
 
 
 def respell_from(sl, st):
@@ -7290,7 +7251,6 @@ def note(records_path, diary_text=None):
                     sidebar_from_panes(sl, house_side)
                     tidy_side(sl.main_table(), house_side, sl.title)
                     respell_from(sl, st)      # so the mend's walk meets the settled names
-                    complete_doc_lines(sl, st)
                     mend_cells(sl, st)
                     if sl.main_table():
                         fold_twins(sl.main_table(), 0)
@@ -8580,26 +8540,7 @@ def note(records_path, diary_text=None):
                             kd = "side"       # a Finder has no tree: its sidebar
                         if kd == "text" or kd in th:
                             continue
-                        reach_ = None
-                        if kd in ("side", "tree"):
-                            # THE BAR STANDS IN THE GAP BEFORE THE NEXT PANE'S
-                            # WORDS: the reader boxes a sidebar by its text, and
-                            # its thumb stood 130 px past that box at 00:01:50
-                            x_end = None
-                            for p2 in (g_.get("panes") or []):
-                                b2 = p2.get("box")
-                                if not b2 or len(b2) != 4 or p2 is p_ or b2[0] < pb[2] - 10:
-                                    continue
-                                if min(b2[3], pb[3]) - max(b2[1], pb[1]) < 0.3 * (pb[3] - pb[1]):
-                                    continue
-                                lefts = [it["box"][0] for it in draw2.items_of(p2) if it.get("box")]
-                                x2 = min(lefts) if lefts else b2[0]
-                                if x_end is None or x2 < x_end:
-                                    x_end = x2
-                            if x_end and x_end > pb[2] + 8:
-                                reach_ = (x_end - pb[2]) + 28
-                                pb = [pb[0], pb[1], x_end - 4, pb[3]]
-                        t_ = shapes.scroll_thumb(fp, pb, reach=reach_)
+                        t_ = shapes.scroll_thumb(fp, pb)
                         if t_:
                             th[kd] = t_
                 sl._thumbs = th
@@ -9172,13 +9113,7 @@ def note(records_path, diary_text=None):
                         st._thumbs = {"list": t_}
             _trace_rows('at card', [st])
             _html = st.window_html()
-            _cw = None
-            if st.name == "The Obsidian window" and _sh[0]:
-                _tr = st.tree()
-                _n = len(_tr.lines) if _tr else 0
-                _need = _n * 22.4 + 90               # the tree's lines at the card's pitch
-                _cw = min(3600, max(1200, _need / float(_sh[0])))
-            parts.append(card_shot(_html, _sh[0], _sh[1], getattr(st, "_tree_min", None), card_w=_cw))
+            parts.append(card_shot(_html, _sh[0], _sh[1], getattr(st, "_tree_min", None)))
             parts.append("")
             if st.fine_html():
                 parts.append(st.fine_html())
