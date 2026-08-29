@@ -25,7 +25,7 @@ import sys
 import machine
 
 TRANSCRIPTS = machine.here("/mnt/nas/obsidian-vault/04 - Resources/Dev/"
-                          "Jaredrhod/Sources/Transcripts")   # the one home; "Transcripts MD" moved here
+                          "Jaredrhod/Transcripts MD")
 STAMP = re.compile(r"^\*\*\[(\d+):(\d{2}):(\d{2})\]\*\*\s*(.*)$")
 
 

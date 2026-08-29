@@ -8727,7 +8727,14 @@ def note(records_path, diary_text=None):
                         span = max(b[2] for b in xs) - min(b[0] for b in xs)
                         l_ = span / editor
                         if 0.15 <= l_ <= 1.0:
-                            best, tree_fr, line_fr = score, t_, l_
+                            # THE NOTE'S LINE IS THE WIDEST IT EVER RAN TO. The
+                            # reference moment (the most rows read) had the note
+                            # read in a narrow column, and the card drew its
+                            # text at a quarter of the pane; a moment with short
+                            # lines showing says nothing about the line length,
+                            # a moment with long lines says it all.
+                            best, tree_fr = score, t_
+                            line_fr = max(line_fr or 0.0, l_)
             for o in g:
                 o._side_home = (words, share)
                 if tree_fr:
