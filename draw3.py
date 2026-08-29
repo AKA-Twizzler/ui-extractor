@@ -8519,7 +8519,7 @@ def note(records_path, diary_text=None):
                         _vo = (min(pb[3], wb[3]) - max(pb[1], wb[1])) / max(1.0, pb[3] - pb[1]) if wb else 1.0
                         if wb and furnish._within(pb, wb) < 0.8 and furnish._within(wb, pb) < 0.5 \
                                 and not ((wb[2] - wb[0]) >= 0.6 * float(s["size"][0]) and pb[0] >= wb[0] - 0.05 * float(s["size"][0])
-                                         and _vo >= 0.5):
+                                         and _vo >= 0.4):
                             continue
                         # THE CAMERA PICTURE IS NOT A SCROLL BAR: its bright edge
                         # read as a thumb on the note at 00:04:20 and as a
