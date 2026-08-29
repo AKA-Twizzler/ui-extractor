@@ -112,25 +112,6 @@ def words_for(video, runs):
     return runs
 
 
-def words_at(video, times, tail=10):
-    """The words spoken at each moment: from its time to the next moment's,
-    the last moment's for `tail` seconds more. One moment, its own words,
-    never a neighbour's, so a note that quotes under each moment says what
-    was being said while THAT screen stood. None where there is no
-    transcript."""
-    path = find(title_of(video))
-    if path is None:
-        return None
-    lines = load(path)
-    if not lines:
-        return None
-    out = []
-    for i, t in enumerate(times):
-        until = times[i + 1] if i + 1 < len(times) else t + tail
-        out.append(between(lines, t, max(until, t + 1)))
-    return out
-
-
 def main():
     import spot
     video = sys.argv[1]

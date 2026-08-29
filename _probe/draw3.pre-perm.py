@@ -8454,15 +8454,12 @@ def note(records_path, diary_text=None):
                              "was" if len(_lost) == 1 else "were",
                              (" Everything else the reader passed over was blank."
                               if _blank else "")), ""]
-            # WHAT WAS SAID WHILE THIS SCREEN STOOD: the moment's own words,
-            # its time to the next moment's, quoted once under its picture
-            # and nowhere else (the card holds the window, not the moment)
-            _sd = ((_m0 or {}).get("said") or "").strip()
-            if _sd:
-                _nx = next((mm["ts"] for mm in moments
-                            if mm.get("secs", -1) > _m0.get("secs", 0)), None)
-                parts += ["> [!quote] Jared, %s%s" % (_m0["ts"], (" to " + _nx) if _nx else ""),
-                          "> " + _sd, ""]
+            seen_said = set()
+            for _, sl, _ in subjects:
+                for ln in sl.said_html():
+                    if ln not in seen_said:
+                        seen_said.add(ln)
+                        parts += [ln, ""]
         parts += ["---", ""]
 
     parts += ["## Every window, rebuilt to read", "",
@@ -8787,6 +8784,9 @@ def note(records_path, diary_text=None):
             _html = st.window_html()
             parts.append(card_shot(_html, _sh[0], _sh[1], getattr(st, "_tree_min", None)))
             parts.append("")
+            for ln in st.said_html():
+                parts.append(ln)
+                parts.append("")
             if st.fine_html():
                 parts.append(st.fine_html())
                 parts.append("")

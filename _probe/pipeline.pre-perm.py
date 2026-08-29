@@ -993,12 +993,14 @@ def main():
         if dense:
             # chronological: the start of every screen, plus each moment a
             # normally-quiet part of it changed -- see spot.dense_moments
-            # each moment gets its own words, its time to the next moment's,
-            # so the note quotes under each moment what was said while THAT
-            # screen stood (Tristan: quotes under each timestamp)
-            times = [t for m in spot.dense_moments(samples) for t in m["times"]]
-            saids = (transcript.words_at(video, times) if joined else None) or [None] * len(times)
-            runs = [{"best": {"t": t}, "said": sd} for t, sd in zip(times, saids)]
+            said_by_start = {r["start"]: r.get("said")
+                             for r in every_run if r["call"] == "screen"}
+            runs = []
+            for m in spot.dense_moments(samples):
+                for i, t in enumerate(m["times"]):
+                    runs.append({"best": {"t": t},
+                                 "said": said_by_start.get(m["start"])
+                                 if i == 0 else None})
             if "--limit" not in sys.argv:
                 limit = len(runs)
             print(f"{len(runs)} moments across the video's screens, "
