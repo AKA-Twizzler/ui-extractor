@@ -1145,14 +1145,16 @@ def word_vote(text, raw, need=3):
     letter vote corrupted real words ("notes" to "noaes") because two
     misread moments outvote a line's own single letter wherever they
     happen to align; a whole word misread the same way by a majority of
-    moments is the truth, and nothing less is touched. Each reading is laid
-    over the stretch of the line's letters it matches best (within a tenth
-    of its letters), one vote a moment a word, and only a word of the same
-    length is a candidate. The spacing and the markup around the word stay."""
+    moments is the truth, and nothing less is touched. A reading is laid
+    over the line from eight letters the two share, and the match grows
+    each way until a tenth of the letters disagree: readings come joined
+    onto the line before, or wrapped at another width, and only the
+    stretch that matches votes, one vote a moment a word, and only for a
+    word of the same length. The spacing and the markup around the word
+    stay."""
     pl = plain_line(text)
     if len(pl) < 12:
         return text
-    # the drawn words, as spans of the letter string
     words, k = [], 0
     for m in re.finditer(r"[A-Za-z0-9\u2019']+", text):
         w = m.group(0)
@@ -1161,39 +1163,49 @@ def word_vote(text, raw, need=3):
             words.append((m.start(), m.end(), k, k + len(wn), wn))
             k += len(wn)
     if k != len(pl):
-        return text                        # the letters and the words disagree; leave it
+        return text
     tally = [dict() for _ in words]
     seen = set()
     for mi, r in raw:
         rf = plain_line(r)
-        if not 6 <= len(rf) <= len(pl):
+        if len(rf) < 8:
             continue
-        if len(rf) >= 8 and not any(rf[i:i + 8] in pl for i in (0, len(rf) // 2 - 4, len(rf) - 8)):
+        anchor = None
+        for i in range(0, len(rf) - 7, 4):
+            g = rf[i:i + 8]
+            p = pl.find(g)
+            if p >= 0 and pl.find(g, p + 1) < 0:
+                anchor = (i, p)
+                break
+        if anchor is None:
             continue
-        best, best_d = None, None
-        lim = max(1, len(rf) // 10)
-        for off in range(0, len(pl) - len(rf) + 1):
-            d = 0
-            for j in range(len(rf)):
-                if pl[off + j] != rf[j]:
-                    d += 1
-                    if d > lim:
-                        break
-            if d <= lim and (best_d is None or d < best_d):
-                best, best_d = off, d
-                if d == 0:
+        i, p = anchor
+        off = p - i
+        lim = max(1, min(len(rf), len(pl)) // 10)
+        hi, d = i + 8, 0
+        while hi < len(rf) and off + hi < len(pl):
+            if rf[hi] != pl[off + hi]:
+                d += 1
+                if d > lim:
                     break
-        if best is None:
-            continue
+            hi += 1
+        lo, d = i, 0
+        while lo > 0 and off + lo - 1 >= 0:
+            if rf[lo - 1] != pl[off + lo - 1]:
+                d += 1
+                if d > lim:
+                    break
+            lo -= 1
+        c0, c1 = off + lo, off + hi
         for wi, (_a, _b, s, e, wn) in enumerate(words):
-            if s < best or e > best + len(rf) or (wi, mi) in seen:
+            if s < c0 or e > c1 or (wi, mi) in seen:
                 continue
             seen.add((wi, mi))
-            v = rf[s - best:e - best]
+            v = rf[s - off:e - off]
             tally[wi][v] = tally[wi].get(v, 0) + 1
-    out, h_swaps = text, []
+    out, swaps = text, []
     for wi in range(len(words) - 1, -1, -1):
-        a, b, s, e, wn = words[wi]
+        a_, b_, s, e, wn = words[wi]
         votes = tally[wi]
         own = votes.get(wn, 0) + 1
         other = [(v, n) for v, n in votes.items() if v != wn and len(v) == len(wn)]
@@ -1202,7 +1214,7 @@ def word_vote(text, raw, need=3):
         v, n = max(other, key=lambda vn: vn[1])
         if n < need or n <= own:
             continue
-        old = text[a:b]
+        old = text[a_:b_]
         new, j = [], 0
         for ch in old:
             if norm(ch):
@@ -1211,9 +1223,9 @@ def word_vote(text, raw, need=3):
             else:
                 new.append(ch)
         new = "".join(new)
-        out = out[:a] + new + out[b:]
-        h_swaps.append((old, new))
-    return out if not h_swaps else (out, h_swaps)
+        out = out[:a_] + new + out[b_:]
+        swaps.append((old, new))
+    return (out, swaps) if swaps else text
 
 
 def mend_prose(states):
