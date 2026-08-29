@@ -683,8 +683,8 @@ def scroll_thumb(path, rect):
         top, bot = int(ys[0]), int(ys[-1])
         if (bot - top + 1) > 1.3 * len(ys):
             continue          # broken: text or ticks, not one solid bar
-        if (bot - top + 1) > 0.97 * h:
-            continue          # a border running the whole height
+        if top <= 0.12 * h and bot >= 0.88 * h:
+            continue          # a border or a divider: a thumb never touches both ends of its track
         cand = (top / float(h), (bot - top + 1) / float(h))
         if best is None or cand[1] > best[1]:
             best = cand
