@@ -3093,14 +3093,18 @@ def harmonise(states):
         # one name spelt with and without its .md is one candidate, not a
         # tie that stops the rescue ("rafaranra hrand nira auida md" sat at
         # 0.51 against reference_brand_voice_guide twice over and stayed blank)
-        _seen, _one = set(), []
+        _seen, _one = [], []
         for sc_, c_ in scored:
             k_ = re.sub(r"md$", "", flat(c_))
-            if k_ in _seen:
+            # the same name a letter apart ("guide" and a tree line's
+            # "quide") is one candidate too, or the two split the margin
+            if any(k_ == k2 or difflib.SequenceMatcher(None, k_, k2, autojunk=False).ratio() >= 0.88 for k2 in _seen):
                 continue
-            _seen.add(k_)
+            _seen.append(k_)
             _one.append((sc_, c_))
         scored = _one
+        if os.environ.get("SN_NAMES"):
+            print("RESCUE %r: %s" % (name, [(round(a_, 2), b_) for a_, b_ in scored[:3]]), file=sys.stderr)
         # a mangled reading that half resembles ONE pool name and nothing
         # else is that name: at 0.47 against reference_brand_voice_guide
         # with the next name at 0.35, "rafaranra hrand unira aida md" is
