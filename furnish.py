@@ -1470,12 +1470,16 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
         # window there at a size it never had. Where the box came out that
         # small, what is honestly known is that a window stood there.
         thin = (rect[2] - rect[0] < 0.15 * W or rect[3] - rect[1] < 0.12 * H)
+        # ONE WINDOW CARRIES ITS CONTENT: a window set aside for the moment's
+        # lead is drawn as its named outline where it stood, in front of
+        # what it stood in front of (a window behind is never drawn over it)
+        only = bool(getattr(st, "_outline_only", False))
         st.shape = rect
-        html = None if thin else (window(st, behind=False) or st.plain_window_html())
+        html = None if (thin or only) else (window(st, behind=False) or st.plain_window_html())
         st.shape = None
         if not html:
             out.append(outline(rect, getattr(st, "_label", "") or "",
-                               "sn-ghost sn-subject", f";z-index:{3 + z}"))
+                               "sn-ghost sn-front" if only else "sn-ghost sn-subject", f";z-index:{3 + z}"))
             continue
         # The window is drawn to SCALE inside its rectangle: the card is laid
         # out over the width that rectangle really had, and the style

@@ -8403,29 +8403,38 @@ def note(records_path, diary_text=None):
             _now_shapes = {id(stx): list(shape) for stx, _, shape in subjects if shape}
             if len(subjects) > 1:
                 _zb = zoom_box
-                _W = float(s["size"][0])
+                _W, _H = float(s["size"][0]), float(s["size"][1])
+
+                def _area(b_):
+                    return max(0.0, (b_[2] - b_[0]) * (b_[3] - b_[1]))
 
                 def _about(x):
                     stx, sl, shape = x
                     if not shape:
-                        return (-1, 0, 0, 0, 0)
-                    i = subjects.index(x)
+                        return (-1, 0, 0, 0, 0, 0)
+                    area = _area(shape)
+                    # a sliver at the crop's edge is a window, not the subject
+                    real = 1 if (shape[2] - shape[0] >= 0.15 * _W and shape[3] - shape[1] >= 0.12 * _H) else 0
                     inzoom = 1 if (_zb and furnish._within(shape, _zb) > 0.6) else 0
-                    over = max((furnish._within(shape, y[2]) for y in subjects[i + 1:] if y[2]), default=0.0)
-                    prev = _prev_shapes.get(id(stx))
-                    fresh = 1 if (prev is None or max(abs(a - b) for a, b in zip(prev, shape)) > 0.05 * _W) else 0
+                    # a smaller window standing inside this one stands in front of it
+                    over = max((furnish._within(y[2], shape) for y in subjects
+                                if y is not x and y[2] and _area(y[2]) < area), default=0.0)
+                    top = 1 if over < 0.3 else 0
                     t_ = sl.main_table()
                     read = len(t_.rows) if t_ else sum(len(q["model"].lines) for q in sl.parts
                                                        if q["fam"] in ("tree", "doc", "term") and hasattr(q["model"], "lines"))
-                    area = (shape[2] - shape[0]) * (shape[3] - shape[1])
-                    return (inzoom, 1 if over < 0.3 else 0, fresh, read, area)
+                    prev = _prev_shapes.get(id(stx))
+                    fresh = 1 if (prev is None or max(abs(a - b) for a, b in zip(prev, shape)) > 0.05 * _W) else 0
+                    return (real, inzoom, top, read, fresh, area)
                 lead = max(subjects, key=_about)
                 for x in subjects:
-                    if x is not lead and x[2]:
-                        behinds.append((label_for(x[0], s["t0"]), list(x[2])))
+                    if x is not lead:
+                        # drawn as its named outline, in front of what it stood
+                        # in front of; its content is on its card below
+                        x[1]._outline_only = True
+                        x[1]._label = label_for(x[0], s["t0"])
                 if os.environ.get("SN_ZOOM"):
                     print("LEAD %s: %s, of %d" % (s["t0"], label_for(lead[0], s["t0"]), len(subjects)), file=sys.stderr)
-                subjects = [lead]
             _prev_shapes = _now_shapes
             # ONE WINDOW OF A PROGRAM THE VIDEO ONLY EVER HAD ONE OF IS ONE
             # OUTLINE: the crop's own reading of Obsidian at 00:03:10 stood
@@ -8441,6 +8450,14 @@ def note(records_path, diary_text=None):
             for b_, t_, src_, k_ in _marks:
                 if _app_(t_) in _single and any(_app_(t2) == _app_(t_) and furnish._within(b_, b2) > 0.9
                                                 for b2, t2, _s2, _k2 in _kept):
+                    continue
+                # THE CROP'S OWN READING OF A WINDOW THAT RUNS PAST THE CROP:
+                # an outline filling the zoom box, of a program whose outline
+                # already holds the zoom box whole, is that window seen
+                # through the crop, not a second one
+                if zoom_box and furnish._within(b_, zoom_box) > 0.9 and any(
+                        _app_(t2) == _app_(t_) and furnish._within(zoom_box, b2) > 0.9
+                        for b2, t2, _s2, _k2 in _kept):
                     continue
                 _kept.append((b_, t_, src_, k_))
             behinds = [(t_, b_) for b_, t_, src_, k_ in _kept if src_ == "behind"]

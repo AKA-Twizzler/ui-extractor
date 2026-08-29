@@ -652,7 +652,7 @@ def scroll_thumb(path, rect):
     w, h = x1 - x0, y1 - y0
     if w < 40 or h < 40:
         return None
-    reach, over = max(28, int(0.02 * w)), max(6, int(0.005 * w))
+    reach, over = max(28, int(0.02 * w)), max(16, int(0.03 * w))
     bx0, bx1 = max(0, x1 - reach), min(W, x1 + over)
     strip = g[y0:y1, bx0:bx1]
     if strip.size == 0:
@@ -678,8 +678,8 @@ def scroll_thumb(path, rect):
             continue
         rows = lit[:, r].mean(axis=1) > 0.5
         ys = np.where(rows)[0]
-        if len(ys) < 0.04 * h:
-            continue
+        if len(ys) < 0.06 * h:
+            continue          # too short for a thumb: a mark, an icon's edge
         top, bot = int(ys[0]), int(ys[-1])
         if (bot - top + 1) > 1.3 * len(ys):
             continue          # broken: text or ticks, not one solid bar

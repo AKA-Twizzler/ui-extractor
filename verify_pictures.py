@@ -202,9 +202,10 @@ def check_picture(stamp, stage, frame_path, fav_boxes=(), read_whole=()):
         filled_wins = [i for i in range(len(fw)) if any(fills(d, i) for d in filled)]
         if len(fw) and filled and not filled_tops and not any(fills(d, i) for d in filled for i in range(len(fw))):
             fails.append("NO WINDOW FILLED: the frame has %d window(s) and the picture fills none of them" % len(fw))
-        if len(filled_wins) > 1:
-            fails.append("TWO WINDOWS FILLED: the picture fills %d windows; one window carries its content, the rest stand as outlines"
-                         % len(filled_wins))
+        big_slots = [d for d in filled if (d[2] - d[0]) * (d[3] - d[1]) >= 0.09]
+        if len(big_slots) > 1:
+            fails.append("TWO WINDOWS FILLED: the picture fills %d window-sized boxes; one window carries its content, the rest stand as outlines"
+                         % len(big_slots))
         for i, r in enumerate(fw):
             box = fboxes[i]
             covered = not top[i]
