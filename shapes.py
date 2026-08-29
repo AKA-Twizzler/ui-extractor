@@ -708,6 +708,13 @@ def _longest_run(on, unk):
     """The longest run of rows that are on or unknown, trimmed to its on
     ends: (top, bot, count of on rows), or (None, None, 0)."""
     n = len(on)
+    # a band's edge is a gradient a few rows deep, neither track nor black:
+    # the unknown reaches six rows past the black on either side
+    unk = np.asarray(unk).copy()
+    src = unk.copy()
+    for s_ in range(1, 7):
+        unk[s_:] |= src[:-s_]
+        unk[:-s_] |= src[s_:]
     top = bot = None
     lit_n = 0
     y = 0
@@ -770,7 +777,7 @@ def scroll_thumb_h(path, rect):
             runs.append(cur)
             cur = [r]
     runs.append(cur)
-    thickest = max(24, int(0.012 * H))
+    thickest = max(24, int(0.012 * W))     # a zoomed frame draws a bar thick, as it draws a thumb wide
     best = None
     for r in runs:
         if not 5 <= len(r) <= thickest:
