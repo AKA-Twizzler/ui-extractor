@@ -5546,7 +5546,10 @@ def note(records_path, diary_text=None):
                         # `.md`, so the tree shows the name without it. A
                         # narrow tree pane in a picture clips it again with
                         # the stylesheet's ellipsis, as the program does.
-                        w = complete_name(nm, list(pool) + list(all_wholes.values()), heads)
+                        # the tree hides `.md`, so its cut tail never closes
+                        # a Finder name that carries it: asked both ways
+                        _cands = list(pool) + list(all_wholes.values())
+                        w = complete_name(nm, _cands, heads) or complete_name(nm + ".md", _cands, heads)
                         if not w:
                             ce = cut_ends(nm)
                             if ce and ce[0] and not ce[1]:
