@@ -3146,7 +3146,11 @@ def harmonise(states):
                     doubtful = (r["italic"] and r["italic"][0]) or "..." in n
                     garbage = " " in n and "_" not in n and "..." not in n
                     b = better(n, fuzzy=doubtful)
-                    if not b and (doubtful or garbage) and not any(c for c in r["cells"][1:] if tidy_date(c) or tidy_size(c)):
+                    # a garbage name is up for rescue whatever its other cells
+                    # read: "rafaranra hrand nira auida md" sat beside a mangled
+                    # date at two moments and a clean size at one, and the
+                    # clean size kept it from the one pool name it resembles
+                    if not b and (garbage or (doubtful and not any(c for c in r["cells"][1:] if tidy_date(c) or tidy_size(c)))):
                         b = rescue(n)
                     if b and b != n:
                         r["cells"][0] = b
@@ -8438,7 +8442,9 @@ def note(records_path, diary_text=None):
                     area = _area(shape)
                     # a sliver at the crop's edge is a window, not the subject
                     real = 1 if (shape[2] - shape[0] >= 0.15 * _W and shape[3] - shape[1] >= 0.12 * _H) else 0
-                    inzoom = 1 if (_zb and furnish._within(shape, _zb) > 0.6) else 0
+                    # in view when a fair part of it stands inside the crop: a
+                    # window the crop cuts at its edge still shows its content
+                    inzoom = 1 if (_zb and furnish._within(shape, _zb) > 0.25) else 0
                     # a smaller window standing inside this one stands in front of it
                     over = max((furnish._within(y[2], shape) for y in subjects
                                 if y is not x and y[2] and _area(y[2]) < area), default=0.0)
