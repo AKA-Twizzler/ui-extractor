@@ -16,6 +16,7 @@ labels) is drawn from what the program always shows.
 
 The classes are the vault's screen-notes style sheet, nothing else."""
 import html as H
+import os
 import re
 
 import draw2
@@ -355,6 +356,10 @@ def finder(st):
     rows = [r for r in rows
             if not (r.get("cells") and not r["cells"][0]
                     and tuple(str(c) for c in r["cells"][1:]) in _named)]
+    if on_card and os.environ.get("SN_NAMES"):
+        for r in rows:
+            if r.get("cells") and not r["cells"][0]:
+                print("NAMELESS ROW on %s: %r" % (st.title, r["cells"]), file=sys.stderr)
     # A FINDER'S LIST READ AS A TREE IS STILL ITS LIST. With only its Name
     # column in view, a file list comes back as a plain column of names and
     # the reader files it as a file tree. At 00:00:30 the vault-demo window's
