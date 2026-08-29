@@ -8502,6 +8502,10 @@ def note(records_path, diary_text=None):
                         wb = rect_at(stx, s["t0"])[1]
                     except Exception:
                         wb = None
+                    try:
+                        cam_ = shapes.camera_box(fp)
+                    except Exception:
+                        cam_ = None
                     for p_ in sorted((g_.get("panes") or []),
                                      key=lambda q_: -((q_.get("box") or [0, 0, 0, 0])[2] - (q_.get("box") or [0, 0, 0, 0])[0])):
                         kd = _kinds.get(p_.get("kind")) or ("text" if p_.get("kind") == "text, not a tree" else None)
@@ -8512,9 +8516,21 @@ def note(records_path, diary_text=None):
                         # inside the pane's reach (the full-screen Obsidian at
                         # 00:04:20 holds a half-height box and its tree pane
                         # runs the whole height)
+                        _vo = (min(pb[3], wb[3]) - max(pb[1], wb[1])) / max(1.0, pb[3] - pb[1]) if wb else 1.0
                         if wb and furnish._within(pb, wb) < 0.8 and furnish._within(wb, pb) < 0.5 \
-                                and not ((wb[2] - wb[0]) >= 0.6 * float(s["size"][0]) and pb[0] >= wb[0] - 0.05 * float(s["size"][0])):
+                                and not ((wb[2] - wb[0]) >= 0.6 * float(s["size"][0]) and pb[0] >= wb[0] - 0.05 * float(s["size"][0])
+                                         and _vo >= 0.5):
                             continue
+                        # THE CAMERA PICTURE IS NOT A SCROLL BAR: its bright edge
+                        # read as a thumb on the note at 00:04:20 and as a
+                        # "sidebar" below the projects window at 00:01:10; a
+                        # pane whose right edge runs into the camera is read
+                        # above it only
+                        if cam_ and pb[2] + 0.05 * (pb[2] - pb[0]) > cam_[0] and pb[2] - 0.03 * (pb[2] - pb[0]) < cam_[2] \
+                                and pb[3] > cam_[1] and pb[1] < cam_[3]:
+                            pb = [pb[0], pb[1], pb[2], min(pb[3], cam_[1])]
+                            if pb[3] - pb[1] < 0.2 * (wb[3] - wb[1] if wb else pb[3] - pb[1]):
+                                continue
                         if wb and (pb[2] - pb[0]) < 0.35 * (wb[2] - wb[0]) and abs(pb[0] - wb[0]) < 0.05 * (wb[2] - wb[0]):
                             # a narrow pane at the window's left edge, whatever
                             # the reader called it: Obsidian's tree, a Finder's
