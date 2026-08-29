@@ -139,31 +139,48 @@ def find_header(rgb, xl, x1, wb):
             return a, b, cols
     return None, None, []
 
-def pathbar_top(g, wb, xl):
-    """The list's foot: where the pathbar's lighter background begins in
-    the window's bottom seventh (the background level of a row is its
-    20th percentile, which the row's own words do not reach); no such band
-    and the measured box's bottom is the foot, the pathbar left outside it."""
+def bottom_border(g, wb, xl):
+    """The window's bottom border: a light line across the list's width in
+    the window's bottom seventh (or just below the measured box)."""
     x0, y0, x1, y1 = wb
     h = y1 - y0
     xs = slice(xl + 40, x1 - 60)
-    # first, the pathbar's own top border: a light line across the width
-    scan0, scan1 = y1 - int(0.15 * h), min(g.shape[0], y1 + int(0.05 * h))
     bg = float(np.median(g[y0 + h // 3:y0 + 2 * h // 3, xs]))
-    for y in range(scan0, scan1):
-        if (g[y, xs] > bg + 20).mean() > 0.6:
+    for y in range(y1 - int(0.15 * h), min(g.shape[0], y1 + int(0.06 * h))):
+        if (g[y, xs] > bg + 20).mean() > 0.9:
             return y
-    mid = np.percentile(g[y0 + h // 3:y0 + 2 * h // 3, xs], 20, axis=1)
-    listbg = float(np.median(mid))
-    top = y1 - int(0.15 * h)
-    bot = min(g.shape[0], y1 + int(0.05 * h))
-    lvl = np.percentile(g[top:bot, xs], 20, axis=1)
-    run = 0
-    for i, v in enumerate(lvl):
-        run = run + 1 if v > listbg + 8 else 0
-        if run >= 6:
-            return top + i - run + 1
     return y1
+
+def word_crops(rgb, ya, yb, ca, cb, gap=10):
+    """A cell's words as separate crops, split at gaps of `gap` columns
+    with no ink: [(x0, x1)] in frame pixels."""
+    band = rgb[ya:yb, ca:cb]
+    ink = (band.min(axis=2) > 100).sum(axis=0)
+    runs, start = [], None
+    for i, v in enumerate(ink):
+        if v > 0 and start is None:
+            start = i
+        elif v == 0 and start is not None:
+            runs.append([start, i]); start = None
+    if start is not None:
+        runs.append([start, len(ink)])
+    merged = []
+    for s_, e_ in runs:
+        if merged and s_ - merged[-1][1] < gap:
+            merged[-1][1] = e_
+        else:
+            merged.append([s_, e_])
+    return [(ca + s_, ca + e_) for s_, e_ in merged if e_ - s_ >= 4]
+
+def read_cell(rgb, ya, yb, ca, cb):
+    """A cell's text, one reading per word, joined with spaces."""
+    words = []
+    for wa, wb_ in word_crops(rgb, ya, yb, ca, cb):
+        got = ocr(rgb[ya:yb, max(ca, wa - 6):min(cb, wb_ + 6)], 3.0)
+        txt = "".join(w[4] for w in sorted(got, key=lambda w: w[0])).strip()
+        if txt:
+            words.append(txt)
+    return " ".join(words)
 
 def icon_of(rgb, y0, y1, x0, x1):
     """What the icon at a row's head is, by its colour: folder (green), md
@@ -192,12 +209,16 @@ def read_frame(path, out_dir, title_hint="memory"):
     hdr_top, hdr_bot, cols = find_header(rgb, xl, x1, wb)
     if hdr_bot is None:
         hdr_top, hdr_bot = y0 + int(0.1 * (y1 - y0)), y0 + int(0.14 * (y1 - y0))
-    path_top = pathbar_top(g, wb, xl)
-    list_top, list_bot = hdr_bot + 4, path_top - 2
-    bands_ = ink_bands(rgb, xl, x1, list_top, list_bot)
+    border = bottom_border(g, wb, xl)
+    list_top = hdr_bot + 4
+    bands_ = ink_bands(rgb, xl, x1, list_top, border - 4)
     centers = [(a + b) / 2.0 for a, b in bands_]
     gaps = np.diff(centers)
     pitch = int(np.median(gaps)) if len(gaps) else int(1.8 * np.median([b - a for a, b in bands_])) if bands_ else 40
+    # the pathbar is one row's height above the bottom border; the list ends above it
+    path_top = border - int(1.1 * pitch) if border < y1 + 2 else y1
+    list_bot = path_top - 2
+    bands_ = [(a, b) for a, b in bands_ if a < list_bot - 4]
     band_h = int(np.median([b - a for a, b in bands_])) if bands_ else pitch // 2
     name_left = cols[0][0] if cols else xl + 60
     ic0, ic1 = max(xl, name_left - int(0.9 * pitch)), name_left - 4
@@ -220,8 +241,7 @@ def read_frame(path, out_dir, title_hint="memory"):
                 cb = x1 - 60
             if cb - ca < 30 or yb - ya < 8:
                 cells.append(""); continue
-            words = ocr(rgb[ya:yb, ca:cb], 2.0)
-            cells.append(" ".join(w[4] for w in sorted(words, key=lambda w: w[0])).strip())
+            cells.append(read_cell(rgb, ya, yb, ca, cb))
         out_rows.append({"y": [int(ry0), int(ry1)], "ink": [int(a), int(b)], "selected": sel, "cut": bool(cut), "icon": icon, "cells": cells})
     thumb = shapes.scroll_thumb(path, [name_left, hdr_bot, x1, path_top])
     side = shapes.scroll_thumb(path, [max(0, xl - 400), y0, xl - 6, y1], reach=min(400, max(40, xl - 6)))
