@@ -1143,8 +1143,9 @@ def vote_line(text, raw):
     Each reading of the line (`same_doc_line`) is laid over the stretch of
     the line's letters it matches best -- the offset with the fewest
     letters different, at most a tenth of it -- and every position takes
-    the letter most readings put there, the drawn line's own letter
-    counting once. Nothing but a substitution can come of it: the count of
+    the letter most MOMENTS put there (a moment that read the line twice,
+    wrapped and joined, votes once), the drawn line's own letter counting
+    once. Nothing but a substitution can come of it: the count of
     letters never changes."""
     pl = plain_line(text)
     if len(pl) < 12:
@@ -1153,7 +1154,9 @@ def vote_line(text, raw):
     for i, ch in enumerate(pl):
         votes[i][ch] = 1
     n = 0
-    for r in raw:
+    seen = set()            # (position, moment): a moment votes once a letter,
+    #                         however many readings of the line it made
+    for mi, r in raw:
         if not same_doc_line(r, text):
             continue
         rf = plain_line(r)
@@ -1176,6 +1179,9 @@ def vote_line(text, raw):
             continue
         n += 1
         for k in range(len(rf)):
+            if (best + k, mi) in seen:
+                continue
+            seen.add((best + k, mi))
             votes[best + k][rf[k]] = votes[best + k].get(rf[k], 0) + 1
     if not n:
         return text
@@ -6509,10 +6515,10 @@ def note(records_path, diary_text=None):
     # readings put there. The spacing stays the drawn line's own.
     for st in all_states:
         raw = []
-        for m_, g_ in (getattr(st, "pieces", None) or ()):
+        for mi, (m_, g_) in enumerate(getattr(st, "pieces", None) or ()):
             for p_ in (g_.get("panes") or []):
                 if p_.get("kind") == "an open document":
-                    raw.extend(x for x in (p_.get("lines") or []) if isinstance(x, str) and len(x) >= 12)
+                    raw.extend((mi, x) for x in (p_.get("lines") or []) if isinstance(x, str) and len(x) >= 12)
         if not raw:
             continue
         for q in st.parts:
