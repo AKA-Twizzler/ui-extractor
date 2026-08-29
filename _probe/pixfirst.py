@@ -66,7 +66,12 @@ def divider(g, wb):
     none found, the window's own left edge (the crop cut the sidebar off)."""
     x0, y0, x1, y1 = wb
     band = g[y0 + int(0.2 * (y1 - y0)):y1 - int(0.1 * (y1 - y0)), x0:x0 + int(0.45 * (x1 - x0))]
-    col = np.median(band, axis=0)          # the median: icons and words are sparse, the background is not
+    col = np.median(band, axis=0)          # the median: words are sparse, the background is not
+    # the list's icons stand in every row, so their column is bright in the
+    # median: the divider is left of the first such column
+    bright = [i for i, v in enumerate(col) if v > 100 and i > 8]
+    if bright:
+        col = col[:max(9, bright[0] - 10)]
     sm = np.convolve(col, np.ones(9) / 9, mode="same")
     # a step down from a sidebar's shade (not from a column of icons,
     # which is far brighter than any background)
@@ -83,7 +88,8 @@ def ink_bands(rgb, xl, x1, y0, y1, least=2):
     # the bar at the right edge is not ink: stop sixty short of it
     c = rgb[y0:y1, xl + 20:x1 - 60]
     ink = c.min(axis=2) > 100
-    cnt = ink.sum(axis=1)
+    cnt = ink.sum(axis=1).astype(int)
+    cnt[cnt > 0.6 * ink.shape[1]] = 0        # a line across the width is a border, not writing
     least = max(least, 12)
     out, start = [], None
     for i, v in enumerate(cnt):
@@ -141,6 +147,12 @@ def pathbar_top(g, wb, xl):
     x0, y0, x1, y1 = wb
     h = y1 - y0
     xs = slice(xl + 40, x1 - 60)
+    # first, the pathbar's own top border: a light line across the width
+    scan0, scan1 = y1 - int(0.15 * h), min(g.shape[0], y1 + int(0.05 * h))
+    bg = float(np.median(g[y0 + h // 3:y0 + 2 * h // 3, xs]))
+    for y in range(scan0, scan1):
+        if (g[y, xs] > bg + 20).mean() > 0.6:
+            return y
     mid = np.percentile(g[y0 + h // 3:y0 + 2 * h // 3, xs], 20, axis=1)
     listbg = float(np.median(mid))
     top = y1 - int(0.15 * h)
@@ -198,12 +210,18 @@ def read_frame(path, out_dir, title_hint="memory"):
         sel_c = rgb[max(a, ry0):min(b, ry1), xl + 200:x1 - 80].astype(np.float32)
         sel = bool(((sel_c[:, :, 1] - np.maximum(sel_c[:, :, 0], sel_c[:, :, 2])) > 25).mean() > 0.4) if sel_c.size else False
         icon, n = icon_of(rgb, max(list_top, ry0), min(list_bot, ry1), ic0, ic1)
-        words = ocr(rgb[max(list_top, ry0):min(list_bot, ry1), name_left - 6:x1 - 60], 2.0)
-        cells = [""] * max(1, len(col_lefts) - 1)
-        for w in sorted(words, key=lambda w: w[0]):
-            wx = name_left - 6 + w[0]
-            k = max(0, min(len(cells) - 1, sum(1 for cl in col_lefts[1:-1] if wx >= cl - 8)))
-            cells[k] = (cells[k] + " " + w[4]).strip()
+        # one reading per cell, each cell cropped to its column and read on
+        # its own, so the engine never runs the row's words together
+        cells = []
+        ya, yb = max(list_top, ry0), min(list_bot, ry1)
+        for k in range(max(1, len(col_lefts) - 1)):
+            ca, cb = (col_lefts[k] - 6 if k < len(col_lefts) else name_left - 6), (col_lefts[k + 1] - 10 if k + 1 < len(col_lefts) else x1 - 60)
+            if k == len(col_lefts) - 2:
+                cb = x1 - 60
+            if cb - ca < 30 or yb - ya < 8:
+                cells.append(""); continue
+            words = ocr(rgb[ya:yb, ca:cb], 2.0)
+            cells.append(" ".join(w[4] for w in sorted(words, key=lambda w: w[0])).strip())
         out_rows.append({"y": [int(ry0), int(ry1)], "ink": [int(a), int(b)], "selected": sel, "cut": bool(cut), "icon": icon, "cells": cells})
     thumb = shapes.scroll_thumb(path, [name_left, hdr_bot, x1, path_top])
     side = shapes.scroll_thumb(path, [max(0, xl - 400), y0, xl - 6, y1], reach=min(400, max(40, xl - 6)))
