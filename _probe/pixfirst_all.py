@@ -31,21 +31,32 @@ def same_name(a, b):
     return False
 
 def merge(records):
-    groups = []          # each: {"names": Counter, "rows": [...]}
-    for rec in records:
-        for r in rec["rows"]:
-            if r["cut"] or not r["cells"] or not r["cells"][0].strip():
+    """The rows of every frame folded into one list: a full row (not cut,
+    read with confidence) may open a group; a cut row may only join one.
+    Each cell is the commonest full reading; the name the commonest whole
+    one. The order is every frame's own sequence stitched in time order,
+    anchored on the rows already placed."""
+    groups = []
+    def find(name):
+        for gp in groups:
+            if any(same_name(name, n) for n in gp["names"]):
+                return gp
+        return None
+    for pass_ in ("full", "cut"):
+        for rec in records:
+            for r in rec["rows"]:
                 if not r["cells"] or not r["cells"][0].strip():
                     continue
-            name = r["cells"][0].strip()
-            hit = None
-            for gp in groups:
-                if any(same_name(name, n) for n in gp["names"]):
-                    hit = gp; break
-            if hit is None:
-                hit = {"names": Counter(), "rows": []}; groups.append(hit)
-            hit["names"][name] += 1
-            hit["rows"].append(dict(r, frame=rec["frame"]))
+                if (pass_ == "full") == bool(r["cut"]):
+                    continue
+                name = r["cells"][0].strip()
+                hit = find(name)
+                if hit is None:
+                    if pass_ == "cut":
+                        continue
+                    hit = {"names": Counter(), "rows": []}; groups.append(hit)
+                hit["names"][name] += 1
+                hit["rows"].append(dict(r, frame=rec["frame"]))
     out = []
     for gp in groups:
         full = [r for r in gp["rows"] if not r["cut"]]
@@ -59,28 +70,29 @@ def merge(records):
             cells.append(c.most_common(1)[0][0] if c else "")
         icon = Counter(r["icon"] for r in pool).most_common(1)[0][0]
         sel = any(r["selected"] for r in full)
-        out.append({"name": name, "cells": cells, "icon": icon, "selected": sel, "seen": len(gp["rows"]), "full": len(full)})
-    # the order: every frame's own sequence stitched together
-    order = []
+        out.append({"name": name, "cells": cells, "icon": icon, "selected": sel, "seen": len(gp["rows"]), "full": len(full),
+                    "names": dict(gp["names"])})
     def key_of(row):
         for i, g in enumerate(out):
-            if same_name(row["cells"][0], g["name"]):
+            if same_name(row["cells"][0], g["name"]) or any(same_name(row["cells"][0], n) for n in g["names"]):
                 return i
         return None
-    seqs = []
-    for rec in records:
+    order = []
+    for rec in records:                       # time order
         seq = [key_of(r) for r in rec["rows"] if r["cells"] and r["cells"][0].strip()]
-        seqs.append([k for k in seq if k is not None])
-    seqs.sort(key=len, reverse=True)
-    for seq in seqs:
+        seq = [k for k in seq if k is not None]
         prev = None
-        for k in seq:
+        for i, k in enumerate(seq):
             if k in order:
                 prev = k; continue
-            if prev is None:
-                order.insert(0, k)
-            else:
+            if prev is not None:
                 order.insert(order.index(prev) + 1, k)
+            else:
+                later = next((j for j in seq[i + 1:] if j in order), None)
+                if later is not None:
+                    order.insert(order.index(later), k)
+                else:
+                    order.append(k)
             prev = k
     ordered = [out[k] for k in order] + [g for i, g in enumerate(out) if i not in order]
     return ordered
