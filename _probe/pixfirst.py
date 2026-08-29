@@ -134,24 +134,24 @@ def find_header(rgb, xl, x1, wb):
     return None, None, []
 
 def pathbar_top(g, wb, xl):
-    """The pathbar's top line: the strongest step in the bottom tenth of the list side."""
+    """The list's foot: where the pathbar's lighter background begins in
+    the window's bottom seventh (the background level of a row is its
+    20th percentile, which the row's own words do not reach); no such band
+    and the measured box's bottom is the foot, the pathbar left outside it."""
     x0, y0, x1, y1 = wb
     h = y1 - y0
-    strip = g[y1 - h // 10:y1, xl + 40:x1 - 40].mean(axis=1)
-    sm = np.convolve(strip, np.ones(3) / 3, mode="same")
-    st = steps(sm, 3.0)
-    return y1 - h // 10 + (min(st, key=lambda s: s[0])[0] if st else h // 10 - 60)
-
-def header_columns(rgb, xl, x1, hdr_top, hdr_bot):
-    """The column lefts from the header's words."""
-    crop = rgb[hdr_top:hdr_bot, xl:x1]
-    words = ocr(crop, 2.0)
-    cols = []
-    for w in sorted(words, key=lambda w: w[0]):
-        t = w[4].strip()
-        if t and t.lower() != "v" and len(t) > 1:
-            cols.append((xl + int(w[0]), t))
-    return cols
+    xs = slice(xl + 40, x1 - 60)
+    mid = np.percentile(g[y0 + h // 3:y0 + 2 * h // 3, xs], 20, axis=1)
+    listbg = float(np.median(mid))
+    top = y1 - int(0.15 * h)
+    bot = min(g.shape[0], y1 + int(0.05 * h))
+    lvl = np.percentile(g[top:bot, xs], 20, axis=1)
+    run = 0
+    for i, v in enumerate(lvl):
+        run = run + 1 if v > listbg + 8 else 0
+        if run >= 6:
+            return top + i - run + 1
+    return y1
 
 def icon_of(rgb, y0, y1, x0, x1):
     """What the icon at a row's head is, by its colour: folder (green), md
@@ -198,7 +198,7 @@ def read_frame(path, out_dir, title_hint="memory"):
         sel_c = rgb[max(a, ry0):min(b, ry1), xl + 200:x1 - 80].astype(np.float32)
         sel = bool(((sel_c[:, :, 1] - np.maximum(sel_c[:, :, 0], sel_c[:, :, 2])) > 25).mean() > 0.4) if sel_c.size else False
         icon, n = icon_of(rgb, max(list_top, ry0), min(list_bot, ry1), ic0, ic1)
-        words = ocr(rgb[max(list_top, ry0):min(list_bot, ry1), name_left - 6:x1 - 8], 2.0)
+        words = ocr(rgb[max(list_top, ry0):min(list_bot, ry1), name_left - 6:x1 - 60], 2.0)
         cells = [""] * max(1, len(col_lefts) - 1)
         for w in sorted(words, key=lambda w: w[0]):
             wx = name_left - 6 + w[0]
