@@ -2,7 +2,7 @@
 (compare.py's page, headless Edge), one PNG each, to look at."""
 import os, re, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import compare
+import compare_bars as compare
 note, out = sys.argv[1], sys.argv[2]
 pats = sys.argv[3:]
 lines = open(note, encoding="utf-8").read().split("\n")
