@@ -4123,8 +4123,12 @@ def moment_thumbs(stx, m_, g_, wb, W):
     else:
         ref = None
     if ref and boxed:
-        ref[1] = min(ref[1], min(b[1] for b in boxed))
-        ref[3] = max(ref[3], max(b[3] for b in boxed))
+        # run out to the panes that are the window's own (a loose pane
+        # below a window is not its foot)
+        own = [b for b in boxed if not wb or furnish._within(b, wb) >= 0.5]
+        if own:
+            ref[1] = min(ref[1], min(b[1] for b in own))
+            ref[3] = max(ref[3], max(b[3] for b in own))
     rw = (ref[2] - ref[0]) if ref else None
     rh = (ref[3] - ref[1]) if ref else None
 
@@ -4210,15 +4214,25 @@ def moment_thumbs(stx, m_, g_, wb, W):
             # sidebar's known share of a measured window, else the leftmost
             # pane's edge; the band reaches a third of the window back,
             # never past the frame's edge
-            if wb:
-                x1 = (list_pb[0] - 6) if list_pb else x_side
-                x0 = max(0.0, ref[0], x1 - 0.35 * rw)
-            else:
+            cut_ = (not wb) or wb[0] < 0.05 * W        # the crop took the window's left side
+            if cut_:
                 x1 = (list_pb[0] if list_pb else ref[0]) - 6
                 x0 = max(0.0, x1 - 0.35 * rw)
+                reach_ = x1 - x0
+            elif list_pb:
+                x1 = list_pb[0] - 6
+                x0 = max(0.0, ref[0], x1 - 0.35 * rw)
+                reach_ = x1 - x0
+            else:
+                # the share is a card's estimate, a few percent out either
+                # way on a window the frame cut: the band takes a twelfth
+                # of the window around it
+                x1 = x_side + 0.05 * rw
+                x0 = max(0.0, ref[0], x1 - 0.12 * rw)
+                reach_ = 0.12 * rw
             if x1 - x0 > 40:
                 pb = [x0, ref[1], x1, ref[3]]
-                t_ = shapes.scroll_thumb(fp, pb, reach=(x1 - x0) if (list_pb or not wb) else max(60.0, 0.08 * rw))
+                t_ = shapes.scroll_thumb(fp, pb, reach=reach_)
                 if trace:
                     print("THUMB %s %s side(edge) box=%s -> %s" % (m_.get("ts"), who, [int(v) for v in pb], t_), file=sys.stderr)
                 if t_:
