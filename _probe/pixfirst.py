@@ -133,7 +133,7 @@ def find_header(rgb, xl, x1, wb):
                     merged[-1][1] = e_
                 else:
                     merged.append([s_, e_])
-            merged = [(s_, e_) for s_, e_ in merged if e_ - s_ >= 20]
+            merged = [(s_, e_) for s_, e_ in merged if e_ - s_ >= 35]     # a sort chevron is no column
             names = [w[4].strip() for w in sorted(words, key=lambda w: w[0])]
             cols = [(xl + s_, names[k] if k < len(names) else "") for k, (s_, e_) in enumerate(merged)]
             return a, b, cols
