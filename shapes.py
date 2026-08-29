@@ -680,7 +680,10 @@ def scroll_thumb(path, rect, reach=None, stop=None):
     # a zoomed frame draws a thumb wide: a thumb is never wider than about
     # one part in eighty of the frame, whatever the pane's own width
     widest = max(24, int(0.012 * W), int(0.05 * w))
-    dark = strip < bg - 25
+    # black is black even where the bands pull the median down: a band's
+    # rows are darker than the track by a quarter of it or by twenty-five,
+    # whichever the track's own brightness allows
+    dark = strip < max(bg - 25, 0.5 * bg)
     if k < h:
         dark[k:, :] = False
     best = None
@@ -696,7 +699,7 @@ def scroll_thumb(path, rect, reach=None, stop=None):
         top, bot, lit_n, cut = _longest_run(rows, unk)
         # too short for a thumb (a mark, an icon's edge), unless a band cut
         # it: what shows of a thumb above a band is the thumb, drawn as seen
-        if top is None or lit_n < 0.03 * h or ((bot - top + 1) < 0.08 * h and not cut):
+        if top is None or lit_n < (0.02 if cut else 0.03) * h or ((bot - top + 1) < 0.08 * h and not cut):
             continue
         if top <= 0.06 * h and bot >= 0.94 * h:
             continue          # a border or a divider: a thumb never touches both ends of its track
@@ -768,7 +771,7 @@ def scroll_thumb_h(path, rect):
     band = g[y0:y1, x0:x1]
     bg = float(np.median(band))
     lit = band > bg + 25
-    dark = band < bg - 25
+    dark = band < max(bg - 25, 0.5 * bg)
     row = lit.mean(axis=1)
     rows = [int(r) for r in np.where((row > 0.04) & (row < 0.98))[0]]
     if not rows:
