@@ -6442,6 +6442,76 @@ def note(records_path, diary_text=None):
                              if st.name == "The Finder window") if v)
     house_share = _hs[len(_hs) // 2] if _hs else None
     mend_prose(all_states)
+    # A NOTE'S LINE IS SPELT BY THE VOTE OF ITS READINGS. Every moment reads
+    # the open note again, and the readings of one line differ by a letter
+    # here and there: "02 Company A/ : the first business" was read ten
+    # times with the 0 (glued) and eight times with a 6 (spaced), and the
+    # spaced reading stood, 6 and all, because the merge prefers words to
+    # glue. The letters are the majority's; the spacing stays the drawn
+    # line's own. Only a pure substitution is taken (the same letters
+    # count), so a fragment or a re-wrapped reading changes nothing.
+    for st in all_states:
+        raw = []
+        for m_, g_ in (getattr(st, "pieces", None) or ()):
+            for p_ in (g_.get("panes") or []):
+                if p_.get("kind") == "an open document":
+                    raw.extend(x for x in (p_.get("lines") or []) if isinstance(x, str) and len(x) >= 12)
+        if not raw:
+            continue
+        for q in st.parts:
+            if q["fam"] != "doc" or not getattr(q["model"], "lines", None):
+                continue
+            fixed = []
+            for t_, h_ in q["model"].lines:
+                pl = plain_line(t_)
+                if len(pl) < 12:
+                    fixed.append((t_, h_))
+                    continue
+                tally = {}
+                for r_ in raw:
+                    if same_doc_line(r_, t_):
+                        k_ = plain_line(r_)
+                        tally[k_] = tally.get(k_, 0) + 1
+                if not tally:
+                    fixed.append((t_, h_))
+                    continue
+                win = max(tally.items(), key=lambda kv: (kv[1], kv[0] == pl))[0]
+                if win == pl or len(win) != len(pl) or tally[win] <= tally.get(pl, 0):
+                    fixed.append((t_, h_))
+                    continue
+                # the drawn line's letters replaced in place, its spacing kept
+                out, k = [], 0
+                for ch in t_:
+                    if ch.isalnum():
+                        out.append(win[k] if ch.islower() or ch.isdigit() else win[k].upper())
+                        k += 1
+                    else:
+                        out.append(ch)
+                t2 = "".join(out)
+                if plain_line(t2) != win:
+                    fixed.append((t_, h_))
+                    continue
+                # the html carries the same letters somewhere; swap the
+                # differing stretch, and only where it stands once
+                i0 = 0
+                while i0 < min(len(t_), len(t2)) and t_[i0] == t2[i0]:
+                    i0 += 1
+                j0 = 0
+                while j0 < min(len(t_), len(t2)) - i0 and t_[-1 - j0] == t2[-1 - j0]:
+                    j0 += 1
+                a_, b_ = t_[i0:len(t_) - j0], t2[i0:len(t2) - j0]
+                # widen to whole words so the swap is unambiguous in the html
+                while i0 > 0 and t_[i0 - 1].isalnum():
+                    i0 -= 1
+                while j0 > 0 and t_[len(t_) - j0].isalnum():
+                    j0 -= 1
+                a_, b_ = t_[i0:len(t_) - j0], t2[i0:len(t2) - j0]
+                ea, eb = esc(a_), esc(b_)
+                h2 = h_.replace(ea, eb) if isinstance(h_, str) and h_.count(ea) == 1 else h_
+                if os.environ.get("SN_NAMES"):
+                    print("DOC %s: %r -> %r (%d vs %d)" % (st.name, a_, b_, tally[win], tally.get(pl, 0)), file=sys.stderr)
+                fixed.append((t2, h2))
+            q["model"].lines = fixed
     title_from_bar(states)
     heal_titles(states)
     flatten_sidebars(all_states)

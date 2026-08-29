@@ -30,7 +30,6 @@ WHAT IT CANNOT SEE, declared rather than implied:
 Exit 1 if any picture drops a row, so a run can gate on it.
 """
 import json
-import difflib
 import re
 import sys
 import unicodedata
@@ -52,38 +51,16 @@ def norm(s):
     return re.sub(r"[^a-z0-9]", "", unicodedata.normalize("NFKD", str(s)).lower())
 
 
-_FOLD = str.maketrans({"0": "o", "1": "l", "i": "l"})
-
-
-def close(a, b, raw=None):
+def close(a, b):
     """Two readings of one name. A short name must match outright; a longer
-    one may differ by up to `SLACK` letters, or be the other cut short.
-    A FOLD IS NOT A DROP. A reading Finder cut ("O3Company...apeCompany)")
-    is the drawn whole name when its two ends open and close it, and a
-    reading a few letters off (".clauds son" for ".claude.json") is the row
-    it was folded into: judged by the letters in common, past the 0/o and
-    l/i the engines confuse. `raw` is the reading before `norm`, for the
-    cut."""
+    one may differ by up to `SLACK` letters, or be the other cut short."""
     if a == b:
         return True
     if len(a) >= 4 and (a in b or b in a):
         return True
-    if raw:
-        m = re.search(r"(?<=\S)(?:\.{2,}|\u2026)(?=\S)", raw)
-        if m:
-            head, tail = norm(raw[:m.start()]), norm(raw[m.end():])
-            bf = b.translate(_FOLD)
-            if head and tail and len(head) + len(tail) >= 6 and len(bf) > len(head) + len(tail) \
-                    and bf.startswith(head.translate(_FOLD)) and bf.endswith(tail.translate(_FOLD)):
-                return True
     if abs(len(a) - len(b)) > 3 or min(len(a), len(b)) < 4:
         return False
-    if sum(1 for x, y in zip(a, b) if x == y) >= max(len(a), len(b)) - SLACK:
-        return True
-    if min(len(a), len(b)) >= 8:
-        af, bf = a.translate(_FOLD), b.translate(_FOLD)
-        return difflib.SequenceMatcher(None, af, bf, autojunk=False).ratio() >= 0.8
-    return False
+    return sum(1 for x, y in zip(a, b) if x == y) >= max(len(a), len(b)) - SLACK
 
 
 def panes_of(records):
@@ -151,11 +128,11 @@ def check(note_path, records_path, quiet=False):
             keys = [(o, norm(o)) for o in pane]
             if not tabs:
                 continue
-            best = max(tabs, key=lambda tb: sum(1 for o, n in keys if any(close(n, d, o) for d in tb)))
-            hit = sum(1 for o, n in keys if any(close(n, d, o) for d in best))
+            best = max(tabs, key=lambda tb: sum(1 for _o, n in keys if any(close(n, d) for d in tb)))
+            hit = sum(1 for _o, n in keys if any(close(n, d) for d in best))
             if hit < max(3, 0.6 * len(keys)):
                 continue          # not this window's list at all
-            miss = [o for o, n in keys if not any(close(n, d, o) for d in best)]
+            miss = [o for o, n in keys if not any(close(n, d) for d in best)]
             if miss:
                 dropped.setdefault(ts, []).extend(miss)
     if not quiet:
