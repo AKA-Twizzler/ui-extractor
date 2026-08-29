@@ -1138,71 +1138,6 @@ def _hole(short, long_):
     return bool(a2 and b2 and b2 != a2 and b2.endswith(a2))
 
 
-def vote_line(text, raw):
-    """The line's letters by the vote of its readings, its spacing kept.
-    Each reading of the line (`same_doc_line`) is laid over the stretch of
-    the line's letters it matches best -- the offset with the fewest
-    letters different, at most a tenth of it -- and every position takes
-    the letter most MOMENTS put there (a moment that read the line twice,
-    wrapped and joined, votes once), the drawn line's own letter counting
-    once. Nothing but a substitution can come of it: the count of
-    letters never changes."""
-    pl = plain_line(text)
-    if len(pl) < 12:
-        return text
-    votes = [{} for _ in pl]
-    for i, ch in enumerate(pl):
-        votes[i][ch] = 1
-    n = 0
-    seen = set()            # (position, moment): a moment votes once a letter,
-    #                         however many readings of the line it made
-    for mi, r in raw:
-        rf = plain_line(r)
-        if not 6 <= len(rf) <= len(pl):
-            continue
-        # a reading of this line shares an eight-letter run with it
-        # somewhere; `same_doc_line` refused the glued reading with one
-        # letter wrong at its head, and it is the one with the votes
-        if len(rf) >= 8 and not any(rf[i:i + 8] in pl for i in (0, len(rf) // 2 - 4, len(rf) - 8)):
-            continue
-        best, best_d = None, None
-        for off in range(0, len(pl) - len(rf) + 1):
-            d = 0
-            lim = max(1, len(rf) // 10)
-            for k in range(len(rf)):
-                if pl[off + k] != rf[k]:
-                    d += 1
-                    if d > lim:
-                        break
-            if d <= lim and (best_d is None or d < best_d):
-                best, best_d = off, d
-                if d == 0:
-                    break
-        if best is None:
-            continue
-        n += 1
-        for k in range(len(rf)):
-            if (best + k, mi) in seen:
-                continue
-            seen.add((best + k, mi))
-            votes[best + k][rf[k]] = votes[best + k].get(rf[k], 0) + 1
-    if not n:
-        return text
-    won = "".join(max(v.items(), key=lambda kv: (kv[1], kv[0] == pl[i]))[0] for i, v in enumerate(votes))
-    if won == pl:
-        return text
-    out, k = [], 0
-    for ch in text:
-        if ch.isalnum():
-            w = won[k] if k < len(won) else ch
-            out.append(w.upper() if ch.isupper() else w)
-            k += 1
-        else:
-            out.append(ch)
-    t2 = "".join(out)
-    return t2 if plain_line(t2) == won else text
-
-
 def mend_prose(states):
     """A line of a note that something covered, filled from a reading of the
     SAME line taken when nothing did.
@@ -6507,49 +6442,6 @@ def note(records_path, diary_text=None):
                              if st.name == "The Finder window") if v)
     house_share = _hs[len(_hs) // 2] if _hs else None
     mend_prose(all_states)
-    # A NOTE'S LINE IS SPELT BY THE VOTE OF ITS READINGS. Every moment reads
-    # the open note again, and the readings of one line differ by a letter
-    # here and there: "02 Company A/ : the first business" was read ten
-    # times with the 0 (glued) and eight times with a 6 (spaced), and the
-    # spaced reading stood, 6 and all, because the merge prefers words to
-    # glue. A drawn line is the joined whole of wrapped readings, so the
-    # vote is per letter: each reading is laid over the stretch of the
-    # drawn line it matches best, and every position takes the letter most
-    # readings put there. The spacing stays the drawn line's own.
-    for st in all_states:
-        raw = []
-        for mi, (m_, g_) in enumerate(getattr(st, "pieces", None) or ()):
-            for p_ in (g_.get("panes") or []):
-                if p_.get("kind") == "an open document":
-                    raw.extend((mi, x) for x in (p_.get("lines") or []) if isinstance(x, str) and len(x) >= 12)
-        if not raw:
-            continue
-        for q in st.parts:
-            if q["fam"] != "doc" or not getattr(q["model"], "lines", None):
-                continue
-            fixed = []
-            for t_, h_ in q["model"].lines:
-                t2 = vote_line(t_, raw)
-                if t2 == t_:
-                    fixed.append((t_, h_))
-                    continue
-                i0 = 0
-                while i0 < min(len(t_), len(t2)) and t_[i0] == t2[i0]:
-                    i0 += 1
-                j0 = 0
-                while j0 < min(len(t_), len(t2)) - i0 and t_[-1 - j0] == t2[-1 - j0]:
-                    j0 += 1
-                while i0 > 0 and t_[i0 - 1].isalnum():
-                    i0 -= 1
-                while j0 > 0 and t_[len(t_) - j0].isalnum():
-                    j0 -= 1
-                a_, b_ = t_[i0:len(t_) - j0], t2[i0:len(t2) - j0]
-                ea, eb = esc(a_), esc(b_)
-                h2 = h_.replace(ea, eb) if isinstance(h_, str) and h_.count(ea) == 1 else h_
-                if os.environ.get("SN_NAMES"):
-                    print("DOC %s: %r -> %r" % (st.name, a_, b_), file=sys.stderr)
-                fixed.append((t2, h2))
-            q["model"].lines = fixed
     title_from_bar(states)
     heal_titles(states)
     flatten_sidebars(all_states)
