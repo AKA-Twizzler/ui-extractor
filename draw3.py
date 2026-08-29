@@ -2393,8 +2393,11 @@ def build_states(moments):
             if touched:
                 home = max(touched, key=lambda s: (s.rect[2] - s.rect[0]) * (s.rect[3] - s.rect[1]))
                 home.said.append((m["ts"], said))
+    _trace_rows('before harmonise', states)
     harmonise(states)
+    _trace_rows('after harmonise', states)
     retitle_by_rows(states)
+    _trace_rows('after retitle', states)
     # A title is a folder's name, and no folder here ends in a bare full
     # stop. `memory.` is the reader's dot, picked up from the title bar of a
     # moving frame; a name that BEGINS with one (`.claude`) is real and is
@@ -2930,6 +2933,23 @@ def complete_docs(states):
         model.lines = [(t, h) for t, h, _ in kept2]
         if mended:
             st.fine.append(f"{mended} cut lines completed from another reading of the same text")
+
+
+
+def _trace_rows(tag, states):
+    """SN_NAMES=1: where one row of the memory list stands after each pass."""
+    if not os.environ.get("SN_NAMES"):
+        return
+    for st in states:
+        if str(getattr(st, "title", "")) != "memory":
+            continue
+        for q in st.parts:
+            if q["fam"] != "table":
+                continue
+            for r in q["model"].rows:
+                nm = (r.get("cells") or [""])[0]
+                if not nm or "brand" in nm or "rafaranra" in nm:
+                    print("ROWTRACE %s: %r" % (tag, r.get("cells")), file=sys.stderr)
 
 
 def harmonise(states):
@@ -6982,6 +7002,7 @@ def note(records_path, diary_text=None):
                     return None
             return box, anchor
 
+        _trace_rows('before pictures', states)
         _prev_shapes = {}     # where every window stood in the last picture
         for s in spans:
             subjects = []
@@ -8977,6 +8998,7 @@ def note(records_path, diary_text=None):
             parts.append(f"#### {w} - as at {_when}" + (f", {st.title}" if st.title else ""))
             parts.append("")
             _sh = shape_of.get(id(st)) or (None, None)
+            _trace_rows('at card', [st])
             _html = st.window_html()
             parts.append(card_shot(_html, _sh[0], _sh[1], getattr(st, "_tree_min", None)))
             parts.append("")
