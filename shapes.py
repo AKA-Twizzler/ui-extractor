@@ -671,7 +671,7 @@ def scroll_thumb(path, rect):
             runs.append(cur)
             cur = [c]
     runs.append(cur)
-    widest = max(24, int(0.02 * w))
+    widest = max(24, int(0.05 * w))      # a zoomed frame draws a thumb wide
     best = None
     for r in runs:
         if not 3 <= len(r) <= widest:

@@ -8508,7 +8508,12 @@ def note(records_path, diary_text=None):
                         pb = p_.get("box")
                         if not kd or not pb or len(pb) != 4:
                             continue
-                        if wb and furnish._within(pb, wb) < 0.8:
+                        # a pane of this window: inside its box, or the box
+                        # inside the pane's reach (the full-screen Obsidian at
+                        # 00:04:20 holds a half-height box and its tree pane
+                        # runs the whole height)
+                        if wb and furnish._within(pb, wb) < 0.8 and furnish._within(wb, pb) < 0.5 \
+                                and not ((wb[2] - wb[0]) >= 0.6 * float(s["size"][0]) and pb[0] >= wb[0] - 0.05 * float(s["size"][0])):
                             continue
                         if wb and (pb[2] - pb[0]) < 0.35 * (wb[2] - wb[0]) and abs(pb[0] - wb[0]) < 0.05 * (wb[2] - wb[0]):
                             # a narrow pane at the window's left edge, whatever
