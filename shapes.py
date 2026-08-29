@@ -703,6 +703,8 @@ def scroll_thumb(path, rect, reach=None, stop=None):
             continue
         if top <= 0.06 * h and bot >= 0.94 * h:
             continue          # a border or a divider: a thumb never touches both ends of its track
+        if top < 2 or bot > h - 3:
+            continue          # a line running into the rect's edge is a border, not a thumb
         cand = (top / float(h), (bot - top + 1) / float(h))
         if best is None or cand[1] > best[1]:
             best = cand
@@ -792,10 +794,13 @@ def scroll_thumb_h(path, rect):
         cols = lit[r, :].mean(axis=0) > 0.5
         unk = dark[r, :].mean(axis=0) > 0.5
         left, right, lit_n, _cut = _longest_run(cols, unk)
-        if left is None or (right - left + 1) < 0.08 * w or lit_n < 0.03 * w:
+        # shorter than a seventh of the track is a crumb's icon, not a bar
+        if left is None or (right - left + 1) < 0.15 * w or lit_n < 0.1 * w:
             continue
         if left <= 0.03 * w and right >= 0.97 * w:
             continue          # a border along the bottom, not a bar
+        if left < 2 or right > w - 3:
+            continue          # runs into the region's edge: a border
         cand = (left / float(w), (right - left + 1) / float(w))
         if best is None or cand[1] > best[1]:
             best = cand

@@ -4197,39 +4197,51 @@ def moment_thumbs(stx, m_, g_, wb, W):
         if t_:
             th[kd] = t_
     if finder and ref:
-        share = getattr(stx, "side_share", None) or furnish.side_share_card(stx) or 0.25
+        # the sidebar's share, as the card draws it
+        home = getattr(stx, "_side_home", None)
+        share = ((home[1] if (home and home[1]) else None) or furnish.side_share_card(stx)
+                 or getattr(stx, "side_share", None) or 0.25)
         x_side = ref[0] + share * rw + 10
         if "side" not in th and not saw_side:
             # A FINDER WHOSE SIDEBAR THE READER DID NOT BOX (cut by the crop
             # to its last few pixels, or a frame caught mid-scroll) keeps
             # the sidebar's bar at the sidebar's right edge all the same:
             # the list's first column where a list was read, else the
-            # sidebar's known share of the window
-            x1 = (list_pb[0] - 6) if list_pb else x_side
-            x0 = max(0.0, ref[0])
+            # sidebar's known share of a measured window, else the leftmost
+            # pane's edge; the band reaches a third of the window back,
+            # never past the frame's edge
+            if wb:
+                x1 = (list_pb[0] - 6) if list_pb else x_side
+                x0 = max(0.0, ref[0], x1 - 0.35 * rw)
+            else:
+                x1 = (list_pb[0] if list_pb else ref[0]) - 6
+                x0 = max(0.0, x1 - 0.35 * rw)
             if x1 - x0 > 40:
                 pb = [x0, ref[1], x1, ref[3]]
-                t_ = shapes.scroll_thumb(fp, pb, reach=(x1 - x0) if list_pb else max(60.0, 0.08 * rw))
+                t_ = shapes.scroll_thumb(fp, pb, reach=(x1 - x0) if (list_pb or not wb) else max(60.0, 0.08 * rw))
                 if trace:
                     print("THUMB %s %s side(edge) box=%s -> %s" % (m_.get("ts"), who, [int(v) for v in pb], t_), file=sys.stderr)
                 if t_:
                     th["side"] = t_
-        if "list" not in th and not boxed:
-            # nothing boxed at all: the list's bar at the window's right edge
-            pb = [x_side, ref[1], ref[2], ref[3]]
-            t_ = shapes.scroll_thumb(fp, pb)
+        # THE WINDOW'S RIGHT EDGE AND FOOT ARE ITS OWN ONLY WHERE THE FRAME
+        # MEASURED THE WINDOW: a strip's right edge is the window in front
+        # of it, and its border read as a bar there
+        if wb:
+            if "list" not in th and not boxed:
+                pb = [x_side, ref[1], ref[2], ref[3]]
+                t_ = shapes.scroll_thumb(fp, pb)
+                if trace:
+                    print("THUMB %s %s list(edge) box=%s -> %s" % (m_.get("ts"), who, [int(v) for v in pb], t_), file=sys.stderr)
+                if t_:
+                    th["list"] = t_
+            # the list's sideways bar, along the window's foot
+            lx = list_pb[0] if list_pb else x_side
+            pb = [lx, ref[3] - 0.12 * rh, ref[2], ref[3]]
+            t_ = shapes.scroll_thumb_h(fp, pb)
             if trace:
-                print("THUMB %s %s list(edge) box=%s -> %s" % (m_.get("ts"), who, [int(v) for v in pb], t_), file=sys.stderr)
+                print("THUMB %s %s list_h box=%s -> %s" % (m_.get("ts"), who, [int(v) for v in pb], t_), file=sys.stderr)
             if t_:
-                th["list"] = t_
-        # the list's sideways bar, along the window's foot
-        lx = list_pb[0] if list_pb else x_side
-        pb = [lx, ref[3] - 0.12 * rh, ref[2], ref[3]]
-        t_ = shapes.scroll_thumb_h(fp, pb)
-        if trace:
-            print("THUMB %s %s list_h box=%s -> %s" % (m_.get("ts"), who, [int(v) for v in pb], t_), file=sys.stderr)
-        if t_:
-            th["list_h"] = t_
+                th["list_h"] = t_
     return th
 
 
@@ -4242,7 +4254,9 @@ def card_thumbs(st, W):
     best = {}
     for m_, g_ in (getattr(st, "pieces", None) or ()):
         try:
-            wb_ = rect_at(st, m_["ts"])[1]
+            how_, wb_ = rect_at(st, m_["ts"])
+            if how_ == "borrowed":
+                wb_ = None
         except Exception:
             wb_ = None
         th = moment_thumbs(st, m_, g_, wb_, W)
@@ -8725,7 +8739,9 @@ def note(records_path, diary_text=None):
                         continue
                     hit_ = True
                     try:
-                        wb = rect_at(stx, s["t0"])[1]
+                        how_, wb = rect_at(stx, s["t0"])
+                        if how_ == "borrowed":
+                            wb = None      # another moment's box, in another frame's space
                     except Exception:
                         wb = None
                     th = moment_thumbs(stx, m_, g_, wb, float(s["size"][0]))
