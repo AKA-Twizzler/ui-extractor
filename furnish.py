@@ -196,6 +196,11 @@ def _layouts(readings, keys, tol=0.10):
 
 
 STATES = []     # every window drawn this run, set by draw3; col_shares borrows across them
+KNOWN = {}      # flat(name) -> the spelling the video uses most, set by draw3
+
+
+def flat_(s):
+    return re.sub(r"[^a-z0-9]", "", str(s or "").lower())
 
 
 def col_shares(st, head):
@@ -516,7 +521,11 @@ def finder(st):
         # earlier attempts cut at the first repeat and threw that tail away,
         # which cost ink on seven pictures. So collapse the duplicated run
         # where it sits and keep what stands on either side of it.
-        path_ = [c for c in table.path]
+        # A CRUMB IS SPELT THE WAY THE VIDEO SPELLS THE NAME MOST. The bar at
+        # 00:03:20 read "(info Product)" once where six rows read "(Info
+        # Product)"; whichever path object reaches the drawing, the crumb is
+        # spelt as the video knows it.
+        path_ = [KNOWN.get(flat_(c), c) if len(flat_(c)) >= 6 else c for c in table.path]
         keys = [re.sub(r"[^a-z0-9]+", "", str(c).lower()) for c in path_]
         again = True
         while again:

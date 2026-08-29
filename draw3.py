@@ -5348,6 +5348,7 @@ def note(records_path, diary_text=None):
                     _spell[flat(r["cells"][0])][r["cells"][0]] += 1
     known = {k: max(v.items(), key=lambda kv: (kv[1], sum(1 for ch in kv[0] if ch.isupper())))[0]
              for k, v in _spell.items()}
+    furnish.KNOWN = dict(known)      # the drawing spells every crumb as the video spells the name most
     times_seen, after = {}, {}
     for st in states:
         t = st.main_table()
