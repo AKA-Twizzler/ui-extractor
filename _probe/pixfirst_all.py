@@ -99,7 +99,40 @@ def merge(records):
                 else:
                     order.append(k)
             prev = k
-    ordered = [out[k] for k in order] + [g for i, g in enumerate(out) if i not in order]
+    # A ROW SEEN IN ONE FRAME ONLY, standing between two rows every other
+    # frame shows with a third between them, is that third row misread
+    # (the pointer over it, a band across it): folded into it
+    seqs = []
+    for rec in records:
+        seq = [key_of(r) for r in rec["rows"] if r["cells"] and r["cells"][0].strip()]
+        seqs.append([k for k in seq if k is not None])
+    folded = {}
+    for i, g in enumerate(out):
+        if g["seen"] != 1:
+            continue
+        for seq in seqs:
+            if i not in seq:
+                continue
+            j = seq.index(i)
+            prev_ = seq[j - 1] if j > 0 else None
+            next_ = seq[j + 1] if j + 1 < len(seq) else None
+            between = Counter()
+            for s2 in seqs:
+                if s2 is seq:
+                    continue
+                for a in range(len(s2) - 2):
+                    if prev_ is not None and next_ is not None and s2[a] == prev_ and s2[a + 2] == next_:
+                        between[s2[a + 1]] += 1
+            if between:
+                x, n = between.most_common(1)[0]
+                if x != i and out[x]["seen"] >= 3:
+                    folded[i] = x
+            break
+    for i, x in folded.items():
+        out[x]["seen"] += 1
+        out[x]["names"][out[i]["name"]] = out[x]["names"].get(out[i]["name"], 0) + 1
+    order = [k for k in order if k not in folded]
+    ordered = [out[k] for k in order] + [g for i, g in enumerate(out) if i not in order and i not in folded]
     return ordered
 
 if __name__ == "__main__":
