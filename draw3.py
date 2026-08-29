@@ -740,6 +740,20 @@ class Table:
             bad_kind = bool(kind) and kind not in usual and not any(
                 same_text(kind, k) for k in usual)
             if bad_date and bad_kind:
+                # A DATE READ BADLY IS STILL A DATE'S PLACE. A line whose date
+                # cell keeps the shape of a date (a year, a time) is a row of
+                # the list read badly, not a line that is no row: it stands
+                # with its name in doubt and its spoiled cells blank, for the
+                # spelling pass to name ("rafaranra hrand nira auida md" |
+                # "302026t5.51DNA" | "Aahutae" was reference_brand_voice_guide.md,
+                # dropped here at both moments it was read).
+                if cs[0] and re.search(r"20\d\d|\d{1,2}[:.]\d\d", cs[di]) and len(re.sub(r"[^a-z]", "", cs[0].lower())) >= 8:
+                    for j_ in range(1, len(cs)):
+                        cs[j_] = ""
+                    if r["italic"]:
+                        r["italic"][0] = True
+                    out.append(r)
+                    continue
                 self.spoiled += 1
                 continue
             out.append(r)
