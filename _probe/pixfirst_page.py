@@ -48,3 +48,41 @@ if __name__ == "__main__":
           "| new dotted names:", sum(1 for r in merged if ".." in r["name"]))
     print("old nameless:", sum(1 for r in old_rows if re.sub(r"<[^>]+>", "", re.findall(r"<td>(.*?)</td>", r)[0]).strip() == ""),
           "| new nameless:", sum(1 for r in merged if not r["name"].strip()))
+    # ROW BY ROW: what build 85 had against what the pixels-first read has
+    def fold(s):
+        return re.sub(r"[^a-z0-9]", "", s.lower())
+    def same(a, b):
+        fa, fb = fold(a), fold(b)
+        if not fa or not fb:
+            return False
+        if fa == fb:
+            return True
+        for cut, whole in ((a, b), (b, a)):
+            if ".." in cut:
+                h, tl = cut.split("..", 1)
+                h, tl = fold(h.rstrip(".")), fold(tl.lstrip("."))
+                if h and tl and fold(whole).startswith(h) and fold(whole).endswith(tl):
+                    return True
+        return False
+    old_cells = []
+    for r in old_rows:
+        tds = [re.sub(r"<[^>]+>", "", c).strip() for c in re.findall(r"<td>(.*?)</td>", r, re.S)]
+        old_cells.append((tds + [""] * 4)[:4])
+    new_cells = [(list(r["cells"]) + [""] * 4)[:4] for r in merged]
+    print("\n=== ROW BY ROW (85 -> pixels first)")
+    used = set()
+    for oc in old_cells:
+        hit = next((i for i, nc in enumerate(new_cells) if i not in used and same(oc[0], nc[0])), None)
+        if hit is None:
+            print("ONLY IN 85     :", " | ".join(oc)); continue
+        used.add(hit); nc = new_cells[hit]
+        if oc == nc:
+            print("same           :", " | ".join(oc))
+        else:
+            diffs = ["%s: '%s' -> '%s'" % (("name", "date", "size", "kind")[k], oc[k], nc[k]) for k in range(4) if oc[k] != nc[k]]
+            print("changed        :", oc[0] or "(no name)", "::", "; ".join(diffs))
+    for i, nc in enumerate(new_cells):
+        if i not in used:
+            print("ONLY IN REWORK :", " | ".join(nc))
+    print("order 85:", [fold(c[0])[:18] for c in old_cells])
+    print("order new:", [fold(c[0])[:18] for c in new_cells])
