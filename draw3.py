@@ -8455,8 +8455,10 @@ def note(records_path, diary_text=None):
                 # an outline filling the zoom box, of a program whose outline
                 # already holds the zoom box whole, is that window seen
                 # through the crop, not a second one
-                if zoom_box and furnish._within(b_, zoom_box) > 0.9 and any(
-                        _app_(t2) == _app_(t_) and furnish._within(zoom_box, b2) > 0.9
+                _zbc = [max(0.0, zoom_box[0]), max(0.0, zoom_box[1]),
+                        min(float(s["size"][0]), zoom_box[2]), min(float(s["size"][1]), zoom_box[3])] if zoom_box else None
+                if _zbc and furnish._within(b_, _zbc) > 0.9 and any(
+                        _app_(t2) == _app_(t_) and furnish._within(_zbc, b2) > 0.9
                         for b2, t2, _s2, _k2 in _kept):
                     continue
                 _kept.append((b_, t_, src_, k_))
