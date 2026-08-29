@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Copy every finished video note into the vault's Screen Notes folder.
+"""Copy every finished video note into the vault's Screen Notes MD folder.
 
     python3 vault_sync.py          (WSL side -- the vault is not reachable
                                     from Windows, measured, so the sync runs
                                     where /mnt/nas is)
 
-Beside Transcripts (what was said), Sources/Screen Notes holds what was on
+Beside Transcripts MD (what was said), Screen Notes MD holds what was on
 screen: a synced copy of each video's chronological note, frontmatter added
 per the vault's convention, the master staying beside the video's images.
 A copy is rewritten only when the master is newer.
@@ -15,7 +15,7 @@ import sys
 
 SRC = "/mnt/g/Images"
 DST = ("/mnt/nas/obsidian-vault/04 - Resources/Dev/Jaredrhod/"
-       "Sources/Screen Notes")      # the one home; "Screen Notes MD" was a duplicate, folded in
+       "Screen Notes MD")
 
 
 def main():
@@ -42,13 +42,6 @@ def main():
             "---",
             "",
         ]
-        # a copy that already stands keeps its own front matter: some carry
-        # the `screen-note` class the stylesheet widens the page for
-        if os.path.exists(target):
-            old_lines = open(target, encoding="utf-8").read().splitlines()
-            if old_lines[:1] == ["---"] and "---" in old_lines[1:]:
-                end = old_lines.index("---", 1)
-                head = old_lines[:end + 1] + [""]
         for i, ln in enumerate(body):
             if ln.startswith("# "):
                 body.insert(i + 1, "")
