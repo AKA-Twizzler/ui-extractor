@@ -5493,6 +5493,18 @@ def note(records_path, diary_text=None):
                     # at another, and the card draws whichever stood last
                     whole_names[whole_name_key(cells[0])] = whole
         st._whole_names = whole_names
+        if os.environ.get("SN_NAMES") and (whole_names or st.name == "The Finder window"):
+            print("NAMES %s %s: %s" % (st.name, st.title, whole_names), file=sys.stderr)
+    if os.environ.get("SN_NAMES"):
+        print("NAMES pool %d cuts %d heads %d" % (len(pool), len(cuts), len(heads)), file=sys.stderr)
+        print("NAMES cuts with Company: %s" % sorted(c for c in cuts if "ompany" in c), file=sys.stderr)
+        print("NAMES pool with Company: %s" % sorted(c for c in pool if "ompany" in c), file=sys.stderr)
+        for st in states:
+            for tb in tables_of(st):
+                for row in tb.rows:
+                    nm = (row.get("cells") or [""])[0] or ""
+                    if "ompany" in nm and "03" in nm.replace("O", "0").replace("o", "0"):
+                        print("NAMES row %s: %r" % (st.title, nm), file=sys.stderr)
 
     clocks = [c for m in moments for p in m.get("panes") or [] for c in [old.clock_in(p)] if c]
     parts = [f"# {title}", ""]
