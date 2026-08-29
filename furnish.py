@@ -1070,6 +1070,18 @@ def note_html(st, doc, title, blocks=None, wide=0):
     # the column's WIDTH -- 0.203 of the screen against the frame's 0.266 --
     # and that comes from `_doc_wide` being borrowed from another moment.
     span = ("max-width:%d%%;" % wide if wide and wide < 98 else "")
+    # THE NAME ABOVE THE PROPERTIES, ON A PICTURE DRAWN IN BLOCKS TOO: the
+    # frame shows "Vault Index" large above the properties box at 00:04:20;
+    # it stands as a block of its own, a title's height above the first
+    if (blocks and groups and title
+            and not any(norm(t.strip().strip("#*> ")) == norm(title) for t, _ in lines[:2])):
+        b0 = min(groups)
+        top0 = blocks[b0][0] - 78
+        if top0 >= 0:
+            out.append('<div class="sn-docblock" style="position:absolute;left:0;right:0;'
+                       'padding:0 calc(26 * var(--sn-u, 1px));%s'
+                       'top:calc(%d * var(--sn-u, 1px))"><div class="sn-title">%s</div></div>'
+                       % (span, top0, esc(title)))
     for bi in sorted(groups):
         out.append('<div class="sn-docblock" style="position:absolute;left:0;right:0;'
                    'padding:0 calc(26 * var(--sn-u, 1px));%s'
