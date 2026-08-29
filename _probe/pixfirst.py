@@ -61,75 +61,62 @@ def window_box(path, g, title_hint=None):
     return [int(v) for v in pick]
 
 def divider(g, wb):
-    """The sidebar's dividing line: the biggest step in the column means across the window's left half."""
+    """The sidebar's dividing line: the biggest DOWNWARD step in the column
+    means across the window's left half (the sidebar is the lighter shade);
+    none found, the window's own left edge (the crop cut the sidebar off)."""
     x0, y0, x1, y1 = wb
-    band = g[y0 + int(0.15 * (y1 - y0)):y1 - int(0.08 * (y1 - y0)), x0:x0 + (x1 - x0) // 2]
+    band = g[y0 + int(0.2 * (y1 - y0)):y1 - int(0.1 * (y1 - y0)), x0:x0 + int(0.45 * (x1 - x0))]
     col = band.mean(axis=0)
     sm = np.convolve(col, np.ones(9) / 9, mode="same")
-    st = steps(sm, 2.5)
+    st = [(i, d) for i, d in steps(sm, 2.5) if d < 0 and i > 8]
     if not st:
         return x0
-    i, d = max(st, key=lambda s: abs(s[1]))
+    i, d = min(st, key=lambda s: s[1])
     return x0 + i
 
-def bands(g, wb, xl):
-    """The toolbar, header and pathbar bands from the row means of the list side: returns (header_top, header_bottom, list_top, list_bottom)."""
-    x0, y0, x1, y1 = wb
-    strip = g[y0:y1, xl + 40:x1 - 40]
-    row = strip.mean(axis=1)
-    sm = np.convolve(row, np.ones(5) / 5, mode="same")
-    h = y1 - y0
-    # the header's underline: the strongest step in the top quarter, below the toolbar
-    top_q = sm[:h // 4]
-    st = [(i, d) for i, d in steps(top_q, 3.0) if i > 0.04 * h]
-    hdr_bot = y0 + (max(st, key=lambda s: s[0])[0] if st else int(0.12 * h))
-    # the pathbar: the step in the bottom tenth
-    bot = sm[h - h // 10:]
-    st2 = steps(bot, 3.0)
-    path_top = y0 + h - h // 10 + (min(st2, key=lambda s: s[0])[0] if st2 else h // 10 - 60)
-    return hdr_bot, path_top
+def ink_bands(rgb, xl, x1, y0, y1, least=2):
+    """The rows of writing on the list side, from the ink itself: runs of
+    rows holding light pixels (text and white icons; a green band's own
+    colour is not ink). [(top, bottom)] in frame pixels."""
+    c = rgb[y0:y1, xl + 20:x1 - 20]
+    ink = c.min(axis=2) > 100
+    cnt = ink.sum(axis=1)
+    out, start = [], None
+    for i, v in enumerate(cnt):
+        if v > least and start is None:
+            start = i
+        elif v <= least and start is not None:
+            out.append([start, i]); start = None
+    if start is not None:
+        out.append([start, len(cnt)])
+    merged = []
+    for a, b in out:
+        if merged and a - merged[-1][1] < 6:
+            merged[-1][1] = b
+        else:
+            merged.append([a, b])
+    return [(y0 + a, y0 + b) for a, b in merged if b - a >= 6]
 
-def rows_from_stripes(g, rgb, xl, x1, top, bottom):
-    """The rows from the list's own stripes: every other row a shade lighter. Returns [(y0, y1, selected)] and the pitch."""
-    strip = g[top:bottom, xl + 200:x1 - 80]
-    prof = strip.mean(axis=1)
-    # the selected row is green: rows where green outruns red and blue
-    c = rgb[top:bottom, xl + 200:x1 - 80].astype(np.float32)
-    green = (c[:, :, 1] - np.maximum(c[:, :, 0], c[:, :, 2])).mean(axis=1) > 25
-    # edges of the stripes: steps of the profile, ignoring the text's own wobble by a 3-row smoothing
-    sm = np.convolve(prof, np.ones(3) / 3, mode="same")
-    d = np.abs(np.diff(sm))
-    thresh = max(2.0, float(np.percentile(d, 96)) * 0.5)
-    edges = [i + 1 for i in range(len(d)) if d[i] >= thresh]
-    # fold edges within 6 rows
-    folded = []
-    for e in edges:
-        if folded and e - folded[-1] < 6:
-            continue
-        folded.append(e)
-    # the pitch: the commonest gap
-    gaps = np.diff(folded)
-    pitch = int(np.median(gaps[(gaps > 20) & (gaps < 200)])) if len(gaps) else 0
-    if not pitch:
-        return [], 0
-    # walk rows at the pitch from the first edge, snapping to the nearest edge
-    rows = []
-    y = folded[0]
-    n = len(prof)
-    while y + pitch * 0.5 < n:
-        near = [e for e in folded if abs(e - y) <= pitch * 0.25]
-        if near:
-            y = min(near, key=lambda e: abs(e - y))
-        y2 = min(n, y + pitch)
-        near2 = [e for e in folded if abs(e - y2) <= pitch * 0.25]
-        if near2:
-            y2 = min(near2, key=lambda e: abs(e - y2))
-        sel = bool(green[y:y2].mean() > 0.5) if y2 > y else False
-        rows.append((top + y, top + y2, sel))
-        y = y2
-        if y2 - y < 1:
-            break
-    return rows, pitch
+def find_header(rgb, xl, x1, wb):
+    """The header band: the first band of writing under the toolbar that reads Name / Date Modified / Size / Kind; returns (top, bottom, columns)."""
+    x0, y0, x1_, y1 = wb
+    for (a, b) in ink_bands(rgb, xl, x1, y0, y0 + (y1 - y0) // 3)[:4]:
+        words = ocr(rgb[a - 4:b + 4, xl:x1], 2.0)
+        texts = [w[4].strip() for w in words]
+        joined = " ".join(texts).lower()
+        if "name" in joined or "modified" in joined or "kind" in joined:
+            cols = [(xl + int(w[0]), w[4].strip()) for w in sorted(words, key=lambda w: w[0]) if len(w[4].strip()) > 1 and w[4].strip().lower() not in ("v", "^")]
+            return a, b, cols
+    return None, None, []
+
+def pathbar_top(g, wb, xl):
+    """The pathbar's top line: the strongest step in the bottom tenth of the list side."""
+    x0, y0, x1, y1 = wb
+    h = y1 - y0
+    strip = g[y1 - h // 10:y1, xl + 40:x1 - 40].mean(axis=1)
+    sm = np.convolve(strip, np.ones(3) / 3, mode="same")
+    st = steps(sm, 3.0)
+    return y1 - h // 10 + (min(st, key=lambda s: s[0])[0] if st else h // 10 - 60)
 
 def header_columns(rgb, xl, x1, hdr_top, hdr_bot):
     """The column lefts from the header's words."""
@@ -164,44 +151,53 @@ def read_frame(path, out_dir, title_hint="memory"):
     wb = window_box(path, g, title_hint) or [0, int(0.125 * H), int(0.62 * W), int(0.746 * H)]
     x0, y0, x1, y1 = wb
     xl = divider(g, wb)
-    hdr_bot, path_top = bands(g, wb, xl)
-    hdr_top = hdr_bot - int(0.055 * (y1 - y0))
-    cols = header_columns(rgb, xl, x1, hdr_top, hdr_bot)
-    rows, pitch = rows_from_stripes(g, rgb, xl, x1, hdr_bot + 2, path_top - 2)
+    hdr_top, hdr_bot, cols = find_header(rgb, xl, x1, wb)
+    if hdr_bot is None:
+        hdr_top, hdr_bot = y0 + int(0.1 * (y1 - y0)), y0 + int(0.14 * (y1 - y0))
+    path_top = pathbar_top(g, wb, xl)
+    list_top, list_bot = hdr_bot + 4, path_top - 2
+    bands_ = ink_bands(rgb, xl, x1, list_top, list_bot)
+    centers = [(a + b) / 2.0 for a, b in bands_]
+    gaps = np.diff(centers)
+    pitch = int(np.median(gaps)) if len(gaps) else int(1.8 * np.median([b - a for a, b in bands_])) if bands_ else 40
+    band_h = int(np.median([b - a for a, b in bands_])) if bands_ else pitch // 2
     name_left = cols[0][0] if cols else xl + 60
-    # the icon column: just left of the Name heading's words
     ic0, ic1 = max(xl, name_left - int(0.9 * pitch)), name_left - 4
     col_lefts = [c[0] for c in cols] + [x1]
     out_rows = []
-    for (ry0, ry1, sel) in rows:
-        cut = ry0 < hdr_bot + 3 or ry1 > path_top - 3
-        icon, n = icon_of(rgb, ry0, ry1, ic0, ic1)
-        words = ocr(rgb[ry0:ry1, name_left - 6:x1 - 8], 2.0)
-        cells = [""] * (len(col_lefts) - 1)
+    for (a, b) in bands_:
+        cy = (a + b) / 2.0
+        ry0, ry1 = int(cy - pitch / 2.0), int(cy + pitch / 2.0)
+        cut = (a - list_top < 3) or (list_bot - b < 3) or ((b - a) < 0.6 * band_h)
+        sel_c = rgb[max(a, ry0):min(b, ry1), xl + 200:x1 - 80].astype(np.float32)
+        sel = bool(((sel_c[:, :, 1] - np.maximum(sel_c[:, :, 0], sel_c[:, :, 2])) > 25).mean() > 0.4) if sel_c.size else False
+        icon, n = icon_of(rgb, max(list_top, ry0), min(list_bot, ry1), ic0, ic1)
+        words = ocr(rgb[max(list_top, ry0):min(list_bot, ry1), name_left - 6:x1 - 8], 2.0)
+        cells = [""] * max(1, len(col_lefts) - 1)
         for w in sorted(words, key=lambda w: w[0]):
             wx = name_left - 6 + w[0]
             k = max(0, min(len(cells) - 1, sum(1 for cl in col_lefts[1:-1] if wx >= cl - 8)))
             cells[k] = (cells[k] + " " + w[4]).strip()
-        out_rows.append({"y": [int(ry0), int(ry1)], "selected": sel, "cut": bool(cut), "icon": icon, "cells": cells})
+        out_rows.append({"y": [int(ry0), int(ry1)], "ink": [int(a), int(b)], "selected": sel, "cut": bool(cut), "icon": icon, "cells": cells})
     thumb = shapes.scroll_thumb(path, [name_left, hdr_bot, x1, path_top])
-    side = shapes.scroll_thumb(path, [max(0, xl - 400), y0, xl - 6, y1], reach=min(400, xl - 6))
+    side = shapes.scroll_thumb(path, [max(0, xl - 400), y0, xl - 6, y1], reach=min(400, max(40, xl - 6)))
     rec = {"frame": os.path.basename(path), "window": wb, "divider": int(xl), "header": [int(hdr_top), int(hdr_bot)], "path_top": int(path_top),
            "pitch": pitch, "columns": cols, "rows": out_rows, "thumb": thumb, "side_thumb": side}
     os.makedirs(out_dir, exist_ok=True)
     stem = os.path.splitext(os.path.basename(path))[0]
     with open(os.path.join(out_dir, stem + ".json"), "w", encoding="utf-8") as f:
         json.dump(rec, f, indent=1)
-    # the overlay, for the eye
     im = Image.fromarray(rgb).crop((x0, y0, x1, y1)); d = ImageDraw.Draw(im)
     d.rectangle((xl - x0, 0, xl - x0 + 2, y1 - y0), fill=(255, 0, 255))
     d.line((0, hdr_bot - y0, x1 - x0, hdr_bot - y0), fill=(0, 200, 255), width=2)
+    d.line((0, hdr_top - y0, x1 - x0, hdr_top - y0), fill=(0, 120, 255), width=1)
     d.line((0, path_top - y0, x1 - x0, path_top - y0), fill=(0, 200, 255), width=2)
-    for cl, t in cols:
+    for cl, t_ in cols:
         d.line((cl - x0, hdr_top - y0, cl - x0, path_top - y0), fill=(255, 200, 0), width=1)
     for r in out_rows:
         col = (255, 80, 80) if r["cut"] else ((80, 255, 80) if r["selected"] else (80, 160, 255))
         d.rectangle((name_left - 6 - x0, r["y"][0] - y0, x1 - 8 - x0, r["y"][1] - y0), outline=col, width=2)
-        d.text((name_left - x0 + 4, r["y"][0] - y0 + 2), " | ".join(r["cells"])[:110], fill=(255, 255, 0))
+        d.text((name_left - x0 + 4, r["y"][0] - y0 + 2), ("%s | " % r["icon"]) + " | ".join(r["cells"])[:110], fill=(255, 255, 0))
     s = 1400 / im.width
     im.resize((1400, int(im.height * s))).save(os.path.join(out_dir, stem + "-overlay.png"))
     return rec
