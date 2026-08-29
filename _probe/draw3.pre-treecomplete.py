@@ -5546,22 +5546,16 @@ def note(records_path, diary_text=None):
                         # `.md`, so the tree shows the name without it. A
                         # narrow tree pane in a picture clips it again with
                         # the stylesheet's ellipsis, as the program does.
-                        w = complete_name(nm, list(pool) + list(all_wholes.values()), heads)
-                        if not w:
-                            ce = cut_ends(nm)
-                            if ce and ce[0] and not ce[1]:
-                                hf = fold(flat(ce[0]))
-                                cands = set()
-                                for cand in list(pool) + list(all_wholes.values()):
-                                    cf = fold(flat(cand))
-                                    if len(cf) > len(hf) and cf.startswith(hf) and " " not in cand:
-                                        cands.add(cand)
-                                if len(cands) == 1:
-                                    w = cands.pop()
-                        if w:
-                            w = re.sub(r"\.md$", "", w)
-                        if w and os.environ.get("SN_NAMES"):
-                            print("TREE %s -> %s" % (nm, w), file=sys.stderr)
+                        ce = cut_ends(nm)
+                        if ce and ce[0] and not ce[1]:
+                            hf = fold(flat(ce[0]))
+                            cands = set()
+                            for cand in list(pool) + list(all_wholes.values()):
+                                cf = fold(flat(cand))
+                                if len(cf) > len(hf) and cf.startswith(hf) and " " not in cand:
+                                    cands.add(re.sub(r"\.md$", "", cand))
+                            if len(cands) == 1:
+                                w = cands.pop()
                     if w and w != nm and nm in (text or ""):
                         fixed.append((text.replace(nm, w), (html_ or "").replace(esc(nm), esc(w)) if isinstance(html_, str) else html_))
                     else:
@@ -8463,18 +8457,12 @@ def note(records_path, diary_text=None):
             # WHAT WAS SAID WHILE THIS SCREEN STOOD: the moment's own words,
             # its time to the next moment's, quoted once under its picture
             # and nowhere else (the card holds the window, not the moment)
-            _a = (_m0 or {}).get("secs")
-            _b = next((mm.get("secs") for mm in moments if mm["ts"] == s.get("t1")), _a)
-            if _a is not None:
-                _span = sorted((mm for mm in moments if _a <= mm.get("secs", -1) <= (_b if _b is not None else _a)),
-                               key=lambda mm: mm.get("secs", 0))
-                for _mm in _span:
-                    _sd = (_mm.get("said") or "").strip()
-                    if not _sd:
-                        continue
-                    _nx = next((mm["ts"] for mm in moments if mm.get("secs", -1) > _mm.get("secs", 0)), None)
-                    parts += ["> [!quote] Jared, %s%s" % (_mm["ts"], (" to " + _nx) if _nx else ""),
-                              "> " + _sd, ""]
+            _sd = ((_m0 or {}).get("said") or "").strip()
+            if _sd:
+                _nx = next((mm["ts"] for mm in moments
+                            if mm.get("secs", -1) > _m0.get("secs", 0)), None)
+                parts += ["> [!quote] Jared, %s%s" % (_m0["ts"], (" to " + _nx) if _nx else ""),
+                          "> " + _sd, ""]
         parts += ["---", ""]
 
     parts += ["## Every window, rebuilt to read", "",
