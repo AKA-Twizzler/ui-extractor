@@ -361,8 +361,10 @@ def finder(st):
     # that row read twice, once with its name lost and once with its cells
     # mangled (reference_brand_voice_guide.md at 00:01:30 and 00:01:40): the
     # name from the one, the cells from the other, one row
+    import draw3 as _d3
+
     def _clean_cells(r_):
-        return any(tidy_date(c) or tidy_size(c) for c in (r_.get("cells") or [])[1:])
+        return any(_d3.tidy_date(c) or _d3.tidy_size(c) for c in (r_.get("cells") or [])[1:])
     _out, _skip = [], set()
     for i_, r in enumerate(rows):
         if i_ in _skip:
