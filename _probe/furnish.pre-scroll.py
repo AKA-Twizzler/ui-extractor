@@ -203,51 +203,6 @@ def flat_(s):
     return re.sub(r"[^a-z0-9]", "", str(s or "").lower())
 
 
-_FOLD_ = str.maketrans({"0": "o", "1": "l", "i": "l"})
-
-
-def scroll_bar(shown, total, first=0):
-    """A scroll bar where the window had one: the thumb as tall as the
-    share of the content showing, standing where the showing part begins.
-    Nothing where everything shows. The reader never reports a scroll bar,
-    but the note knows what the window holds and what one moment showed,
-    which is exactly what a scroll bar says."""
-    if not total or not shown or shown >= total:
-        return ""
-    top = max(0.0, min(1.0, float(first) / total))
-    h = max(0.04, min(1.0 - top, float(shown) / total))
-    return ('<div class="sn-scroll"><div class="sn-thumb" style="top:%.1f%%;height:%.1f%%"></div></div>'
-            % (100 * top, 100 * h))
-
-
-def seen_at_once(st, kind):
-    """The most lines of a pane of this kind any one moment read: what the
-    real window had room for, for a card that shows everything."""
-    best = 0
-    for m_, g_ in (getattr(st, "pieces", None) or ()):
-        for p_ in (g_.get("panes") or []):
-            if p_.get("kind") != kind:
-                continue
-            if kind == "a list of columns":
-                n = sum(1 for x in (p_.get("lines") or []) if isinstance(x, str) and x.startswith("| ")
-                        and not set(x) <= set("|- ")) - 1
-            else:
-                n = len(p_.get("lines") or [])
-            best = max(best, n)
-    return best
-
-
-def first_index(names, pool):
-    """Where the shown run begins inside the whole: the whole's index of the
-    first shown name that it holds."""
-    keys = [flat_(x).translate(_FOLD_) for x in pool]
-    for nm in names:
-        k = flat_(nm).translate(_FOLD_)
-        if k and k in keys:
-            return keys.index(k)
-    return 0
-
-
 def col_shares(st, head):
     """Where the list's columns began, as shares of the list's width,
     measured off the frame: each heading's own left edge, over the readings
@@ -550,19 +505,7 @@ def finder(st):
         # placed by a flex row, because a table's own auto margin was
         # ignored inside the window's column layout and the list stayed left
         out = ['<div style="display:flex;justify-content:flex-end">'] + out + ["</div>"]
-    # A SCROLL BAR WHERE THE WINDOW HAD ONE: in a picture, the rows this
-    # moment showed against the rows the window holds; on a card, the most
-    # the real window ever showed at once against all of them
-    parent = getattr(st, "_parent", None)
-    names_here = [str((r.get("cells") or [""])[0] or "") for r in rows]
-    if parent is not None and parent.main_table() and parent.main_table().rows:
-        whole_rows = [str((r.get("cells") or [""])[0] or "") for r in parent.main_table().rows]
-        bar = scroll_bar(len(rows), len(whole_rows), first_index(names_here, whole_rows))
-    elif on_card and rows:
-        bar = scroll_bar(seen_at_once(st, "a list of columns"), len(rows), 0)
-    else:
-        bar = ""
-    body = '<div class="sn-body">' + "".join(out) + bar + "</div>"
+    body = '<div class="sn-body">' + "".join(out) + "</div>"
     # the path bar
     foot = ""
     if table and table.path:
@@ -836,21 +779,10 @@ def obsidian(st, behind=True):
         # the floor, the true share still wins.
         tree_ch = max((len(re.sub(r"<[^>]+>", "", l)) for l in lines), default=0)
         count = getattr(st, "explorer_count", "")
-        parent = getattr(st, "_parent", None)
-        ptree = parent.tree() if parent is not None else None
-        shown_txt = [t.strip("│ ˃˅") for t, _h in tree.lines]
-        if ptree and ptree.lines:
-            whole_txt = [t.strip("│ ˃˅") for t, _h in ptree.lines]
-            tree_bar = scroll_bar(len(tree.lines), len(ptree.lines), first_index(shown_txt, whole_txt))
-        elif not getattr(st, "shape", None):
-            tree_bar = scroll_bar(seen_at_once(st, "a file tree"), len(tree.lines), 0)
-        else:
-            tree_bar = ""
         explorer = ('<div class="sn-explorer"><div class="sn-explorer-head"><span class="sn-g">✎</span><span class="sn-g">▱+</span>'
                     '<span class="sn-g">⇅</span><span class="sn-g">⊟</span><span class="sn-g">⌃</span></div>'
                     + (f'<div class="sn-count">{esc(count)}</div>' if count else "")
-                    + '<div class="sn-tree">' + "".join(f"<div>{l}</div>" for l in lines) + "</div>"
-                    + tree_bar + "</div>")
+                    + '<div class="sn-tree">' + "".join(f"<div>{l}</div>" for l in lines) + "</div></div>")
         cols.append(explorer)
     if doc:
         # How far down the pane the note had been scrolled matters in a
@@ -875,17 +807,7 @@ def obsidian(st, behind=True):
         inner = note_html(st, doc, title, blocks, wide)
         if card_line:
             inner = f'<div class="sn-page">{inner}</div>'
-        parent = getattr(st, "_parent", None)
-        pdoc = parent.main_doc() if parent is not None else None
-        if pdoc and pdoc.lines and doc.lines:
-            shown_d = [t for t, _h in doc.lines]
-            whole_d = [t for t, _h in pdoc.lines]
-            doc_bar = scroll_bar(len(doc.lines), len(pdoc.lines), first_index(shown_d, whole_d))
-        elif not getattr(st, "shape", None) and doc.lines:
-            doc_bar = scroll_bar(seen_at_once(st, "an open document"), len(doc.lines), 0)
-        else:
-            doc_bar = ""
-        cols.append(f'<div class="sn-doc"{sty_doc}>' + inner + doc_bar + "</div>")
+        cols.append(f'<div class="sn-doc"{sty_doc}>' + inner + "</div>")
     # THE PANES ARE AS WIDE AS THE SCREEN HAD THEM. The explorer and the
     # note share the window in the proportion the reader measured - the
     # tree's pane against the rest of the window - not a fixed 38 to 62,

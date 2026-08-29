@@ -5536,9 +5536,28 @@ def note(records_path, diary_text=None):
                 fixed = []
                 for text, html_ in q["model"].lines:
                     nm = re.sub(r"^[\s\u2500-\u257f\u203a\u25b8\u25be\u25b9\u2022\-\u00b7>\u02c3\u02c5]+", "", text or "").strip()
-                    w = all_wholes.get(fold(flat(nm))) if nm and not cut_ends(nm) else None
+                    w = None
+                    if nm and not cut_ends(nm):
+                        w = all_wholes.get(fold(flat(nm)))
+                    elif nm:
+                        # A TREE NAME CUT AT THE PANE'S EDGE ("feedback_cold_traffic_is_not...")
+                        # is completed from the names the video knows whole,
+                        # the way the list's are (point 3); Obsidian hides
+                        # `.md`, so the tree shows the name without it. A
+                        # narrow tree pane in a picture clips it again with
+                        # the stylesheet's ellipsis, as the program does.
+                        ce = cut_ends(nm)
+                        if ce and ce[0] and not ce[1]:
+                            hf = fold(flat(ce[0]))
+                            cands = set()
+                            for cand in list(pool) + list(all_wholes.values()):
+                                cf = fold(flat(cand))
+                                if len(cf) > len(hf) and cf.startswith(hf) and " " not in cand:
+                                    cands.add(re.sub(r"\.md$", "", cand))
+                            if len(cands) == 1:
+                                w = cands.pop()
                     if w and w != nm and nm in (text or ""):
-                        fixed.append((text.replace(nm, w), (html_ or "").replace(nm, w) if isinstance(html_, str) else html_))
+                        fixed.append((text.replace(nm, w), (html_ or "").replace(esc(nm), esc(w)) if isinstance(html_, str) else html_))
                     else:
                         fixed.append((text, html_))
                 q["model"].lines = fixed
