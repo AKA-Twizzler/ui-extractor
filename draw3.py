@@ -4140,17 +4140,13 @@ def moment_thumbs(stx, m_, g_, wb, W):
 
     def _narrow(b_):
         return bool(ref) and (b_[2] - b_[0]) < 0.35 * rw and abs(b_[0] - ref[0]) < 0.05 * rw
-    # where Obsidian's explorer and note columns begin: under the tabs,
-    # which the tree's first line stands a head row below
-    col_top = None
-    if obsid and ref:
-        # OBSIDIAN'S COLUMNS ARE MEASURED FROM THE WINDOW'S TOP, tabs and
+    # OBSIDIAN'S COLUMNS ARE MEASURED FROM THE WINDOW'S TOP, tabs and
     # all, and drawn the same way: the stylesheet runs the explorer's and
     # the note's track up through the tab bar to the window's top, so the
     # share needs no guess at where the tabs end (the pane's box starts
     # at the screen's top and its items are the ribbon's and the menu
     # bar's as often as the tree's)
-    col_top = ref[1]
+    col_top = ref[1] if (obsid and ref) else None
     list_pb = None
     saw_side = False
     for p_ in panes:
