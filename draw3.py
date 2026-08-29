@@ -1157,10 +1157,13 @@ def vote_line(text, raw):
     seen = set()            # (position, moment): a moment votes once a letter,
     #                         however many readings of the line it made
     for mi, r in raw:
-        if not same_doc_line(r, text):
-            continue
         rf = plain_line(r)
         if not 6 <= len(rf) <= len(pl):
+            continue
+        # a reading of this line shares an eight-letter run with it
+        # somewhere; `same_doc_line` refused the glued reading with one
+        # letter wrong at its head, and it is the one with the votes
+        if len(rf) >= 8 and not any(rf[i:i + 8] in pl for i in (0, len(rf) // 2 - 4, len(rf) - 8)):
             continue
         best, best_d = None, None
         for off in range(0, len(pl) - len(rf) + 1):
