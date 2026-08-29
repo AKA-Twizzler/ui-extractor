@@ -233,34 +233,6 @@ def hscroll_bar(measured):
             % (100 * left, 100 * w))
 
 
-def seen_at_once(st, kind):
-    """The most lines of a pane of this kind any one moment read: what the
-    real window had room for, for a card that shows everything."""
-    best = 0
-    for m_, g_ in (getattr(st, "pieces", None) or ()):
-        for p_ in (g_.get("panes") or []):
-            if p_.get("kind") != kind:
-                continue
-            if kind == "a list of columns":
-                n = sum(1 for x in (p_.get("lines") or []) if isinstance(x, str) and x.startswith("| ")
-                        and not set(x) <= set("|- ")) - 1
-            else:
-                n = len(p_.get("lines") or [])
-            best = max(best, n)
-    return best
-
-
-def first_index(names, pool):
-    """Where the shown run begins inside the whole: the whole's index of the
-    first shown name that it holds."""
-    keys = [flat_(x).translate(_FOLD_) for x in pool]
-    for nm in names:
-        k = flat_(nm).translate(_FOLD_)
-        if k and k in keys:
-            return keys.index(k)
-    return 0
-
-
 def col_shares(st, head):
     """Where the list's columns began, as shares of the list's width,
     measured off the frame: each heading's own left edge, over the readings
@@ -579,7 +551,8 @@ def finder(st):
     # THE BARS THE FRAME SHOWED, read off it: the list's thumb at its right
     # edge and the sideways bar along its foot, never worked out from counts
     _th = getattr(st, "_thumbs", None) or {}
-    bar = scroll_bar(_th.get("list")) + hscroll_bar(_th.get("list_h"))
+    bar = scroll_bar(_th.get("list"))
+    hbar = hscroll_bar(_th.get("list_h"))       # drawn along the list area's foot, below
     body = '<div class="sn-body">' + "".join(out) + bar + "</div>"
     # the path bar
     foot = ""
@@ -637,7 +610,7 @@ def finder(st):
     # stays empty, which is what the rule requires.
     main = ('<div class="sn-main" style="display:flex;flex-direction:column;'
             'flex:1 1 auto;min-height:0">' + toolbar
-            + '<div class="sn-slack" style="flex:1 1 auto;min-height:0">' + body + '</div>'
+            + '<div class="sn-slack" style="flex:1 1 auto;min-height:0">' + body + hbar + '</div>'
             + foot + "</div>")
     cls = "sn-window sn-finder" + (" sn-dark" if st.theme == "dark" else "")
     if side:
