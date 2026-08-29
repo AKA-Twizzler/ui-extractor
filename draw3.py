@@ -4099,9 +4099,10 @@ def complete_doc_lines(sl, st):
                      if len(pu) > len(pt) + 3 and (pu.startswith(head_) or head_ in pu)]
             if len(cands) == 1:
                 pick = (cands[0][1], cands[0][2])
-        if pick[0] in seen:
+        key_ = plain_line(pick[0])[:40]
+        if key_ in seen:
             continue
-        seen.add(pick[0])
+        seen.add(key_)
         out.append(pick)
     # the title above the first line, where the whole has one and the moment did not
     first = whole[0] if whole else None
@@ -7718,9 +7719,16 @@ def note(records_path, diary_text=None):
                             if m_["ts"] not in s["ts"]:
                                 continue
                             for q_ in (g_.get("panes") or []):
-                                if q_.get("kind") != "a file tree":
-                                    continue
                                 b_ = q_.get("box")
+                                # the tree pane whatever the reader called it:
+                                # a narrow pane at the window's left edge
+                                # (read as a note at 00:04:20, and the picture
+                                # fell back to a tree of 38%)
+                                narrow_ = bool(b_ and len(b_) == 4 and (b_[2] - b_[0]) < 0.35 * w_
+                                               and abs(b_[0] - shape[0]) < 0.05 * w_
+                                               and q_.get("kind") in ("an open document", "text, not a tree"))
+                                if q_.get("kind") != "a file tree" and not narrow_:
+                                    continue
                                 if b_ and b_[2] <= dl:
                                     sl._tree_fr = max(4, round(
                                         100.0 * (b_[2] - shape[0]) / w_))

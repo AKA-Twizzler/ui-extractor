@@ -1012,7 +1012,9 @@ def note_html(st, doc, title, blocks=None, wide=0):
     # note's name large under the breadcrumb, then the properties box, then
     # the body; where the note's own lines begin at the properties block the
     # name is known from the tab and is drawn there.
-    if (title and not blocks and not getattr(st, "shape", None)
+    # ...on a picture too: the frame shows the name above the properties
+    # at every moment the note is open (00:00:00, 00:04:20)
+    if (title and not blocks
             and not any(norm(t.strip().strip("#*> ")) == norm(title) for t, _ in lines[:2])):
         out.append(f'<div class="sn-title">{esc(title)}</div>')
         first = False
