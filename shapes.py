@@ -692,7 +692,7 @@ def scroll_thumb(path, rect):
                 y = y2 + 1
             else:
                 y += 1
-        if top is None or (bot - top + 1) < 0.06 * h:
+        if top is None or (bot - top + 1) < 0.08 * h:
             continue          # too short for a thumb: a mark, an icon's edge
         if top <= 0.12 * h and bot >= 0.88 * h:
             continue          # a border or a divider: a thumb never touches both ends of its track
