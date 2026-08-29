@@ -418,7 +418,9 @@ def finder(st):
             else:
                 g = SIDE_GLYPH.get(w, "⌂" if w.lower() == (st.title or "").lower() or w.islower() else "▱")
                 items.append(f'<div class="sn-item"><span class="sn-g">{g}</span>{esc(w)}</div>')
-        side_bar = scroll_bar(0, 0, 0, measured=(getattr(st, "_thumbs", None) or {}).get("side"))
+        side_bar = ""
+        if getattr(st, "shape", None):
+            side_bar = scroll_bar(0, 0, 0, measured=(getattr(st, "_thumbs", None) or {}).get("side"))
         side = '<div class="sn-side">' + "".join(items) + side_bar + "</div>"
     # the toolbar: back and forward, the folder's name, the view and action buttons, search
     title = st.title or ""
@@ -947,7 +949,7 @@ def obsidian(st, behind=True):
     tree_fr, doc_fr = 38, 62
     # the ribbon: a readable 30px on a card, its true share of the window in
     # a picture (57 of 3840 pixels here)
-    ribbon_w = "calc(30 * var(--sn-u, 1px))" if not getattr(st, "shape", None) else "1.5%"
+    ribbon_w = "30px" if not getattr(st, "shape", None) else "1.5%"
     # ON THE CARD ONLY: a picture's tree stands at the span the frame gave
     # it, and the median across moments moved three pictures off their frames
     share = tree_share_of(st) if (tree and doc and not getattr(st, "shape", None)) else None

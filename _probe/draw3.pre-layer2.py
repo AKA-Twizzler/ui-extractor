@@ -3608,17 +3608,9 @@ def card_shot(html, ratio, share=None, tree_min=None, card_w=None):
         # none. The picture keeps the true share; the card, which exists to be
         # READ, floors the column at the width its own longest row needs.
         bits.append("--sn-tree-min:%s" % tree_min)
-    out = re.sub(r'^(<div class="sn-window[^"]*")(?=>)',
-                 r'\1 style="%s"' % ";".join(bits),
-                 html, count=1)
-    if card_w:
-        # ...AND SCALED DOWN AS ONE PIECE TO THE PANE, as a picture is: laid
-        # out at the width its shape needs, every size in the window's own
-        # unit, the unit set by the pane's width. Tristan: "needs to be scaled
-        # down to fit the obsidian note...same thing just the whole border of
-        # the html scaled to a smaller size."
-        out = '<div class="sn-cardshot" style="--sn-u:calc(100cqw / %d)">%s</div>' % (int(card_w), out)
-    return out
+    return re.sub(r'^(<div class="sn-window[^"]*")(?=>)',
+                  r'\1 style="%s"' % ";".join(bits),
+                  html, count=1)
 
 
 CARD_W = 960          # the canvas the note's own stylesheet is drawn against
@@ -4084,90 +4076,6 @@ def drop_glued(t_):
             continue
         kept_.append(r)
     t_.rows = kept_
-
-
-_THUMB_KINDS = {"a list of columns": "list", "a file tree": "tree", "an open document": "doc"}
-
-
-def moment_thumbs(stx, m_, g_, wb, W):
-    """The thumbs a window's panes show at one moment, read off the frame:
-    {"list"|"tree"|"doc"|"side": (top_share, height_share)}. A narrow pane
-    at the window's left edge is the tree in Obsidian and the sidebar in
-    Finder whatever the reader called it; a sidebar's band reaches to the
-    next pane's first word; a pane's band is read above the camera only."""
-    import furnish
-    th = {}
-    fp = frame_of(m_)
-    try:
-        cam_ = shapes.camera_box(fp)
-    except Exception:
-        cam_ = None
-    panes = sorted((g_.get("panes") or []),
-                   key=lambda q_: -((q_.get("box") or [0, 0, 0, 0])[2] - (q_.get("box") or [0, 0, 0, 0])[0]))
-    for p_ in panes:
-        kd = _THUMB_KINDS.get(p_.get("kind")) or ("text" if p_.get("kind") == "text, not a tree" else None)
-        pb = p_.get("box")
-        if not kd or not pb or len(pb) != 4:
-            continue
-        pb = list(pb)
-        _vo = (min(pb[3], wb[3]) - max(pb[1], wb[1])) / max(1.0, pb[3] - pb[1]) if wb else 1.0
-        if wb and furnish._within(pb, wb) < 0.8 and furnish._within(wb, pb) < 0.5 \
-                and not ((wb[2] - wb[0]) >= 0.6 * float(W) and pb[0] >= wb[0] - 0.05 * float(W) and _vo >= 0.4):
-            continue
-        if cam_ and pb[2] + 0.05 * (pb[2] - pb[0]) > cam_[0] and pb[2] - 0.03 * (pb[2] - pb[0]) < cam_[2] \
-                and pb[3] > cam_[1] and pb[1] < cam_[3]:
-            pb = [pb[0], pb[1], pb[2], min(pb[3], cam_[1])]
-            if pb[3] - pb[1] < 0.2 * (wb[3] - wb[1] if wb else pb[3] - pb[1]):
-                continue
-        if wb and (pb[2] - pb[0]) < 0.35 * (wb[2] - wb[0]) and abs(pb[0] - wb[0]) < 0.05 * (wb[2] - wb[0]):
-            kd = "tree" if stx.name == "The Obsidian window" else "side"
-        if kd == "tree" and stx.name == "The Finder window":
-            kd = "side"
-        if kd == "text" or kd in th:
-            continue
-        reach_ = None
-        if kd in ("side", "tree"):
-            x_end = None
-            for p2 in (g_.get("panes") or []):
-                b2 = p2.get("box")
-                if not b2 or len(b2) != 4 or p2 is p_ or b2[0] < pb[2] - 10:
-                    continue
-                if min(b2[3], pb[3]) - max(b2[1], pb[1]) < 0.3 * (pb[3] - pb[1]):
-                    continue
-                lefts = [it["box"][0] for it in draw2.items_of(p2) if it.get("box")]
-                x2 = min(lefts) if lefts else b2[0]
-                if x_end is None or x2 < x_end:
-                    x_end = x2
-            if x_end and x_end > pb[2] + 8:
-                reach_ = (x_end - pb[2]) + 28
-                pb = [pb[0], pb[1], x_end - 4, pb[3]]
-        t_ = shapes.scroll_thumb(fp, pb, reach=reach_)
-        if t_:
-            th[kd] = t_
-    return th
-
-
-def card_thumbs(st, W):
-    """A card's thumbs: for each pane kind, the thumb the frame showed at the
-    moment that read the most of that pane -- a window the video never
-    scrolled to the end of held more than the card knows, and the thumb
-    says so."""
-    import furnish
-    best = {}
-    for m_, g_ in (getattr(st, "pieces", None) or ()):
-        try:
-            wb_ = rect_at(st, m_["ts"])[1]
-        except Exception:
-            wb_ = None
-        th = moment_thumbs(st, m_, g_, wb_, W)
-        if not th:
-            continue
-        # how much each pane read at this moment
-        n_lines = sum(len(p_.get("lines") or []) for p_ in (g_.get("panes") or []))
-        for kd, t_ in th.items():
-            if kd not in best or n_lines > best[kd][0]:
-                best[kd] = (n_lines, t_)
-    return {kd: t_ for kd, (n_, t_) in best.items()}
 
 
 def complete_doc_lines(sl, st):
@@ -8630,17 +8538,78 @@ def note(records_path, diary_text=None):
             # THE SCROLL THUMBS READ OFF THE FRAME: for each window drawn
             # full, the thumb its list, tree or note pane showed at this
             # moment (shapes.scroll_thumb); the drawing puts it where it was
+            _kinds = {"a list of columns": "list", "a file tree": "tree", "an open document": "doc"}
             for stx, sl, shape in subjects:
                 th = {}
-                wb = None
                 for m_, g_ in getattr(stx, "pieces", ()):
                     if m_["ts"] != s["t0"]:
                         continue
+                    fp = frame_of(m_)
+                    wb = None
                     try:
                         wb = rect_at(stx, s["t0"])[1]
                     except Exception:
                         wb = None
-                    th = moment_thumbs(stx, m_, g_, wb, float(s["size"][0]))
+                    try:
+                        cam_ = shapes.camera_box(fp)
+                    except Exception:
+                        cam_ = None
+                    for p_ in sorted((g_.get("panes") or []),
+                                     key=lambda q_: -((q_.get("box") or [0, 0, 0, 0])[2] - (q_.get("box") or [0, 0, 0, 0])[0])):
+                        kd = _kinds.get(p_.get("kind")) or ("text" if p_.get("kind") == "text, not a tree" else None)
+                        pb = p_.get("box")
+                        if not kd or not pb or len(pb) != 4:
+                            continue
+                        # a pane of this window: inside its box, or the box
+                        # inside the pane's reach (the full-screen Obsidian at
+                        # 00:04:20 holds a half-height box and its tree pane
+                        # runs the whole height)
+                        _vo = (min(pb[3], wb[3]) - max(pb[1], wb[1])) / max(1.0, pb[3] - pb[1]) if wb else 1.0
+                        if wb and furnish._within(pb, wb) < 0.8 and furnish._within(wb, pb) < 0.5 \
+                                and not ((wb[2] - wb[0]) >= 0.6 * float(s["size"][0]) and pb[0] >= wb[0] - 0.05 * float(s["size"][0])
+                                         and _vo >= 0.4):
+                            continue
+                        # THE CAMERA PICTURE IS NOT A SCROLL BAR: its bright edge
+                        # read as a thumb on the note at 00:04:20 and as a
+                        # "sidebar" below the projects window at 00:01:10; a
+                        # pane whose right edge runs into the camera is read
+                        # above it only
+                        if cam_ and pb[2] + 0.05 * (pb[2] - pb[0]) > cam_[0] and pb[2] - 0.03 * (pb[2] - pb[0]) < cam_[2] \
+                                and pb[3] > cam_[1] and pb[1] < cam_[3]:
+                            pb = [pb[0], pb[1], pb[2], min(pb[3], cam_[1])]
+                            if pb[3] - pb[1] < 0.2 * (wb[3] - wb[1] if wb else pb[3] - pb[1]):
+                                continue
+                        if wb and (pb[2] - pb[0]) < 0.35 * (wb[2] - wb[0]) and abs(pb[0] - wb[0]) < 0.05 * (wb[2] - wb[0]):
+                            # a narrow pane at the window's left edge, whatever
+                            # the reader called it: Obsidian's tree, a Finder's
+                            # sidebar, each with a thumb of its own
+                            kd = "tree" if stx.name == "The Obsidian window" else "side"
+                        if kd == "tree" and stx.name == "The Finder window":
+                            kd = "side"       # a Finder has no tree: its sidebar
+                        if kd == "text" or kd in th:
+                            continue
+                        reach_ = None
+                        if kd in ("side", "tree"):
+                            # THE BAR STANDS IN THE GAP BEFORE THE NEXT PANE'S
+                            # WORDS: the reader boxes a sidebar by its text, and
+                            # its thumb stood 130 px past that box at 00:01:50
+                            x_end = None
+                            for p2 in (g_.get("panes") or []):
+                                b2 = p2.get("box")
+                                if not b2 or len(b2) != 4 or p2 is p_ or b2[0] < pb[2] - 10:
+                                    continue
+                                if min(b2[3], pb[3]) - max(b2[1], pb[1]) < 0.3 * (pb[3] - pb[1]):
+                                    continue
+                                lefts = [it["box"][0] for it in draw2.items_of(p2) if it.get("box")]
+                                x2 = min(lefts) if lefts else b2[0]
+                                if x_end is None or x2 < x_end:
+                                    x_end = x2
+                            if x_end and x_end > pb[2] + 8:
+                                reach_ = (x_end - pb[2]) + 28
+                                pb = [pb[0], pb[1], x_end - 4, pb[3]]
+                        t_ = shapes.scroll_thumb(fp, pb, reach=reach_)
+                        if t_:
+                            th[kd] = t_
                 sl._thumbs = th
                 if os.environ.get("SN_ZOOM"):
                     if th:
@@ -8701,15 +8670,7 @@ def note(records_path, diary_text=None):
                 # showed it; a window another stands over is its outline. In a
                 # zoomed frame only what the crop shows is in view.
                 ranked = sorted(subjects, key=_about, reverse=True)
-                # EVERY WINDOW THE MOMENT READ IS FILLED, in the order the
-                # screen stacked them: what a window in front covers is
-                # covered by that window's drawing, and nothing behind is
-                # guessed from other frames because each slice holds this
-                # stretch's own readings. Tristan: "we are still missing
-                # slots, texts, content, etc that we should have because it
-                # was captured in the video". A window the moment could not
-                # read stays its outline.
-                shown_ = [x for x in ranked if x[2] and _about(x)[3] > 0 and (not _zb or _about(x)[1] == 1)]
+                shown_ = [x for x in ranked if x[2] and _about(x)[2] == 1 and (not _zb or _about(x)[1] == 1)]
                 if not shown_:
                     shown_ = ranked[:1]
                 for x in subjects:
@@ -9196,11 +9157,27 @@ def note(records_path, diary_text=None):
             # end held more than the card knows, and the thumb says so
             # (the .claude list: eight rows read, the thumb a quarter of the
             # track near its foot)
-            if not getattr(st, "_thumbs", None) and getattr(st, "pieces", None):
-                _tw = st.pieces[0][0].get("size", [3840, 2160])[0] if st.pieces else 3840
-                _ct = card_thumbs(st, float(_tw))
-                if _ct:
-                    st._thumbs = _ct
+            if not getattr(st, "_thumbs", None) and getattr(st, "pieces", None) and st.name == "The Finder window":
+                import furnish as _fz
+                best_ = None
+                for m_, g_ in st.pieces:
+                    try:
+                        wb_ = rect_at(st, m_["ts"])[1]
+                    except Exception:
+                        wb_ = None
+                    for p_ in (g_.get("panes") or []):
+                        pb_ = p_.get("box")
+                        if p_.get("kind") != "a list of columns" or not pb_ or len(pb_) != 4:
+                            continue
+                        if wb_ and _fz._within(pb_, wb_) < 0.8:
+                            continue
+                        n_ = len(p_.get("lines") or [])
+                        if best_ is None or n_ > best_[0]:
+                            best_ = (n_, m_, pb_)
+                if best_:
+                    t_ = shapes.scroll_thumb(frame_of(best_[1]), best_[2])
+                    if t_:
+                        st._thumbs = {"list": t_}
             _trace_rows('at card', [st])
             _html = st.window_html()
             _cw = None
