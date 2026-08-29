@@ -1522,10 +1522,14 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
                     or rect[1] < zoom[1] - 0.01 * H or rect[3] > zoom[3] + 0.01 * H)
             if cut_ and vis[2] > vis[0] and vis[3] > vis[1]:
                 # the slot keeps its true box (the gates read it) and clips
-                # its own drawing to the part the crop showed
-                rw, rh = max(1.0, rect[2] - rect[0]), max(1.0, rect[3] - rect[1])
-                ins = (100.0 * (vis[1] - rect[1]) / rh, 100.0 * (rect[2] - vis[2]) / rw,
-                       100.0 * (rect[3] - vis[3]) / rh, 100.0 * (vis[0] - rect[0]) / rw)
+                # its own drawing to the part the crop showed; the insets are
+                # measured on the box the slot is DRAWN at (clipped to the
+                # screen), or a window past the screen's edge was clipped twice
+                box_ = clip_box(rect, W, H, bar=barred)
+                vis = [max(box_[0], vis[0]), max(box_[1], vis[1]), min(box_[2], vis[2]), min(box_[3], vis[3])]
+                rw, rh = max(1.0, box_[2] - box_[0]), max(1.0, box_[3] - box_[1])
+                ins = (max(0.0, 100.0 * (vis[1] - box_[1]) / rh), max(0.0, 100.0 * (box_[2] - vis[2]) / rw),
+                       max(0.0, 100.0 * (box_[3] - vis[3]) / rh), max(0.0, 100.0 * (vis[0] - box_[0]) / rw))
                 slot_html = slot_html.replace('<div class="sn-slot" style="',
                                               '<div class="sn-slot" style="clip-path:inset(%.2f%% %.2f%% %.2f%% %.2f%%);' % ins, 1)
         out.append(slot_html)
