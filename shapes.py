@@ -671,18 +671,29 @@ def scroll_thumb(path, rect):
             runs.append(cur)
             cur = [c]
     runs.append(cur)
-    widest = max(16, int(0.015 * w))
+    widest = max(24, int(0.02 * w))
     best = None
     for r in runs:
         if not 3 <= len(r) <= widest:
             continue
         rows = lit[:, r].mean(axis=1) > 0.5
-        ys = np.where(rows)[0]
-        if len(ys) < 0.06 * h:
+        # the longest unbroken run of lit rows: the thumb itself, not the
+        # thumb plus whatever else stands in the same columns lower down
+        top = bot = None
+        y = 0
+        n = len(rows)
+        while y < n:
+            if rows[y]:
+                y2 = y
+                while y2 + 1 < n and rows[y2 + 1]:
+                    y2 += 1
+                if top is None or (y2 - y) > (bot - top):
+                    top, bot = y, y2
+                y = y2 + 1
+            else:
+                y += 1
+        if top is None or (bot - top + 1) < 0.06 * h:
             continue          # too short for a thumb: a mark, an icon's edge
-        top, bot = int(ys[0]), int(ys[-1])
-        if (bot - top + 1) > 1.3 * len(ys):
-            continue          # broken: text or ticks, not one solid bar
         if top <= 0.12 * h and bot >= 0.88 * h:
             continue          # a border or a divider: a thumb never touches both ends of its track
         cand = (top / float(h), (bot - top + 1) / float(h))
