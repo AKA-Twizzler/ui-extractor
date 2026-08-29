@@ -4426,6 +4426,15 @@ def mend_cells(sl, full):
             starts = any(name_fits(st_.path[0], c) for c in ft.path)
             if same_end and not starts:
                 st_.path = list(ft.path)
+    # whatever depth the stretch's bar keeps, each crumb the settled path
+    # or the window's title also names is spelt as they spell it: the bar
+    # at 00:03:20 kept "Assets" beyond the settled path and so kept its own
+    # "(info Product)" too
+    if st_.path:
+        spelt = {fold(flat(c)): c for c in (ft.path or [])}
+        if full.title:
+            spelt.setdefault(fold(flat(full.title)), full.title)
+        st_.path = [spelt.get(fold(flat(c)), c) if len(flat(c)) >= 6 else c for c in st_.path]
     # the sidebar: fixed furniture, filled in when the stretch saw only part
     if ft.side and st_.side and len(ft.side) > len(st_.side):
         walk = 0
@@ -5451,7 +5460,7 @@ def note(records_path, diary_text=None):
             elif q["fam"] == "tree":
                 # a tree line opens with its guide bars and glyphs
                 # ("│   name"); only the name is a name
-                names = [re.sub(r"^[\s\u2500-\u257f\u203a\u25b8\u25be\u25b9\u2022\-\u00b7>]+", "", t_ or "") for t_, _h in q["model"].lines]
+                names = [re.sub(r"^[\s\u2500-\u257f\u203a\u25b8\u25be\u25b9\u2022\-\u00b7>\u02c3\u02c5]+", "", t_ or "") for t_, _h in q["model"].lines]
             for nm in names:
                 nm = nm.strip()
                 c = cut_ends(nm)
@@ -5466,6 +5475,21 @@ def note(records_path, diary_text=None):
                     heads.add(c[0])
                 if c is not None and c[0] and c[1] and " " in (c[0] + c[1]):
                     cuts.add(nm)
+    # THE CUT READINGS LIVE IN THE RAW RECORD. A window's gathered rows keep
+    # one spelling of each name, and the glued whole won "03 Company B
+    # (Landscape Company)"; the cut readings that show its spaces
+    # ("03 Company...ape Company)") were folded into it and stood nowhere
+    # in any state's rows or trees. They are read off the pieces instead.
+    for st in all_states:
+        for m_, g_ in (getattr(st, "pieces", None) or ()):
+            for p_ in (g_.get("panes") or []):
+                if p_.get("kind") not in ("a list of columns", "a file tree"):
+                    continue
+                for it in draw2.items_of(p_):
+                    nm = re.sub(r"\s+", " ", (it.get("text") or "").strip())
+                    c = cut_ends(nm)
+                    if c and c[0] and c[1] and " " in (c[0] + c[1]) and len(nm) < 60:
+                        cuts.add(nm)
     # Recorded on the window, never written into its rows: the rows are
     # what the pictures are cut from, and a whole name there stood beside
     # the stretch's own cut reading as a second row. The card substitutes
@@ -5495,6 +5519,27 @@ def note(records_path, diary_text=None):
         st._whole_names = whole_names
         if os.environ.get("SN_NAMES") and (whole_names or st.name == "The Finder window"):
             print("NAMES %s %s: %s" % (st.name, st.title, whole_names), file=sys.stderr)
+    # A TREE LINE SPELT THE WAY THE NAME IS KNOWN. Obsidian's tree carried
+    # the same glued spelling ("˃ 03 CompanyB(LandscapeCompany)"), and a
+    # tree is drawn on every card of its window.
+    all_wholes = {}
+    for st in states:
+        for w in (getattr(st, "_whole_names", None) or {}).values():
+            all_wholes[fold(flat(w))] = w
+    if all_wholes:
+        for st in all_states:
+            for q in st.parts:
+                if q["fam"] != "tree":
+                    continue
+                fixed = []
+                for text, html_ in q["model"].lines:
+                    nm = re.sub(r"^[\s\u2500-\u257f\u203a\u25b8\u25be\u25b9\u2022\-\u00b7>\u02c3\u02c5]+", "", text or "").strip()
+                    w = all_wholes.get(fold(flat(nm))) if nm and not cut_ends(nm) else None
+                    if w and w != nm and nm in (text or ""):
+                        fixed.append((text.replace(nm, w), (html_ or "").replace(nm, w) if isinstance(html_, str) else html_))
+                    else:
+                        fixed.append((text, html_))
+                q["model"].lines = fixed
     if os.environ.get("SN_NAMES"):
         print("NAMES pool %d cuts %d heads %d" % (len(pool), len(cuts), len(heads)), file=sys.stderr)
         print("NAMES cuts with Company: %s" % sorted(c for c in cuts if "ompany" in c), file=sys.stderr)
