@@ -3096,8 +3096,13 @@ def harmonise(states):
         f = re.sub(r"(md|m d)$", "", flat(name))
         if len(f) < 8:
             return None
+        # a candidate a third longer or shorter than the reading is no
+        # candidate: "Brand Guide.md" (10 letters) scored 0.42 against a
+        # 23-letter reading of reference_brand_voice_guide.md and split the
+        # margin with the name it really was
         scored = sorted(((difflib.SequenceMatcher(None, re.sub(r"md$", "", flat(c)), f, autojunk=False).ratio(), c)
-                         for c in clean if len(flat(c)) >= 8 and re.sub(r"md$", "", flat(c)) != f), reverse=True)
+                         for c in clean if len(flat(c)) >= 8 and re.sub(r"md$", "", flat(c)) != f
+                         and abs(len(re.sub(r"md$", "", flat(c))) - len(f)) <= 0.3 * len(f)), reverse=True)
         # one name spelt with and without its .md is one candidate, not a
         # tie that stops the rescue ("rafaranra hrand nira auida md" sat at
         # 0.51 against reference_brand_voice_guide twice over and stayed blank)
@@ -3119,7 +3124,7 @@ def harmonise(states):
         # no other file in the folder
         _top = scored[0][0] if scored else 0.0
         _gap = (scored[0][0] - scored[1][0]) if len(scored) > 1 else 1.0
-        if scored and ((_top >= 0.5 and _gap >= 0.08) or (_top >= 0.42 and _gap >= 0.1)):
+        if scored and _top >= 0.42 and _gap >= 0.08:
             c = scored[0][1]
             if re.search(r"(\.md|\bmd)$", name.strip()) and not c.lower().endswith(".md"):
                 c += ".md"
