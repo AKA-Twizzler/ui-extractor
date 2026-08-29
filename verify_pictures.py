@@ -194,23 +194,11 @@ def check_picture(stamp, stage, frame_path, fav_boxes=(), read_whole=()):
                 if j != i and top[j] and overlap(fboxes[j], d) > 0.5:
                     return False
             return True
-        # ONE WINDOW CARRIES ITS CONTENT, THE REST STAND AS OUTLINES (B,
-        # Tristan's choice): the gate asks that SOME top-layer window is
-        # filled and that no second window is, where it used to ask that
-        # every top-layer window be filled.
-        filled_tops = [i for i in range(len(fw)) if top[i] and any(fills(d, i) for d in filled)]
-        filled_wins = [i for i in range(len(fw)) if any(fills(d, i) for d in filled)]
-        if len(fw) and filled and not filled_tops and not any(fills(d, i) for d in filled for i in range(len(fw))):
-            fails.append("NO WINDOW FILLED: the frame has %d window(s) and the picture fills none of them" % len(fw))
-        big_slots = [d for d in filled if (d[2] - d[0]) * (d[3] - d[1]) >= 0.09]
-        if len(big_slots) > 1:
-            fails.append("TWO WINDOWS FILLED: the picture fills %d window-sized boxes; one window carries its content, the rest stand as outlines"
-                         % len(big_slots))
         for i, r in enumerate(fw):
             box = fboxes[i]
             covered = not top[i]
             hit_any = any(overlap(box, d) > 0.5 for d in drawn)
-            hit_filled = any(fills(d, i) for d in filled) or bool(filled_tops) or bool(filled_wins)
+            hit_filled = any(fills(d, i) for d in filled)
             where = "%.0f-%.0f%% across, %.0f-%.0f%% down" % (
                 box[0]*100, box[2]*100, box[1]*100, box[3]*100)
             if not hit_any:

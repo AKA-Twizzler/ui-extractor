@@ -3048,13 +3048,6 @@ def harmonise(states):
             return best
         return None
 
-    def _md_kept(name, c):
-        """A Finder row keeps its `.md`: the tree's spelling of the same
-        name hides it, and handing that spelling to the row dropped it."""
-        if c and flat(name).endswith("md") and not c.lower().endswith(".md") and not re.search(r"\.\w{1,5}$", c):
-            return c + ".md"
-        return c
-
     def better(name, fuzzy=False):
         f = flat(name)
         if len(f) < 4:
@@ -3069,12 +3062,12 @@ def harmonise(states):
             if cf + "md" == f or f + "md" == cf:
                 continue              # the same name, one read with its .md: not a fuzzy fix
             if fuzzy and len(cf) >= 6 and difflib.SequenceMatcher(None, cf, f, autojunk=False).ratio() >= 0.85:
-                return _md_kept(name, canon.get(cf, c))
+                return canon.get(cf, c)
             if "..." in name:
                 a, _, b2 = name.partition("...")
                 af, bf = flat(a), flat(b2)
                 if af and bf and cf.startswith(af) and cf.endswith(bf) and len(af) + len(bf) >= 8:
-                    return _md_kept(name, canon.get(cf, c))
+                    return canon.get(cf, c)
         return None
 
     def rescue(name):
@@ -3090,17 +3083,6 @@ def harmonise(states):
             return None
         scored = sorted(((difflib.SequenceMatcher(None, re.sub(r"md$", "", flat(c)), f, autojunk=False).ratio(), c)
                          for c in clean if len(flat(c)) >= 8 and re.sub(r"md$", "", flat(c)) != f), reverse=True)
-        # one name spelt with and without its .md is one candidate, not a
-        # tie that stops the rescue ("rafaranra hrand nira auida md" sat at
-        # 0.51 against reference_brand_voice_guide twice over and stayed blank)
-        _seen, _one = set(), []
-        for sc_, c_ in scored:
-            k_ = re.sub(r"md$", "", flat(c_))
-            if k_ in _seen:
-                continue
-            _seen.add(k_)
-            _one.append((sc_, c_))
-        scored = _one
         if scored and scored[0][0] >= 0.5 and (len(scored) == 1 or scored[0][0] - scored[1][0] >= 0.08):
             c = scored[0][1]
             if re.search(r"(\.md|\bmd)$", name.strip()) and not c.lower().endswith(".md"):
@@ -8400,14 +8382,9 @@ def note(records_path, diary_text=None):
                                      key=lambda q_: -((q_.get("box") or [0, 0, 0, 0])[2] - (q_.get("box") or [0, 0, 0, 0])[0])):
                         kd = _kinds.get(p_.get("kind"))
                         pb = p_.get("box")
-                        if not kd or not pb or len(pb) != 4:
+                        if not kd or not pb or len(pb) != 4 or kd in th:
                             continue
                         if wb and furnish._within(pb, wb) < 0.8:
-                            continue
-                        if kd == "doc" and wb and (pb[2] - pb[0]) < 0.25 * (wb[2] - wb[0]) \
-                                and abs(pb[0] - wb[0]) < 0.05 * (wb[2] - wb[0]):
-                            kd = "tree"       # the tree pane, read as a column of text
-                        if kd in th:
                             continue
                         t_ = shapes.scroll_thumb(fp, pb)
                         if t_:
@@ -8449,26 +8426,15 @@ def note(records_path, diary_text=None):
                     prev = _prev_shapes.get(id(stx))
                     fresh = 1 if (prev is None or max(abs(a - b) for a, b in zip(prev, shape)) > 0.05 * _W) else 0
                     return (real, inzoom, top, read, fresh, area)
-                # THE TOP LAYER IS FILLED, ALL OF IT. Tristan, on B: "B is more
-                # about what's IN view in a moment, but more like the top layer
-                # view rather than gussing what's behind because of other
-                # frams...so if SOME info shows up in view, then it should be
-                # fine...like side by side sorta stuff". A window no smaller
-                # window stands inside is in view and drawn as the moment
-                # showed it; a window another stands over is its outline. In a
-                # zoomed frame only what the crop shows is in view.
-                ranked = sorted(subjects, key=_about, reverse=True)
-                shown_ = [x for x in ranked if x[2] and _about(x)[2] == 1 and (not _zb or _about(x)[1] == 1)]
-                if not shown_:
-                    shown_ = ranked[:1]
+                lead = max(subjects, key=_about)
                 for x in subjects:
-                    if x not in shown_:
+                    if x is not lead:
                         # drawn as its named outline, in front of what it stood
                         # in front of; its content is on its card below
                         x[1]._outline_only = True
                         x[1]._label = label_for(x[0], s["t0"])
                 if os.environ.get("SN_ZOOM"):
-                    print("LAYER %s: %s of %d" % (s["t0"], [label_for(x[0], s["t0"]) for x in shown_], len(subjects)), file=sys.stderr)
+                    print("LEAD %s: %s, of %d" % (s["t0"], label_for(lead[0], s["t0"]), len(subjects)), file=sys.stderr)
             _prev_shapes = _now_shapes
             # ONE WINDOW OF A PROGRAM THE VIDEO ONLY EVER HAD ONE OF IS ONE
             # OUTLINE: the crop's own reading of Obsidian at 00:03:10 stood
