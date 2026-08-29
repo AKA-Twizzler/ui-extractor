@@ -4144,21 +4144,13 @@ def moment_thumbs(stx, m_, g_, wb, W):
     # which the tree's first line stands a head row below
     col_top = None
     if obsid and ref:
-        # THE EXPLORER BEGINS AT ITS HEAD ROW, the first thing in the pane
-        # past the ribbon's column and below the menu bar; the pane's own
-        # box starts at the screen's top, the ribbon and the menu bar's
-        # words inside it, a tenth of the window above the head row
-        tops = []
-        for p_ in panes:
-            b_ = p_.get("box")
-            if not b_ or len(b_) != 4 or not _narrow(b_):
-                continue
-            its = [it["box"][1] for it in draw2.items_of(p_)
-                   if it.get("box") and it["box"][0] >= b_[0] + 0.12 * (b_[2] - b_[0])
-                   and it["box"][1] > ref[1] + 0.02 * rh]
-            if its:
-                tops.append(min(its))
-        col_top = max(ref[1], min(tops)) if tops else ref[1] + 0.04 * rh
+        # OBSIDIAN'S COLUMNS ARE MEASURED FROM THE WINDOW'S TOP, tabs and
+    # all, and drawn the same way: the stylesheet runs the explorer's and
+    # the note's track up through the tab bar to the window's top, so the
+    # share needs no guess at where the tabs end (the pane's box starts
+    # at the screen's top and its items are the ribbon's and the menu
+    # bar's as often as the tree's)
+    col_top = ref[1]
     list_pb = None
     saw_side = False
     for p_ in panes:
