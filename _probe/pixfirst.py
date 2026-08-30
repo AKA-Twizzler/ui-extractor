@@ -258,7 +258,7 @@ def _medoid(cands):
     for i, f in enumerate(folds):
         if not f:
             continue
-        s = sum(_ratio(f, g_) for j, g_ in enumerate(folds) if j != i and g_)
+        s = sum(_ratio(f, g_) for j, g_ in enumerate(folds) if j != i and g_) + 0.002 * len(f)
         if s > best_s:
             best_i, best_s = i, s
     return best_i
@@ -266,8 +266,9 @@ def _medoid(cands):
 def _respace(txt, alt):
     """txt's letters with alt's spaces, where the two hold the same letters."""
     ft, fa = _FOLD(txt), _FOLD(alt)
-    if len(ft) != len(fa) or " " in txt or " " not in alt:
+    if len(ft) != len(fa) or alt.count(" ") <= txt.count(" "):
         return txt
+    txt = txt.replace(" ", "")
     cuts, n = set(), 0
     for ch in alt:
         if ch == " ":
@@ -284,6 +285,31 @@ def _respace(txt, alt):
     return out
 
 _WEIGHT = lambda s: 2 * s.count("_") + s.count(".") + s.count(",") + s.count(":")
+
+def _undouble(txt, alt):
+    """txt with a letter struck out wherever it doubles a letter that alt,
+    agreeing on everything else, has once: the first engine doubles a
+    letter now and then at a large size ("PPersonal", "20266")."""
+    import difflib
+    pos, ft = [], ""
+    for i, ch in enumerate(txt):
+        if re.match(r"[A-Za-z0-9]", ch):
+            pos.append(i); ft += ch.lower()
+    fa = _FOLD(alt)
+    if not ft or not fa or len(ft) <= len(fa):
+        return txt
+    drop = []
+    for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, ft, fa).get_opcodes():
+        if tag == "equal":
+            continue
+        if tag == "delete" and i2 - i1 == 1 and i1 > 0 and ft[i1] == ft[i1 - 1]:
+            drop.append(pos[i1]); continue
+        if tag == "replace" and (i2 - i1) == (j2 - j1):
+            continue                       # a letter read differently is no reason to strike one
+        return txt
+    if not drop:
+        return txt
+    return "".join(ch for i, ch in enumerate(txt) if i not in set(drop))
 
 def _rapid_text(crop, scale, height):
     got = ocr(crop, scale)
@@ -307,6 +333,9 @@ def read_cell(rgb, ya, yb, ca, cb, twice=False):
     height = max(8, yb - ya)
     x0_, x1_ = max(ca, boxes[0][0] - 14), min(cb, boxes[-1][1] + 14)
     whole_crop = rgb[y0_:y1_, x0_:x1_]
+    # padded with its own edges: the engine's detector drops a first word
+    # or reads two letters of seven from a crop cut close
+    whole_crop = np.pad(whole_crop, ((8, 8), (40, 40), (0, 0)), mode="edge")
     r3, s3 = _rapid_text(whole_crop, 3.0, height)
     r2, s2 = _rapid_text(whole_crop, 2.0, height)
     alt = re.sub(r"\s+", " ", tess_word(whole_crop)).strip()
@@ -317,7 +346,13 @@ def read_cell(rgb, ya, yb, ca, cb, twice=False):
             return "", 0.0, 1
         txt = cands[i]
         scores = s3 if i == 0 else (s2 if i == 1 else (s3 or s2))
+        for c in cands:
+            # a reading holding the chosen one inside it and much more: the
+            # chosen is a piece of the name, the other the whole
+            if c is not txt and len(_FOLD(c)) >= len(_FOLD(txt)) + 3 and _FOLD(txt) in _FOLD(c):
+                txt = c
         if alt and txt is not alt and _ratio(_FOLD(alt), _FOLD(txt)) >= 0.85:
+            txt = _undouble(txt, alt)
             if _WEIGHT(alt) > _WEIGHT(txt):
                 txt = alt                    # the second engine keeps the underscores
             else:
@@ -347,8 +382,15 @@ def read_cell(rgb, ya, yb, ca, cb, twice=False):
         return "", 0.0, blank
     text = cands[i]
     scores = [s3, s2, scores, s3 or s2][i]
-    if alt and text is not alt and _ratio(_FOLD(alt), _FOLD(text)) >= 0.85 and _WEIGHT(alt) >= _WEIGHT(text):
-        text = alt                           # the second engine keeps the commas
+    for c in cands:
+        if c is not text and len(_FOLD(c)) >= len(_FOLD(text)) + 3 and _FOLD(text) in _FOLD(c):
+            text = c
+    if alt and text is not alt and _ratio(_FOLD(alt), _FOLD(text)) >= 0.85:
+        text = _undouble(text, alt)
+        if _WEIGHT(alt) >= _WEIGHT(text):
+            text = alt                       # the second engine keeps the commas
+    if (boxes[-1][1] - boxes[0][0]) < 1.2 * height and not re.search(r"\d", text):
+        text = "--"                          # a folder's size: a dash, read as two letters
     shaped = finder_shape(text)
     if shaped is None:
         for c in cands:
