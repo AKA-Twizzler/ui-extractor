@@ -372,16 +372,21 @@ def read_cell(rgb, ya, yb, ca, cb, twice=False):
         return "", 0.0, 0
     y0_, y1_ = max(0, ya - 6), min(H, yb + 6)
     height = max(8, yb - ya)
-    x0_, x1_ = max(ca, boxes[0][0] - 6), min(cb, boxes[-1][1] + 6)
+    # the crop starts at the column's own left at the earliest (an icon's
+    # edge stands just outside it) and six columns short of the ink
+    x0_, x1_ = max(ca + 6, boxes[0][0] - 6), min(cb, boxes[-1][1] + 6)
     whole_crop = rgb[y0_:y1_, x0_:x1_]
-    # padded forty columns each side with its own background (each row's
-    # median colour, so a green band pads green and an icon's edge is not
-    # smeared into a letter): the engine's detector drops a first word or
-    # reads two letters of seven from a crop cut close
-    bg = np.median(whole_crop, axis=1, keepdims=True).astype(whole_crop.dtype)
-    side = np.repeat(bg, 40, axis=1)
-    whole_crop = np.concatenate([side, whole_crop, side], axis=1)
-    whole_crop = np.pad(whole_crop, ((8, 8), (0, 0), (0, 0)), mode="edge")
+    # padded forty columns each side and eight rows above and below with
+    # one flat colour, the crop's own median (a green band pads green):
+    # the engine's detector drops a first word or reads two letters of
+    # seven from a crop cut close, and the second engine reads a streaked
+    # pad as "=" and "m"
+    bg = np.median(whole_crop.reshape(-1, 3), axis=0).astype(whole_crop.dtype)
+    h_, w_ = whole_crop.shape[:2]
+    padded = np.empty((h_ + 16, w_ + 80, 3), dtype=whole_crop.dtype)
+    padded[:, :] = bg
+    padded[8:8 + h_, 40:40 + w_] = whole_crop
+    whole_crop = padded
     r3, s3 = _rapid_text(whole_crop, 3.0, height)
     r2, s2 = _rapid_text(whole_crop, 2.0, height)
     alt = re.sub(r"\s+", " ", tess_word(whole_crop)).strip()
@@ -392,11 +397,6 @@ def read_cell(rgb, ya, yb, ca, cb, twice=False):
             return "", 0.0, 1
         txt = cands[i]
         scores = s3 if i == 0 else (s2 if i == 1 else (s3 or s2))
-        for c in cands:
-            # a reading holding the chosen one inside it and much more: the
-            # chosen is a piece of the name, the other the whole
-            if c is not txt and len(_FOLD(c)) >= len(_FOLD(txt)) + 3 and _FOLD(txt) in _FOLD(c):
-                txt = c
         if alt and txt is not alt and _ratio(_FOLD(alt), _FOLD(txt)) >= 0.85:
             txt = _lookalike(_undouble(txt, alt), alt)
             if _WEIGHT(alt) > _WEIGHT(txt):
@@ -428,9 +428,6 @@ def read_cell(rgb, ya, yb, ca, cb, twice=False):
         return "", 0.0, blank
     text = cands[i]
     scores = [s3, s2, scores, s3 or s2][i]
-    for c in cands:
-        if c is not text and len(_FOLD(c)) >= len(_FOLD(text)) + 3 and _FOLD(text) in _FOLD(c):
-            text = c
     if alt and text is not alt and _ratio(_FOLD(alt), _FOLD(text)) >= 0.85:
         text = _undouble(text, alt)
         if _WEIGHT(alt) >= _WEIGHT(text):
