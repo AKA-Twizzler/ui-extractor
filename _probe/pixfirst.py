@@ -272,8 +272,16 @@ def read_cell(rgb, ya, yb, ca, cb, twice=False):
         txt = _join(got, height)
         alt = re.sub(r"\s+", " ", tess_word(whole_crop)).strip()
         fa, fb = _FOLD(alt), _FOLD(txt)
-        if alt and (not txt or (_close(fa, fb) and (_MARKS(alt), len(fa)) > (_MARKS(txt), len(fb)))):
+        # the ink's own gaps say how many words the name has (a gap of a
+        # fifth of the height or more); the second engine keeps the spaces
+        # the first drops ("00Inbox"), and stands where its letters agree
+        k = 1 + sum(1 for i in range(1, len(boxes)) if boxes[i][0] - boxes[i - 1][1] >= 0.2 * height)
+        if alt and txt and _close(fa, fb) and alt.count(" ") == k - 1 and txt.count(" ") != k - 1:
             txt = alt
+        elif alt and (not txt or (_close(fa, fb) and (_MARKS(alt), len(fa)) > (_MARKS(txt), len(fb)))):
+            txt = alt
+        if os.environ.get("PF_DEBUG"):
+            print("   name boxes", boxes, "k", k, "rapid", repr(_join(got, height)), "tess", repr(alt), "->", repr(txt))
         scores = [w[5] for w in got]
         return txt, (float(np.mean(scores)) if scores else 0.0), (0 if txt else 1)
     words, scores, blank = [], [], 0
@@ -292,14 +300,39 @@ def read_cell(rgb, ya, yb, ca, cb, twice=False):
     text = " ".join(words)
     whole = ocr(whole_crop, 3.0)
     wtxt = _join(whole, height)
-    alnum = lambda s: len(_FOLD(s))
-    if alnum(wtxt) >= alnum(text) + 2:
-        # a dim small word ("6,", "at") left no crop at all; the whole holds it
-        text = wtxt; scores = [w[5] for w in whole]
     alt = re.sub(r"\s+", " ", tess_word(whole_crop)).strip()
-    if alt and _close(_FOLD(alt), _FOLD(text)) and _MARKS(alt) >= _MARKS(text):
-        text = alt
+    alnum = lambda s: len(_FOLD(s))
+    # the whole cell read at once holds every letter the word crops hold,
+    # without the crops' doubled edges; the words stand only where the
+    # whole missed a word of theirs
+    best = wtxt if alnum(wtxt) >= alnum(text) - 1 else text
+    if alt and _close(_FOLD(alt), _FOLD(best)) and alnum(alt) >= alnum(best) and _MARKS(alt) >= _MARKS(best):
+        best = alt                    # the second engine keeps the spaces and commas
+    shaped = finder_shape(best)
+    if shaped is None and best is wtxt and alt and _close(_FOLD(alt), _FOLD(text)):
+        shaped = finder_shape(alt)
+    text = shaped if shaped is not None else best
+    if text is wtxt:
+        scores = [w[5] for w in whole]
     return text, (float(np.mean(scores)) if scores else 0.0), blank
+
+def finder_shape(s):
+    """A date or a size in the shape Finder writes it, from a reading that
+    holds the letters and digits but not the spaces: "Jun 30, 2026 at 5:54
+    PM", "Today at 8:47 PM", "57 KB". None where the reading is neither."""
+    f = re.sub(r"\s+", "", s)
+    m = re.fullmatch(r"([A-Z][a-z]{2})(\d{1,2})[,.]?(\d{4})(?:at)?(\d{1,2})[:;.](\d{2})(AM|PM)", f)
+    if m:
+        return "%s %s, %s at %s:%s %s" % m.groups()
+    m = re.fullmatch(r"(Today|Yesterday)(?:at)?(\d{1,2})[:;.](\d{2})(AM|PM)", f)
+    if m:
+        return "%s at %s:%s %s" % m.groups()
+    m = re.fullmatch(r"(\d+(?:[.,]\d+)?)(bytes|KB|MB|GB|TB)", f)
+    if m:
+        return "%s %s" % m.groups()
+    if f == "--":
+        return "--"
+    return None
 
 def _close(a, b):
     if not a or not b:
