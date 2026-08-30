@@ -52,7 +52,10 @@ def ink_mask(rgb_region, floor=55, lift=30):
     line or a bar (a sidebar's thumb standing inside a list's box), never
     writing, and is dropped."""
     mn = rgb_region.min(axis=2)
-    thr = max(floor, float(np.median(mn)) + lift)
+    # the background is each row's own median: a selected row's band is
+    # background to the white writing on it, not writing itself
+    med = np.median(mn, axis=1, keepdims=True)
+    thr = np.maximum(float(floor), med + lift)
     ink = mn > thr
     h = ink.shape[0]
     if h >= 8:
@@ -162,6 +165,12 @@ def find_header(rgb, xl, x1, wb):
                 else:
                     merged.append([s_, e_])
             merged = [(s_, e_) for s_, e_ in merged if e_ - s_ >= 35]     # a sort chevron is no column
+            if merged:
+                # a bar's stub or a line standing in the header's band is far
+                # narrower than any heading
+                widths = sorted(e_ - s_ for s_, e_ in merged)
+                med_w = widths[len(widths) // 2]
+                merged = [(s_, e_) for s_, e_ in merged if e_ - s_ >= 0.35 * med_w]
             cols = []
             for s_, e_ in merged:
                 got = ocr(rgb[max(0, a - 6):b + 6, max(0, xl + s_ - 10):xl + e_ + 10], 3.0)
@@ -219,7 +228,8 @@ def read_cell(rgb, ya, yb, ca, cb, twice=False):
     the mean confidence, the count of words the engine could not read)."""
     words, scores, blank = [], [], 0
     H = rgb.shape[0]
-    for wa, wb_ in word_crops(rgb, ya, yb, ca, cb):
+    boxes = word_crops(rgb, ya, yb, ca, cb)
+    for wa, wb_ in boxes:
         crop = rgb[max(0, ya - 6):min(H, yb + 6), max(ca, wa - 14):min(cb, wb_ + 14)]
         got = ocr(crop, 3.0 if (wb_ - wa) > 40 else 4.0)
         if twice and (wb_ - wa) > 120:
@@ -236,12 +246,30 @@ def read_cell(rgb, ya, yb, ca, cb, twice=False):
             # the second stands.
             alt = tess_word(crop)
             fa, fb = re.sub(r"[^a-z0-9]", "", alt.lower()), re.sub(r"[^a-z0-9]", "", txt.lower())
-            if alt and (not txt or ("_" in alt and "_" not in txt and _close(fa, fb))):
+            marks = lambda s: s.count("_") + s.count(".")
+            if alt and (not txt or (_close(fa, fb) and (marks(alt), len(fa)) > (marks(txt), len(fb)))):
                 txt = alt
         if txt:
             words.append(txt); scores.extend(w[5] for w in got)
         else:
-            blank += 1
+            words.append(""); blank += 1
+    if blank and len(boxes) > 1:
+        # A WORD READ AS NOTHING (a lone digit, a two-letter word) takes its
+        # share of the whole cell read at once: the words read on their own
+        # are struck out of the whole, left to right, and what is left is
+        # the missing word
+        whole = ocr(rgb[max(0, ya - 6):min(H, yb + 6), ca:cb], 3.0)
+        rest = "".join(w[4] for w in sorted(whole, key=lambda w: w[0])).replace(" ", "")
+        for i, w in enumerate(words):
+            if w:
+                k = rest.find(w.replace(" ", ""))
+                if k >= 0:
+                    rest = rest[:k] + "\x00" * len(w.replace(" ", "")) + rest[k + len(w.replace(" ", "")):]
+        pieces = [s for s in rest.split("\x00") if s]
+        for i, w in enumerate(words):
+            if not w and pieces:
+                words[i] = pieces.pop(0)
+    words = [w for w in words if w]
     return " ".join(words), (float(np.mean(scores)) if scores else 0.0), blank
 
 def _close(a, b):
