@@ -232,82 +232,6 @@ def word_crops(rgb, ya, yb, ca, cb, gap=10):
             merged.append([s_, e_])
     return [(ca + s_, ca + e_) for s_, e_ in merged if e_ - s_ >= 4]
 
-def leading_dot(rgb, ya, yb, ca, cb):
-    """A hidden file's leading dot, read off the pixels: the first run of
-    ink in the name's band is a small blob, no wider than two fifths of
-    the writing's height and no taller than that, sitting low on the
-    line, with a gap before the letters. The engines read that dot as a
-    letter (".local" as "Jocal", ".claude" as "aclaude") or drop it, so
-    the dot is cut away before reading and put back after. Returns (the
-    dot's last column, the letters' first column) in frame pixels, or
-    None where there is no such dot."""
-    band = rgb[ya:yb, ca:cb]
-    if band.size == 0:
-        return None
-    ink = ink_mask(band)
-    cols = ink.sum(axis=0)
-    runs, start = [], None
-    for i, v in enumerate(cols):
-        if v > 0 and start is None:
-            start = i
-        elif v == 0 and start is not None:
-            runs.append((start, i)); start = None
-    if start is not None:
-        runs.append((start, len(cols)))
-    runs = [(a, b) for a, b in runs if b - a >= 2]
-    if not runs:
-        return None
-    a, b = runs[0]
-    trows = np.where(ink.any(axis=1))[0]
-    if trows.size == 0:
-        return None
-    h = trows[-1] - trows[0] + 1
-    # a dot joined to the letter after it (a j's hook curls back under it on
-    # a doubled frame): the run opens with a shoulder of low, short columns
-    # before the first tall one
-    k = 0
-    for j in range(a, b):
-        lit = np.where(ink[:, j])[0]
-        if lit.size and lit.size <= 0.4 * h and lit[0] >= trows[0] + 0.55 * h:
-            k += 1
-        else:
-            break
-    if 2 <= k <= 0.45 * h and a + k < b:
-        return ca + a + k, ca + a + k
-    if len(runs) < 2:
-        return None
-    rows = np.where(ink[:, a:b].any(axis=1))[0]
-    if rows.size == 0:
-        return None
-    if (b - a) > 0.45 * h or (rows[-1] - rows[0] + 1) > 0.4 * h:
-        return None                          # a letter, not a dot
-    if rows[-1] < trows[0] + 0.55 * h:
-        return None                          # sits high: an apostrophe, a dash
-    gap = runs[1][0] - b
-    if gap < 1 or gap > 0.8 * h:
-        return None
-    return ca + b, ca + runs[1][0]
-
-def _remark(txt, o, marks="._-"):
-    """The other reading's marks (dots, underscores, dashes) set into txt
-    where its letters agree with txt's: never a letter, never a colon."""
-    import difflib
-    out = ""
-    for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, txt, o).get_opcodes():
-        if tag == "equal" or tag == "delete":
-            out += txt[i1:i2]
-        elif tag == "insert":
-            ins = o[j1:j2]
-            out += ins if ins and all(c in marks for c in ins) else ""
-        else:
-            a_, b_ = txt[i1:i2], o[j1:j2]
-            if not a_.strip() and b_ and all(c in marks for c in b_):
-                out += b_                    # a space where the other reading has a dot: the dot's own gap
-                continue
-            lead = b_[:len(b_) - len(b_.lstrip(marks))]; trail = b_[len(b_.rstrip(marks)):]
-            out += (lead + a_ + trail) if b_.strip(marks).lower() == a_.lower() else a_
-    return out
-
 def _join(got, height):
     """The engine's pieces in reading order, a space where the gap between
     two pieces is a third of the writing's height or more."""
@@ -433,48 +357,7 @@ def _rapid_text(crop, scale, height):
     got = ocr(crop, scale)
     return _join(got, height), [w[5] for w in got]
 
-def win_words(rgb, xl, x1, y0, y1):
-    """The third reader's words over the list area, once per frame, in the
-    frame's own pixels: [(x0, y0, x1, y1, text)]. Windows' own OCR reads
-    the pane at its working size; enlarging it further makes it worse.
-    None when the reader is not on this machine or is switched off."""
-    if os.environ.get("PF_WIN", "3") == "0":
-        return None
-    try:
-        import winocr
-        if not winocr.available():
-            return None
-        got = winocr.read_words(rgb[y0:y1, xl:x1], scale=1.0)
-    except Exception as e:
-        if os.environ.get("PF_DEBUG"):
-            print("   winocr off:", e)
-        return None
-    return [(a + xl, b + y0, c + xl, d + y0, t) for a, b, c, d, t in got]
-
-def win_cell(words, ya, yb, ca, cb, height):
-    """The third reader's text inside one cell: its words whose centre lies
-    in the cell, in reading order, a space at a gap a third of the height."""
-    if not words:
-        return ""
-    got = [w for w in words if ca <= (w[0] + w[2]) / 2.0 <= cb and ya <= (w[1] + w[3]) / 2.0 <= yb]
-    return _join(got, height)
-
-def _vote(rapid_reads, alt, win):
-    """One vote per engine. The first engine's own pick is whichever of its
-    reads is most like the other engines' (its sharper read when there is
-    nothing to compare); then the reading most like the others stands.
-    Returns (text, index of the standing engine: 0 first, 1 second, 2 third, or None)."""
-    others = [o for o in (alt, win) if o]
-    rr = [r for r in rapid_reads if r]
-    if rr and others:
-        rapid = max(rr, key=lambda r: sum(_ratio(_FOLD(r), _FOLD(o)) for o in others) + 0.001 * len(r))
-    else:
-        rapid = rr[0] if rr else ""
-    cands = [rapid, alt or "", win or ""]
-    i = _medoid(cands)
-    return (cands[i] if i is not None else ""), i
-
-def read_cell(rgb, ya, yb, ca, cb, twice=False, win=""):
+def read_cell(rgb, ya, yb, ca, cb, twice=False):
     """A cell's text by majority. A name (twice=True) is one crop over the
     whole of its ink, read by the first engine at two sizes and by the
     second engine once; the reading most like the other two stands, with
@@ -491,14 +374,8 @@ def read_cell(rgb, ya, yb, ca, cb, twice=False, win=""):
     y0_, y1_ = max(0, ya - 6), min(H, yb + 6)
     height = max(8, yb - ya)
     # the crop starts at the column's own left at the earliest (an icon's
-    # edge stands just outside it) and six columns short of the ink; a
-    # hidden file's leading dot is left out of the crop and put back after
-    dot = leading_dot(rgb, ya, yb, ca, cb) if twice else None
-    if dot:
-        x0_ = max(ca + 6, dot[1] - min(6, max(1, (dot[1] - dot[0]) // 2)))
-    else:
-        x0_ = max(ca + 6, boxes[0][0] - 6)
-    x1_ = min(cb, boxes[-1][1] + 6)
+    # edge stands just outside it) and six columns short of the ink
+    x0_, x1_ = max(ca + 6, boxes[0][0] - 6), min(cb, boxes[-1][1] + 6)
     whole_crop = rgb[y0_:y1_, x0_:x1_]
     # padded forty columns each side and eight rows above and below with
     # one flat colour, the crop's own median (a green band pads green):
@@ -514,41 +391,23 @@ def read_cell(rgb, ya, yb, ca, cb, twice=False, win=""):
     r3, s3 = _rapid_text(whole_crop, 3.0, height)
     r2, s2 = _rapid_text(whole_crop, 2.0, height)
     alt = re.sub(r"\s+", " ", tess_word(whole_crop)).strip()
-    win = re.sub(r"\s+", " ", win or "").strip()
-    if twice and dot:
-        win = win.lstrip("._")                    # the third reader saw the dot the crop leaves out
-    mode = os.environ.get("PF_WIN", "3")
     if twice:
-        if mode == "3" and win:
-            txt, i = _vote((r3, r2), alt, win)
-            scores = (s3 or s2) if i is not None else []
-            if not txt or (not r3 and not r2 and len(_FOLD(txt)) < 3):
-                return "", 0.0, 1
-            i = 3                            # an engine's index below: none of the two first reads by itself
-        else:
-            cands = [r3, r2, alt] + ([win] if (mode == "4" and win) else [])
-            i = _medoid(cands)
-            if i is None or (not r3 and not r2 and len(_FOLD(alt)) < 3 and len(_FOLD(win)) < 3):
-                return "", 0.0, 1
-            txt = cands[i]
-            scores = s3 if i == 0 else (s2 if i == 1 else (s3 or s2))
-        # the other readings' marks laid over the standing reading where
-        # the letters agree: dots, underscores and dashes, never letters;
-        # spaces from the second engine
-        for o in (alt, win):
-            if o and o != txt and _ratio(_FOLD(o), _FOLD(txt)) >= 0.85:
-                txt = _remark(_lookalike(_undouble(txt, o), o), o)
-                if o is alt:
-                    txt = _respace(txt, o)
+        cands = [r3, r2, alt]
+        i = _medoid(cands)
+        if i is None or (not r3 and not r2 and len(_FOLD(alt)) < 3):
+            return "", 0.0, 1
+        txt = cands[i]
+        scores = s3 if i == 0 else (s2 if i == 1 else (s3 or s2))
+        if alt and txt is not alt and _ratio(_FOLD(alt), _FOLD(txt)) >= 0.85:
+            txt = _lookalike(_undouble(txt, alt), alt)
+            if _WEIGHT(alt) > _WEIGHT(txt):
+                txt = alt                    # the second engine keeps the underscores
+            else:
+                txt = _respace(txt, alt)     # and the spaces
         txt = re.sub(r"^[^A-Za-z0-9._~$]+", ".", txt)      # a hidden file's leading dot, read as a dash or a comma
-        txt = re.sub(r"\. (?=\w)", ".", txt)                # no space beside a dot inside a name
-        txt = re.sub(r" \.(?=\w)", ".", txt)
-        if dot:
-            txt = "." + txt.lstrip("._ ")                      # the dot the pixels showed
-        elif not txt.startswith(".") and any(r[:1] == "J" and r[1:2] == "j" for r in (r3, r2)):
-            txt = "." + txt.lstrip("._ ")                      # the first engine's "Jj": the dot and the j read as one
+        txt = re.sub(r"\. (?=[a-z])", ".", txt)             # no space after a dot inside a name
         if os.environ.get("PF_DEBUG"):
-            print("   name", repr(r3), repr(r2), repr(alt), repr(win), "->", repr(txt))
+            print("   name", repr(r3), repr(r2), repr(alt), "->", repr(txt))
         return txt, (float(np.mean(scores)) if scores else 0.0), (0 if txt else 1)
     words, scores, blank = [], [], 0
     for i, (wa, wb_) in enumerate(boxes):
@@ -564,22 +423,16 @@ def read_cell(rgb, ya, yb, ca, cb, twice=False, win=""):
         else:
             blank += 1
     pw = " ".join(words)
-    if mode == "3" and win:
-        text, i = _vote((r3, r2, pw), alt, win)
-        cands = [r3, r2, pw, alt, win]
-        if not text:
-            return "", 0.0, blank
-        scores = s3 or s2 or scores
-    else:
-        cands = [r3, r2, pw, alt] + ([win] if (mode == "4" and win) else [])
-        i = _medoid(cands)
-        if i is None:
-            return "", 0.0, blank
-        text = cands[i]
-        scores = ([s3, s2, scores, s3 or s2] + [s3 or s2])[i]
-    for o in (alt, win):
-        if o and o != text and _ratio(_FOLD(o), _FOLD(text)) >= 0.85:
-            text = _remark(_undouble(text, o), o, marks="._-,")     # the other reading's commas and dots, never its letters
+    cands = [r3, r2, pw, alt]
+    i = _medoid(cands)
+    if i is None:
+        return "", 0.0, blank
+    text = cands[i]
+    scores = [s3, s2, scores, s3 or s2][i]
+    if alt and text is not alt and _ratio(_FOLD(alt), _FOLD(text)) >= 0.85:
+        text = _undouble(text, alt)
+        if _WEIGHT(alt) >= _WEIGHT(text):
+            text = alt                       # the second engine keeps the commas
     if (boxes[-1][1] - boxes[0][0]) < 1.2 * height and not re.search(r"\d", text):
         text = "--"                          # a folder's size: a dash, read as two letters
     shaped = finder_shape(text)
@@ -590,7 +443,7 @@ def read_cell(rgb, ya, yb, ca, cb, twice=False, win=""):
                 if shaped is not None:
                     break
     if os.environ.get("PF_DEBUG"):
-        print("   cell", [repr(c) for c in cands], "win", repr(win), "->", repr(shaped if shaped is not None else text))
+        print("   cell", [repr(c) for c in cands], "->", repr(shaped if shaped is not None else text))
     return (shaped if shaped is not None else text), (float(np.mean(scores)) if scores else 0.0), blank
 
 def finder_shape(s):
@@ -598,15 +451,15 @@ def finder_shape(s):
     holds the letters and digits but not the spaces: "Jun 30, 2026 at 5:54
     PM", "Today at 8:47 PM", "57 KB". None where the reading is neither."""
     f = re.sub(r"\s+", "", s)
-    m = re.fullmatch(r"([A-Za-z]{3})(\d{1,2})[,.]?(\d{4,5})(?:at)?(\d{1,2})[:;.°•](\d{2})(AM|PM)", f)
+    m = re.fullmatch(r"([A-Za-z]{3})(\d{1,2})[,.]?(\d{4})(?:at)?(\d{1,2})[:;.](\d{2})(AM|PM)", f)
     if m:
         mon = m.group(1)
         months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
         near = max(months, key=lambda x: _ratio(x.lower(), mon.lower()))
         if _ratio(near.lower(), mon.lower()) < 0.66:
             return None
-        return "%s %s, %s at %s:%s %s" % (near, m.group(2), m.group(3)[-4:], m.group(4), m.group(5), m.group(6))
-    m = re.fullmatch(r"(Today|Yesterday)(?:at)?(\d{1,2})[:;.°•](\d{2})(AM|PM)", f)
+        return "%s %s, %s at %s:%s %s" % ((near,) + m.groups()[1:])
+    m = re.fullmatch(r"(Today|Yesterday)(?:at)?(\d{1,2})[:;.](\d{2})(AM|PM)", f)
     if m:
         return "%s at %s:%s %s" % m.groups()
     m = re.fullmatch(r"(\d+(?:[.,]\d+)?)(bytes|KB|MB|GB|TB)", f)
@@ -719,7 +572,6 @@ def read_frame(path, out_dir=None, title_hint="memory", wb=None, list_box=False)
     name_left = cols[0][0] if cols else xl + 60
     ic0, ic1 = max(xl, name_left - int(0.9 * pitch)), name_left - 4
     col_lefts = ([c[0] for c in cols] or [name_left]) + [x1]
-    words3 = win_words(rgb, xl, x1, list_top, list_bot)      # the third reader, once over the list
     out_rows = []
     for (a, b) in bands_:
         cy = (a + b) / 2.0
@@ -744,7 +596,7 @@ def read_frame(path, out_dir=None, title_hint="memory", wb=None, list_box=False)
                 cb = x1 - 60
             if cb - ca < 30 or yb - ya < 8:
                 cells.append(""); continue
-            txt, sc, blank = read_cell(rgb, ya, yb, ca, cb, twice=(k == 0), win=win_cell(words3, ya, yb, ca, cb, band_h))
+            txt, sc, blank = read_cell(rgb, ya, yb, ca, cb, twice=(k == 0))
             cells.append(txt); scores.append(sc); blanks += blank
         if icon == "folder" and len(cells) == 4:
             if not re.search(r"\d", cells[2]):

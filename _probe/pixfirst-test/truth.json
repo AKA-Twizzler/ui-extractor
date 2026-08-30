@@ -1,0 +1,298 @@
+{
+ "panes": [
+  {
+   "frame": "00-00-00",
+   "wb": [
+    2153,
+    494,
+    3192,
+    1148
+   ],
+   "rows": [
+    [
+     ".obsidian",
+     "Jun 23, 2026 at 11:14 PM",
+     "--",
+     "Folder"
+    ],
+    [
+     "00 Inbox",
+     "Jun 30, 2026 at 5:54 PM",
+     "--",
+     "Folder"
+    ],
+    [
+     "01 Daily Notes",
+     "Jun 30, 2026 at 5:54 PM",
+     "--",
+     "Folder"
+    ],
+    [
+     "02 Company A (Info Product)",
+     "Jun 30, 2026 at 5:54 PM",
+     "--",
+     "Folder"
+    ],
+    [
+     "03 Company...ape Company)",
+     "Jun 30, 2026 at 5:54 PM",
+     "--",
+     "Folder"
+    ],
+    [
+     "04 Dev",
+     "Jun 30, 2026 at 5:54 PM",
+     "--",
+     "Folder"
+    ],
+    [
+     "05 Marketing",
+     "Jun 30, 2026 at 5:54 PM",
+     "--",
+     "Folder"
+    ],
+    [
+     "06 Personal",
+     "Jun 30, 2026 at 5:54 PM",
+     "--",
+     "Folder"
+    ],
+    [
+     "07 Archive",
+     "Jun 30, 2026 at 5:54 PM",
+     "--",
+     "Folder"
+    ],
+    [
+     "Vault Index.md",
+     "Jun 30, 2026 at 5:54 PM",
+     "3 KB",
+     "Markdo...text file"
+    ]
+   ],
+   "cut_last": false
+  },
+  {
+   "frame": "00-00-30",
+   "wb": [
+    88,
+    272,
+    2372,
+    1680
+   ],
+   "rows": [
+    [
+     ".agents",
+     "Apr 28, 2026 at 4:31 PM",
+     "--",
+     "Folder"
+    ],
+    [
+     ".bash_history",
+     "Jun 30, 2026 at 9:26 PM",
+     "31 bytes",
+     "Document"
+    ],
+    [
+     ".bytertc",
+     "Apr 15, 2026 at 4:34 AM",
+     "--",
+     "Folder"
+    ],
+    [
+     ".cache",
+     "May 8, 2026 at 10:49 AM",
+     "--",
+     "Folder"
+    ],
+    [
+     ".CFUserTextEncoding",
+     "Apr 6, 2026 at 5:17 PM",
+     "7 bytes",
+     "Document"
+    ],
+    [
+     ".claude",
+     "Today at 7:55 PM",
+     "--",
+     "Folder"
+    ],
+    [
+     ".claude.json",
+     "Today at 8:47 PM",
+     "57 KB",
+     "JSON"
+    ],
+    [
+     ".claude.json.backup",
+     "Apr 14, 2026 at 1:27 PM",
+     "33 KB",
+     "Document"
+    ],
+    [
+     ".cloudflared",
+     "Apr 21, 2026 at 5:41 PM",
+     "--",
+     "Folder"
+    ],
+    [
+     ".config",
+     "May 6, 2026 at 8:41 AM",
+     "--",
+     "Folder"
+    ],
+    [
+     ".cups",
+     "Apr 27, 2026 at 11:41 AM",
+     "--",
+     "Folder"
+    ],
+    [
+     ".jarvis",
+     "Jun 21, 2026 at 2:51 PM",
+     "--",
+     "Folder"
+    ],
+    [
+     ".jarvis_action_denied.log",
+     "Jun 27, 2026 at 6:11 PM",
+     "5 KB",
+     "Log File"
+    ],
+    [
+     ".jarvis-backup-mirrors",
+     "Jun 5, 2026 at 2:56 PM",
+     "--",
+     "Folder"
+    ],
+    [
+     ".local",
+     "Apr 6, 2026 at 7:12 PM",
+     "--",
+     "Folder"
+    ],
+    [
+     ".npm",
+     "Apr 12, 2026 at 10:41 AM",
+     "--",
+     "Folder"
+    ],
+    [
+     ".railway",
+     "Yesterday at 4:42 AM",
+     "--",
+     "Folder"
+    ]
+   ],
+   "cut_last": true
+  },
+  {
+   "frame": "00-00-00",
+   "wb": [
+    773,
+    472,
+    1748,
+    1140
+   ],
+   "rows": [
+    [
+     ".agents",
+     "Apr 28, 2026 at 4:31 PM",
+     "--",
+     "Folder"
+    ],
+    [
+     ".bash_history",
+     "Jun 30, 2026 at 9:26 PM",
+     "31 bytes",
+     "Document"
+    ],
+    [
+     ".bytertc",
+     "Apr 15, 2026 at 4:34 AM",
+     "--",
+     "Folder"
+    ],
+    [
+     ".cache",
+     "May 8, 2026 at 10:49 AM",
+     "--",
+     "Folder"
+    ],
+    [
+     ".CFUserTextEncoding",
+     "Apr 6, 2026 at 5:17 PM",
+     "7 bytes",
+     "Document"
+    ],
+    [
+     ".claude",
+     "Today at 7:55 PM",
+     "--",
+     "Folder"
+    ],
+    [
+     ".claude.json",
+     "Today at 8:47 PM",
+     "57 KB",
+     "JSON"
+    ],
+    [
+     ".claude.json.backup",
+     "Apr 14, 2026 at 1:27 PM",
+     "33 KB",
+     "Document"
+    ],
+    [
+     ".cloudflared",
+     "Apr 21, 2026 at 5:41 PM",
+     "--",
+     "Folder"
+    ],
+    [
+     ".config",
+     "May 6, 2026 at 8:41 AM",
+     "--",
+     "Folder"
+    ],
+    [
+     ".cups",
+     "Apr 27, 2026 at 11:41 AM",
+     "--",
+     "Folder"
+    ],
+    [
+     ".jarvis",
+     "Jun 21, 2026 at 2:51 PM",
+     "--",
+     "Folder"
+    ],
+    [
+     ".jarvis_action_denied.log",
+     "Jun 27, 2026 at 6:11 PM",
+     "5 KB",
+     "Log File"
+    ],
+    [
+     ".jarvis-backup-mirrors",
+     "Jun 5, 2026 at 2:56 PM",
+     "--",
+     "Folder"
+    ],
+    [
+     ".local",
+     "Apr 6, 2026 at 7:12 PM",
+     "--",
+     "Folder"
+    ],
+    [
+     ".npm",
+     "Apr 12, 2026 at 10:41 AM",
+     "--",
+     "Folder"
+    ]
+   ],
+   "cut_last": false
+  }
+ ]
+}
