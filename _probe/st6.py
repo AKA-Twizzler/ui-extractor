@@ -1,8 +1,8 @@
-import sys; sys.path.insert(0, r"/home/trism/.claude/jobs/014c964f/tmp/replay")
+import sys; sys.path.insert(0, r"G:\AI\Ethereal\ui-extractor")
 import cv2, numpy as np, machine
 fr = cv2.imread(machine.here("/mnt/g/Images/Move Memory Files Out of Claude Code Into Obsidian/Images/00-03-00.png"), cv2.IMREAD_GRAYSCALE)
 t = fr[894:950, 1798:1833]
-cv2.imwrite(machine.here("/home/trism/.claude/jobs/014c964f/tmp/replay/pointer.png"), t)
+cv2.imwrite(machine.here("/mnt/g/AI/Ethereal/ui-extractor/pointer.png"), t)
 print("template", t.shape)
 # match on this frame and on the other frame at a few scales
 for name in ("00-03-00.png", "00-04-10.png", "00-01-20.png"):

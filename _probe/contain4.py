@@ -3,7 +3,7 @@ is 'a window holds its panes' and the leftovers are outside it. If assigned
 panes ALSO fail to overlap, my rectangle test is wrong and every number above
 is worthless."""
 import sys, os, json
-sys.path.insert(0, r"/home/trism/.claude/jobs/014c964f/tmp/replay"); os.chdir(r"/home/trism/.claude/jobs/014c964f/tmp/replay")
+sys.path.insert(0, r"G:\AI\Ethereal\ui-extractor"); os.chdir(r"G:\AI\Ethereal\ui-extractor")
 P = r"G:\Images\Move Memory Files Out of Claude Code Into Obsidian\records.jsonl"
 def area(r): return max(0.0, r[2]-r[0]) * max(0.0, r[3]-r[1])
 def inter(a, b):

@@ -1,5 +1,5 @@
 import sys, os, re, subprocess
-sys.path.insert(0, "/home/trism/.claude/jobs/014c964f/tmp/replay"); os.chdir("/home/trism/.claude/jobs/014c964f/tmp/replay")
+sys.path.insert(0, "/mnt/g/AI/Ethereal/ui-extractor"); os.chdir("/mnt/g/AI/Ethereal/ui-extractor")
 import compare
 note = open("/mnt/g/Images/Move Memory Files Out of Claude Code Into Obsidian/Move Memory Files Out of Claude Code Into Obsidian.md", encoding="utf-8").read()
 card = [l for l in note.splitlines() if l.startswith('<div class="sn-window sn-obsidian')][3]
@@ -7,7 +7,7 @@ css_new = open(compare.CSS_PATH, encoding="utf-8").read()
 css_old = css_new[:css_new.index("/* A REBUILT WINDOW IS A PICTURE")]
 # Obsidian's own readable-line-length, exactly as it applies it
 OBS = ".markdown-preview-view.is-readable-line-width .markdown-preview-sizer{max-width:var(--file-line-width,700px);}"
-out = "/home/trism/.claude/jobs/014c964f/tmp/replay/_probe/wmeas"
+out = "/mnt/g/AI/Ethereal/ui-extractor/_probe/wmeas"
 JS = ("<script>window.addEventListener('load',function(){var q=function(s){var e=document.querySelector(s);"
       "return e?e.offsetWidth:-1};document.title='MEAS win='+q('.sn-window')+' tree='+q('.sn-explorer')"
       "+' doc='+q('.sn-doc');});</script>")

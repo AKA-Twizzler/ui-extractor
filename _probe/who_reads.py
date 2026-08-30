@@ -1,8 +1,8 @@
 """Does anything ever ask a STRETCH for a moment the stretch does not cover?
 That is the only way the deleted line could have mattered."""
 import sys, io, os
-sys.path.insert(0, r"/home/trism/.claude/jobs/014c964f/tmp/replay")
-os.chdir(r"/home/trism/.claude/jobs/014c964f/tmp/replay")
+sys.path.insert(0, r"G:\AI\Ethereal\ui-extractor")
+os.chdir(r"G:\AI\Ethereal\ui-extractor")
 import draw3
 draw3.PROBE = []
 real_slice = draw3.state_slice

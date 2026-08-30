@@ -1,7 +1,7 @@
 import sys, os
-sys.path.insert(0, r"/home/trism/.claude/jobs/014c964f/tmp/replay")
+sys.path.insert(0, r"G:\AI\Ethereal\ui-extractor")
 import draw3, selfcheck
-note = r"/home/trism/.claude/jobs/014c964f/tmp/replay\_probe\rig\mem72.md"
+note = r"G:\AI\Ethereal\ui-extractor\_probe\rig\mem72.md"
 imgs = r"G:\Images\Move Memory Files Out of Claude Code Into Obsidian\Images"
 print("draw3.note:", callable(draw3.note))
 f = selfcheck.check(note, imgs)

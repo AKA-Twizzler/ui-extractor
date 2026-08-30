@@ -1,7 +1,7 @@
 """Does asking for the moment BEFORE ever differ from taking whichever moment
 ran last? If it never differs, the change is cosmetic and I should say so."""
 import sys, os
-sys.path.insert(0, r"/home/trism/.claude/jobs/014c964f/tmp/replay"); os.chdir(r"/home/trism/.claude/jobs/014c964f/tmp/replay")
+sys.path.insert(0, r"G:\AI\Ethereal\ui-extractor"); os.chdir(r"G:\AI\Ethereal\ui-extractor")
 import draw3
 
 calls = {"n": 0, "differ": 0, "old_none_new_some": 0, "old_some_new_none": 0}

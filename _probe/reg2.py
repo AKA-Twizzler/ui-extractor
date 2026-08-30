@@ -1,5 +1,5 @@
 import sys, cv2
-sys.path.insert(0, r"/home/trism/.claude/jobs/014c964f/tmp/replay")
+sys.path.insert(0, r"G:\AI\Ethereal\ui-extractor")
 import checks, panes, overlay, shapes
 for key, stamp in (("obsidian", "00:06:00"), ("works", "00:07:00"), ("obsidian", "00:07:30")):
     p = checks.frame(key, stamp)

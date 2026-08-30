@@ -1,5 +1,5 @@
 import os, sys, json
-sys.path.insert(0, r"/home/trism/.claude/jobs/014c964f/tmp/replay")
+sys.path.insert(0, r"G:\AI\Ethereal\ui-extractor")
 import draw2
 REC = r"G:\Images\Move Memory Files Out of Claude Code Into Obsidian\records.jsonl"
 for line in open(REC, encoding="utf-8"):

@@ -1,10 +1,10 @@
 import sys, os, re, subprocess
-sys.path.insert(0, "/home/trism/.claude/jobs/014c964f/tmp/replay"); os.chdir("/home/trism/.claude/jobs/014c964f/tmp/replay")
+sys.path.insert(0, "/mnt/g/AI/Ethereal/ui-extractor"); os.chdir("/mnt/g/AI/Ethereal/ui-extractor")
 import compare
 note = open("_probe/note-ratio2.md", encoding="utf-8").read()
 cards = [l for l in note.splitlines() if l.startswith('<div class="sn-window sn-')]
 css = open(compare.CSS_PATH, encoding="utf-8").read()
-out = "/home/trism/.claude/jobs/014c964f/tmp/replay/_probe/wmeas"; os.makedirs(out, exist_ok=True)
+out = "/mnt/g/AI/Ethereal/ui-extractor/_probe/wmeas"; os.makedirs(out, exist_ok=True)
 JS = ("<script>window.addEventListener('load',function(){var e=document.querySelector('.sn-window');"
       "document.title='MEAS w='+(e?e.offsetWidth:-1)+' h='+(e?e.offsetHeight:-1);});</script>")
 print("%-4s %-34s %-28s %-28s" % ("card", "asked for", "in a 900px pane", "in a 1600px pane"))

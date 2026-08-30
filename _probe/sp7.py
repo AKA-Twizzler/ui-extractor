@@ -1,4 +1,4 @@
-import sys; sys.path.insert(0, r"/home/trism/.claude/jobs/014c964f/tmp/replay")
+import sys; sys.path.insert(0, r"G:\AI\Ethereal\ui-extractor")
 import json, verify_names
 path = r"G:\Images\Move Memory Files Out of Claude Code Into Obsidian\records-at.jsonl"
 for line in open(path, encoding="utf-8"):

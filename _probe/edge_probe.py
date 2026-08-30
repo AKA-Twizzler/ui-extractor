@@ -1,5 +1,5 @@
 import os, sys
-sys.path.insert(0, r"/home/trism/.claude/jobs/014c964f/tmp/replay")
+sys.path.insert(0, r"G:\AI\Ethereal\ui-extractor")
 import shapes
 shapes.WATCH = (0.0, 147.0)
 D = r"G:\Images\Move Memory Files Out of Claude Code Into Obsidian\Images"

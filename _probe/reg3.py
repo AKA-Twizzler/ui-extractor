@@ -1,5 +1,5 @@
 import sys, cv2
-sys.path.insert(0, r"/home/trism/.claude/jobs/014c964f/tmp/replay")
+sys.path.insert(0, r"G:\AI\Ethereal\ui-extractor")
 import checks, panes, overlay, shapes
 p = checks.frame("jarvis", "00:02:00")
 img = cv2.imread(p); h, w = img.shape[:2]
@@ -11,4 +11,4 @@ print("panes now:", panes.frame_regions(img))
 # what the same frame gives if a window is cut at its corridors too
 import types
 orig = panes.frame_regions
-src = open(r"/home/trism/.claude/jobs/014c964f/tmp/replay\panes.py", encoding="utf-8").read()
+src = open(r"G:\AI\Ethereal\ui-extractor\panes.py", encoding="utf-8").read()

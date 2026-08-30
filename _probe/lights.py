@@ -1,5 +1,5 @@
 import sys, cv2
-sys.path.insert(0, r"/home/trism/.claude/jobs/014c964f/tmp/replay")
+sys.path.insert(0, r"G:\AI\Ethereal\ui-extractor")
 import checks, panes, overlay, shapes
 cases = [("works", "00:01:52"), ("obsidian", "00:07:30"), ("obsidian", "00:06:00"),
          ("memfiles", "00:00:00"), ("jarvis", "00:02:00"), ("skills", "00:01:00"),

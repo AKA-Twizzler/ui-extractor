@@ -1,7 +1,7 @@
 """Is a QUIET pane blank wallpaper, or content that could not be read?
 The record calls both of them the same thing, which is the whole question."""
 import sys, os, json
-sys.path.insert(0, r"/home/trism/.claude/jobs/014c964f/tmp/replay"); os.chdir(r"/home/trism/.claude/jobs/014c964f/tmp/replay")
+sys.path.insert(0, r"G:\AI\Ethereal\ui-extractor"); os.chdir(r"G:\AI\Ethereal\ui-extractor")
 import cv2, numpy as np, panes
 P = r"G:\Images\Move Memory Files Out of Claude Code Into Obsidian\records.jsonl"
 WANT = {"00:00:10", "00:00:30", "00:04:00", "00:00:50", "00:00:00"}

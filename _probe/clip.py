@@ -1,5 +1,5 @@
 import os, sys, json, copy
-sys.path.insert(0, r"/home/trism/.claude/jobs/014c964f/tmp/replay")
+sys.path.insert(0, r"G:\AI\Ethereal\ui-extractor")
 import draw2, shapes
 REC = r"G:\Images\Move Memory Files Out of Claude Code Into Obsidian\records.jsonl"
 P = r"G:\Images\Move Memory Files Out of Claude Code Into Obsidian\Images\00-02-50.png"

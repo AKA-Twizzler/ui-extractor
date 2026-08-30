@@ -5,12 +5,12 @@
 The JS runs after load and must set document.getElementById('R').textContent
 (one line per finding). Prints the result per fragment."""
 import os, re, subprocess, sys
-sys.path.insert(0, "/home/trism/.claude/jobs/014c964f/tmp/replay"); os.chdir("/home/trism/.claude/jobs/014c964f/tmp/replay")
+sys.path.insert(0, "/mnt/g/AI/Ethereal/ui-extractor"); os.chdir("/mnt/g/AI/Ethereal/ui-extractor")
 import compare
 
 def run(fragments, js, width=960, cell_h=None):
     css = open(compare.CSS_PATH, encoding="utf-8").read()
-    out = "/home/trism/.claude/jobs/014c964f/tmp/replay/_probe/dom"
+    out = "/mnt/g/AI/Ethereal/ui-extractor/_probe/dom"
     body = "".join("<div class='cell' data-i='%d'><div class='markdown-preview-view screen-note' style='width:%dpx'>"
                    "<div class='markdown-preview-sizer'>%s</div></div></div>" % (i, width, f)
                    for i, f in enumerate(fragments))

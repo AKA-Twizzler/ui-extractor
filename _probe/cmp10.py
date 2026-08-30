@@ -1,8 +1,8 @@
 import os, sys, importlib
-sys.path.insert(0, r"/home/trism/.claude/jobs/014c964f/tmp/replay")
+sys.path.insert(0, r"G:\AI\Ethereal\ui-extractor")
 P = r"G:\Images\Move Memory Files Out of Claude Code Into Obsidian\Images\00-00-10.png"
 for which in ("_probe/shapes.clean.py", "shapes.py"):
-    src = open(os.path.join(r"/home/trism/.claude/jobs/014c964f/tmp/replay", which.replace("/", "\\")), encoding="utf-8").read()
+    src = open(os.path.join(r"G:\AI\Ethereal\ui-extractor", which.replace("/", "\\")), encoding="utf-8").read()
     mod = {"__name__": "shapes_probe"}
     exec(compile(src, which, "exec"), mod)
     W, H = mod["_frame_size"](P)

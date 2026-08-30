@@ -1,4 +1,4 @@
-import sys; sys.path.insert(0, r"/home/trism/.claude/jobs/014c964f/tmp/replay")
+import sys; sys.path.insert(0, r"G:\AI\Ethereal\ui-extractor")
 import shapes, cv2
 img = cv2.imread(r"G:\Images\Move Memory Files Out of Claude Code Into Obsidian\Images\00-00-00.png")
 g, W, H = shapes._grey(img)

@@ -1,5 +1,5 @@
 import sys, cv2
-sys.path.insert(0, r"/home/trism/.claude/jobs/014c964f/tmp/replay")
+sys.path.insert(0, r"G:\AI\Ethereal\ui-extractor")
 import checks, panes, overlay, shapes
 for key, stamp in (("jarvis", "00:02:00"), ("works", "00:01:52")):
     p = checks.frame(key, stamp)

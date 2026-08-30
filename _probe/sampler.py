@@ -1,5 +1,5 @@
 import sys, os
-sys.path.insert(0, r"/home/trism/.claude/jobs/014c964f/tmp/replay"); os.chdir(r"/home/trism/.claude/jobs/014c964f/tmp/replay")
+sys.path.insert(0, r"G:\AI\Ethereal\ui-extractor"); os.chdir(r"G:\AI\Ethereal\ui-extractor")
 import numpy as np, spot, machine
 video = r"G:\Video\Move Memory Files Out of Claude Code Into Obsidian\Move Memory Files Out of Claude Code Into Obsidian (2160p_30fps_AV1-128kbit_AAC-English).mp4"
 cache = machine.here("/mnt/g/Images/Move Memory Files Out of Claude Code Into Obsidian/scan.json")

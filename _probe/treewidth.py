@@ -1,7 +1,7 @@
 """How wide was the file tree REALLY, against the window it sat in? The card
 says 10fr; the frame is the only thing that can say whether that is right."""
 import sys, os
-sys.path.insert(0, r"/home/trism/.claude/jobs/014c964f/tmp/replay"); os.chdir(r"/home/trism/.claude/jobs/014c964f/tmp/replay")
+sys.path.insert(0, r"G:\AI\Ethereal\ui-extractor"); os.chdir(r"G:\AI\Ethereal\ui-extractor")
 import draw3
 LIVE = []
 real = draw3.State.__init__

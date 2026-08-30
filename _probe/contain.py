@@ -1,7 +1,7 @@
 """How many panes reach the drawing with no window, and would CONTAINMENT
 place them? Measurement before any rule is written."""
 import sys, os, json
-sys.path.insert(0, r"/home/trism/.claude/jobs/014c964f/tmp/replay"); os.chdir(r"/home/trism/.claude/jobs/014c964f/tmp/replay")
+sys.path.insert(0, r"G:\AI\Ethereal\ui-extractor"); os.chdir(r"G:\AI\Ethereal\ui-extractor")
 P = r"G:\Images\Move Memory Files Out of Claude Code Into Obsidian\records.jsonl"
 
 def inside(b, r, slack):

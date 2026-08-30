@@ -1,5 +1,5 @@
 import sys, cv2, numpy as np
-sys.path.insert(0, r"/home/trism/.claude/jobs/014c964f/tmp/replay")
+sys.path.insert(0, r"G:\AI\Ethereal\ui-extractor")
 import checks, overlay, shapes
 
 def blobs_of(img, box, tall=0.14, wide=0.30):

@@ -1,4 +1,4 @@
-import sys, time; sys.path.insert(0, r"/home/trism/.claude/jobs/014c964f/tmp/replay")
+import sys, time; sys.path.insert(0, r"G:\AI\Ethereal\ui-extractor")
 import concurrent.futures, machine, pipeline
 from rapidocr_onnxruntime import RapidOCR
 engine = RapidOCR()

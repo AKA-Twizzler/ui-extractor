@@ -1,12 +1,12 @@
 import sys, os, re, subprocess, json
-sys.path.insert(0, "/home/trism/.claude/jobs/014c964f/tmp/replay"); os.chdir("/home/trism/.claude/jobs/014c964f/tmp/replay")
+sys.path.insert(0, "/mnt/g/AI/Ethereal/ui-extractor"); os.chdir("/mnt/g/AI/Ethereal/ui-extractor")
 import compare
 note = open("/mnt/g/Images/Move Memory Files Out of Claude Code Into Obsidian/Move Memory Files Out of Claude Code Into Obsidian.md", encoding="utf-8").read()
 card = next(l for l in note.splitlines() if l.startswith('<div class="sn-window sn-obsidian'))
 css_new = open(compare.CSS_PATH, encoding="utf-8").read()
 css_old = css_new.replace("calc(1200 * var(--sn-u, 1px))", "calc(880 * var(--sn-u, 1px))")
 css_old = css_old[:css_old.index("/* A REBUILT WINDOW IS A PICTURE")]
-out = "/home/trism/.claude/jobs/014c964f/tmp/replay/_probe/wmeas"; os.makedirs(out, exist_ok=True)
+out = "/mnt/g/AI/Ethereal/ui-extractor/_probe/wmeas"; os.makedirs(out, exist_ok=True)
 JS = ("<script>window.addEventListener('load',function(){"
       "var w=document.querySelector('.sn-window');"
       "var s=document.querySelector('.markdown-preview-sizer');"

@@ -1,4 +1,4 @@
-import sys; sys.path.insert(0, r"/home/trism/.claude/jobs/014c964f/tmp/replay")
+import sys; sys.path.insert(0, r"G:\AI\Ethereal\ui-extractor")
 import note_reader, machine, statistics
 p = machine.here("/mnt/g/Images/Move Memory Files Out of Claude Code Into Obsidian/Images/00-04-10_pane2.png")
 orig = note_reader.clip_to_column

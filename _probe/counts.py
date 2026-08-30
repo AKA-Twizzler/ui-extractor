@@ -1,9 +1,9 @@
 """How many rectangles each finder closes on every fixture frame."""
 import re, sys, cv2
-sys.path.insert(0, r"/home/trism/.claude/jobs/014c964f/tmp/replay")
+sys.path.insert(0, r"G:\AI\Ethereal\ui-extractor")
 import checks, overlay, shapes
 
-src = open(r"/home/trism/.claude/jobs/014c964f/tmp/replay\checks.py", encoding="utf-8").read()
+src = open(r"G:\AI\Ethereal\ui-extractor\checks.py", encoding="utf-8").read()
 pairs = sorted(set(re.findall(r'(?:regions|frame)\(\s*"([a-z0-9]+)"\s*,\s*"([0-9:]+)"', src)))
 print("%-10s %-9s %5s %5s   %s" % ("video", "at", "over", "shape", "shapes boxes (% of screen)"))
 for key, stamp in pairs:

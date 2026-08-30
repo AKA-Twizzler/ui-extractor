@@ -1,5 +1,5 @@
 import sys, cv2
-sys.path.insert(0, r"/home/trism/.claude/jobs/014c964f/tmp/replay")
+sys.path.insert(0, r"G:\AI\Ethereal\ui-extractor")
 import checks, panes, overlay, shapes
 p = checks.frame("memfiles", "00:00:00")
 img = cv2.imread(p)

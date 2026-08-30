@@ -2,7 +2,7 @@
 both ways round, because containment measured zero and a rule that never
 fires is worth understanding before it is replaced."""
 import sys, os, json
-sys.path.insert(0, r"/home/trism/.claude/jobs/014c964f/tmp/replay"); os.chdir(r"/home/trism/.claude/jobs/014c964f/tmp/replay")
+sys.path.insert(0, r"G:\AI\Ethereal\ui-extractor"); os.chdir(r"G:\AI\Ethereal\ui-extractor")
 P = r"G:\Images\Move Memory Files Out of Claude Code Into Obsidian\records.jsonl"
 PICS = {"00:00:00","00:00:10","00:00:30","00:00:50","00:01:00","00:01:20","00:01:30","00:01:40",
         "00:01:50","00:02:20","00:02:50","00:03:00","00:03:30","00:03:50","00:04:00"}

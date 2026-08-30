@@ -1,4 +1,4 @@
-import sys; sys.path.insert(0, r"/home/trism/.claude/jobs/014c964f/tmp/replay")
+import sys; sys.path.insert(0, r"G:\AI\Ethereal\ui-extractor")
 import cv2, numpy as np, machine, style_reader as sr, tree_reader, note_reader
 base = "/mnt/g/Images/Move Memory Files Out of Claude Code Into Obsidian/Images/"
 for name in ("00-03-00.png", "00-04-10.png", "00-01-20.png"):

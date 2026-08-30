@@ -1,5 +1,5 @@
 import sys, cv2
-sys.path.insert(0, r"/home/trism/.claude/jobs/014c964f/tmp/replay")
+sys.path.insert(0, r"G:\AI\Ethereal\ui-extractor")
 import shapes
 img = cv2.imread(r"G:\Images\How To Set Up Claude Code With Obsidian\Images\00-02-09.png")
 try:
