@@ -121,7 +121,9 @@ def ink_bands(rgb, xl, x1, y0, y1, least=2):
     # the rows between the writing carry a little ink of their own (a
     # stroke of an icon, a mark): the least is a step above that level
     base = int(np.percentile(cnt, 25)) if len(cnt) else 0
-    least = max(least, 12, base + 12)
+    # a selected row's band carries a few light pixels on its own rows;
+    # writing carries hundreds
+    least = max(least, 12, base + 12, int(0.04 * np.percentile(cnt, 90)) if len(cnt) else 0)
     out, start = [], None
     for i, v in enumerate(cnt):
         if v > least and start is None:
@@ -165,12 +167,10 @@ def find_header(rgb, xl, x1, wb):
                 else:
                     merged.append([s_, e_])
             merged = [(s_, e_) for s_, e_ in merged if e_ - s_ >= 35]     # a sort chevron is no column
-            if merged:
-                # a bar's stub or a line standing in the header's band is far
-                # narrower than any heading
-                widths = sorted(e_ - s_ for s_, e_ in merged)
-                med_w = widths[len(widths) // 2]
-                merged = [(s_, e_) for s_, e_ in merged if e_ - s_ >= 0.35 * med_w]
+            # a bar's stub or a divider standing in the header's band is a
+            # solid block; a heading is letters, under half ink
+            ink2 = ink_mask(band)
+            merged = [(s_, e_) for s_, e_ in merged if ink2[:, s_:e_].mean() < 0.6]
             cols = []
             for s_, e_ in merged:
                 got = ocr(rgb[max(0, a - 6):b + 6, max(0, xl + s_ - 10):xl + e_ + 10], 3.0)
@@ -179,21 +179,28 @@ def find_header(rgb, xl, x1, wb):
     return None, None, []
 
 def bottom_border(g, wb, xl):
-    """The window's bottom border: a light line across the list's width in
-    the window's bottom seventh (or just below the measured box)."""
+    """The window's bottom border or the pathbar's line: a thin run of rows
+    (eight at most) in the window's bottom seventh, even across the list's
+    width and a step lighter than the dark rows around it. A selected row's
+    band is even too, but sixty rows deep."""
     x0, y0, x1, y1 = wb
     h = y1 - y0
     xs = slice(xl + 40, x1 - 60)
-    bg = float(np.median(g[y0 + h // 3:y0 + 2 * h // 3, xs]))
-    ys_ = list(range(y1 - int(0.15 * h), min(g.shape[0], y1 + int(0.06 * h))))
-    across = [(g[y, xs] > bg + 20).mean() > 0.9 for y in ys_]
+    ys_ = list(range(max(0, y1 - int(0.15 * h)), min(g.shape[0], y1 + int(0.06 * h))))
+    if len(ys_) < 3:
+        return y1
+    rows = g[ys_[0]:ys_[-1] + 1, xs]
+    means = rows.mean(axis=1)
+    spread = np.percentile(rows, 95, axis=1) - np.percentile(rows, 5, axis=1)
+    dark = float(np.percentile(means, 10))
+    line = (spread < 25) & (means > dark + 12)
     i = 0
-    while i < len(across):
-        if across[i]:
+    while i < len(ys_):
+        if line[i]:
             j = i
-            while j + 1 < len(across) and across[j + 1]:
+            while j + 1 < len(ys_) and line[j + 1]:
                 j += 1
-            if j - i + 1 <= 8:              # a line; a selected row is a band twenty rows deep
+            if j - i + 1 <= 8:
                 return ys_[i]
             i = j + 1
         else:
@@ -270,7 +277,16 @@ def read_cell(rgb, ya, yb, ca, cb, twice=False):
             if not w and pieces:
                 words[i] = pieces.pop(0)
     words = [w for w in words if w]
-    return " ".join(words), (float(np.mean(scores)) if scores else 0.0), blank
+    text = " ".join(words)
+    if not twice:
+        # A DIM SMALL WORD ("6,", "at") leaves no crop at all. The whole cell
+        # read at once stands when it holds more letters than the words did.
+        whole = ocr(rgb[max(0, ya - 6):min(H, yb + 6), ca:cb], 3.0)
+        wtxt = " ".join(w[4].strip() for w in sorted(whole, key=lambda w: w[0])).strip()
+        alnum = lambda s: len(re.sub(r"[^A-Za-z0-9]", "", s))
+        if alnum(wtxt) >= alnum(text) + 2:
+            text = wtxt; scores = [w[5] for w in whole]
+    return text, (float(np.mean(scores)) if scores else 0.0), blank
 
 def _close(a, b):
     if not a or not b:
@@ -348,8 +364,10 @@ def read_frame(path, out_dir=None, title_hint="memory", wb=None, list_box=False)
     # the pitch is the commonest gap between rows of writing; with fewer
     # than three rows in view, or gaps that disagree (a black band across
     # a mid-scroll frame), a row is about twice the height of its writing
-    if len(gaps) >= 2 and float(np.max(gaps)) < 1.5 * float(np.min(gaps)):
-        pitch = int(np.median(gaps))
+    med_gap = float(np.median(gaps)) if len(gaps) else 0.0
+    agree = [g_ for g_ in gaps if abs(g_ - med_gap) <= 0.2 * med_gap] if len(gaps) else []
+    if len(gaps) >= 2 and len(agree) >= 0.6 * len(gaps):
+        pitch = int(med_gap)
     else:
         pitch = int(2.1 * band_h0)
     # the pathbar is one row's height above the bottom border; the list ends above it
