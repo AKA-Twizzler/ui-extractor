@@ -246,16 +246,59 @@ def _join(got, height):
 _FOLD = lambda s: re.sub(r"[^a-z0-9]", "", s.lower())
 _MARKS = lambda s: s.count("_") + s.count(".") + s.count(",") + s.count(":")
 
+def _ratio(a, b):
+    import difflib
+    return difflib.SequenceMatcher(None, a, b).ratio() if a and b else 0.0
+
+def _medoid(cands):
+    """The reading most like the others, once folded to letters and digits;
+    the index into cands, or None when every reading is empty."""
+    folds = [_FOLD(c) for c in cands]
+    best_i, best_s = None, -1.0
+    for i, f in enumerate(folds):
+        if not f:
+            continue
+        s = sum(_ratio(f, g_) for j, g_ in enumerate(folds) if j != i and g_)
+        if s > best_s:
+            best_i, best_s = i, s
+    return best_i
+
+def _respace(txt, alt):
+    """txt's letters with alt's spaces, where the two hold the same letters."""
+    ft, fa = _FOLD(txt), _FOLD(alt)
+    if len(ft) != len(fa) or " " in txt or " " not in alt:
+        return txt
+    cuts, n = set(), 0
+    for ch in alt:
+        if ch == " ":
+            cuts.add(n)
+        elif re.match(r"[a-z0-9]", ch.lower()):
+            n += 1
+    out, n = "", 0
+    for ch in txt:
+        if n in cuts and n and not out.endswith(" "):
+            out += " "; cuts.discard(n)
+        out += ch
+        if re.match(r"[a-z0-9]", ch.lower()):
+            n += 1
+    return out
+
+_WEIGHT = lambda s: 2 * s.count("_") + s.count(".") + s.count(",") + s.count(":")
+
+def _rapid_text(crop, scale, height):
+    got = ocr(crop, scale)
+    return _join(got, height), [w[5] for w in got]
+
 def read_cell(rgb, ya, yb, ca, cb, twice=False):
-    """A cell's text. A name (twice=True) is one crop over the whole of its
-    ink, read by both engines at two sizes; the reading with the most marks
-    (dots, underscores) and letters stands where the two agree once folded.
-    Any other cell is read word by word (each word cropped with its own
-    margin, the neighbour's ink kept out, the crop padded with background)
-    and then whole by both engines: the second engine's reading, which
-    keeps the spaces and commas the first drops, stands where it agrees
-    with the first once folded. Returns (text, mean confidence, the count
-    of words the engine could not read)."""
+    """A cell's text by majority. A name (twice=True) is one crop over the
+    whole of its ink, read by the first engine at two sizes and by the
+    second engine once; the reading most like the other two stands, with
+    the second engine's underscores and spaces laid over it where its
+    letters agree. Any other cell is read whole at two sizes, word by word
+    (each word cropped with its own margin, padded with background), and by
+    the second engine; the reading most like the others stands, and a date
+    or a size then takes the shape Finder writes it in. Returns (text, mean
+    confidence, the count of words the engine could not read)."""
     H = rgb.shape[0]
     boxes = word_crops(rgb, ya, yb, ca, cb)
     if not boxes:
@@ -264,25 +307,25 @@ def read_cell(rgb, ya, yb, ca, cb, twice=False):
     height = max(8, yb - ya)
     x0_, x1_ = max(ca, boxes[0][0] - 14), min(cb, boxes[-1][1] + 14)
     whole_crop = rgb[y0_:y1_, x0_:x1_]
+    r3, s3 = _rapid_text(whole_crop, 3.0, height)
+    r2, s2 = _rapid_text(whole_crop, 2.0, height)
+    alt = re.sub(r"\s+", " ", tess_word(whole_crop)).strip()
     if twice:
-        got = ocr(whole_crop, 3.0)
-        got2 = ocr(whole_crop, 2.0)
-        if got2 and (not got or np.mean([w[5] for w in got2]) > np.mean([w[5] for w in got])):
-            got = got2
-        txt = _join(got, height)
-        alt = re.sub(r"\s+", " ", tess_word(whole_crop)).strip()
-        fa, fb = _FOLD(alt), _FOLD(txt)
-        # the ink's own gaps say how many words the name has (a gap of a
-        # fifth of the height or more); the second engine keeps the spaces
-        # the first drops ("00Inbox"), and stands where its letters agree
-        k = 1 + sum(1 for i in range(1, len(boxes)) if boxes[i][0] - boxes[i - 1][1] >= 0.2 * height)
-        if alt and txt and _close(fa, fb) and alt.count(" ") == k - 1 and txt.count(" ") != k - 1:
-            txt = alt
-        elif alt and (not txt or (_close(fa, fb) and (_MARKS(alt), len(fa)) > (_MARKS(txt), len(fb)))):
-            txt = alt
+        cands = [r3, r2, alt]
+        i = _medoid(cands)
+        if i is None:
+            return "", 0.0, 1
+        txt = cands[i]
+        scores = s3 if i == 0 else (s2 if i == 1 else (s3 or s2))
+        if alt and txt is not alt and _ratio(_FOLD(alt), _FOLD(txt)) >= 0.85:
+            if _WEIGHT(alt) > _WEIGHT(txt):
+                txt = alt                    # the second engine keeps the underscores
+            else:
+                txt = _respace(txt, alt)     # and the spaces
+        txt = re.sub(r"^[^A-Za-z0-9._~$]+", ".", txt)      # a hidden file's leading dot, read as a dash or a comma
+        txt = re.sub(r"\. (?=[a-z])", ".", txt)             # no space after a dot inside a name
         if os.environ.get("PF_DEBUG"):
-            print("   name boxes", boxes, "k", k, "rapid", repr(_join(got, height)), "tess", repr(alt), "->", repr(txt))
-        scores = [w[5] for w in got]
+            print("   name", repr(r3), repr(r2), repr(alt), "->", repr(txt))
         return txt, (float(np.mean(scores)) if scores else 0.0), (0 if txt else 1)
     words, scores, blank = [], [], 0
     for i, (wa, wb_) in enumerate(boxes):
@@ -297,24 +340,25 @@ def read_cell(rgb, ya, yb, ca, cb, twice=False):
             words.append(w_); scores.extend(w[5] for w in got)
         else:
             blank += 1
-    text = " ".join(words)
-    whole = ocr(whole_crop, 3.0)
-    wtxt = _join(whole, height)
-    alt = re.sub(r"\s+", " ", tess_word(whole_crop)).strip()
-    alnum = lambda s: len(_FOLD(s))
-    # the whole cell read at once holds every letter the word crops hold,
-    # without the crops' doubled edges; the words stand only where the
-    # whole missed a word of theirs
-    best = wtxt if alnum(wtxt) >= alnum(text) - 1 else text
-    if alt and _close(_FOLD(alt), _FOLD(best)) and alnum(alt) >= alnum(best) and _MARKS(alt) >= _MARKS(best):
-        best = alt                    # the second engine keeps the spaces and commas
-    shaped = finder_shape(best)
-    if shaped is None and best is wtxt and alt and _close(_FOLD(alt), _FOLD(text)):
-        shaped = finder_shape(alt)
-    text = shaped if shaped is not None else best
-    if text is wtxt:
-        scores = [w[5] for w in whole]
-    return text, (float(np.mean(scores)) if scores else 0.0), blank
+    pw = " ".join(words)
+    cands = [r3, r2, pw, alt]
+    i = _medoid(cands)
+    if i is None:
+        return "", 0.0, blank
+    text = cands[i]
+    scores = [s3, s2, scores, s3 or s2][i]
+    if alt and text is not alt and _ratio(_FOLD(alt), _FOLD(text)) >= 0.85 and _WEIGHT(alt) >= _WEIGHT(text):
+        text = alt                           # the second engine keeps the commas
+    shaped = finder_shape(text)
+    if shaped is None:
+        for c in cands:
+            if c and c is not text and _ratio(_FOLD(c), _FOLD(text)) >= 0.85:
+                shaped = finder_shape(c)
+                if shaped is not None:
+                    break
+    if os.environ.get("PF_DEBUG"):
+        print("   cell", [repr(c) for c in cands], "->", repr(shaped if shaped is not None else text))
+    return (shaped if shaped is not None else text), (float(np.mean(scores)) if scores else 0.0), blank
 
 def finder_shape(s):
     """A date or a size in the shape Finder writes it, from a reading that
