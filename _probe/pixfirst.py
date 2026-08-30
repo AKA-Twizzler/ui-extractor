@@ -194,16 +194,18 @@ def bottom_border(g, wb, xl):
     rows = g[ys_[0]:ys_[-1] + 1, xs]
     means = rows.mean(axis=1)
     spread = np.percentile(rows, 95, axis=1) - np.percentile(rows, 5, axis=1)
-    dark = float(np.percentile(means, 10))
-    line = (spread < 25) & (means > dark + 12)
+    even = spread < 25
     i = 0
     while i < len(ys_):
-        if line[i]:
+        if even[i]:
             j = i
-            while j + 1 < len(ys_) and line[j + 1]:
+            while j + 1 < len(ys_) and even[j + 1]:
                 j += 1
-            if j - i + 1 <= 8:
-                return ys_[i]
+            if j - i + 1 <= 8 and i >= 4 and j + 5 <= len(ys_):
+                # a line stands a step above the rows on both sides of it
+                above = float(np.median(means[i - 4:i])); below = float(np.median(means[j + 1:j + 5]))
+                if float(means[i:j + 1].max()) > max(above, below) + 10:
+                    return ys_[i]
             i = j + 1
         else:
             i += 1
@@ -230,64 +232,73 @@ def word_crops(rgb, ya, yb, ca, cb, gap=10):
             merged.append([s_, e_])
     return [(ca + s_, ca + e_) for s_, e_ in merged if e_ - s_ >= 4]
 
+def _join(got, height):
+    """The engine's pieces in reading order, a space where the gap between
+    two pieces is a third of the writing's height or more."""
+    got = sorted(got, key=lambda w: w[0])
+    out = ""
+    for i, w in enumerate(got):
+        if i and (w[0] - got[i - 1][2]) >= 0.3 * height:
+            out += " "
+        out += w[4].strip()
+    return out.strip()
+
+_FOLD = lambda s: re.sub(r"[^a-z0-9]", "", s.lower())
+_MARKS = lambda s: s.count("_") + s.count(".") + s.count(",") + s.count(":")
+
 def read_cell(rgb, ya, yb, ca, cb, twice=False):
-    """A cell's text, one reading per word, joined with spaces: each word
-    cropped with fourteen columns of margin and six rows, read at three
-    times its size (four for a word under forty columns). Returns (text,
-    the mean confidence, the count of words the engine could not read)."""
-    words, scores, blank = [], [], 0
+    """A cell's text. A name (twice=True) is one crop over the whole of its
+    ink, read by both engines at two sizes; the reading with the most marks
+    (dots, underscores) and letters stands where the two agree once folded.
+    Any other cell is read word by word (each word cropped with its own
+    margin, the neighbour's ink kept out, the crop padded with background)
+    and then whole by both engines: the second engine's reading, which
+    keeps the spaces and commas the first drops, stands where it agrees
+    with the first once folded. Returns (text, mean confidence, the count
+    of words the engine could not read)."""
     H = rgb.shape[0]
     boxes = word_crops(rgb, ya, yb, ca, cb)
-    for wa, wb_ in boxes:
-        crop = rgb[max(0, ya - 6):min(H, yb + 6), max(ca, wa - 14):min(cb, wb_ + 14)]
+    if not boxes:
+        return "", 0.0, 0
+    y0_, y1_ = max(0, ya - 6), min(H, yb + 6)
+    height = max(8, yb - ya)
+    x0_, x1_ = max(ca, boxes[0][0] - 14), min(cb, boxes[-1][1] + 14)
+    whole_crop = rgb[y0_:y1_, x0_:x1_]
+    if twice:
+        got = ocr(whole_crop, 3.0)
+        got2 = ocr(whole_crop, 2.0)
+        if got2 and (not got or np.mean([w[5] for w in got2]) > np.mean([w[5] for w in got])):
+            got = got2
+        txt = _join(got, height)
+        alt = re.sub(r"\s+", " ", tess_word(whole_crop)).strip()
+        fa, fb = _FOLD(alt), _FOLD(txt)
+        if alt and (not txt or (_close(fa, fb) and (_MARKS(alt), len(fa)) > (_MARKS(txt), len(fb)))):
+            txt = alt
+        scores = [w[5] for w in got]
+        return txt, (float(np.mean(scores)) if scores else 0.0), (0 if txt else 1)
+    words, scores, blank = [], [], 0
+    for i, (wa, wb_) in enumerate(boxes):
+        lg = (wa - boxes[i - 1][1]) if i else 100
+        rg = (boxes[i + 1][0] - wb_) if i + 1 < len(boxes) else 100
+        ml, mr = min(14, max(3, lg // 2)), min(14, max(3, rg // 2))
+        crop = rgb[y0_:y1_, max(ca, wa - ml):min(cb, wb_ + mr)]
+        crop = np.pad(crop, ((0, 0), (14 - ml, 14 - mr), (0, 0)), mode="edge")
         got = ocr(crop, 3.0 if (wb_ - wa) > 40 else 4.0)
-        if twice and (wb_ - wa) > 120:
-            # a long word (a file name) reads differently at two sizes; the
-            # engine's own confidence picks between them
-            got2 = ocr(crop, 2.0)
-            if got2 and (not got or np.mean([w[5] for w in got2]) > np.mean([w[5] for w in got])):
-                got = got2
-        txt = "".join(w[4] for w in sorted(got, key=lambda w: w[0])).strip()
-        if twice and (wb_ - wa) > 120:
-            # THE SECOND ENGINE ON A FILE NAME: the first drops underscores
-            # and reads a stroke as a dot; tesseract keeps them. Where the
-            # two agree once folded and only the second has the underscores,
-            # the second stands.
-            alt = tess_word(crop)
-            fa, fb = re.sub(r"[^a-z0-9]", "", alt.lower()), re.sub(r"[^a-z0-9]", "", txt.lower())
-            marks = lambda s: s.count("_") + s.count(".")
-            if alt and (not txt or (_close(fa, fb) and (marks(alt), len(fa)) > (marks(txt), len(fb)))):
-                txt = alt
-        if txt:
-            words.append(txt); scores.extend(w[5] for w in got)
+        w_ = "".join(w[4] for w in sorted(got, key=lambda w: w[0])).strip()
+        if w_:
+            words.append(w_); scores.extend(w[5] for w in got)
         else:
-            words.append(""); blank += 1
-    if blank and len(boxes) > 1:
-        # A WORD READ AS NOTHING (a lone digit, a two-letter word) takes its
-        # share of the whole cell read at once: the words read on their own
-        # are struck out of the whole, left to right, and what is left is
-        # the missing word
-        whole = ocr(rgb[max(0, ya - 6):min(H, yb + 6), ca:cb], 3.0)
-        rest = "".join(w[4] for w in sorted(whole, key=lambda w: w[0])).replace(" ", "")
-        for i, w in enumerate(words):
-            if w:
-                k = rest.find(w.replace(" ", ""))
-                if k >= 0:
-                    rest = rest[:k] + "\x00" * len(w.replace(" ", "")) + rest[k + len(w.replace(" ", "")):]
-        pieces = [s for s in rest.split("\x00") if s]
-        for i, w in enumerate(words):
-            if not w and pieces:
-                words[i] = pieces.pop(0)
-    words = [w for w in words if w]
+            blank += 1
     text = " ".join(words)
-    if not twice:
-        # A DIM SMALL WORD ("6,", "at") leaves no crop at all. The whole cell
-        # read at once stands when it holds more letters than the words did.
-        whole = ocr(rgb[max(0, ya - 6):min(H, yb + 6), ca:cb], 3.0)
-        wtxt = " ".join(w[4].strip() for w in sorted(whole, key=lambda w: w[0])).strip()
-        alnum = lambda s: len(re.sub(r"[^A-Za-z0-9]", "", s))
-        if alnum(wtxt) >= alnum(text) + 2:
-            text = wtxt; scores = [w[5] for w in whole]
+    whole = ocr(whole_crop, 3.0)
+    wtxt = _join(whole, height)
+    alnum = lambda s: len(_FOLD(s))
+    if alnum(wtxt) >= alnum(text) + 2:
+        # a dim small word ("6,", "at") left no crop at all; the whole holds it
+        text = wtxt; scores = [w[5] for w in whole]
+    alt = re.sub(r"\s+", " ", tess_word(whole_crop)).strip()
+    if alt and _close(_FOLD(alt), _FOLD(text)) and _MARKS(alt) >= _MARKS(text):
+        text = alt
     return text, (float(np.mean(scores)) if scores else 0.0), blank
 
 def _close(a, b):
@@ -306,7 +317,9 @@ def tess_word(rgb_crop):
         import cv2, verify_names
     except Exception:
         return ""
-    im = Image.fromarray(rgb_crop).convert("L")
+    # the darkest channel: white writing on a green or blue band stands
+    # as high as it does on black, and the band as low
+    im = Image.fromarray(rgb_crop.min(axis=2).astype(np.uint8))
     im = im.resize((im.width * 4, im.height * 4), Image.LANCZOS)
     g = np.asarray(im)
     ink = (255 - g) if float(np.median(g)) < 128 else g
@@ -373,7 +386,14 @@ def read_frame(path, out_dir=None, title_hint="memory", wb=None, list_box=False)
     else:
         pitch = int(2.1 * band_h0)
     # the pathbar is one row's height above the bottom border; the list ends above it
-    path_top = border - int(1.1 * pitch) if border < y1 + 2 else y1
+    # the line found is the pathbar's own top when rows of the box lie
+    # below it; the window's bottom border otherwise, with the pathbar above
+    if border >= y1 + 2:
+        path_top = y1
+    elif (y1 - border) > 0.6 * pitch:
+        path_top = border
+    else:
+        path_top = border - int(1.1 * pitch)
     list_bot = path_top - 2
     bands_ = [(a, b) for a, b in bands_ if a < list_bot - 4]
     band_h = int(np.median([b - a for a, b in bands_])) if bands_ else pitch // 2
