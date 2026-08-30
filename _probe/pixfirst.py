@@ -168,9 +168,11 @@ def find_header(rgb, xl, x1, wb):
                     merged.append([s_, e_])
             merged = [(s_, e_) for s_, e_ in merged if e_ - s_ >= 35]     # a sort chevron is no column
             # a bar's stub or a divider standing in the header's band is a
-            # solid block; a heading is letters, under half ink
+            # solid block, every column of it lit from the band's top to its
+            # bottom; a heading's letters vary in height column by column
             ink2 = ink_mask(band)
-            merged = [(s_, e_) for s_, e_ in merged if ink2[:, s_:e_].mean() < 0.6]
+            solid = lambda s_, e_: (ink2[:, s_:e_].mean(axis=0) >= 0.9).mean() >= 0.9
+            merged = [(s_, e_) for s_, e_ in merged if not solid(s_, e_)]
             cols = []
             for s_, e_ in merged:
                 got = ocr(rgb[max(0, a - 6):b + 6, max(0, xl + s_ - 10):xl + e_ + 10], 3.0)
@@ -377,7 +379,7 @@ def read_frame(path, out_dir=None, title_hint="memory", wb=None, list_box=False)
     band_h = int(np.median([b - a for a, b in bands_])) if bands_ else pitch // 2
     name_left = cols[0][0] if cols else xl + 60
     ic0, ic1 = max(xl, name_left - int(0.9 * pitch)), name_left - 4
-    col_lefts = [c[0] for c in cols] + [x1]
+    col_lefts = ([c[0] for c in cols] or [name_left]) + [x1]
     out_rows = []
     for (a, b) in bands_:
         cy = (a + b) / 2.0
