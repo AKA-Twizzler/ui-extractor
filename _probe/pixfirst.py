@@ -29,8 +29,10 @@ def load(path):
     return rgb, g
 
 def ocr(rgb_crop, scale=2.0):
-    """The words in a crop, upscaled for the engine: [(x0,y0,x1,y1,text,score)] in the crop's own pixels."""
-    im = Image.fromarray(rgb_crop)
+    """The words in a crop, upscaled for the engine: [(x0,y0,x1,y1,text,score)] in the crop's own pixels.
+    The contrast is stretched first: a dimmed window's grey writing on grey is nothing to the engine as it stands."""
+    from PIL import ImageOps
+    im = ImageOps.autocontrast(Image.fromarray(rgb_crop), cutoff=1)
     if scale != 1.0:
         im = im.resize((int(im.width * scale), int(im.height * scale)), Image.LANCZOS)
     arr = np.asarray(im)[:, :, ::-1].copy()      # BGR for the engine
@@ -148,9 +150,19 @@ def bottom_border(g, wb, xl):
     h = y1 - y0
     xs = slice(xl + 40, x1 - 60)
     bg = float(np.median(g[y0 + h // 3:y0 + 2 * h // 3, xs]))
-    for y in range(y1 - int(0.15 * h), min(g.shape[0], y1 + int(0.06 * h))):
-        if (g[y, xs] > bg + 20).mean() > 0.9:
-            return y
+    ys_ = list(range(y1 - int(0.15 * h), min(g.shape[0], y1 + int(0.06 * h))))
+    across = [(g[y, xs] > bg + 20).mean() > 0.9 for y in ys_]
+    i = 0
+    while i < len(across):
+        if across[i]:
+            j = i
+            while j + 1 < len(across) and across[j + 1]:
+                j += 1
+            if j - i + 1 <= 8:              # a line; a selected row is a band twenty rows deep
+                return ys_[i]
+            i = j + 1
+        else:
+            i += 1
     return y1
 
 def word_crops(rgb, ya, yb, ca, cb, gap=10):
@@ -249,7 +261,7 @@ def icon_of(rgb, y0, y1, x0, x1):
         return "file", int(lit.sum())
     return "none", 0
 
-def read_frame(path, out_dir=None, title_hint="memory", wb=None):
+def read_frame(path, out_dir=None, title_hint="memory", wb=None, list_box=False):
     rgb, g = load(path)
     H, W = g.shape
     if wb:
@@ -257,7 +269,8 @@ def read_frame(path, out_dir=None, title_hint="memory", wb=None):
     else:
         wb = window_box(path, g, title_hint) or [0, int(0.125 * H), int(0.62 * W), int(0.746 * H)]
     x0, y0, x1, y1 = wb
-    xl = divider(g, wb)
+    # a box that is the list pane itself has no sidebar inside it
+    xl = x0 if list_box else divider(g, wb)
     hdr_top, hdr_bot, cols = find_header(rgb, xl, x1, wb)
     if hdr_bot is None:
         hdr_top, hdr_bot = y0 + int(0.1 * (y1 - y0)), y0 + int(0.14 * (y1 - y0))
@@ -266,7 +279,14 @@ def read_frame(path, out_dir=None, title_hint="memory", wb=None):
     bands_ = ink_bands(rgb, xl, x1, list_top, border - 4)
     centers = [(a + b) / 2.0 for a, b in bands_]
     gaps = np.diff(centers)
-    pitch = int(np.median(gaps)) if len(gaps) else int(1.8 * np.median([b - a for a, b in bands_])) if bands_ else 40
+    band_h0 = int(np.median([b - a for a, b in bands_])) if bands_ else 20
+    # the pitch is the commonest gap between rows of writing; with fewer
+    # than three rows in view, or gaps that disagree (a black band across
+    # a mid-scroll frame), a row is about twice the height of its writing
+    if len(gaps) >= 2 and float(np.max(gaps)) < 1.5 * float(np.min(gaps)):
+        pitch = int(np.median(gaps))
+    else:
+        pitch = int(2.1 * band_h0)
     # the pathbar is one row's height above the bottom border; the list ends above it
     path_top = border - int(1.1 * pitch) if border < y1 + 2 else y1
     list_bot = path_top - 2

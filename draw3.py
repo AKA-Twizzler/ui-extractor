@@ -350,7 +350,7 @@ def pixfirst_rows(m, p, built):
             sys.path.insert(0, os.path.join(here, "_probe"))
         try:
             import pixfirst
-            rec = pixfirst.read_frame(fp, None, "", wb=box)
+            rec = pixfirst.read_frame(fp, None, "", wb=box, list_box=True)
         except Exception as e:
             print("PIXFIRST %s failed: %s" % (m.get("ts"), e), file=sys.stderr)
             return None
