@@ -5,7 +5,7 @@ frame has no rectangle near it, the box is in the wrong place or the wrong
 size, and no amount of looking at the note itself would say so.
 """
 import os, re, sys
-sys.path.insert(0, "/home/trism/.claude/jobs/014c964f/tmp/replay")
+sys.path.insert(0, "/mnt/g/AI/Ethereal/ui-extractor")
 import selfcheck as SC
 import shapes
 from PIL import Image

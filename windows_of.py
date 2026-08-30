@@ -1,6 +1,6 @@
 """Thin wrapper: the distinct windows of a frame live in shapes.windows."""
 import sys, os, glob
-sys.path.insert(0, "/home/trism/.claude/jobs/014c964f/tmp/replay")
+sys.path.insert(0, "/mnt/g/AI/Ethereal/ui-extractor")
 import shapes
 windows = shapes.windows
 if __name__ == "__main__":
