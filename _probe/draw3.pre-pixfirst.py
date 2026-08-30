@@ -323,62 +323,6 @@ def tidy_size(s):
     return f"{m.group(1)} {unit}", m.group(3).strip()
 
 
-
-def pixfirst_rows(m, p, built):
-    """PIXELS FIRST, WORDS SECOND (the rework): a Finder list's rows read
-    from the frame's own structure by `_probe/pixfirst` -- the header from
-    its band of writing, the rows from the ink, the icons from their colour,
-    the selected band from its own -- and the words then read into that
-    structure cell by cell. The old reading's toolbar, sidebar and path bar
-    are kept; its rows are replaced. Cached per frame and pane box under
-    `_probe/pixfirst-cache`. Returns a table tuple like build_tables', or
-    None where the frame is missing or no Finder header stands in the pane."""
-    import json as _json
-    fp = frame_of(m)
-    box = p.get("box")
-    if not fp or not os.path.exists(fp) or not box or len(box) != 4:
-        return None
-    here = os.path.dirname(os.path.abspath(__file__))
-    cache = os.path.join(here, "_probe", "pixfirst-cache")
-    os.makedirs(cache, exist_ok=True)
-    key = "%s__%s.json" % (os.path.splitext(os.path.basename(fp))[0], "-".join(str(int(v)) for v in box))
-    cp = os.path.join(cache, key)
-    if os.path.exists(cp):
-        rec = _json.load(open(cp, encoding="utf-8"))
-    else:
-        if os.path.join(here, "_probe") not in sys.path:
-            sys.path.insert(0, os.path.join(here, "_probe"))
-        try:
-            import pixfirst
-            rec = pixfirst.read_frame(fp, None, "", wb=box)
-        except Exception as e:
-            print("PIXFIRST %s failed: %s" % (m.get("ts"), e), file=sys.stderr)
-            return None
-        _json.dump(rec, open(cp, "w", encoding="utf-8"), indent=1)
-    cols = rec.get("columns") or []
-    if len(cols) < 2:
-        return None
-    rows = []
-    for r in rec.get("rows") or []:
-        cells = list(r.get("cells") or [])
-        if r.get("cut") or not cells or not cells[0].strip():
-            continue
-        cells = (cells + [""] * len(cols))[:len(cols)]
-        icon = {"folder": "green", "md": "white", "file": "white"}.get(r.get("icon"))
-        band = "green" if r.get("selected") else None
-        rows.append((cells, icon, band))
-    if not rows:
-        return None
-    std = Table.STANDARD.get(len(cols)) or [""] * len(cols)
-    head = [c[1] if (c[1] in FINDER_WORDS) else std[i] for i, c in enumerate(cols)]
-    top, side, bottom = (built[0], built[1], built[4]) if built else ([], [], [])
-    span = (float(cols[0][0]), float(rec["window"][2]))
-    pitch = float(rec.get("pitch") or 0)
-    if os.environ.get("SN_ZOOM"):
-        print("PIXFIRST %s: %d rows, %d columns, pitch %.0f, %s" % (m.get("ts"), len(rows), len(cols), pitch, "cached" if os.path.exists(cp) else "read"), file=sys.stderr)
-    return (top, side, head, rows, bottom, [], span, pitch * 0.5, pitch)
-
-
 class Table:
     def __init__(self):
         self.header = []
@@ -1782,10 +1726,6 @@ class State:
                 part = self.part_for("a list of columns", slot)
                 part["x0"] = p["box"][0] if part["x0"] is None else min(part["x0"], p["box"][0])
                 part["x1"] = p["box"][2] if part["x1"] is None else max(part["x1"], p["box"][2])
-                if os.environ.get("SN_PIXFIRST"):
-                    pf_ = pixfirst_rows(m, p, cut)
-                    if pf_:
-                        cut = pf_
                 part["model"].add(cut)
                 if p.get("_cut_pitch"):
                     self.at(m["ts"], make=True).pitch = p["_cut_pitch"]
@@ -1839,10 +1779,6 @@ class State:
                             loose = list(loose)
                             loose[3] = rows_
                         built = loose
-                if os.environ.get("SN_PIXFIRST"):
-                    pf_ = pixfirst_rows(m, p, built)
-                    if pf_:
-                        built = pf_
                 if built:
                     part["model"].add(built)
                     # AND WHAT THIS WINDOW'S ROWS REALLY MEASURE at this

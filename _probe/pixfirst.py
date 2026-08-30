@@ -249,10 +249,13 @@ def icon_of(rgb, y0, y1, x0, x1):
         return "file", int(lit.sum())
     return "none", 0
 
-def read_frame(path, out_dir, title_hint="memory"):
+def read_frame(path, out_dir=None, title_hint="memory", wb=None):
     rgb, g = load(path)
     H, W = g.shape
-    wb = window_box(path, g, title_hint) or [0, int(0.125 * H), int(0.62 * W), int(0.746 * H)]
+    if wb:
+        wb = [int(v) for v in wb]
+    else:
+        wb = window_box(path, g, title_hint) or [0, int(0.125 * H), int(0.62 * W), int(0.746 * H)]
     x0, y0, x1, y1 = wb
     xl = divider(g, wb)
     hdr_top, hdr_bot, cols = find_header(rgb, xl, x1, wb)
@@ -301,6 +304,8 @@ def read_frame(path, out_dir, title_hint="memory"):
     side = shapes.scroll_thumb(path, [max(0, xl - 400), y0, xl - 6, y1], reach=min(400, max(40, xl - 6)))
     rec = {"frame": os.path.basename(path), "window": wb, "divider": int(xl), "header": [int(hdr_top), int(hdr_bot)], "path_top": int(path_top),
            "pitch": pitch, "columns": cols, "rows": out_rows, "thumb": thumb, "side_thumb": side}
+    if not out_dir:
+        return rec
     os.makedirs(out_dir, exist_ok=True)
     stem = os.path.splitext(os.path.basename(path))[0]
     with open(os.path.join(out_dir, stem + ".json"), "w", encoding="utf-8") as f:
