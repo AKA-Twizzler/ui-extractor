@@ -303,7 +303,8 @@ def _lookalike(txt, alt):
     if not ft or not fa:
         return txt
     def run_class(s, i):
-        # the run of letters-and-digits round index i in a folded string, as one class or mixed
+        # the token (letters and digits unbroken by a space or a mark)
+        # round index i of the original string, as one class or mixed
         a = i
         while a > 0 and s[a - 1].isalnum():
             a -= 1
@@ -323,7 +324,7 @@ def _lookalike(txt, alt):
         for k in range(i2 - i1):
             a_, b_ = ft[i1 + k], fa[j1 + k]
             if (a_, b_) in _LOOK or (b_, a_) in _LOOK:
-                if run_class(ft, i1 + k) == "mixed" and run_class(fa, j1 + k) != "mixed":
+                if run_class(txt, pt[i1 + k]) == "mixed" and run_class(alt, pa[j1 + k]) != "mixed":
                     out[pt[i1 + k]] = alt[pa[j1 + k]]
     return "".join(out)
 
@@ -393,7 +394,7 @@ def read_cell(rgb, ya, yb, ca, cb, twice=False):
     if twice:
         cands = [r3, r2, alt]
         i = _medoid(cands)
-        if i is None:
+        if i is None or (not r3 and not r2 and len(_FOLD(alt)) < 3):
             return "", 0.0, 1
         txt = cands[i]
         scores = s3 if i == 0 else (s2 if i == 1 else (s3 or s2))
@@ -477,6 +478,8 @@ def _close(a, b):
     diff = sum(1 for x, y in zip(a[:n], b[:n]) if x != y) + abs(len(a) - len(b))
     return diff <= max(2, len(a) // 6)
 
+_UP = [1]      # the frame's enlargement while it is read (1 or 2), for the second engine's own scale
+
 def tess_word(rgb_crop):
     """One word read by the second engine: enlarged four times, turned to
     dark writing on light paper, one line (psm 7)."""
@@ -487,7 +490,8 @@ def tess_word(rgb_crop):
     # the darkest channel: white writing on a green or blue band stands
     # as high as it does on black, and the band as low
     im = Image.fromarray(rgb_crop.min(axis=2).astype(np.uint8))
-    im = im.resize((im.width * 4, im.height * 4), Image.LANCZOS)
+    k = max(2, 4 // _UP[0])                 # four times at one-to-one; two on a frame already doubled
+    im = im.resize((im.width * k, im.height * k), Image.LANCZOS)
     g = np.asarray(im)
     ink = (255 - g) if float(np.median(g)) < 128 else g
     try:
