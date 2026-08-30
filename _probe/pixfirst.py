@@ -285,6 +285,47 @@ def _respace(txt, alt):
     return out
 
 _WEIGHT = lambda s: 2 * s.count("_") + s.count(".") + s.count(",") + s.count(":")
+_LOOK = {("o", "0"), ("l", "1"), ("i", "1"), ("s", "5"), ("b", "8"), ("z", "2"), ("g", "9"), ("q", "9")}
+
+def _lookalike(txt, alt):
+    """txt with a letter swapped for the digit alt read there (or a digit
+    for alt's letter) where the two are look-alikes and alt's run of
+    characters is of one class (all digits, all letters) while txt's is
+    mixed: "0o" beside "00" is a doubled zero, "O6" beside "06" a six."""
+    import difflib
+    def fold_map(s):
+        pos, f = [], ""
+        for i, ch in enumerate(s):
+            if re.match(r"[A-Za-z0-9]", ch):
+                pos.append(i); f += ch.lower()
+        return pos, f
+    pt, ft = fold_map(txt); pa, fa = fold_map(alt)
+    if not ft or not fa:
+        return txt
+    def run_class(s, i):
+        # the run of letters-and-digits round index i in a folded string, as one class or mixed
+        a = i
+        while a > 0 and s[a - 1].isalnum():
+            a -= 1
+        b = i
+        while b + 1 < len(s) and s[b + 1].isalnum():
+            b += 1
+        seg = s[a:b + 1]
+        if seg.isdigit():
+            return "digit"
+        if seg.isalpha():
+            return "alpha"
+        return "mixed"
+    out = list(txt)
+    for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, ft, fa).get_opcodes():
+        if tag != "replace" or (i2 - i1) != (j2 - j1):
+            continue
+        for k in range(i2 - i1):
+            a_, b_ = ft[i1 + k], fa[j1 + k]
+            if (a_, b_) in _LOOK or (b_, a_) in _LOOK:
+                if run_class(ft, i1 + k) == "mixed" and run_class(fa, j1 + k) != "mixed":
+                    out[pt[i1 + k]] = alt[pa[j1 + k]]
+    return "".join(out)
 
 def _undouble(txt, alt):
     """txt with a letter struck out wherever it doubles a letter that alt,
@@ -302,7 +343,7 @@ def _undouble(txt, alt):
     for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, ft, fa).get_opcodes():
         if tag == "equal":
             continue
-        if tag == "delete" and i2 - i1 == 1 and i1 > 0 and ft[i1] == ft[i1 - 1]:
+        if tag == "delete" and i2 - i1 == 1 and ((i1 > 0 and ft[i1] == ft[i1 - 1]) or (i2 < len(ft) and ft[i1] == ft[i2])):
             drop.append(pos[i1]); continue
         if tag == "replace" and (i2 - i1) == (j2 - j1):
             continue                       # a letter read differently is no reason to strike one
@@ -331,11 +372,16 @@ def read_cell(rgb, ya, yb, ca, cb, twice=False):
         return "", 0.0, 0
     y0_, y1_ = max(0, ya - 6), min(H, yb + 6)
     height = max(8, yb - ya)
-    x0_, x1_ = max(ca, boxes[0][0] - 14), min(cb, boxes[-1][1] + 14)
+    x0_, x1_ = max(ca, boxes[0][0] - 6), min(cb, boxes[-1][1] + 6)
     whole_crop = rgb[y0_:y1_, x0_:x1_]
-    # padded with its own edges: the engine's detector drops a first word
-    # or reads two letters of seven from a crop cut close
-    whole_crop = np.pad(whole_crop, ((8, 8), (40, 40), (0, 0)), mode="edge")
+    # padded forty columns each side with its own background (each row's
+    # median colour, so a green band pads green and an icon's edge is not
+    # smeared into a letter): the engine's detector drops a first word or
+    # reads two letters of seven from a crop cut close
+    bg = np.median(whole_crop, axis=1, keepdims=True).astype(whole_crop.dtype)
+    side = np.repeat(bg, 40, axis=1)
+    whole_crop = np.concatenate([side, whole_crop, side], axis=1)
+    whole_crop = np.pad(whole_crop, ((8, 8), (0, 0), (0, 0)), mode="edge")
     r3, s3 = _rapid_text(whole_crop, 3.0, height)
     r2, s2 = _rapid_text(whole_crop, 2.0, height)
     alt = re.sub(r"\s+", " ", tess_word(whole_crop)).strip()
@@ -352,7 +398,7 @@ def read_cell(rgb, ya, yb, ca, cb, twice=False):
             if c is not txt and len(_FOLD(c)) >= len(_FOLD(txt)) + 3 and _FOLD(txt) in _FOLD(c):
                 txt = c
         if alt and txt is not alt and _ratio(_FOLD(alt), _FOLD(txt)) >= 0.85:
-            txt = _undouble(txt, alt)
+            txt = _lookalike(_undouble(txt, alt), alt)
             if _WEIGHT(alt) > _WEIGHT(txt):
                 txt = alt                    # the second engine keeps the underscores
             else:
@@ -407,9 +453,14 @@ def finder_shape(s):
     holds the letters and digits but not the spaces: "Jun 30, 2026 at 5:54
     PM", "Today at 8:47 PM", "57 KB". None where the reading is neither."""
     f = re.sub(r"\s+", "", s)
-    m = re.fullmatch(r"([A-Z][a-z]{2})(\d{1,2})[,.]?(\d{4})(?:at)?(\d{1,2})[:;.](\d{2})(AM|PM)", f)
+    m = re.fullmatch(r"([A-Za-z]{3})(\d{1,2})[,.]?(\d{4})(?:at)?(\d{1,2})[:;.](\d{2})(AM|PM)", f)
     if m:
-        return "%s %s, %s at %s:%s %s" % m.groups()
+        mon = m.group(1)
+        months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        near = max(months, key=lambda x: _ratio(x.lower(), mon.lower()))
+        if _ratio(near.lower(), mon.lower()) < 0.66:
+            return None
+        return "%s %s, %s at %s:%s %s" % ((near,) + m.groups()[1:])
     m = re.fullmatch(r"(Today|Yesterday)(?:at)?(\d{1,2})[:;.](\d{2})(AM|PM)", f)
     if m:
         return "%s at %s:%s %s" % m.groups()
@@ -545,6 +596,11 @@ def read_frame(path, out_dir=None, title_hint="memory", wb=None, list_box=False)
                 cells.append(""); continue
             txt, sc, blank = read_cell(rgb, ya, yb, ca, cb, twice=(k == 0))
             cells.append(txt); scores.append(sc); blanks += blank
+        if icon == "folder" and len(cells) == 4:
+            if not re.search(r"\d", cells[2]):
+                cells[2] = "--"                # a folder has no size
+            if cells[3] and _ratio(cells[3].lower(), "folder") >= 0.66:
+                cells[3] = "Folder"
         conf = float(np.mean([s for s in scores if s > 0])) if any(s > 0 for s in scores) else 0.0
         if conf < 0.7:
             cut = True                     # read too poorly to stand: a row the edge or the pointer spoiled
