@@ -529,6 +529,7 @@ def read_frame(path, out_dir=None, title_hint="memory", wb=None, list_box=False)
     # wide is read at twice its size so the same rules hold, and every
     # measure is halved again on the way out
     up = 2 if (wb[2] - wb[0]) < 1600 else 1
+    _UP[0] = up
     if up == 2:
         im2 = Image.fromarray(rgb).resize((W * 2, H * 2), Image.LANCZOS)
         rgb = np.asarray(im2)
