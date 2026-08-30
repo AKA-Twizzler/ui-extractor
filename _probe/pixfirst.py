@@ -62,7 +62,8 @@ def ink_mask(rgb_region, floor=55, lift=30):
         for y in range(h):
             run = np.where(ink[y], run + 1, 0)
             best = np.maximum(best, run)
-        ink[:, best > 0.2 * h] = False
+        # a row of writing is thirty rows deep at most; a bar runs far past that
+        ink[:, best > max(0.2 * h, 60)] = False
     return ink
 
 def steps(profile, least=6.0):
