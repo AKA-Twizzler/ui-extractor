@@ -43,6 +43,20 @@ def ocr(rgb_crop, scale=2.0):
         out.append((min(xs), min(ys), max(xs), max(ys), text, float(score)))
     return out
 
+
+def ink_mask(rgb_region, floor=60, lift=45):
+    """The writing in a region: pixels whose darkest channel stands `lift`
+    above the region's own background (the median), never under `floor`,
+    so a dimmed window's grey writing counts as its white does; a column
+    lit in most rows is a line, not writing, and is dropped."""
+    mn = rgb_region.min(axis=2)
+    thr = max(floor, float(np.median(mn)) + lift)
+    ink = mn > thr
+    if ink.shape[0] >= 8:
+        col_share = ink.mean(axis=0)
+        ink[:, col_share > 0.7] = False
+    return ink
+
 def steps(profile, least=6.0):
     """Where a 1-D profile steps by at least `least`: [(index, delta)]."""
     d = np.diff(profile)
@@ -89,10 +103,13 @@ def ink_bands(rgb, xl, x1, y0, y1, least=2):
     colour is not ink). [(top, bottom)] in frame pixels."""
     # the bar at the right edge is not ink: stop sixty short of it
     c = rgb[y0:y1, xl + 20:x1 - 60]
-    ink = c.min(axis=2) > 100
+    ink = ink_mask(c)
     cnt = ink.sum(axis=1).astype(int)
     cnt[cnt > 0.6 * ink.shape[1]] = 0        # a line across the width is a border, not writing
-    least = max(least, 12)
+    # the rows between the writing carry a little ink of their own (a
+    # stroke of an icon, a mark): the least is a step above that level
+    base = int(np.percentile(cnt, 25)) if len(cnt) else 0
+    least = max(least, 12, base + 12)
     out, start = [], None
     for i, v in enumerate(cnt):
         if v > least and start is None:
@@ -120,7 +137,7 @@ def find_header(rgb, xl, x1, wb):
             # the column lefts from the header's own ink: runs of columns
             # holding light pixels, split at gaps of thirty or more
             band = rgb[a:b, xl:x1]
-            ink = (band.min(axis=2) > 90).sum(axis=0)
+            ink = ink_mask(band, floor=55, lift=35).sum(axis=0)
             groups, start = [], None
             for i, v in enumerate(ink):
                 if v > 0 and start is None:
@@ -169,7 +186,7 @@ def word_crops(rgb, ya, yb, ca, cb, gap=10):
     """A cell's words as separate crops, split at gaps of `gap` columns
     with no ink: [(x0, x1)] in frame pixels."""
     band = rgb[ya:yb, ca:cb]
-    ink = (band.min(axis=2) > 100).sum(axis=0)
+    ink = ink_mask(band).sum(axis=0)
     runs, start = [], None
     for i, v in enumerate(ink):
         if v > 0 and start is None:
@@ -268,6 +285,17 @@ def read_frame(path, out_dir=None, title_hint="memory", wb=None, list_box=False)
         wb = [int(v) for v in wb]
     else:
         wb = window_box(path, g, title_hint) or [0, int(0.125 * H), int(0.62 * W), int(0.746 * H)]
+    # THE RULES WERE SET ON A ZOOMED FRAME, where a row is sixty rows deep
+    # and a word's margin fourteen columns; a window under 1600 columns
+    # wide is read at twice its size so the same rules hold, and every
+    # measure is halved again on the way out
+    up = 2 if (wb[2] - wb[0]) < 1600 else 1
+    if up == 2:
+        im2 = Image.fromarray(rgb).resize((W * 2, H * 2), Image.LANCZOS)
+        rgb = np.asarray(im2)
+        g = np.asarray(im2.convert("L"), dtype=np.float32)
+        wb = [v * 2 for v in wb]
+        H, W = g.shape
     x0, y0, x1, y1 = wb
     # a box that is the list pane itself has no sidebar inside it
     xl = x0 if list_box else divider(g, wb)
@@ -300,6 +328,12 @@ def read_frame(path, out_dir=None, title_hint="memory", wb=None, list_box=False)
         cy = (a + b) / 2.0
         ry0, ry1 = int(cy - pitch / 2.0), int(cy + pitch / 2.0)
         cut = (a - list_top <= 12) or (list_bot - b <= 12) or ((b - a) < 0.75 * band_h)
+        # a black band across a mid-scroll frame touching the row's writing
+        # took part of it: the rows just above and below the writing, dark
+        # across the width
+        for yy in (max(list_top, a - 4), min(list_bot - 1, b + 3)):
+            if (g[yy, xl + 40:x1 - 60] < 12).mean() > 0.9:
+                cut = True
         sel_c = rgb[max(a, ry0):min(b, ry1), xl + 200:x1 - 80].astype(np.float32)
         sel = bool(((sel_c[:, :, 1] - np.maximum(sel_c[:, :, 0], sel_c[:, :, 2])) > 25).mean() > 0.4) if sel_c.size else False
         icon, n = icon_of(rgb, max(list_top, ry0), min(list_bot, ry1), ic0, ic1)
@@ -320,16 +354,22 @@ def read_frame(path, out_dir=None, title_hint="memory", wb=None, list_box=False)
             cut = True                     # read too poorly to stand: a row the edge or the pointer spoiled
         out_rows.append({"y": [int(ry0), int(ry1)], "ink": [int(a), int(b)], "selected": sel, "cut": bool(cut), "icon": icon,
                          "cells": cells, "conf": round(conf, 3), "blank": blanks})
-    thumb = shapes.scroll_thumb(path, [name_left, hdr_bot, x1, path_top])
-    side = shapes.scroll_thumb(path, [max(0, xl - 400), y0, xl - 6, y1], reach=min(400, max(40, xl - 6)))
-    rec = {"frame": os.path.basename(path), "window": wb, "divider": int(xl), "header": [int(hdr_top), int(hdr_bot)], "path_top": int(path_top),
-           "pitch": pitch, "columns": cols, "rows": out_rows, "thumb": thumb, "side_thumb": side}
+    d_ = float(up)
+    thumb = shapes.scroll_thumb(path, [v / d_ for v in (name_left, hdr_bot, x1, path_top)])
+    side = shapes.scroll_thumb(path, [v / d_ for v in (max(0, xl - 400), y0, xl - 6, y1)], reach=min(400, max(40, xl - 6)) / d_)
+    for r in out_rows:
+        r["y"] = [int(v / d_) for v in r["y"]]; r["ink"] = [int(v / d_) for v in r["ink"]]
+    rec = {"frame": os.path.basename(path), "window": [int(v / d_) for v in wb], "divider": int(xl / d_),
+           "header": [int(hdr_top / d_), int(hdr_bot / d_)], "path_top": int(path_top / d_), "up": up,
+           "pitch": int(pitch / d_), "columns": [(int(c[0] / d_), c[1]) for c in cols], "rows": out_rows, "thumb": thumb, "side_thumb": side}
     if not out_dir:
         return rec
     os.makedirs(out_dir, exist_ok=True)
     stem = os.path.splitext(os.path.basename(path))[0]
     with open(os.path.join(out_dir, stem + ".json"), "w", encoding="utf-8") as f:
         json.dump(rec, f, indent=1)
+    if up == 2:      # the overlay is drawn on the enlarged frame, in its own coordinates
+        cols = [(c[0] * 2, c[1]) for c in rec["columns"]]; hdr_top, hdr_bot, path_top = hdr_top, hdr_bot, path_top
     im = Image.fromarray(rgb).crop((x0, y0, x1, y1)); d = ImageDraw.Draw(im)
     d.rectangle((xl - x0, 0, xl - x0 + 2, y1 - y0), fill=(255, 0, 255))
     d.line((0, hdr_bot - y0, x1 - x0, hdr_bot - y0), fill=(0, 200, 255), width=2)
@@ -339,8 +379,9 @@ def read_frame(path, out_dir=None, title_hint="memory", wb=None, list_box=False)
         d.line((cl - x0, hdr_top - y0, cl - x0, path_top - y0), fill=(255, 200, 0), width=1)
     for r in out_rows:
         col = (255, 80, 80) if r["cut"] else ((80, 255, 80) if r["selected"] else (80, 160, 255))
-        d.rectangle((name_left - 6 - x0, r["y"][0] - y0, x1 - 8 - x0, r["y"][1] - y0), outline=col, width=2)
-        d.text((name_left - x0 + 4, r["y"][0] - y0 + 2), ("%s | " % r["icon"]) + " | ".join(r["cells"])[:110], fill=(255, 255, 0))
+        ry0_, ry1_ = r["y"][0] * up, r["y"][1] * up
+        d.rectangle((name_left - 6 - x0, ry0_ - y0, x1 - 8 - x0, ry1_ - y0), outline=col, width=2)
+        d.text((name_left - x0 + 4, ry0_ - y0 + 2), ("%s | " % r["icon"]) + " | ".join(r["cells"])[:110], fill=(255, 255, 0))
     s = 1400 / im.width
     im.resize((1400, int(im.height * s))).save(os.path.join(out_dir, stem + "-overlay.png"))
     return rec
