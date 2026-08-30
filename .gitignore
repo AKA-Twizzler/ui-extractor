@@ -3,4 +3,13 @@
 __pycache__/
 _frames/
 _trial/
-_probe/
+_probe/*
+!_probe/*.py
+_bak/
+_bigwin/
+_cmp*/
+_*cmp/
+_compare_out/
+*.txt
+*.log
+*.pyc
