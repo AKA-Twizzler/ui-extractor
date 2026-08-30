@@ -44,17 +44,25 @@ def ocr(rgb_crop, scale=2.0):
     return out
 
 
-def ink_mask(rgb_region, floor=60, lift=45):
+def ink_mask(rgb_region, floor=55, lift=30):
     """The writing in a region: pixels whose darkest channel stands `lift`
     above the region's own background (the median), never under `floor`,
-    so a dimmed window's grey writing counts as its white does; a column
-    lit in most rows is a line, not writing, and is dropped."""
+    so a dimmed window's grey writing counts as its white does. A column
+    lit without a break over more than a fifth of the region's height is a
+    line or a bar (a sidebar's thumb standing inside a list's box), never
+    writing, and is dropped."""
     mn = rgb_region.min(axis=2)
     thr = max(floor, float(np.median(mn)) + lift)
     ink = mn > thr
-    if ink.shape[0] >= 8:
-        col_share = ink.mean(axis=0)
-        ink[:, col_share > 0.7] = False
+    h = ink.shape[0]
+    if h >= 8:
+        # the longest unbroken run of lit rows in each column
+        run = np.zeros(ink.shape[1], dtype=int)
+        best = np.zeros(ink.shape[1], dtype=int)
+        for y in range(h):
+            run = np.where(ink[y], run + 1, 0)
+            best = np.maximum(best, run)
+        ink[:, best > 0.2 * h] = False
     return ink
 
 def steps(profile, least=6.0):
@@ -137,7 +145,7 @@ def find_header(rgb, xl, x1, wb):
             # the column lefts from the header's own ink: runs of columns
             # holding light pixels, split at gaps of thirty or more
             band = rgb[a:b, xl:x1]
-            ink = ink_mask(band, floor=55, lift=35).sum(axis=0)
+            ink = ink_mask(band).sum(axis=0)
             groups, start = [], None
             for i, v in enumerate(ink):
                 if v > 0 and start is None:
