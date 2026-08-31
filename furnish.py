@@ -460,6 +460,35 @@ def finder(st):
             rest = 1.0 - shares[name_i]
             scale = (1.0 - need) / rest if rest > 0 else 0.0
             shares = {i: (need if i == name_i else v * scale) for i, v in shares.items()}
+    # ONE FILE, ONE ROW -- and THE WHOLE NAMES GO ON FIRST.
+    #
+    # The card shows a name the screen cut at its full length (`whole_names`
+    # below), so two rows that differ only in WHERE the screen cut them are
+    # not the same row anywhere earlier in the build and become the same row
+    # right here. `user_moves_fast_..t_pad_timelines.md` and the whole
+    # `user_moves_fast_dont_pad_timelines.md` were folded by nothing and drawn
+    # twice. Substituting first and folding second is the whole of it, and
+    # this is also the last point at which the name column is known for
+    # certain -- at the earliest of the three tidying passes the column titles
+    # are not in place and the fold's own header gate turns it away.
+    if has_name and name_i is not None and rows:
+        if whole_names:
+            fixed = []
+            for r in rows:
+                cs = list(r.get("cells") or [])
+                its = list(r.get("italic") or [])
+                if name_i < len(cs):
+                    k = draw3.whole_name_key(cs[name_i])
+                    if k in whole_names:
+                        cs[name_i] = whole_names[k]
+                        while len(its) <= name_i:
+                            its.append(False)
+                        its[name_i] = False
+                r = dict(r)
+                r["cells"], r["italic"] = cs, its
+                fixed.append(r)
+            rows = fixed
+        rows = draw3.fold_same_name(rows, name_i)
     out = ['<table class="sn-list%s%s">' % (" sn-tail" if not has_name else "", " sn-fixed" if shares else "")]
     if shares:
         # THE COLUMNS WHERE THE FRAME HAD THEM. `sn-fixed` fixes the layout so

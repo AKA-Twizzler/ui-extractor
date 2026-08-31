@@ -381,16 +381,35 @@ def reach(found, rows, tess_words):
         # top -- a table is not disqualified for having had a toolbar above it.
         if len(table) < 2:
             continue
-        b["header"], b["rows"] = table[0], table[1:]
-        b["headflags"], b["flags"] = flags[0], flags[1:]
+        # THE SAME RULE AS IN read_list, AND IT HAS TO BE HERE TOO. The block
+        # is rebuilt from scratch above, so a heading refused there comes back
+        # as table[0] the moment this line runs -- the first fix went in a
+        # hundred lines away and the record came out identical, 17 blocks of 32
+        # still headed by a file name. A heading must SAY what a heading says;
+        # anything else is the first FILE and stays in the body.
+        if _is_heading(table[0]):
+            b["header"], b["rows"] = table[0], table[1:]
+            b["headflags"], b["flags"] = flags[0], flags[1:]
+            head_row = mine[0]
+            body_rows = mine[1:]
+        else:
+            b["header"], b["rows"] = _standard_head(len(table[0])), table
+            b["headflags"], b["flags"] = [None] * len(table[0]), flags
+            head_row = mine[0]
+            body_rows = mine
         b["y0"], b["y1"] = rows[mine[0]]["y0"], rows[mine[-1]]["y1"]
         # each body row's own box, on the enlargement the reader measures
         # on, so the style reader can ask what band it sits on and what
         # mark stands before it
-        b["head_box"] = [rows[mine[0]]["x0"], rows[mine[0]]["y0"],
-                         rows[mine[0]]["x1"], rows[mine[0]]["y1"]]
+        # A HEADING WE SUPPLIED WAS NEVER ON THE SCREEN, so it gets no box and
+        # is not drawn as ink -- draw2 skips a header without one, which is
+        # what keeps it out of the picture gates. Where a real heading WAS
+        # read, it keeps its own box as before.
+        b["head_box"] = ([rows[head_row]["x0"], rows[head_row]["y0"],
+                          rows[head_row]["x1"], rows[head_row]["y1"]]
+                         if body_rows is not mine else None)
         b["row_boxes"] = [[rows[k]["x0"], rows[k]["y0"], rows[k]["x1"], rows[k]["y1"]]
-                          for k in mine[1:]]
+                          for k in body_rows]
         kept.append(b)
     kept.sort(key=lambda b: b["y0"])
     return kept
@@ -438,6 +457,39 @@ def columnar(res):
     return multi >= MIN_ROWS
 
 
+
+
+# What Finder writes across the top of a list. A heading says one of these; a
+# file name says anything at all, which is exactly why the test has to be on
+# the words rather than on the row being full.
+HEAD_WORDS = ("name", "date modified", "date created", "date added",
+              "date last opened", "size", "kind", "modified", "created",
+              "tags", "comments", "version")
+_STANDARD_HEAD = {4: ["Name", "Date Modified", "Size", "Kind"],
+                  3: ["Name", "Date Modified", "Kind"],
+                  2: ["Name", "Date Modified"],
+                  5: ["Name", "Date Modified", "Size", "Kind", ""]}
+
+def _is_heading(row):
+    """Does this row say what the columns ARE, rather than what is in them."""
+    if not row:
+        return False
+    import re as _re
+    said = 0
+    for c in row:
+        f = _re.sub(r"[^a-z ]", "", (c or "").lower()).strip()
+        if not f:
+            continue
+        if any(f.startswith(w[:4]) and abs(len(f) - len(w)) <= 4 for w in HEAD_WORDS):
+            said += 1
+    # the first column carries the weight: a heading almost always opens "Name"
+    first = _re.sub(r"[^a-z]", "", (row[0] or "").lower())
+    return said >= max(1, len(row) // 2) or first.startswith("name")
+
+def _standard_head(n):
+    return list(_STANDARD_HEAD.get(n) or ["Name"] + [""] * (n - 1))
+
+
 def read_list(png_path, readings=None, res=None):
     """Read a column view back as a table, or say plainly that it is not one.
 
@@ -453,12 +505,12 @@ def read_list(png_path, readings=None, res=None):
     if res is not None and not columnar(res):
         return {"is_list": False,
                 "why": "no three rows with two cells at pane scale"}
-    bgr = cv2.imread(png_path)
+    bgr = machine.pixels(png_path)
     if bgr is None:
         return {"is_list": False, "why": "could not read the image"}
     bgr = machine.enlarge(bgr, 3)
     big = png_path.replace(".png", "_3x.png")
-    cv2.imwrite(big, bgr)
+    machine.write_once(big, bgr, png_path)
     gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
     mask = note_reader.ink_mask(gray)
 
@@ -535,6 +587,26 @@ def read_list(png_path, readings=None, res=None):
                 header, body, hflags = row, table[i + 1:], flagged[i + 1:]
                 headflags = flagged[i]
                 break
+        # A FULL ROW IS NOT A HEADING. The rule above takes the first row whose
+        # every cell is filled -- which is a heading only when the heading was
+        # read at all. When it was not, the first FILE is taken for the column
+        # titles and that file is gone from the note without a trace.
+        #
+        # Measured over one video: 17 of 32 list blocks had a header that was
+        # plainly a data row (".agents", ".claude.json.backup", even a date), so
+        # HALF the lists were quietly one row short. It never showed, because
+        # nothing downstream can tell a lost row from a list that never had it,
+        # and the note was only ever set against earlier notes with the same
+        # fault. It showed the moment one pane was read by eye.
+        #
+        # So a heading must LOOK like one. Finder writes Name, Date Modified,
+        # Size and Kind; anything else goes back to the body and the titles are
+        # supplied by position instead.
+        if header is not None and not _is_heading(header):
+            body = [header] + list(body)
+            hflags = ([headflags] if headflags is not None else []) + list(hflags)
+            header = _standard_head(len(header))
+            headflags = None
         if header is None or not body:
             continue
         found.append({"columns": len(bands), "bands": bands,

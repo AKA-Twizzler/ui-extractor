@@ -37,14 +37,66 @@ STILL_THRESHOLD = 1.5     # mean grey levels of frame-to-frame change
 CUT_THRESHOLD = 12.0      # above this, the picture changed shot, not content
 
 
-def _ffmpeg_burst(video, timestamp, seconds, workdir):
+_SIZE = {}
+
+def _frame_size(video):
+    """The video's width and height, asked once per file."""
+    if video not in _SIZE:
+        out = subprocess.run(
+            ["ffprobe", "-v", "error", "-select_streams", "v:0",
+             "-show_entries", "stream=width,height", "-of", "csv=p=0", video],
+            capture_output=True, text=True, check=True).stdout.strip()
+        w, h = (int(v) for v in out.split(",")[:2])
+        _SIZE[video] = (w, h)
+    return _SIZE[video]
+
+
+def _ffmpeg_burst(video, timestamp, seconds):
+    """The burst's frames themselves, decoded straight into memory.
+
+    THE COST OF A FRAME WAS NEVER THE DECODING. Measured on one 1.5 s burst of
+    a 4K AV1 file: decoding it and discarding the frames costs 1.18 s; decoding
+    it and writing the forty-five PNGs this used to write costs 10.48 s, and
+    every one of them is then read straight back by cv2.imread into the buffers
+    ffmpeg already had. So ffmpeg hands the frames over directly now, and
+    nothing is written. Proved lossless: the same burst both ways gives
+    forty-five frames identical pixel for pixel (_probe/rawsame.py).
+
+    ffmpeg's tmix filter is faster still (1.61 s) and may NOT be used --
+    capture_moment needs every frame on its own, for the cut detection, the
+    motion test, the sharpness pick and the stack, and tmix averages where this
+    medians. The average is not the same instrument.
+
+    """
+    w, h = _frame_size(video)
     start = max(0.0, _to_seconds(timestamp) - seconds / 2)
     cmd = ["ffmpeg", "-y", "-v", "error", "-ss", f"{start:.3f}", "-i", video,
            "-t", f"{seconds:.3f}", "-vsync", "0",
-           os.path.join(workdir, "f_%04d.png")]
-    subprocess.run(cmd, check=True, capture_output=True)
-    return sorted(os.path.join(workdir, f) for f in os.listdir(workdir)
-                  if f.startswith("f_"))
+           "-f", "rawvideo", "-pix_fmt", "bgr24", "-"]
+    stride = w * h * 3
+    # READ INTO THE FRAME, NOT INTO A GROWING BYTES OBJECT. subprocess.run's
+    # capture_output collects a gigabyte by concatenation and then every frame
+    # has to be copied out of it again; readinto fills each frame's own array
+    # once and nothing is copied twice.
+    out = []
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                         bufsize=0)
+    try:
+        while True:
+            frame = np.empty(stride, dtype=np.uint8)
+            view = memoryview(frame)
+            got = 0
+            while got < stride:
+                n = p.stdout.readinto(view[got:])
+                if not n:
+                    break
+                got += n
+            if got < stride:
+                break                     # the tail of a truncated frame
+            out.append(frame.reshape(h, w, 3))
+    finally:
+        p.stdout.close(); p.wait()
+    return out
 
 
 def _to_seconds(ts):
@@ -121,57 +173,66 @@ def capture_moment(video, timestamp, out_dir, seconds=BURST_SECONDS):
     is worth having; a picture silently taken from somewhere else is not.
     """
     os.makedirs(out_dir, exist_ok=True)
-    with tempfile.TemporaryDirectory() as work:
-        moved, files = 0.0, []
-        for step in range(MOVED_ON):
-            moved = step * seconds
-            files = _ffmpeg_burst(video, _to_seconds(timestamp) + moved,
-                                  seconds, work)
-            if files:
-                break
-            for stale in os.listdir(work):
-                os.unlink(os.path.join(work, stale))
-        if not files:
-            raise RuntimeError(
-                f"no frames at {timestamp}, nor in the "
-                f"{MOVED_ON * seconds:.0f}s after it; the file cannot be "
-                "decoded here")
-        frames = [cv2.imread(f, cv2.IMREAD_COLOR) for f in files]
-        frames = [f for f in frames if f is not None]
-        grays = [cv2.cvtColor(f, cv2.COLOR_BGR2GRAY) for f in frames]
-        moves = [float(np.mean(np.abs(a.astype(np.int16) - b.astype(np.int16))))
-                 for a, b in zip(grays, grays[1:])]
+    # A FRAME ALREADY CAPTURED IS NOT CAPTURED AGAIN.
+    #
+    # Capturing a moment costs twelve to fifteen seconds: a 1.5-second burst is
+    # decoded, every frame of it measured for movement, and the median or the
+    # sharpest taken. None of that is worth repeating for a frame already
+    # sitting on disk, and a re-run of the same video used to pay all of it a
+    # second time. `how` is kept in a sidecar beside the frame so a reused
+    # capture reports exactly what the first one reported -- it goes into the
+    # record, so a different wording would move the note.
+    done = os.path.join(out_dir, f"{_slug(timestamp)}.png")
+    how_file = done + ".how"
+    if os.path.exists(done) and os.path.getsize(done) > 0 and os.path.exists(how_file):
+        return done, open(how_file, encoding="utf-8").read().strip()
+    moved, frames = 0.0, []
+    for step in range(MOVED_ON):
+        moved = step * seconds
+        frames = _ffmpeg_burst(video, _to_seconds(timestamp) + moved, seconds)
+        if frames:
+            break
+    if not frames:
+        raise RuntimeError(
+            f"no frames at {timestamp}, nor in the "
+            f"{MOVED_ON * seconds:.0f}s after it; the file cannot be "
+            "decoded here")
+    grays = [cv2.cvtColor(f, cv2.COLOR_BGR2GRAY) for f in frames]
+    moves = [float(np.mean(np.abs(a.astype(np.int16) - b.astype(np.int16))))
+             for a, b in zip(grays, grays[1:])]
 
-        # keep only the shot the requested moment belongs to
-        target = len(frames) // 2
-        lo, hi = 0, len(frames)
-        for i, m in enumerate(moves):
-            if m >= CUT_THRESHOLD:
-                if i + 1 <= target:
-                    lo = i + 1
-                else:
-                    hi = i + 1
-                    break
-        cuts = sum(1 for m in moves if m >= CUT_THRESHOLD)
-        frames, grays = frames[lo:hi], grays[lo:hi]
-        moves = [float(np.mean(np.abs(a.astype(np.int16) - b.astype(np.int16))))
-                 for a, b in zip(grays, grays[1:])]
-        still = (max(moves) < STILL_THRESHOLD) if moves else True
-        if still and len(frames) >= 3:
-            out = _median_stack(frames)
-            how = f"stacked {len(frames)} still frames"
-        else:
-            sharp = [cv2.Laplacian(g, cv2.CV_64F).var() for g in grays]
-            out = frames[int(np.argmax(sharp))]
-            how = f"sharpest of {len(frames)} moving frames"
-        if cuts:
-            how += f"; burst crossed {cuts} cut(s), kept the moment's own shot"
-        if moved:
-            how += (f"; moved {moved:.1f}s on, the file cannot be decoded at "
-                    f"{timestamp}")
-        path = os.path.join(out_dir, f"{_slug(timestamp)}.png")
-        cv2.imwrite(path, out, [cv2.IMWRITE_PNG_COMPRESSION, 3])
-        return path, how
+    # keep only the shot the requested moment belongs to
+    target = len(frames) // 2
+    lo, hi = 0, len(frames)
+    for i, m in enumerate(moves):
+        if m >= CUT_THRESHOLD:
+            if i + 1 <= target:
+                lo = i + 1
+            else:
+                hi = i + 1
+                break
+    cuts = sum(1 for m in moves if m >= CUT_THRESHOLD)
+    frames, grays = frames[lo:hi], grays[lo:hi]
+    moves = [float(np.mean(np.abs(a.astype(np.int16) - b.astype(np.int16))))
+             for a, b in zip(grays, grays[1:])]
+    still = (max(moves) < STILL_THRESHOLD) if moves else True
+    if still and len(frames) >= 3:
+        out = _median_stack(frames)
+        how = f"stacked {len(frames)} still frames"
+    else:
+        sharp = [cv2.Laplacian(g, cv2.CV_64F).var() for g in grays]
+        out = frames[int(np.argmax(sharp))]
+        how = f"sharpest of {len(frames)} moving frames"
+    if cuts:
+        how += f"; burst crossed {cuts} cut(s), kept the moment's own shot"
+    if moved:
+        how += (f"; moved {moved:.1f}s on, the file cannot be decoded at "
+                f"{timestamp}")
+    path = os.path.join(out_dir, f"{_slug(timestamp)}.png")
+    cv2.imwrite(path, out, [cv2.IMWRITE_PNG_COMPRESSION, 3])
+    with open(path + ".how", "w", encoding="utf-8") as f:
+        f.write(how)
+    return path, how
 
 
 def panes(png_path, min_height=0.75):

@@ -481,7 +481,7 @@ def strip_chevron(text):
 
 
 def read_tree(png_path, res=None):
-    img = cv2.imread(png_path, cv2.IMREAD_GRAYSCALE)
+    img = machine.pixels(png_path, cv2.IMREAD_GRAYSCALE)
     if img is None:
         raise ValueError(f"cannot read {png_path}")
     every = ocr_rows(png_path, res)

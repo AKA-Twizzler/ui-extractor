@@ -36,7 +36,99 @@ import machine
 import screenness
 
 SAME_SCREEN_DIFF = 4.0   # mean grey change below this and it is the same screen
+# ...AND A FIXED LINE IS THE WRONG SHAPE OF ANSWER, which eye tracking learned
+# a long time ago. Telling a fixation from a saccade is this same problem in a
+# stream of noisy positions, and its oldest method -- I-VT -- is a fixed
+# velocity threshold. The reviews are blunt about it: a fixed threshold
+# "degrades rapidly under noise", falling under 20% accuracy, while the same
+# algorithm with the threshold ADAPTED to the signal's own noise holds above
+# 81%. (Review and Evaluation of Eye Movement Event Detection Algorithms,
+# PMC9699548; One algorithm to rule them all?, Behavior Research Methods.)
+#
+# Ours is fixed at 4.0, chosen on a screen recording, and the noise varies by
+# twenty times between recordings. Measured on this library's own caches, each
+# video's FLOOR -- what it looks like when nothing is happening, the 5th
+# percentile of change between consecutive samples:
+#
+#     a webcam and a chat overlay   7.72     the line is BELOW the floor, so
+#                                            every sample is a new screen
+#     a live replay                 1.37
+#     a screen recording            0.33
+#     another screen recording      0.67
+#
+# The St Jude's replay at its very stillest is already twice the threshold, so
+# the test could only ever answer "changed": 1,594 stretches from 1,981
+# samples, and one text confirmation per stretch.
+#
+# So the line is the video's OWN floor times this, and never below the 4.0 that
+# already serves a screen recording well. A recording with no camera in it has
+# a floor near zero and is pinned at 4.0 whatever this multiplier is, which is
+# why it can be raised without touching one. Measured over the four cached
+# skims: the webcam stream's stretches fall 1,594 -> 489, and both screen
+# recordings keep their exact counts (17 and 17).
+#
+# WHAT THIS DOES NOT FIX, measured before claiming it did: the MOMENTS barely
+# move, 1,594 -> 1,492. Longer stretches just hand the same samples to the
+# within-stretch test below, and raising the multiplier further makes it worse
+# (x8 gives 1,550). The saving here is in the skim's own reading -- one
+# confirmation per stretch, so 489 instead of 1,594 -- not in the read.
+FLOOR_TIMES = 2.5
+_FLOOR = [None]          # this video's own quiet floor, learned once per scan
+
+
+def learn_floor(samples):
+    """The change this video shows when nothing is happening, from its own
+    samples. None where there are too few to tell."""
+    if len(samples) < 12:
+        _FLOOR[0] = None
+        return None
+    d = []
+    for a, b in zip(samples, samples[1:]):
+        ta = np.array(a["thumb"], np.float32)
+        tb = np.array(b["thumb"], np.float32)
+        d.append(float(np.mean(np.abs(ta - tb))))
+    _FLOOR[0] = float(np.percentile(d, 5))
+    return _FLOOR[0]
+
+
+def same_screen_line():
+    """The line this video is judged against."""
+    f = _FLOOR[0]
+    return SAME_SCREEN_DIFF if not f else max(SAME_SCREEN_DIFF, f * FLOOR_TIMES)
 UNCERTAIN_BOXES = 20     # OCR boxes needed for an uncertain frame to be a screen
+
+# HOW MUCH INTERFACE MAKES A MOMENT WORTH CAPTURING.
+#
+# The pixel test cannot tell a dark room from a window. It counts pixels that
+# exactly equal their neighbour, on the premise that a camera's noise makes
+# ties rare -- and H.264 breaks that premise, painting near-black in flat
+# blocks of one value. Measured on 120 frames labelled by eye from six of
+# Jared's videos (_probe/screen_truth.json, scored by _probe/scanrule.py): the
+# pixel test alone gets 49 of them right and every one of the 20 webcam frames
+# wrong, and a spread gate, a step-edge gate and a dilated-ink gate were each
+# measured and none of them separates a dark room from a blank window panel.
+#
+# The reading that follows already settles it -- and the skim then threw the
+# evidence away, keeping only WHETHER text was found, not HOW MUCH. Measured
+# over the same 120 frames (_probe/boxbar.py), text items per frame:
+#
+#     a camera        0 (in 30 of 70 frames), then 5 .. 29
+#     a screen        14 .. 108
+#
+# So a webcam with a live chat in the corner reads 5 to 10 items and a screen
+# reads dozens. At twelve items no real screen is lost and 109 of the 120 are
+# right, against 80 for "any text at all". Twelve is the last value that loses
+# nothing: at fifteen, two real screens go.
+#
+# The bar is on the WHOLE frame's items, not one region's, so a screen made of
+# several small windows still clears it -- and a webcam frame with a terminal
+# open over it clears it too, which is the point. One did, in the labelled set:
+# a Jarvis transcript over the dark room, read at 30 items and kept.
+#
+# The bar lives HERE rather than in screenness.ui_regions, whose callers
+# include the read itself: finding a sparse window is still that function's
+# job, and whether the moment is worth capturing is this one's.
+WORTH_READING = 12
 THUMB = (320, 180)
 # The comparison picture has to be big enough to SEE a change. At 80x45 a
 # different note open in the same window is pixel-identical, so a ten minute
@@ -76,7 +168,12 @@ def sample_frames(video, every, workdir):
 def scan(video, every, cache_path=None, rescan=False):
     if cache_path and os.path.exists(cache_path) and not rescan:
         d = json.load(open(cache_path))
-        if d.get("every") == every and d.get("video") == video and d.get("v") == 2:
+        # THE VERSION IS THE JUDGEMENT'S, not the file format's. A cache
+        # written before WORTH_READING carries the old answer to "is this a
+        # screen" and would keep it forever, which is how a fix comes to be
+        # installed and have no effect. Bump this whenever what the skim
+        # DECIDES changes, not only when what it stores does.
+        if d.get("every") == every and d.get("video") == video and d.get("v") == 3:
             return d["samples"]
 
     samples = []
@@ -111,19 +208,20 @@ def scan(video, every, cache_path=None, rescan=False):
                 continue
             regions = screenness.ui_regions(cv2.imread(path), engine)
             checked += 1
-            confirmed = bool(regions)
+            items = sum(r["boxes"] for r in regions)
+            confirmed = items >= WORTH_READING
             for s2 in samples:
                 if run["start"] <= s2["t"] <= run["end"]:
                     s2["call"] = "screen" if confirmed else "camera"
                     if confirmed:
-                        s2["boxes"] = regions[0]["boxes"]
+                        s2["boxes"] = items
                         s2["box"] = regions[0]["box"]
     print(f"  {len(samples)} samples; text read on {checked} of them "
           f"({100*checked/max(1,len(samples)):.0f}%) — one per stretch, "
           f"the rest settled by pixels alone")
     if cache_path:
         os.makedirs(os.path.dirname(cache_path), exist_ok=True)
-        json.dump({"v": 2, "video": video, "every": every, "samples": samples},
+        json.dump({"v": 3, "video": video, "every": every, "samples": samples},
                   open(cache_path, "w"))
     return samples
 
@@ -140,10 +238,14 @@ def changed(a, b):
     """
     ta = np.array(a["thumb"], np.float32)
     tb = np.array(b["thumb"], np.float32)
-    return float(np.mean(np.abs(ta - tb))) > SAME_SCREEN_DIFF
+    return float(np.mean(np.abs(ta - tb))) > same_screen_line()
 
 
 def stretches(samples):
+    learn_floor(samples)
+    if os.environ.get("SN_FLOOR") and _FLOOR[0] is not None:
+        print("  [this video is still at %.2f grey; a screen changes past %.1f]"
+              % (_FLOOR[0], same_screen_line()), file=sys.stderr)
     runs = []
     for s in samples:
         new = (not runs

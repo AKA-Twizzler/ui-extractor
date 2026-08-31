@@ -13,6 +13,7 @@ So this finds a window the other way round -- from the CORNER its two
 drawn edges make, and outward to wherever those edges end.
 """
 import numpy as np
+import machine
 
 try:
     import cv2
@@ -208,7 +209,7 @@ def big_windows(path, least_frac=0.20, img=None):
         blocks.append(tuple(v / k for v in r))
 
     if img is None:
-        img = cv2.imread(path) if isinstance(path, str) else path
+        img = machine.pixels(path) if isinstance(path, str) else path
 
     least_v, least_h = shapes.RUN * h, shapes.RUN * w
     grey = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)

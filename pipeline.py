@@ -26,6 +26,7 @@ import chat_reader
 import columns
 import machine
 import console_reader
+import apps
 import panes
 import note_reader
 import overlay
@@ -50,6 +51,11 @@ write_box = panes.write_box
 STUMBLED = []
 # panes read side by side per moment: one run uses about four cores this
 # way, which is the share that leaves room for two more runs beside it
+# MEASURED, do not raise this again without measuring. Twelve cores are here
+# and only three are used, which looks like an easy win and is not: on the same
+# two moments, panes took 52.5s and 48.2s at three workers and 54.5s and 50.1s
+# at six -- slightly WORSE. The engines already spread themselves, and the
+# ceiling is not the worker count.
 PANE_WORKERS = int(os.environ.get("PANE_WORKERS", "3"))
 
 
@@ -129,6 +135,25 @@ def records_path(out_dir, dense, at):
 LARGE = 2.0
 
 
+READER_SECS = {}         # reader name -> seconds, for SN_READERS
+
+
+CASCADE = {}      # what each reader in say_pane's cascade costs, in seconds
+
+
+def _timed(name, fn):
+    """Run one reader and keep what it cost, under a name that survives."""
+    import time as _t
+
+    def go(*a, **k):
+        t0 = _t.perf_counter()
+        try:
+            return fn(*a, **k)
+        finally:
+            CASCADE[name] = CASCADE.get(name, 0.0) + _t.perf_counter() - t0
+    return go
+
+
 def guard(what, fn, *args, sink=None, **kwargs):
     """Run one reader, and never let it end the run.
 
@@ -145,6 +170,14 @@ def guard(what, fn, *args, sink=None, **kwargs):
     return nothing. A caller assembling its output later passes `sink`, and
     the failure line lands in the record it belongs to instead of mid-stream.
     """
+    # EVERY READER PASSES THROUGH HERE, so this is the one place that can say
+    # where a pane's time actually goes. It was never measured: `took` carried
+    # a total per pane and nothing per reader, so "the panes cost 49 seconds"
+    # was all anyone could know, and the cascade's order was never judged.
+    # Measured over one video, 51 of 73 panes are claimed by the LAST two
+    # readers of five, and every reader before the winner is work thrown away.
+    # Set SN_READERS=1 to print the tally per moment.
+    _t0 = time.perf_counter()
     try:
         return fn(*args, **kwargs)
     except Exception as why:
@@ -156,6 +189,10 @@ def guard(what, fn, *args, sink=None, **kwargs):
         else:
             print("    " + line)
         return None
+    finally:
+        READER_SECS[what.split(",")[0].strip()] = (
+            READER_SECS.get(what.split(",")[0].strip(), 0.0)
+            + time.perf_counter() - _t0)
 
 
 def already_drawn(lines, drawn):
@@ -223,7 +260,7 @@ def structure_band(kind, data):
     return min(ys), max(ys)
 
 
-def say_pane(pane_path, pi, engine, drawn=(), camera=None, in_ui=True):
+def say_pane(pane_path, pi, engine, drawn=(), camera=None, in_ui=True, box=None, skip=()):
     """Read one pane every way there is, and say what it turned out to be.
 
     Returns a record -- the pane's number, what it is, and its lines -- so
@@ -317,7 +354,7 @@ def say_pane(pane_path, pi, engine, drawn=(), camera=None, in_ui=True):
         # the other engine has read this pane's enlargement already, for
         # the structure; its text comes from the memo, not a third run
         other = guard(f"second engine text, pane {pi}",
-                      note_reader.tess_text_for, pane_path, sink=notes)
+                      _timed("second engine", note_reader.tess_text_for), pane_path, sink=notes)
         marked = guard(f"confirmation, pane {pi}",
                        verify_names.confirm_readings, pane_path,
                        [t for t, _ in left], other_text=other, sink=notes)
@@ -365,7 +402,7 @@ def say_pane(pane_path, pi, engine, drawn=(), camera=None, in_ui=True):
         and the marks a document's lines carry -- a leaning word between
         asterisks, a rule or a link named after the line. See
         style_reader.measure; the numbers ride on the rows in `data`."""
-        line = guard(f"style, pane {pi}", style_reader.measure, pane_path,
+        line = guard(f"style, pane {pi}", _timed("style", style_reader.measure), pane_path,
                      kind, data, res, sink=notes)
         if kind == "an open document":
             for r in data.get("rows") or []:
@@ -427,9 +464,40 @@ def say_pane(pane_path, pi, engine, drawn=(), camera=None, in_ui=True):
     # a camera pane carrying one word -- was the readers' own duplicate
     # engine passes, which are gone; the cascade on such a pane is now a
     # few seconds, and the rule stands.
-    if in_ui or texts:
+    # TOO SMALL TO HOLD STRUCTURE, SO THE STRUCTURE READERS DO NOT RUN.
+    #
+    # A pane is offered to the tree reader, then the terminal, then the
+    # columns, then the chat, then the document, and at most one of them ever
+    # claims it. Measured over one video: those five are 58% of all reader
+    # time and the panes they claim are the big ones. A strip of chrome -- a
+    # browser's tab bar, a Finder sidebar, a path bar, the clock -- is offered
+    # to all five, is claimed by none, and comes out as plain text after
+    # twenty to thirty seconds of work.
+    #
+    # The smallest pane any reader ever actually claimed in that video is an
+    # open document of 254,508 pixels; a file tree needs 794,832 and a list
+    # 651,300. Refusing the cascade under 250,000 skipped 15 panes of 136 and
+    # saved 250.5 s -- 7% of the read -- without losing a single reading a
+    # reader had claimed. NOTHING IS DROPPED: the pane still gets its own
+    # engine pass and still says its words, through the plain-text path below,
+    # which is where all fifteen of them ended up anyway.
+    #
+    # Width alone cannot do this: a Finder sidebar and a file tree are both
+    # narrow and tall, and every width threshold tried loses a real tree.
+    small = False
+    if box and len(box) >= 4:
+        try:
+            area = (int(box[2]) - int(box[0])) * (int(box[3]) - int(box[1]))
+            small = 0 < area < int(os.environ.get("SN_CHROME_AREA", "250000"))
+        except (TypeError, ValueError):
+            small = False
+    if small and os.environ.get("SN_CHROME", "1") == "1":
+        if os.environ.get("SN_TRACE"):
+            print(f"    [pane {pi} is {area} px, too small to hold structure; "
+                  "read as text]")
+    elif in_ui or texts:
         tree = {} if len(texts) < 5 else (
-            guard(f"tree reader, pane {pi}", tree_reader.read_tree,
+            guard(f"tree reader, pane {pi}", _timed("tree", tree_reader.read_tree),
                   pane_path, res, sink=notes) or {})
         if tree.get("is_tree") and len(tree["rows"]) >= 5:
             got = owned([r["name"] for r in tree["rows"]])
@@ -450,29 +518,36 @@ def say_pane(pane_path, pi, engine, drawn=(), camera=None, in_ui=True):
         # nothing else sets every character on one width, and read as
         # anything else it loses the split between what Jared typed and what
         # came back -- which is most of what it says
-        term = guard(f"terminal reader, pane {pi}",
-                     console_reader.read_console, pane_path, sink=notes) or {}
+        # A READER FOR SOMETHING THE VIDEO DOES NOT CONTAIN NEVER RUNS. The menu
+        # bars were read before any of this started and named every program in
+        # the video; a terminal reader on a video with no terminal is 16% of
+        # all reader time spent proving an absence. `skip` is empty whenever
+        # too few bars were read to have learned anything, so a recording that
+        # crops the bar away behaves exactly as before.
+        term = {} if "terminal" in skip else (guard(
+            f"terminal reader, pane {pi}",
+            _timed("terminal", console_reader.read_console), pane_path, sink=notes) or {})
         if term.get("is_console"):
             return record("a terminal",
                           console_reader.render(term).splitlines(), term)
         # not a tree: a column view before a document, since a table read as
         # prose loses the pairing of value to heading
-        lst = guard(f"columns reader, pane {pi}", columns.read_list,
+        lst = guard(f"columns reader, pane {pi}", _timed("list", columns.read_list),
                     pane_path, readings=len(texts), res=res, sink=notes) or {}
         if lst.get("is_list"):
             return record("a list of columns",
                           columns.render(lst).splitlines(), lst)
         # a live stream's chat log, before the document reader, which would
         # otherwise take it for prose and lose who said what
-        chat = guard(f"chat reader, pane {pi}",
-                     chat_reader.read_chat, pane_path, engine=engine,
-                     res=res, sink=notes) or {}
+        chat = {} if "chat" in skip else (guard(
+            f"chat reader, pane {pi}", _timed("chat", chat_reader.read_chat), pane_path,
+            engine=engine, res=res, sink=notes) or {})
         if chat.get("is_chat"):
             return record("a chat log", chat_reader.render(chat).splitlines(),
                           chat)
         # a document: the words AND the shape
         note = guard(f"document reader, pane {pi}",
-                     note_reader.read_note, pane_path, res=res,
+                     _timed("document", note_reader.read_note), pane_path, res=res,
                      sink=notes) or {"markdown": "", "backed": 0}
         # lines of TEXT, not lines of output: the fences round a properties
         # block are structure the reader emits, so counting them lets two
@@ -569,7 +644,7 @@ def say_pane(pane_path, pi, engine, drawn=(), camera=None, in_ui=True):
         hue = None
         if sum(ch.isalnum() for ch in t) >= 3:
             if pane_img is None:
-                pane_img = cv2.imread(pane_path)
+                pane_img = machine.pixels(pane_path)
             if pane_img is not None:
                 hue = guard(f"ink colour, pane {pi}",
                             note_reader.row_ink_color, pane_img,
@@ -1012,6 +1087,50 @@ def main():
           "dense": dense, "at": at, "moments": len(runs[:limit]),
           "joined": joined, "text": tee.take()})
 
+    # WHAT IS IN THIS VIDEO AT ALL, ASKED BEFORE A SINGLE PANE IS READ.
+    #
+    # Every pane is offered to the tree reader, then the terminal, then the
+    # columns, then the chat, then the document, and at most one claims it.
+    # Measured over one video: those five are 58% of all reader time, the
+    # terminal reader alone is 16% and claimed NOTHING because the video holds
+    # no terminal, and the chat reader is another 7% for the same reason. A
+    # quarter of the reading went on proving the absence of things a glance
+    # would have ruled out.
+    #
+    # macOS writes the frontmost program's name at the left of the menu bar.
+    # Seeking to each chosen moment and decoding ONLY the top sixty rows costs
+    # about a third of a second where a whole frame costs twelve to fifteen;
+    # all of one video's moments came to 18 seconds including the reading.
+    #
+    # It runs here, before the loop, rather than alongside it: a terminal that
+    # appeared once at the END of a video would be missed by anything learning
+    # as it goes, and missed silently. And an ABSENCE is only believed when
+    # enough bars were actually read -- a recording that crops the menu bar away
+    # teaches nothing about what it contains, and runs every reader as before.
+    skip_readers = set()
+    # NAMED BY HAND, for measuring and for a video whose menu bar is cropped
+    # away: `SN_NO_READERS=terminal,chat` says outright which readers this
+    # recording has no use for. The naming pass below decides it from the menu
+    # bar when it can read three of them; this is the same answer given
+    # directly, and it is what an A/B of the gate is run with.
+    if os.environ.get("SN_NO_READERS"):
+        skip_readers = {w.strip() for w in os.environ["SN_NO_READERS"].split(",") if w.strip()}
+        print("  [told not to run: %s]" % ", ".join(sorted(skip_readers)))
+    elif os.environ.get("SN_APPS", "1") == "1":
+        try:
+            _t0 = time.perf_counter()
+            _seen, _kinds, _bars = apps.scan_video(video, [r["best"]["t"] for r in runs[:limit]])
+            skip_readers = apps.readers_to_skip(_kinds, _bars)
+            print("  [the video shows %s -- %d menu bar(s) read in %.1fs%s]"
+                  % (", ".join("%s x%d" % (k, v) for k, v in sorted(_seen.items())) or "no program named",
+                     _bars, time.perf_counter() - _t0,
+                     ("; not run: " + ", ".join(sorted(skip_readers))) if skip_readers else ""))
+            keep({"kind": "programs", "seen": _seen, "kinds": sorted(_kinds),
+                  "bars": _bars, "skipped": sorted(skip_readers)})
+        except Exception as why:
+            print("  [could not name the video's programs: %s: %s]"
+                  % (type(why).__name__, why))
+
     from rapidocr_onnxruntime import RapidOCR
     engine = RapidOCR()
     standing = set()
@@ -1286,7 +1405,7 @@ def main():
             pi, box_t, pane_path, camera, hits_ui = job
             ta = time.perf_counter()
             rec = say_pane(pane_path, pi, engine, drawn, camera,
-                           in_ui=hits_ui)
+                           in_ui=hits_ui, box=box_t, skip=skip_readers)
             return pi, rec, round(time.perf_counter() - ta, 2)
 
         if len(jobs) > 1 and PANE_WORKERS > 1:
@@ -1305,6 +1424,10 @@ def main():
                 rec["image"] = pane_path
                 records.append(rec)
         lap("panes")
+        if os.environ.get("SN_READERS") and READER_SECS:
+            tally = sorted(READER_SECS.items(), key=lambda kv: -kv[1])
+            print("  [readers: " + ", ".join("%s %.1fs" % (k, v) for k, v in tally) + "]")
+            READER_SECS.clear()
         prev = {"ts": ts, "how": how, "grey": grey, "boxes": cur_boxes}
         # a reading identical to one already said in full -- same kind, same
         # place on the screen, every line and mark the same -- points back
@@ -1357,6 +1480,15 @@ def main():
         moment["took"] = took
         sys.stderr.write(f"[{ts} took {took['total']:.1f} s: " + ", ".join(
             f"{k} {v}" for k, v in took.items() if k not in ("per_pane", "total")) + "]\n")
+        if os.environ.get("SN_PIXSTAT"):
+            sys.stderr.write("   " + machine.pixels_report() + "\n")
+            if CASCADE:
+                sys.stderr.write("   the cascade: " + ", ".join(
+                    "%s %.0f s" % (k, v) for k, v in sorted(CASCADE.items(), key=lambda kv: -kv[1])) + "\n")
+            sys.stderr.write("   pictures written: %d panes in %.1f s, %d of them enlarged in %.1f s;"
+                             " write_once wrote %d in %.1f s\n"
+                             % (panes.WROTE[0], panes.WROTE[1], panes.WROTE[2], panes.WROTE[3],
+                                machine.WRITE_ONCE[0], machine.WRITE_ONCE[1]))
         moment.update(panes=records, quiet=quiet, unwritten=unwritten,
                       coverage=cov, text=tee.take())
         keep(moment)

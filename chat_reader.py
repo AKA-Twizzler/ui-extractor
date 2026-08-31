@@ -246,14 +246,14 @@ def confirmed_elsewhere(png_path, entries, engine=None, res=None):
 
 
 def read_chat(png_path, engine=None, res=None):
-    bgr = cv2.imread(png_path)
+    bgr = machine.pixels(png_path)
     if bgr is None:
         return {"is_chat": False, "why": "could not read the image"}
     small_gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
     small_mask = note_reader.ink_mask(small_gray)
     bgr = machine.enlarge(bgr, 3)
     big = png_path.replace(".png", "_3x.png")
-    cv2.imwrite(big, bgr)
+    machine.write_once(big, bgr, png_path)
     gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
     mask = note_reader.ink_mask(gray)
     rows = [r for r in note_reader.tess_rows(big, gray) if r["text"].strip()]

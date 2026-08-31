@@ -276,7 +276,7 @@ def read_panel(bgr, box, scratch, engine=None):
 
 
 def read_overlays(png_path, engine=None):
-    bgr = cv2.imread(png_path)
+    bgr = machine.pixels(png_path)
     if bgr is None:
         return {"panels": [], "why": "could not read the image"}
     out = []
@@ -434,7 +434,7 @@ def moving_zones(paths, work_width=1280):
 
     Returns (zones, why): boxes in the shots' own pixels, or ([], reason).
     """
-    shots = [cv2.imread(p) for p in paths]
+    shots = [machine.pixels(p) for p in paths]
     shots = [s for s in shots if s is not None]
     if len(shots) < 4 or len({s.shape for s in shots}) != 1:
         return [], "not enough matching looks across the stretch"
@@ -582,7 +582,7 @@ def standing_text(paths, engine=None):
     """
     if len(paths) < 3:
         return []
-    shots = [cv2.imread(p) for p in paths]
+    shots = [machine.pixels(p) for p in paths]
     shots = [s for s in shots if s is not None]
     if len(shots) < 3 or len({s.shape for s in shots}) != 1:
         return []

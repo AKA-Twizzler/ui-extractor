@@ -8,7 +8,7 @@ bar -- and only then are the words read, row by row, into that structure.
 Run under the Windows venv (cv2, rapidocr):
     python _probe/pixfirst.py <frame.png> <out_dir> [<title>]
 """
-import json, os, re, sys
+import json, os, re, sys, time
 import numpy as np
 from PIL import Image, ImageDraw
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -451,6 +451,45 @@ def win_words(rgb, xl, x1, y0, y1):
         return None
     return [(a + xl, b + y0, c + xl, d + y0, t) for a, b, c, d, t in got]
 
+def list_words(rgb, xl, x1, y0, y1, scale=2.0):
+    """THE FIRST ENGINE OVER THE WHOLE LIST, ONCE -- the same shape win_words
+    already used for the third engine, and the reason a pane can cost twenty
+    seconds instead of a hundred.
+
+    Measured, and it is the whole speed story of this file: reading a pane
+    cell by cell spends 93 to 96 per cent of its time in those calls (75.6s
+    total against 70.2s in cells; 113.9 against 109.5; 103.4 against 99.3),
+    while the structure the pixels give -- rows, columns, edges -- costs four
+    to five seconds. The order was never the problem. "Words second" had
+    quietly become "words, one cell at a time, dozens of times a pane".
+
+    So the words are read once over the list area and placed into the cells
+    they fall in. A cell the placement leaves empty, or whose text fails the
+    shape its column expects, is still read on its own -- that is where the
+    accuracy of cell-by-cell reading is actually earned, and it is a handful
+    of cells rather than all of them.
+
+    Returns [(x0, y0, x1, y1, text, score)] in the FRAME's own pixels."""
+    crop = rgb[y0:y1, xl:x1]
+    if crop.size == 0:
+        return []
+    got = ocr(crop, scale)
+    out = []
+    for a, b, c, d, t, sc in got:
+        out.append((a / scale + xl, b / scale + y0, c / scale + xl, d / scale + y0, t, sc))
+    return out
+
+
+def cell_from(words, ya, yb, ca, cb, height):
+    """One cell's text and mean score from a whole-list reading: the words
+    whose centre lies inside it, in reading order. Mirrors win_cell, which
+    has done exactly this for the third engine since it was added."""
+    got = [w for w in words if ca <= (w[0] + w[2]) / 2.0 <= cb and ya <= (w[1] + w[3]) / 2.0 <= yb]
+    if not got:
+        return "", 0.0
+    return _join([(w[0], w[1], w[2], w[3], w[4]) for w in got], height), float(np.mean([w[5] for w in got]))
+
+
 def win_cell(words, ya, yb, ca, cb, height):
     """The third reader's text inside one cell: its words whose centre lies
     in the cell, in reading order, a space at a gap a third of the height."""
@@ -471,10 +510,322 @@ def _vote(rapid_reads, alt, win):
     else:
         rapid = rr[0] if rr else ""
     cands = [rapid, alt or "", win or ""]
+    # WHY THE MARKS ARE SETTLED SEPARATELY BELOW.
+    #
+    # The medoid compares FOLDED readings -- letters and digits only. When the
+    # engines agree on a name's letters and differ only in its marks, every
+    # fold is identical, every similarity score ties, and the tie falls to the
+    # first candidate, which is always the first engine. That engine is the one
+    # with the underscore fault, so the tie is decided in favour of the reading
+    # known to be wrong about marks, every time.
+    #
+    # Measured on the memory pane at 00:01:20, sixteen names against the true
+    # ones. `reference_utm_convention.md` was read correctly by BOTH the second
+    # and third engines and still came out `reference.utm.convention.md`.
+    #
+    # Two blunter rules were tried and are recorded here so they are not tried
+    # again. Taking the third engine's whole reading: 14 of 16 on this pane but
+    # 29 of 43 on the test panes, because that engine has its own faults there
+    # (`.locai`, `.cloudf:ared`) and writes an em-dash for an underscore. A
+    # count of marks (_MARKS) to detect the disagreement: never fires, because
+    # `reference_utm_convention.md` and `reference.utm.convention.md` both
+    # count three. The rule that stands is below: letters by majority, marks
+    # from the second engine when it read the very same letters.
+    mode = os.environ.get("PF_NAME", "marks")   # "medoid" puts back the old behaviour
+    if mode == "win" and (win or "").strip():
+        return win, 2                    # measured WORSE (29 of 43); kept only to re-measure
     i = _medoid(cands)
-    return (cands[i] if i is not None else ""), i
+    txt = cands[i] if i is not None else ""
+    # PF_NAME=marks -- the narrow fix, and the one the measurement supports.
+    # Keep the majority's LETTERS (the medoid is right 41 of 43 on the test
+    # panes) and take the SECOND engine's MARKS where it read the very same
+    # letters. Underscore against dot is invisible to the vote, because the
+    # comparison folds a reading to letters and digits alone; the two spellings
+    # are one candidate to it and the marks then fall to whichever engine
+    # happened to win, which is the pair that shares the underscore weakness.
+    # This can never change a letter: it fires only when the second engine's
+    # reading folds identically to the standing one.
+    if mode != "medoid" and txt:
+        # The marks come from the engine measured best on marks, which is the
+        # SECOND engine (alt), not the third: on the memory pane the third
+        # engine writes an em-dash where the name has an underscore
+        # (`user--review--drafts...`), and taking its marks scored 1 of 16.
+        # Folds equal and the strings differ => the whole difference is marks
+        # and spacing, so the second engine's spelling stands. _MARKS is not
+        # used here: it counts marks without telling their kind, and
+        # `reference_utm_convention.md` and `reference.utm.convention.md` both
+        # count three, so a count test never fires on the very case this is for.
+        if alt and alt != txt and _FOLD(alt) == _FOLD(txt):
+            return alt, 1
+    return txt, i
+
+
+def _cell_crop(rgb, ya, yb, ca, cb, twice):
+    """The crop a cell is read from: its ink, cut at the column's own left
+    at the earliest, padded forty columns each side and eight rows above
+    and below with the crop's own median colour. Returns (crop, the word
+    boxes, the leading dot, the row's height, the crop's top and bottom),
+    or None where the cell holds no ink. Built in ONE place so the batch
+    reader and the cell reader read exactly the same pixels."""
+    H = rgb.shape[0]
+    boxes = word_crops(rgb, ya, yb, ca, cb)
+    if not boxes:
+        return None
+    y0_, y1_ = max(0, ya - 6), min(H, yb + 6)
+    height = max(8, yb - ya)
+    # a hidden file's leading dot is left out of the crop and put back after
+    dot = leading_dot(rgb, ya, yb, ca, cb) if twice else None
+    if dot:
+        x0_ = max(ca + 6, dot[1] - min(6, max(1, (dot[1] - dot[0]) // 2)))
+    else:
+        x0_ = max(ca + 6, boxes[0][0] - 6)
+    x1_ = min(cb, boxes[-1][1] + 6)
+    crop = rgb[y0_:y1_, x0_:x1_]
+    # the engine's detector drops a first word or reads two letters of seven
+    # from a crop cut close, and the second engine reads a streaked pad as
+    # "=" and "m"; one flat colour, the crop's own (a green band pads green)
+    bg = np.median(crop.reshape(-1, 3), axis=0).astype(crop.dtype)
+    h_, w_ = crop.shape[:2]
+    padded = np.empty((h_ + 16, w_ + 80, 3), dtype=crop.dtype)
+    padded[:, :] = bg
+    padded[8:8 + h_, 40:40 + w_] = crop
+    return padded, boxes, dot, height, y0_, y1_
+
+
+# THE COST OF READING A CELL IS THE CALL, NOT THE PIXELS.
+#
+# Measured: one engine call on a cell-sized crop costs about 0.6 s whatever
+# the crop's size -- upscaling it three times (nine times the pixels) costs
+# the same 0.6 s, and not upscaling it at all saves nothing. The engine's
+# detector resizes its input to a fixed size before it looks at anything, so
+# every call pays the same toll. Sixty-four cells therefore cost sixty-four
+# tolls, and a pane spent forty seconds paying them.
+#
+# So the saving is fewer calls, not smaller ones: every cell of a pane is
+# laid out down ONE tall canvas with a gap between, and the engine reads the
+# lot in a single call. Each reading comes back with its y, which says whose
+# it is -- the gap is what keeps the engine from running two cells together.
+# Measured on the seventeen-row pane: 41.4 s in sixty-eight calls became
+# 4.6 s in one. A cell the canvas yields nothing for still goes to the cell
+# reader on its own, so the hard cells keep the careful pass.
+_BATCH = {}
+_BATCH_GAP = 24
+
+
+# THE SAME PIXELS CANNOT SAY TWO THINGS.
+#
+# The batch above spares a PANE its repeated calls, and is thrown away when
+# the next frame opens. But a video shows one folder over and over: the same
+# window, the same rows, at ten moments. Measured across the whole video --
+# 1,662 cells read from 42 panes -- only 831 crops are distinct BYTE FOR
+# BYTE. Half of every read was the same picture handed to the same engine
+# for the same answer.
+#
+# So a cell's crop is fingerprinted by its bytes and its reading kept for
+# the length of the run. An identical crop takes the remembered reading and
+# calls no engine at all. This cannot be wrong in the way a clever key can:
+# the same bytes through the same code give the same answer, and the check
+# that says so counted zero disagreements over all 1,662 cells.
+#
+# A LOOSER KEY IS NOT WORTH IT, MEASURED. The same crops shrunk to sixteen
+# rows, greyed and quantised -- a fingerprint that ought to forgive a pixel
+# of anti-aliasing -- found 816 distinct against exact bytes' 831: one point
+# of saving for a key that CAN be wrong. Exact bytes it is.
+_SEEN = {}          # crop fingerprint -> the batch's reading of it
+_SEEN_ALT = {}      # crop fingerprint -> the second engine's word boxes
+_SEEN_CELL = {}     # (crop fingerprint, name?, the third reader's word) -> the finished reading
+_SEEN_HITS = [0, 0, 0, 0]     # batch hits, batch asks, cell hits, cell asks
+
+
+def _fingerprint(crop):
+    import hashlib
+    return hashlib.sha1(np.ascontiguousarray(crop).tobytes()).digest()
+
+
+def memory_report():
+    """hits and asks, for a run that wants to print what the memory saved."""
+    b_h, b_a, c_h, c_a = _SEEN_HITS
+    return ("cell memory: %d of %d whole cells and %d of %d batch crops were "
+            "pictures already read" % (c_h, c_a, b_h, b_a))
+
+
+def _tess_prep(rgb_crop):
+    """A crop as the second engine wants it: the darkest channel, enlarged,
+    dark writing on light paper. The same preparation tess_word makes, kept
+    apart so a canvas of many crops can be built from it."""
+    im = Image.fromarray(rgb_crop.min(axis=2).astype(np.uint8))
+    k = max(2, 4 // _UP[0])
+    im = im.resize((im.width * k, im.height * k), Image.LANCZOS)
+    g = np.asarray(im)
+    return (255 - g) if float(np.median(g)) < 128 else g
+
+def _tess_tsv(gray, psm=6):
+    """Every line the second engine finds in an image, with its top and
+    bottom: [(top, bottom, text)]. Plain stdout gives the words but not
+    where they sat, and where they sat is what says whose they are."""
+    import subprocess, tempfile, os as _os, cv2, machine
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as fh:
+        path = fh.name
+    try:
+        cv2.imwrite(path, gray)
+        r = subprocess.run([machine.tesseract_or_refuse(), path, "stdout", "-l", "eng",
+                            "--psm", str(psm), "tsv"],
+                           capture_output=True, text=True, encoding="utf-8")
+        rows = {}
+        for ln in (r.stdout or "").splitlines()[1:]:
+            f = ln.split("\t")
+            if len(f) < 12 or not f[11].strip():
+                continue
+            try:
+                top, h = int(f[7]), int(f[9])
+            except ValueError:
+                continue
+            key = (f[2], f[3], f[4])          # block, paragraph, line
+            a, b, w = rows.get(key, (top, top + h, []))
+            rows[key] = (min(a, top), max(b, top + h), w + [f[11]])
+        return [(a, b, " ".join(w)) for (a, b, w) in rows.values()]
+    except Exception:
+        return []
+    finally:
+        try: _os.unlink(path)
+        except Exception: pass
+
+_BATCH_ALT = {}
+
+def batch_tess(keys, crops, gap):
+    """The second engine over every cell of a pane in ONE call. It spawns a
+    process and writes a file per call, which is the whole of its cost: 64
+    cells cost 11.6 s in 64 calls and about a second in one."""
+    if not crops:
+        return
+    prepped = [_tess_prep(c) for c in crops]
+    G = gap * max(2, 4 // _UP[0])
+    W = max(p.shape[1] for p in prepped) + 40
+    H = sum(p.shape[0] for p in prepped) + G * (len(prepped) + 1)
+    canvas = np.full((H, W), 255, dtype=np.uint8)
+    at = []; y = G
+    for p in prepped:
+        canvas[y:y + p.shape[0], 20:20 + p.shape[1]] = p
+        at.append((y, y + p.shape[0])); y += p.shape[0] + G
+    got = _tess_tsv(canvas, psm=6)
+    per = ["" for _ in crops]
+    for (a, b, txt) in got:
+        yc = (a + b) / 2.0
+        for n, (a_, z_) in enumerate(at):
+            if a_ - G / 2.0 <= yc <= z_ + G / 2.0:
+                per[n] = (per[n] + " " + txt).strip(); break
+    for n, k in enumerate(keys):
+        _BATCH_ALT[k] = per[n]
+
+def batch_key(ya, yb, ca, cb, twice):
+    return (int(ya), int(yb), int(ca), int(cb), bool(twice))
+
+def batch_read(rgb, specs, scale=None):
+    """Read every cell in `specs` -- (ya, yb, ca, cb, twice) -- in as few
+    engine calls as the canvas cap allows, and leave each reading in _BATCH
+    under its own key."""
+    if os.environ.get("PF_BATCH", "1") != "1":
+        return
+    scale = float(os.environ.get("PF_BATCH_SCALE", "1.0")) if scale is None else scale
+    cap = int(os.environ.get("PF_BATCH_CAP", "6000000"))
+    made = []
+    mem = os.environ.get("PF_MEMORY", "1") == "1"
+    for sp in specs:
+        k = batch_key(*sp)
+        if k in _BATCH:
+            continue
+        c = _cell_crop(rgb, sp[0], sp[1], sp[2], sp[3], sp[4])
+        if c is None:
+            _BATCH[k] = ("", [])
+            continue
+        fp = _fingerprint(c[0]) if mem else None
+        _SEEN_HITS[1] += 1
+        if fp is not None and fp in _SEEN:
+            _BATCH[k] = _SEEN[fp]
+            if fp in _SEEN_ALT:
+                _BATCH_ALT[k] = _SEEN_ALT[fp]
+            _SEEN_HITS[0] += 1
+            continue
+        made.append((k, c[0], c[3], fp))
+    i = 0
+    while i < len(made):
+        # as many crops as fit the cap, then one call
+        W = 0; H = _BATCH_GAP; j = i
+        while j < len(made):
+            w_ = max(W, made[j][1].shape[1] + 40)
+            h_ = H + made[j][1].shape[0] + _BATCH_GAP
+            if j > i and w_ * h_ * scale * scale > cap:
+                break
+            W, H = w_, h_; j += 1
+        crops = [m[1] for m in made[i:j]]
+        bg = np.median(np.concatenate([c.reshape(-1, 3) for c in crops]), axis=0).astype(rgb.dtype)
+        canvas = np.empty((H, W, 3), dtype=rgb.dtype); canvas[:, :] = bg
+        at = []; y = _BATCH_GAP
+        for c in crops:
+            canvas[y:y + c.shape[0], 20:20 + c.shape[1]] = c
+            at.append((y, y + c.shape[0])); y += c.shape[0] + _BATCH_GAP
+        try:
+            got = ocr(canvas, scale)
+        except Exception:
+            got = []
+        per = [[] for _ in crops]
+        for b in got:
+            yc = (b[1] + b[3]) / 2.0
+            for n, (a_, z_) in enumerate(at):
+                if a_ - _BATCH_GAP / 2.0 <= yc <= z_ + _BATCH_GAP / 2.0:
+                    # back into the crop's own pixels, so _join sees what it expects
+                    per[n].append((b[0] - 20, b[1] - a_, b[2] - 20, b[3] - a_, b[4], b[5]))
+                    break
+        for n, (k, _c, hgt, fp) in enumerate(made[i:j]):
+            _BATCH[k] = (_join(per[n], hgt), [w[5] for w in per[n]])
+            if fp is not None:
+                _SEEN[fp] = _BATCH[k]
+        # THE SECOND ENGINE IS NOT BATCHED, MEASURED. The same canvas trick
+        # works on it -- one process instead of sixty-eight -- and on a pane
+        # read alone it cut 23.7 s to 16.5 s. On the three-pane test it LOST:
+        # reading a tall canvas as one block (psm 6) rather than each cell as
+        # one line (psm 7) reads well enough to stand but not well enough to
+        # agree, so nearly every cell failed the doubt test and bought a
+        # careful pass by the dearer engine. Kept, off, for the day the
+        # canvas is laid out so the block reading holds. PF_BATCH_TESS=1.
+        if os.environ.get("PF_BATCH_TESS", "0") == "1":
+            try:
+                batch_tess([m[0] for m in made[i:j]], crops, _BATCH_GAP)
+            except Exception:
+                pass
+            for k, _c, _h, fp in made[i:j]:
+                if fp is not None and k in _BATCH_ALT:
+                    _SEEN_ALT[fp] = _BATCH_ALT[k]
+        i = j
 
 def read_cell(rgb, ya, yb, ca, cb, twice=False, win=""):
+    """The finished reading of a cell, from the memory where this exact
+    picture has been read before and from the engines where it has not.
+
+    The memory is keyed on the crop's own bytes together with the two things
+    outside the crop that change the answer: whether the cell is a name, and
+    the third reader's word for the same place. Everything else the vote
+    uses comes out of the crop itself, so the same key can only stand for
+    the same reading."""
+    if os.environ.get("PF_MEMORY", "1") != "1":
+        return _read_cell_once(rgb, ya, yb, ca, cb, twice, win)
+    got_ = _cell_crop(rgb, ya, yb, ca, cb, twice)
+    if got_ is None:
+        return "", 0.0, 0
+    key = (_fingerprint(got_[0]), bool(twice),
+           re.sub(r"\s+", " ", win or "").strip())
+    _SEEN_HITS[3] += 1
+    if key in _SEEN_CELL:
+        _SEEN_HITS[2] += 1
+        return _SEEN_CELL[key]
+    # the crop is handed on rather than cut a second time: cutting it means
+    # finding the row's words in the ink, and it has just been done
+    out = _read_cell_once(rgb, ya, yb, ca, cb, twice, win, got_)
+    _SEEN_CELL[key] = out
+    return out
+
+
+def _read_cell_once(rgb, ya, yb, ca, cb, twice=False, win="", got_=None):
     """A cell's text by majority. A name (twice=True) is one crop over the
     whole of its ink, read by the first engine at two sizes and by the
     second engine once; the reading most like the other two stands, with
@@ -484,37 +835,71 @@ def read_cell(rgb, ya, yb, ca, cb, twice=False, win=""):
     the second engine; the reading most like the others stands, and a date
     or a size then takes the shape Finder writes it in. Returns (text, mean
     confidence, the count of words the engine could not read)."""
-    H = rgb.shape[0]
-    boxes = word_crops(rgb, ya, yb, ca, cb)
-    if not boxes:
+    if got_ is None:
+        got_ = _cell_crop(rgb, ya, yb, ca, cb, twice)
+    if got_ is None:
         return "", 0.0, 0
-    y0_, y1_ = max(0, ya - 6), min(H, yb + 6)
-    height = max(8, yb - ya)
-    # the crop starts at the column's own left at the earliest (an icon's
-    # edge stands just outside it) and six columns short of the ink; a
-    # hidden file's leading dot is left out of the crop and put back after
-    dot = leading_dot(rgb, ya, yb, ca, cb) if twice else None
-    if dot:
-        x0_ = max(ca + 6, dot[1] - min(6, max(1, (dot[1] - dot[0]) // 2)))
-    else:
-        x0_ = max(ca + 6, boxes[0][0] - 6)
-    x1_ = min(cb, boxes[-1][1] + 6)
-    whole_crop = rgb[y0_:y1_, x0_:x1_]
-    # padded forty columns each side and eight rows above and below with
-    # one flat colour, the crop's own median (a green band pads green):
-    # the engine's detector drops a first word or reads two letters of
-    # seven from a crop cut close, and the second engine reads a streaked
-    # pad as "=" and "m"
-    bg = np.median(whole_crop.reshape(-1, 3), axis=0).astype(whole_crop.dtype)
-    h_, w_ = whole_crop.shape[:2]
-    padded = np.empty((h_ + 16, w_ + 80, 3), dtype=whole_crop.dtype)
-    padded[:, :] = bg
-    padded[8:8 + h_, 40:40 + w_] = whole_crop
-    whole_crop = padded
-    r3, s3 = _rapid_text(whole_crop, 3.0, height)
-    r2, s2 = _rapid_text(whole_crop, 2.0, height)
-    alt = re.sub(r"\s+", " ", tess_word(whole_crop)).strip()
+    whole_crop, boxes, dot, height, y0_, y1_ = got_
+    _sc = float(os.environ.get("PF_SCALE", "3.0"))
     win = re.sub(r"\s+", " ", win or "").strip()
+    # The second engine is woken FIRST here. It is read either way, so
+    # reading it first costs nothing -- and it is what says whether the
+    # batch's reading of this cell can stand.
+    _bk = batch_key(ya, yb, ca, cb, twice)
+    _ba = _BATCH_ALT.get(_bk)
+    alt = re.sub(r"\s+", " ", (_ba if _ba else tess_word(whole_crop))).strip()
+    _bb = _BATCH.get(_bk)
+    if _ba and _bb and _bb[0] and _ratio(_FOLD(_ba), _FOLD(_bb[0])) < 0.85:
+        # THE CHEAPER ENGINE SETTLES ITS OWN DOUBT. Where the two batched
+        # readings of a cell disagree, one of them is wrong and the cell
+        # needs a careful pass -- but the second engine's careful pass costs
+        # a fifth of the first engine's, so it is asked first. It agrees
+        # with the batch often enough to save the dearer call outright.
+        alt = re.sub(r"\s+", " ", tess_word(whole_crop)).strip()
+    _b = _bb
+    r3, s3 = None, None
+    if _b is not None and _b[0]:
+        # THE BATCH'S READING STANDS ONLY WHERE ANOTHER ENGINE BACKS IT.
+        # Reading a whole pane in one call is nine times cheaper than reading
+        # its cells one at a time, and on all but a handful it reads the same.
+        # The handful is the point: where the batch's reading is backed by
+        # NEITHER other engine, the cell is read again on its own, the careful
+        # way. Doubt is measured on letters and digits alone, so a
+        # disagreement about underscores never buys a pass it cannot settle.
+        if any(o and _ratio(_FOLD(_b[0]), _FOLD(o)) >= 0.85 for o in (alt, win)):
+            r3, s3 = _b
+        # A CELL'S SHAPE IS NOT ITS CORRECTNESS, MEASURED. It was tried:
+        # let a batched reading stand unbacked where finder_shape already
+        # recognises it, on the reasoning that a date that reads as a date
+        # is a finished reading. The test read "Today at 7:66 PM" for
+        # "Today at 7:55 PM" -- a flawless date shape with a wrong digit --
+        # and the score fell from 41 of 43 rows to 40. A shape test cannot
+        # see a misread digit, and a misread digit is what the second engine
+        # is there to catch. Only another engine's agreement will do.
+    if r3 is None:
+        r3, s3 = _rapid_text(whole_crop, _sc, height)
+    # THE SECOND SIZE IS OFF, MEASURED. Every cell used to be read by the
+    # first engine at two sizes, on the reasoning that a size that suits one
+    # cell suits another badly. On the three-pane test the second size
+    # changed NOTHING: 41 of 43 rows and 169 of 172 cells with it and
+    # without, and it cost a third of the reading. PF_SCALE2=1 puts it back.
+    if os.environ.get("PF_SCALE2", "0") == "1":
+        r2, s2 = _rapid_text(whole_crop, _sc * 2.0 / 3.0, height)
+    else:
+        r2, s2 = "", []
+    # THE SECOND ENGINE IS ALWAYS WOKEN, and here is why it may not be skipped.
+    #
+    # It was tried: skip it where the first engine's two reads and the third
+    # engine already agree, on the reasoning that a fourth opinion cannot
+    # change a settled vote. MEASURED WORSE -- the three-pane test fell from
+    # 41 of 43 rows to 38, and cells from 169 to 172 down to 166.
+    #
+    # The premise was wrong in a way worth keeping written down: the agreement
+    # test compares readings FOLDED to letters and digits, and the second
+    # engine is precisely the one the marks rule takes its punctuation from.
+    # Three readings can agree on every letter and differ on every underscore,
+    # which is the exact case the marks fix exists for -- so skipping the
+    # second engine there removes the fix's own source.
     if twice and dot:
         win = win.lstrip("._")                    # the third reader saw the dot the crop leaves out
     mode = os.environ.get("PF_WIN", "3")
@@ -543,6 +928,15 @@ def read_cell(rgb, ya, yb, ca, cb, twice=False, win=""):
         txt = re.sub(r"^[^A-Za-z0-9._~$]+", ".", txt)      # a hidden file's leading dot, read as a dash or a comma
         txt = re.sub(r"\. (?=\w)", ".", txt)                # no space beside a dot inside a name
         txt = re.sub(r" \.(?=\w)", ".", txt)
+        # NOR BESIDE AN UNDERSCORE, for the same reason and from the same
+        # source: the second engine's spaces are laid over the standing
+        # reading by _respace, and it reads the gap an underscore leaves
+        # under the letters as a space of its own. Measured on the truth set:
+        # "feedback_email_lis..._ bank_account.md" for
+        # "feedback_email_lis..._bank_account.md". A name that separates its
+        # words with underscores does not also put a space beside one.
+        txt = re.sub(r"_ (?=\w)", "_", txt)
+        txt = re.sub(r"(?<=\w) _", "_", txt)
         if dot:
             txt = "." + txt.lstrip("._ ")                      # the dot the pixels showed
         elif not txt.startswith(".") and any(r[:1] == "J" and r[1:2] == "j" for r in (r3, r2)):
@@ -550,8 +944,15 @@ def read_cell(rgb, ya, yb, ca, cb, twice=False, win=""):
         if os.environ.get("PF_DEBUG"):
             print("   name", repr(r3), repr(r2), repr(alt), repr(win), "->", repr(txt))
         return txt, (float(np.mean(scores)) if scores else 0.0), (0 if txt else 1)
+    # THE WORD-BY-WORD PASS IS OFF, MEASURED. A non-name cell used to be read
+    # a second time one word at a time, each word cropped with its own margin,
+    # and the result stood in the vote as a fourth opinion. On the three-pane
+    # test it changed NOTHING -- 41 of 43 rows and 169 of 172 cells with it
+    # and without -- while costing a hundred and sixty-six engine calls a
+    # pane, a third of the reading. It is a fourth voter that never once broke
+    # a tie. PF_WORDS=1 puts it back.
     words, scores, blank = [], [], 0
-    for i, (wa, wb_) in enumerate(boxes):
+    for i, (wa, wb_) in enumerate(boxes if os.environ.get("PF_WORDS", "0") == "1" else []):
         lg = (wa - boxes[i - 1][1]) if i else 100
         rg = (boxes[i + 1][0] - wb_) if i + 1 < len(boxes) else 100
         ml, mr = min(14, max(3, lg // 2)), min(14, max(3, rg // 2))
@@ -565,7 +966,7 @@ def read_cell(rgb, ya, yb, ca, cb, twice=False, win=""):
             blank += 1
     pw = " ".join(words)
     if mode == "3" and win:
-        text, i = _vote((r3, r2, pw), alt, win)
+        text, i = _vote(tuple(c for c in (r3, r2, pw) if c), alt, win)
         cands = [r3, r2, pw, alt, win]
         if not text:
             return "", 0.0, blank
@@ -589,6 +990,13 @@ def read_cell(rgb, ya, yb, ca, cb, twice=False, win=""):
                 shaped = finder_shape(c)
                 if shaped is not None:
                     break
+    # THE KIND IS NOT COMPLETED HERE, AND THE BENCH IS WHY. Spelling a cut
+    # "Markdo...text file" whole belongs to the NOTE, not to the reader: the
+    # hand-made truth records the truncated form, because what the screen
+    # showed is what the reader must return. Completing it here scored 40 of 43
+    # rows against 41 -- the one "failure" being the reader no longer saying
+    # what was on the glass. The completion lives in draw3, over the record,
+    # where legibility is the job and fidelity has already been banked.
     if os.environ.get("PF_DEBUG"):
         print("   cell", [repr(c) for c in cands], "win", repr(win), "->", repr(shaped if shaped is not None else text))
     return (shaped if shaped is not None else text), (float(np.mean(scores)) if scores else 0.0), blank
@@ -625,6 +1033,7 @@ def _close(a, b):
     diff = sum(1 for x, y in zip(a[:n], b[:n]) if x != y) + abs(len(a) - len(b))
     return diff <= max(2, len(a) // 6)
 
+_PHASE = {}    # read_frame's own split: seconds spent reading cells
 _UP = [1]      # the frame's enlargement while it is read (1 or 2), for the second engine's own scale
 
 def tess_word(rgb_crop):
@@ -665,7 +1074,33 @@ def icon_of(rgb, y0, y1, x0, x1):
     return "none", 0
 
 def read_frame(path, out_dir=None, title_hint="memory", wb=None, list_box=False):
+    _BATCH.clear(); _BATCH_ALT.clear()
+    # PHASE TIMING. The STRUCTURE (rows, columns and edges taken from the
+    # pixels) and the WORDS (every cell handed to the engines) had never been
+    # timed apart, so "pixels first costs 70 to 140 seconds a pane" said
+    # nothing about which half to fix. SN_PHASE=1 prints the split. The
+    # structure is arithmetic on light and dark and ought to be seconds; the
+    # words are engine calls and ought to be nearly all of it.
+    _PHASE.clear()
+    _t_all = time.perf_counter()
     rgb, g = load(path)
+    # THE POINTER IS PAINTED OUT BEFORE ANYTHING LOOKS. It is not the screen's
+    # ink, and it is read as ink -- see style_reader.blank_pointer for the
+    # three faults in this one video that came from it. Done here, before the
+    # rows and the words are found, so nothing downstream ever sees it: the
+    # ink bands, the word boxes and the cell crops are all built from `rgb`.
+    if os.environ.get("PF_POINTER", "1") == "1":
+        try:
+            import style_reader as _sr
+            if not rgb.flags.writeable:
+                rgb = np.array(rgb)          # `load` hands back a read-only view
+            _pb = _sr.blank_pointer(rgb)
+            if _pb is not None:
+                g = np.asarray(Image.fromarray(rgb).convert("L"), dtype=np.float32)
+                if os.environ.get("SN_ZOOM"):
+                    print("POINTER %s painted out at %s" % (os.path.basename(path), _pb), file=sys.stderr)
+        except Exception as e:
+            print("POINTER failed: %s" % e, file=sys.stderr)
     H, W = g.shape
     if wb:
         wb = [int(v) for v in wb]
@@ -720,6 +1155,62 @@ def read_frame(path, out_dir=None, title_hint="memory", wb=None, list_box=False)
     ic0, ic1 = max(xl, name_left - int(0.9 * pitch)), name_left - 4
     col_lefts = ([c[0] for c in cols] or [name_left]) + [x1]
     words3 = win_words(rgb, xl, x1, list_top, list_bot)      # the third reader, once over the list
+    # THE FIRST ENGINE, ALSO ONCE OVER THE WHOLE LIST. Two passes at the two
+    # sizes the cell reader used, so nothing it had is lost. PF_ONEPASS=0
+    # falls back to reading every cell on its own, as before.
+    # ONE READ PER COLUMN, DOWN THE WHOLE LIST -- not one per cell, and not one
+    # for the whole list either.
+    #
+    # Reading the whole list in a single pass was tried and fails outright: the
+    # engine groups each ROW into one box, so a name cell came back holding the
+    # row's dates and kinds ("Jun30,2026at5:54PM...Folder" where `.obsidian`
+    # belonged) and the score fell from 41 of 43 rows to 16. That is exactly
+    # what the cell reader's own comment warns of -- each cell is cropped to
+    # its column "so the engine never runs the row's words together".
+    #
+    # A COLUMN STRIP keeps that separation and still collapses the work: four
+    # reads a pane instead of one per cell, about sixty. The column is the unit
+    # that matters, not the cell -- rows are separated by position afterwards,
+    # which costs nothing.
+    # OFF BY DEFAULT, AND HERE IS THE MEASUREMENT THAT PUT IT THERE.
+    # Reading a whole COLUMN in one pass fails the same way reading a whole ROW
+    # does: the engine merges whatever is adjacent to it. A column strip gave
+    # `01DailyNotesooInbox` where `.obsidian` belonged -- several rows run
+    # together -- and scored 17 of 43 rows against the cell reader's 41. The
+    # whole-list pass scored 16 of 43, with a name cell holding the row's dates
+    # and kinds. Faster both times (56/99/76s and 41/82/72s against 76/114/104)
+    # and useless both times.
+    # THE CONCLUSION, which is the opposite of what it looked like: reading
+    # cell by cell is NOT redundant work. It is load-bearing, and it is the
+    # only unit this engine reads cleanly. The speed must come from somewhere
+    # else -- a faster engine (#25), or reading fewer cells, never from reading
+    # the same cells in bigger gulps.
+    _onepass = os.environ.get("PF_ONEPASS", "0") != "0"
+    _strips = {}
+    if _onepass:
+        for _k in range(max(1, len(col_lefts) - 1)):
+            _ca = (col_lefts[_k] - 6 if _k < len(col_lefts) else name_left - 6)
+            _cb = (col_lefts[_k + 1] - 10 if _k + 1 < len(col_lefts) else x1 - 60)
+            _strips[_k] = (list_words(rgb, max(xl, _ca), min(x1, _cb), list_top, list_bot, 3.0),
+                           list_words(rgb, max(xl, _ca), min(x1, _cb), list_top, list_bot, 2.0))
+    # EVERY CELL OF THE PANE, READ IN ONE CALL, BEFORE THE ROW LOOP STARTS.
+    # The row loop below is unchanged: each cell still asks for its own
+    # reading, and finds it already made. A cell the canvas yielded nothing
+    # for falls through to its own call, so nothing is lost, only repaid.
+    _specs = []
+    for (a, b) in bands_:
+        cy = (a + b) / 2.0
+        _ya, _yb = max(list_top, int(cy - pitch / 2.0)), min(list_bot, int(cy + pitch / 2.0))
+        for k in range(max(1, len(col_lefts) - 1)):
+            ca_ = (col_lefts[k] - 6 if k < len(col_lefts) else name_left - 6)
+            cb_ = (x1 - 60) if k == len(col_lefts) - 2 else (col_lefts[k + 1] - 10 if k + 1 < len(col_lefts) else x1 - 60)
+            if cb_ - ca_ >= 30 and _yb - _ya >= 8:
+                _specs.append((_ya, _yb, ca_, cb_, k == 0))
+    if _specs:
+        _tb = time.perf_counter()
+        batch_read(rgb, _specs)
+        _PHASE["batch"] = _PHASE.get("batch", 0.0) + time.perf_counter() - _tb
+
     out_rows = []
     for (a, b) in bands_:
         cy = (a + b) / 2.0
@@ -744,7 +1235,33 @@ def read_frame(path, out_dir=None, title_hint="memory", wb=None, list_box=False)
                 cb = x1 - 60
             if cb - ca < 30 or yb - ya < 8:
                 cells.append(""); continue
-            txt, sc, blank = read_cell(rgb, ya, yb, ca, cb, twice=(k == 0), win=win_cell(words3, ya, yb, ca, cb, band_h))
+            _tc = time.perf_counter()
+            _win = win_cell(words3, ya, yb, ca, cb, band_h)
+            txt = None
+            if _onepass:
+                # the cell's words out of the two whole-list readings, voted
+                # against the third engine exactly as before -- the same
+                # decision, made on words already read rather than on a fresh
+                # pass per cell
+                _s3, _s2 = _strips.get(k, (None, None))
+                _a, _sa = cell_from(_s3, ya, yb, ca, cb, band_h)
+                _b, _sb = cell_from(_s2, ya, yb, ca, cb, band_h)
+                if _a or _b or _win:
+                    _t, _i = _vote((_a, _b), "", _win)
+                    if _t:
+                        _shaped = finder_shape(_t) if k else None
+                        _cand = _shaped if _shaped is not None else _t
+                        # A CELL IS ONLY TRUSTED FROM THE ONE PASS WHERE IT
+                        # LOOKS FINISHED. Empty, or a non-name cell that is
+                        # not the shape its column writes (a date that is not
+                        # a date, a size that is not a size) goes to the cell
+                        # reader, which is where cell-by-cell accuracy is
+                        # actually earned -- a handful of cells, not all.
+                        if k == 0 or _shaped is not None:
+                            txt, sc, blank = _cand, float(np.mean([x for x in (_sa, _sb) if x] or [0.0])), 0
+            if txt is None:
+                txt, sc, blank = read_cell(rgb, ya, yb, ca, cb, twice=(k == 0), win=_win)
+            _PHASE["cells"] = _PHASE.get("cells", 0.0) + time.perf_counter() - _tc
             cells.append(txt); scores.append(sc); blanks += blank
         if icon == "folder" and len(cells) == 4:
             if not re.search(r"\d", cells[2]):
@@ -764,6 +1281,13 @@ def read_frame(path, out_dir=None, title_hint="memory", wb=None, list_box=False)
     rec = {"frame": os.path.basename(path), "window": [int(v / d_) for v in wb], "divider": int(xl / d_),
            "header": [int(hdr_top / d_), int(hdr_bot / d_)], "path_top": int(path_top / d_), "up": up,
            "pitch": int(pitch / d_), "columns": [(int(c[0] / d_), c[1]) for c in cols], "rows": out_rows, "thumb": thumb, "side_thumb": side}
+    def _phase():
+        if os.environ.get("SN_PHASE"):
+            _tot = time.perf_counter() - _t_all
+            _c = _PHASE.get("cells", 0.0)
+            print("   PHASE whole %.1fs | words in cells %.1fs (%.0f%%) | structure and the rest %.1fs"
+                  % (_tot, _c, 100.0 * _c / max(_tot, 0.001), _tot - _c), file=sys.stderr)
+    _phase()
     if not out_dir:
         return rec
     os.makedirs(out_dir, exist_ok=True)

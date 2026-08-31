@@ -34,7 +34,7 @@ def runs_of(colmean):
 
 def main():
     png = sys.argv[1]
-    img = cv2.imread(png, cv2.IMREAD_GRAYSCALE)
+    img = machine.pixels(png, cv2.IMREAD_GRAYSCALE)
     lines = strip_furniture_by_gaps(group_lines(tesseract_tsv(png)))
 
     for ln in lines:

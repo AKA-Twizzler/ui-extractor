@@ -63,6 +63,23 @@ def win_path(p):
     return m.group(1).upper() + ":\\" + m.group(2).replace("/", "\\")
 
 
+def edge_profile(name):
+    """Edge's scratch profile, on the FAST local disk -- never beside the output.
+
+    It used to live in the out-dir, which sits on G:, a USB drive that also
+    carries the images, the WSL disk and whatever else is being copied at the
+    time. Edge writes its profile as it starts, so the render inherited that
+    drive's contention: measured on one and the same page, 2 seconds with the
+    profile on C: against 179 seconds with it on G:, and past the 300-second
+    limit altogether when the drive was busy, which failed the whole compare.
+    The pictures are unaffected -- only where the browser keeps its scratch.
+    """
+    base = "/mnt/c/Users/%s/AppData/Local/Temp/ui-extractor-edge" % os.environ.get("WINUSER", "trism")
+    d = os.path.join(base, name)
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
 def file_url(p):
     m = re.match(r"^/mnt/([a-z])/(.*)$", p)
     return "file:///%s:/%s" % (m.group(1).upper(), m.group(2))
@@ -106,7 +123,7 @@ def render_page(out, name, cells, cell_h, css, scale=1):
     if os.path.exists(png):
         os.remove(png)
     subprocess.run([EDGE, "--headless=new", "--disable-gpu", "--hide-scrollbars", "--no-first-run",
-                    "--user-data-dir=" + win_path(os.path.join(out, "edge-profile")),
+                    "--user-data-dir=" + win_path(edge_profile(name)),
                     "--window-size=%d,%d" % (1000 * scale, cell_h * len(cells)),
                     "--screenshot=" + win_path(png), file_url(hp)],
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=300)

@@ -240,7 +240,7 @@ if __name__ == "__main__":
     from rapidocr_onnxruntime import RapidOCR
     eng = RapidOCR()
     for p in paths:
-        bgr = cv2.imread(p)
+        bgr = machine.pixels(p)
         regions = ui_regions(bgr, eng)
         _, frac, s = verdict(bgr)
         if regions:

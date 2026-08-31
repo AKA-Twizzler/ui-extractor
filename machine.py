@@ -200,3 +200,125 @@ if __name__ == "__main__":
     for p in ("/mnt/g/Images", "/mnt/g/Video", "/mnt/nas/obsidian-vault"):
         there = here(p)
         print(f"{p:24} -> {there}   {'ok' if os.path.isdir(there) else 'MISSING'}")
+
+WRITE_ONCE = [0, 0.0]     # pictures write_once actually wrote, seconds
+
+
+def write_once(path, img, source=None):
+    """Write a picture only if it is not already on disk and current.
+
+    THE SAME 3x ENLARGEMENT WAS WRITTEN UP TO FOUR TIMES PER PANE. columns,
+    console_reader, chat_reader and note_reader each derive the same
+    `<pane>_3x.png` from the same pane and each wrote it, and the file is a
+    genuine shared artifact -- note_reader.tess_text_for reads it back and
+    checks.py tests for it -- so it cannot simply go. It only had to be written
+    ONCE. Measured on one 2280x1340 pane: enlarging costs 0.12 s and writing
+    the 6840x4020 PNG costs 3.42 s, so three of the four writes were three and
+    a half seconds each of the identical bytes.
+
+    Current means: the file exists and is no older than the picture it came
+    from, so a pane re-cut by a later run is never read as its predecessor.
+    """
+    import os as _os
+    try:
+        if _os.path.exists(path) and _os.path.getsize(path) > 0:
+            if source is None or not _os.path.exists(source):
+                return path
+            if _os.path.getmtime(path) >= _os.path.getmtime(source):
+                return path
+    except OSError:
+        pass
+    import cv2 as _cv2, time as _t
+    _a = _t.perf_counter()
+    _cv2.imwrite(path, img)
+    WRITE_ONCE[0] += 1
+    WRITE_ONCE[1] += _t.perf_counter() - _a
+    return path
+
+
+# THE SAME PANE WAS DECODED SEVEN TIMES.
+#
+# A pane is cut from the frame as an array, written to a PNG, and then read
+# straight back into an array by everything that looks at it: columns,
+# note_reader, tree_reader, style_reader, console_reader, chat_reader and hunt
+# each call cv2.imread on the same file. The `_3x.png` enlargement is worse --
+# 6840x4020 -- and two of them decode that as well.
+#
+# The picture on disk is a genuine shared artifact and stays; it is the
+# DECODING that had no reason to happen more than once. Measured on one
+# 2280x1340 pane: 0.18 s to decode, 0.004 s to hand back a copy of what was
+# already decoded.
+#
+# A COPY IS HANDED BACK, ALWAYS. A reader that writes into the array it is
+# given would otherwise poison every reader after it, and the copy costs a
+# fortieth of the decode it saves.
+_PIX = None
+_PIX_LOCK = None
+_PIX_BYTES = [0]
+_PIX_HITS = [0, 0, 0, 0.0, 0.0]   # hits, disk reads, bytes copied, seconds decoding, seconds copying
+# A 3x pane is 6480 x 6507 x 3 -- 126 MB held. The store keeps the most
+# recently used until it is over the cap, then drops the oldest, so a moment's
+# own pane is still there when the next reader asks for it and nothing is held
+# for a video's length. SN_PIXCAP raises it, in megabytes.
+_PIX_CAP = 600 * 1024 * 1024
+
+
+def pixels(path, flags=None):
+    """The pixels of a picture on disk, decoded once for the whole run.
+
+    Keyed on the file's path, its modified time and its size together with the
+    flags asked for, so a pane re-cut by a later run is never served as its
+    predecessor -- the same rule `write_once` follows above."""
+    global _PIX, _PIX_LOCK
+    import os as _os, cv2 as _cv2, collections as _c, threading as _t
+    if _PIX is None:
+        _PIX, _PIX_LOCK = _c.OrderedDict(), _t.Lock()
+    read = (lambda p: _cv2.imread(p)) if flags is None else (lambda p: _cv2.imread(p, flags))
+    try:
+        st = _os.stat(path)
+    except OSError:
+        return read(path)
+    if _os.environ.get("SN_PIXCACHE", "1") != "1":
+        return read(path)
+    # the modified time to the NANOSECOND, not the second: a pane rewritten
+    # within one second at the same size would otherwise be served as its
+    # predecessor, which is the one way this store could hand back a lie
+    key = (_os.path.abspath(path), flags, st.st_mtime_ns, st.st_size)
+    # THE READERS RUN AS THREADS IN ONE PROCESS (pipeline's pane pool), so
+    # this store is shared and must be locked: two threads evicting at once
+    # can leave the byte count wrong or pop an entry another is still holding.
+    with _PIX_LOCK:
+        got = _PIX.get(key)
+        if got is not None:
+            _PIX.move_to_end(key)
+            _PIX_HITS[0] += 1
+    if got is None:
+        _t0 = __import__("time").perf_counter()
+        got = read(path)
+        _PIX_HITS[3] += __import__("time").perf_counter() - _t0
+        if got is None:
+            return None
+        cap = int(_os.environ.get("SN_PIXCAP", "0")) * 1024 * 1024 or _PIX_CAP
+        with _PIX_LOCK:
+            _PIX_HITS[1] += 1
+            if key not in _PIX:
+                _PIX[key] = got
+                _PIX_BYTES[0] += got.nbytes
+            while _PIX_BYTES[0] > cap and len(_PIX) > 1:
+                _k, old_ = _PIX.popitem(last=False)
+                _PIX_BYTES[0] -= old_.nbytes
+    _PIX_HITS[2] += got.nbytes
+    _t1 = __import__("time").perf_counter()
+    out = got.copy()
+    _PIX_HITS[4] += __import__("time").perf_counter() - _t1
+    return out
+
+
+def pixels_report():
+    """reads from disk, hits, and megabytes copied out -- the numbers that say
+    whether decoding once is worth the copy it costs."""
+    h, m, b, td, tc = _PIX_HITS
+    saved = (td / m * h) if m else 0.0
+    return ("pictures: %d decoded from disk in %.1f s, %d handed back already "
+            "decoded (about %.1f s of decoding not done), %.0f MB copied out "
+            "in %.1f s" % (m, td, h, saved, b / 1e6, tc))

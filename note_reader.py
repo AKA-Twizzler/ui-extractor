@@ -368,7 +368,7 @@ def tess_text_for(png_path):
     big = png_path.replace(".png", "_3x.png")
     if not os.path.exists(big):
         return None
-    gray = cv2.imread(big, cv2.IMREAD_GRAYSCALE)
+    gray = machine.pixels(big, cv2.IMREAD_GRAYSCALE)
     if gray is None:
         return None
     rows = tess_rows(big, gray)
@@ -422,12 +422,12 @@ def reconcile_rows(rows, big_path, body_h, second=None):
 
 
 def read_note(png_path, engine=None, res=None):
-    bgr = cv2.imread(png_path)
+    bgr = machine.pixels(png_path)
     # everything is measured on a 3x enlargement: strokes are two or three
     # pixels at native size and the measurement can only land on whole values
     bgr = machine.enlarge(bgr, 3)
     big_path = png_path.replace(".png", "_3x.png")
-    cv2.imwrite(big_path, bgr)
+    machine.write_once(big_path, bgr, png_path)
     gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
     mask = ink_mask(gray)
     rows = tess_rows(big_path, gray)

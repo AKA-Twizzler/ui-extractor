@@ -95,7 +95,7 @@ def strip_furniture(lines, img_h):
 
 
 def load_gray(png_path):
-    img = cv2.imread(str(png_path), cv2.IMREAD_GRAYSCALE)
+    img = machine.pixels(str(png_path), cv2.IMREAD_GRAYSCALE)
     if img is None:
         raise ValueError(f"cannot read {png_path}")
     return img

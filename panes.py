@@ -479,6 +479,9 @@ def frame_regions(img, engine=None):
     return boxes
 
 
+WROTE = [0, 0.0, 0, 0.0]     # pictures written, seconds; enlargements, seconds
+
+
 def write_box(img, box, path, target=1400):
     """Cut a rectangle out of the ORIGINAL frame, not the shrunken copy.
 
@@ -494,9 +497,15 @@ def write_box(img, box, path, target=1400):
         return None
     scale = min(MAX_SCALE, max(1, int(target / crop.shape[1])))
     if scale > 1:
+        import time as _t
+        _a = _t.perf_counter()
         crop = cv2.resize(crop, (crop.shape[1] * scale, crop.shape[0] * scale),
                           interpolation=cv2.INTER_LANCZOS4)
+        WROTE[2] += 1; WROTE[3] += _t.perf_counter() - _a
+    import time as _t2
+    _b = _t2.perf_counter()
     cv2.imwrite(path, crop)
+    WROTE[0] += 1; WROTE[1] += _t2.perf_counter() - _b
     return crop
 
 

@@ -402,12 +402,12 @@ def find_prompt(lines):
 
 
 def read_console(png_path):
-    bgr = cv2.imread(png_path)
+    bgr = machine.pixels(png_path)
     if bgr is None:
         return {"is_console": False, "why": "could not read the image"}
     up = machine.enlarge(bgr, 3)
     big = png_path.replace(".png", "_3x.png")
-    cv2.imwrite(big, up)
+    machine.write_once(big, up, png_path)
     gray = cv2.cvtColor(up, cv2.COLOR_BGR2GRAY)
     mask = note_reader.ink_mask(gray)
     rows = [r for r in note_reader.tess_rows(big, gray) if r["text"].strip()]

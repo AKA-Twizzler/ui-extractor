@@ -293,6 +293,123 @@
     ]
    ],
    "cut_last": false
+  },
+  {
+   "frame": "00-01-30",
+   "wb": [
+    96,
+    272,
+    2376,
+    1612
+   ],
+   "rows": [
+    [
+     "project_company_...de_lead_magnet.md",
+     "Jun 30, 2026 at 5:51 PM",
+     "63 bytes",
+     "Markdo...text file"
+    ],
+    [
+     "project_company_...unch_campaign.md",
+     "Jun 30, 2026 at 5:51 PM",
+     "54 bytes",
+     "Markdo...text file"
+    ],
+    [
+     "project_company_a_membership.md",
+     "Jun 30, 2026 at 5:51 PM",
+     "49 bytes",
+     "Markdo...text file"
+    ],
+    [
+     "feedback_squeeze...o_choices_only.md",
+     "Jun 30, 2026 at 5:51 PM",
+     "59 bytes",
+     "Markdo...text file"
+    ],
+    [
+     "feedback_cold_tra..._not_for_selling.md",
+     "Jun 30, 2026 at 5:51 PM",
+     "61 bytes",
+     "Markdo...text file"
+    ],
+    [
+     "feedback_verify_lin...before_sending.md",
+     "Jun 30, 2026 at 5:51 PM",
+     "57 bytes",
+     "Markdo...text file"
+    ],
+    [
+     "feedback_utm_tags_on_every_link.md",
+     "Jun 30, 2026 at 5:51 PM",
+     "52 bytes",
+     "Markdo...text file"
+    ],
+    [
+     "feedback_idempot...bhook_handlers.md",
+     "Jun 30, 2026 at 5:51 PM",
+     "57 bytes",
+     "Markdo...text file"
+    ],
+    [
+     "feedback_own_you...ot_rented_land.md",
+     "Jun 30, 2026 at 5:51 PM",
+     "59 bytes",
+     "Markdo...text file"
+    ],
+    [
+     "feedback_give_aw...your_best_stuff.md",
+     "Jun 30, 2026 at 5:51 PM",
+     "55 bytes",
+     "Markdo...text file"
+    ],
+    [
+     "feedback_acknowl..._on_next_page.md",
+     "Jun 30, 2026 at 5:51 PM",
+     "60 bytes",
+     "Markdo...text file"
+    ],
+    [
+     "feedback_subject_...ity_plus_benefit.md",
+     "Jun 30, 2026 at 5:51 PM",
+     "65 bytes",
+     "Markdo...text file"
+    ],
+    [
+     "feedback_email_lis..._bank_account.md",
+     "Jun 30, 2026 at 5:51 PM",
+     "58 bytes",
+     "Markdo...text file"
+    ],
+    [
+     "feedback_three_or...variations_max.md",
+     "Jun 30, 2026 at 5:51 PM",
+     "61 bytes",
+     "Markdo...text file"
+    ],
+    [
+     "feedback_match_t...ad_to_the_page.md",
+     "Jun 30, 2026 at 5:51 PM",
+     "54 bytes",
+     "Markdo...text file"
+    ],
+    [
+     "feedback_write_like_a_friend.md",
+     "Jun 30, 2026 at 5:51 PM",
+     "49 bytes",
+     "Markdo...text file"
+    ],
+    [
+     "feedback_plain_pa..._beat_polished.md",
+     "Jun 30, 2026 at 5:51 PM",
+     "55 bytes",
+     "Markdo...text file"
+    ]
+   ],
+   "cut_last": false,
+   "note": "read by eye from the frame, all four columns. The mouse pointer sits on row 11. Every name and every Kind is cut BY THE SCREEN, which is why the truth records them cut: what the reader must return is what was on the glass."
   }
- ]
+ ],
+ "note_last_row": "The LAST ROW of the 00-00-30 and 00-01-30 panes is clipped by the path bar: looked at in the frame, only the top two thirds of its letters are drawn. The eye reads through the clipping and typed the row out whole; the reader marks it cut and drops it, and reads 'railwau' and 'EO TERE, AD AM' from the half-glyphs when made to try. Both are right about what they see. So four cells of every score are a row the pixels do not carry, and the open work is not to read it better -- it is to KEEP the row as a row, partly read, instead of losing it (task 20).",
+ "note_headroom": "WHAT IS LEFT TO WIN HERE, looked at cell by cell after the underscore rule took the score to 56 of 60 rows and 230 of 240 cells. Ten cells miss. Eight are the two last rows the path bar clips (see note_last_row). One is '.claude.json' at 00-00-30, and the frame shows the MOUSE POINTER drawn straight through the name between 'claude' and 'son' -- all three engines return nothing, which is the right answer from those pixels. One is a true misread: 'on_next_page' read as 'on_ne[y_page'. So nine of ten are pixels that do not carry the answer. The reader is at the ceiling of what one pane can give, and every further gain has to come from ACROSS MOMENTS -- the same name read at a moment the pointer was elsewhere and the row stood clear."
 }

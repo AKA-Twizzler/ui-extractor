@@ -131,14 +131,14 @@ def classify(pane_path):
     except Exception:
         pass
     try:
-        bgr = cv2.imread(pane_path)
+        bgr = machine.pixels(pane_path)
         if bgr is None:
             return None
         big = pane_path.replace(".png", "_3x.png")
         if not os.path.exists(big):
             up = machine.enlarge(bgr, 3)
             cv2.imwrite(big, up)
-        gray = cv2.cvtColor(cv2.imread(big), cv2.COLOR_BGR2GRAY)
+        gray = cv2.cvtColor(machine.pixels(big), cv2.COLOR_BGR2GRAY)
         spread = char_spread(big, gray)
         if spread is None:
             return None

@@ -20,6 +20,7 @@ the record carries what was seen and the verdict can be re-judged later.
 Nothing here reads text; nothing here guesses from a name.
 """
 import cv2
+import machine
 import numpy as np
 
 BAND_DIFF = 40        # a band's colour differs from the background by this much, summed over BGR
@@ -361,6 +362,9 @@ def _template():
     return _POINTER
 
 
+_POINTER_SCALE = []      # the scale the pointer was last found at, tried first
+
+
 def pointer(gray, floor=POINTER_FLOOR):
     """Where the mouse pointer is, by matching the real pointer's pixels.
 
@@ -378,7 +382,16 @@ def pointer(gray, floor=POINTER_FLOOR):
         return None
     unit = gray.shape[0] / 2160.0
     best = None
-    for sc in (0.35, 0.5, 0.75, 1.0, 1.25):
+    # THE SCALE IT WAS LAST FOUND AT IS TRIED FIRST AND ALONE. One screen
+    # recording has one pointer at one size, so searching five scales on every
+    # frame after the first is four searches for nothing -- measured at about
+    # four seconds a frame over a whole video. A frame where the remembered
+    # scale finds nothing falls back to the full ladder, so a recording that
+    # changes size is still read.
+    ladder = (0.35, 0.5, 0.75, 1.0, 1.25)
+    for ladder in ((tuple(_POINTER_SCALE), ladder) if _POINTER_SCALE else (ladder,)):
+      best = None
+      for sc in ladder:
         f = sc * unit
         if f <= 0:
             continue
@@ -391,7 +404,11 @@ def pointer(gray, floor=POINTER_FLOOR):
             best = {"box": [int(loc[0]), int(loc[1]),
                             int(loc[0] + tt.shape[1]), int(loc[1] + tt.shape[0])],
                     "scale": round(sc, 2), "score": round(float(val), 3)}
-    return best
+      if best:
+        del _POINTER_SCALE[:]
+        _POINTER_SCALE.append(best["scale"])
+        return best
+    return None
 
 
 # --------------------------------------------------------- the whole pane
@@ -445,7 +462,7 @@ def measure(pane_path, kind, data, res):
     with the numbers behind it, and the line returned says only what was
     found. None when the pane could not be read.
     """
-    img = cv2.imread(pane_path)
+    img = machine.pixels(pane_path)
     if img is None or data is None:
         return None
     out = {"look": look(img)}
@@ -489,7 +506,7 @@ def measure(pane_path, kind, data, res):
     # a document's type: lean, rules, links, pitch -- on the 3x enlargement
     # the document reader measured on
     if kind == "an open document":
-        big = cv2.imread(pane_path.replace(".png", "_3x.png"), cv2.IMREAD_GRAYSCALE)
+        big = machine.pixels(pane_path.replace(".png", "_3x.png"), cv2.IMREAD_GRAYSCALE)
         if big is not None:
             mask = ink_mask(big)
             italics, ruled, links, mono, total = [], [], [], 0, 0
@@ -531,3 +548,44 @@ def measure(pane_path, kind, data, res):
                 out["family"] = "proportional"
     data["style"] = out
     return "[" + "; ".join(said) + "]"
+
+
+def blank_pointer(rgb, pad=3):
+    """Paint the mouse pointer out of a frame, and say where it was.
+
+    THE POINTER IS NOT THE SCREEN'S INK, and read as if it were it does real
+    damage. Three faults in one video traced back to it: `.claude.json` came
+    back empty from all three engines because the arrow sits between `claude`
+    and `son`; `projects` read `projets` at every moment because the arrow
+    covers its `c`; and `04 Dev` read `04 Dev ~` because the arrow's own shape
+    reads as a tilde. The first two look like weak engines and the third looks
+    like a stray character, and none of them is either.
+
+    What is under the arrow is not recoverable from THIS frame -- it is
+    covered -- so the honest thing is to make the patch say nothing rather
+    than say something wrong, and let another moment, where the pointer stood
+    elsewhere, supply the letters. The ground it is painted with is the median
+    of the pixels either side of it in its own band, so the patch matches the
+    row it sits in.
+
+    Returns the box painted, or None where no pointer was found. `rgb` is
+    changed in place.
+    """
+    g = cv2.cvtColor(rgb, cv2.COLOR_BGR2GRAY) if rgb.ndim == 3 else rgb
+    got = pointer(g)
+    if not got:
+        return None
+    x0, y0, x1, y1 = got["box"]
+    h, w = rgb.shape[:2]
+    x0, y0 = max(0, x0 - pad), max(0, y0 - pad)
+    x1, y1 = min(w, x1 + pad), min(h, y1 + pad)
+    if x1 <= x0 or y1 <= y0:
+        return None
+    sides = [rgb[y0:y1, max(0, x0 - 40):x0], rgb[y0:y1, x1:min(w, x1 + 40)]]
+    near = [a.reshape(-1, a.shape[-1]) for a in sides if a.size]
+    if near:
+        bg = np.median(np.concatenate(near), axis=0)
+    else:
+        bg = np.median(rgb[y0:y1].reshape(-1, rgb.shape[-1] if rgb.ndim == 3 else 1), axis=0)
+    rgb[y0:y1, x0:x1] = bg.astype(rgb.dtype)
+    return [x0, y0, x1, y1]

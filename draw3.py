@@ -163,16 +163,28 @@ def bare_dot(nm):
 
 
 # Finder's kinds are a fixed vocabulary; a reading that matches one letter
-# for letter, spaces aside, is that kind spelt as Finder spells it
-KIND_CANON = ["Folder", "Document", "JSON", "Log File", "Markdo...text file", "Markdown text file",
-              "Application", "PNG image", "JPEG image", "Plain Text", "Text Document", "Alias",
-              "Unix executable", "Zip archive", "Python script", "JavaScript", "Shell script"]
+# for letter, spaces aside, is that kind spelt as Finder spells it.
+#
+# "Markdo...text file" USED TO STAND IN THIS LIST as a kind of its own, so a
+# cut reading matched itself and the note kept the truncation for good. That is
+# how 565 of the note's 1,037 mangled strings came to be one column. Finder cuts
+# the words itself when the column is narrow, so the READING is right -- but a
+# kind is not a name: its vocabulary is closed and published, so a cut one names
+# exactly one whole string where a cut file name may be anything. The list and
+# the bracket rule that completes a cut reading now live in finder_kinds, so
+# there is one vocabulary rather than two drifting apart.
+import finder_kinds as _fk
+KIND_CANON = list(_fk.KINDS)
 _KIND_KEY = {re.sub(r"[^a-z0-9]", "", k.lower()): k for k in KIND_CANON}
 
 
 def canon_kind(text):
     key = re.sub(r"[^a-z0-9]", "", str(text or "").lower())
-    return _KIND_KEY.get(key, text)
+    hit = _KIND_KEY.get(key)
+    if hit:
+        return hit
+    whole, how = _fk.finder_kind(text)
+    return whole if how in ("kind completed", "kind mended") else text
 
 
 def fold_twins(table, sni=0):
@@ -181,28 +193,73 @@ def fold_twins(table, sni=0):
     beside `.claude.json`, `user_review.qdrafts_...` beside
     `user_review_drafts_...`). The better-confirmed name stands and the
     band goes with it."""
-    rows = table.rows
     hdr = getattr(table, "header", None) or []
     if not (sni < len(hdr) and hdr[sni] and "Name" in hdr[sni]):
         return                      # a Size or Kind column is never a name
+    table.rows = fold_same_name(table.rows, sni)
+
+
+def fold_same_name(rows, sni=0):
+    """The folding itself, on a plain list of rows, so the LAST thing to touch
+    a list can run it.
+
+    It used to live only inside `fold_twins`, which runs while a table is being
+    tidied -- and at the earliest of those three points the standard column
+    titles are not in place yet, so its own header gate turned it away and a
+    list tidied only there drew `user_moves_fast_dont_pad_timelines.md` twice.
+    The renderer knows which column is the name for certain, so it folds there
+    too, and this is the one copy of the rule."""
     out = []
     for r in rows:
         nm = r["cells"][sni] if sni < len(r["cells"]) else ""
         rest = [c for i, c in enumerate(r["cells"]) if i != sni]
-        if not nm or sum(1 for c in rest if c) < 2 or GLUED_SIZE.search(nm) or GLUED_DATE.search(nm):
+        if not nm or GLUED_SIZE.search(nm) or GLUED_DATE.search(nm):
             out.append(r)
             continue
         twin = None
         for o in out:
             om = o["cells"][sni] if sni < len(o["cells"]) else ""
+            if not om:
+                continue
             orest = [c for i, c in enumerate(o["cells"]) if i != sni]
-            if not om or len(orest) != len(rest):
+            x, y = norm(nm), norm(om)
+            # A LIST CANNOT HOLD TWO FILES OF ONE NAME. That is a fact about
+            # the filesystem, not a likeness test, so an exact repeat is folded
+            # whatever the other cells say -- and the rows that need it most are
+            # exactly the ones whose other cells DISAGREE, because a row read
+            # badly enough to lose its Kind is a row read badly. Measured on
+            # build 103: twelve rows across 46 lists were one file drawn twice,
+            # `03 Company B (Landscape Company)` among them, once as a folder
+            # and once as a file with no kind at all. The old rule demanded
+            # every other cell agree before folding, so it kept both.
+            if x and x == y:
+                twin = o
+                break
+            if sum(1 for c in rest if c) < 2 or len(orest) != len(rest):
                 continue
             if not all(norm(a) == norm(b) for a, b in zip(rest, orest) if a and b) or not any(a and b for a, b in zip(rest, orest)):
                 continue
-            x, y = norm(nm), norm(om)
-            alike = (x == y or (min(len(x), len(y)) >= 5 and abs(len(x) - len(y)) <= 2
-                     and difflib.SequenceMatcher(None, x, y, autojunk=False).ratio() >= 0.75))
+            # AND `rn` IS `m`, WHICH IS WHY `.npm` WAS DRAWN TWICE. At one
+            # moment the engines read it `.nprn`; at another `.npm`. Four
+            # letters against three is too short for the likeness test below
+            # (it wants five) and too different for the ratio, so both stood.
+            # The confusion is the oldest one in reading machines and it is
+            # worth naming rather than loosening the general rule.
+            if x.replace("rn", "m") == y.replace("rn", "m"):
+                twin = o
+                break
+            # A CUT READING AND THE WHOLE NAME ARE ONE ROW. The likeness test
+            # below cannot see it -- a cut name is far shorter than the whole
+            # one and every length guard throws it out -- so the bracket rule
+            # the lexicon already uses for exactly this answers instead:
+            # head and tail against the one candidate.
+            if _ELL.search(nm) or _ELL.search(om):
+                cut_, whole_ = (nm, om) if _ELL.search(nm) else (om, nm)
+                if not _ELL.search(whole_) and lexicon_name(cut_, {flat(whole_): (whole_, 2)}) == whole_:
+                    twin = o
+                    break
+            alike = (min(len(x), len(y)) >= 5 and abs(len(x) - len(y)) <= 2
+                     and difflib.SequenceMatcher(None, x, y, autojunk=False).ratio() >= 0.75)
             if alike:
                 twin = o
                 break
@@ -214,8 +271,14 @@ def fold_twins(table, sni=0):
         def _weight(row_, name_):
             v_ = row_.get("_names") or {}
             sure_ = not (row_.get("italic") and row_["italic"][sni])
+            # PUNCTUATION A NAME REALLY USES counts for the reading; anything
+            # else counts against it. The rule was "more marks wins", which is
+            # right for `.claude.json` over `clauds son` and wrong for a
+            # reading carrying a character no file name contains.
+            good_ = sum(1 for ch in name_ if ch in "._-()[]{}&+~ ")
+            bad_ = sum(1 for ch in name_ if not ch.isalnum() and ch not in "._-()[]{}&+~ ")
             return (sum(v_.values()) if v_ else (2 if sure_ else 1), sure_,
-                    sum(1 for ch in name_ if not ch.isalnum()), len(name_))
+                    good_ - 3 * bad_, len(name_))
         if _weight(r, nm) > _weight(twin, twin["cells"][sni]):
             twin["cells"][sni] = nm
             twin["italic"][sni] = False
@@ -225,7 +288,7 @@ def fold_twins(table, sni=0):
                 twin["cells"][i] = c
         if r.get("band") and not twin.get("band"):
             twin["band"] = r["band"]
-    table.rows = out
+    return out
 
 
 def same_name(a, b):
@@ -324,6 +387,311 @@ def tidy_size(s):
 
 
 
+_PF_FINGERPRINT = None
+_OFF_SCREEN = []      # moments whose zoom crop ran outside the screen
+_PF_LEXICON = None
+
+
+def _whole_name(n):
+    """A reading fit to stand in the lexicon: no truncation mark, no run of
+    the mangling the engines leave, and long enough to be worth matching."""
+    n = (n or "").strip()
+    if len(n) < 6 or "..." in n or ".." in n or "\u2026" in n:
+        return False
+    if re.search(r"[\\|{}<>@\[\]\u2014\u2013]", n):
+        return False
+    # a real name opens with a letter, a digit, a dot (hidden files) or an
+    # underscore. `[--] Desktop`, a sidebar row read with its bullet, opened
+    # with a bracket and stood in the lexicon until it rewrote a good `Desktop`.
+    if not re.match(r"^[A-Za-z0-9._]", n):
+        return False
+    # three or more lowercase words with no underscore and no extension is a
+    # reading of a file name, not a file name (the same test the rescue uses)
+    if (" " in n and "_" not in n and not re.search(r"\.\w{1,5}$", n)
+            and re.search(r"[a-z]{3,} [a-z]{3,} [a-z]{3,}", n)):
+        return False
+    return True
+
+
+# TWO dots or three: the engines drop one of a run of dots often enough
+# that a cut written "..bhook_handlers.md" is the same cut as "...".
+_ELL = re.compile(r"\.\.+|\u2026")
+
+
+def _overlap_join(head, tail, least=3):
+    """head and tail joined WHERE THEY OVERLAP, or None where they do not.
+
+    The overlap is the proof. Two cuts of one name only complete each other
+    when the longer head runs far enough to meet the tail: "..._to_th" and
+    "he_page.md" share "he", and at three characters or more the join IS the
+    name. Where they do not meet, the belly between them is unknown and
+    anything put there is invented, so it is refused.
+    """
+    for n in range(min(len(head), len(tail)), least - 1, -1):
+        if head[-n:] == tail[:n]:
+            return head + tail[n:]
+    return None
+
+
+def _splice_cuts(cut_mid, cut_end):
+    """Whole names recovered by joining a middle cut to an end cut of the same
+    name. See the note in build_lexicon for why this is safe and what it is
+    worth."""
+    out = set()
+    for head, tails in cut_mid.items():
+        for eh in cut_end:
+            if len(eh) <= len(head) or not eh.startswith(head):
+                continue
+            for tail in tails:
+                whole = _overlap_join(eh, tail)
+                if whole and "." in whole and len(whole) > len(eh):
+                    out.add(whole)
+    return sorted(out)
+
+
+def build_lexicon(moments):
+    """EVERY NAME THE VIDEO READ WHOLE, ANYWHERE -- the gate ROVER's vote is
+    missing.
+
+    The research (ui-extractor-instruments-research, finding 3) puts it
+    plainly: "The pixels-first majority is ROVER's shape without its lexicon
+    gate. The lexicon we have is real and local: Finder's own words, the month
+    names, and the names the video read whole." A majority among engines that
+    share a weakness is an echo, not a vote; the gate is what stops the echo
+    standing, by refusing a reading that is no known name when exactly one
+    known name is plainly what it was.
+
+    It is built across the WHOLE video rather than one pane, because a name a
+    Finder list mangles is very often read whole somewhere else -- the memory
+    list's `reference_stripe_api_version.md` is mangled at 00:01:20 and read
+    correctly in Obsidian's tree at 00:04:10. Keyed by the folded spelling, so
+    one file with two spellings is one entry and the fullest one wins."""
+    lex = {}
+    cut_mid, cut_end = {}, {}
+
+    def note_cut(n):
+        """Keep a cut reading under its head and tail, for the splice below."""
+        n = (n or "").strip()
+        if not _ELL.search(n) or len(n) < 9:
+            return
+        if re.search(r"[\\|{}<>@\[\]\u2014\u2013]", n) or "_" not in n:
+            return
+        parts = _ELL.split(n)
+        head, tail = parts[0].strip(), parts[-1].strip()
+        if len(head) < 5:
+            return
+        if tail:
+            cut_mid.setdefault(head, set()).add(tail)
+        else:
+            cut_end[head] = True
+
+    def add(n):
+        n = (n or "").strip().lstrip("\u2502 \u02c3\u02c5")
+        n = re.sub(r"^#+\s*", "", n).strip()          # a document's heading is not a file name
+        # a name with its neighbouring CELLS glued on ("...md Jun 30, 2026 at
+        # 5:51PM"): cut at a date, a size or a kind, and keep the name
+        n = re.split(r"\s+(?=(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s+\d)", n)[0]
+        n = re.split(r"\s+(?=Today at |Yesterday at |\d+\s*(?:bytes|KB|MB|GB)\b)", n)[0]
+        n = n.strip()
+        if not _whole_name(n):
+            return
+        if re.match(r"^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s+\d|^Today at |^Yesterday at |^\d+\s*(?:bytes|KB|MB|GB)\b", n):
+            return                                     # a date or a size is not a name
+        k = flat(n)
+        if not k:
+            return
+        best, seen_n = lex.get(k, (None, 0))
+        lex[k] = (n if (best is None or len(n) > len(best)) else best, seen_n + 1)
+    for m in (moments or []):
+        for q in (m.get("panes") or []):
+            d = q.get("data") or {}
+            for b in (d.get("blocks") or []):
+                for row in (b.get("rows") or []):
+                    if row:
+                        add(row[0])
+                h = b.get("header")
+                if h:
+                    add(h[0])
+            for ln in (q.get("lines") or []):
+                if not isinstance(ln, str):
+                    continue
+                if "|" not in ln:
+                    add(ln)
+                # A PATH BAR IS A ROW OF FOLDER NAMES, and for some folders it
+                # is the ONLY place the video reads them whole. `projects` is
+                # the case: the mouse pointer is drawn over its `c` in the
+                # Finder list, so every list reading of it is `projets`, while
+                # two path bars read it right -- and the lexicon, built from
+                # list rows alone, had nothing to mend from. Segments are taken
+                # only from a line that reads like a path bar and not like a
+                # sentence, and only where a segment is one word: `.claude
+                # projects` is two names glued and there is no telling where.
+                if (ln.count(">") + ln.count("\u203a") >= 1 and "," not in ln
+                        and not re.search(r"\. ", ln) and len(ln) <= 160):
+                    for seg in re.split(r"[>\u203a|]", ln):
+                        seg = seg.strip()
+                        if seg and " " not in seg:
+                            add(seg)
+    # THE CUT READINGS ARE GATHERED FROM EVERYWHERE, not from the rows alone.
+    # A name cut in the middle stands in a list's rows; the same name cut at
+    # the END stands in a narrower view, and that view's text lives in the
+    # pane's own readings and in the moment's text rather than in any row. The
+    # first version of this looked only at rows and found one splice of nine.
+    def sweep(o):
+        if isinstance(o, str):
+            for tok in re.split(r"[|\s]+", o):
+                note_cut(tok)
+        elif isinstance(o, list):
+            for v in o:
+                sweep(v)
+        elif isinstance(o, dict):
+            for v in o.values():
+                sweep(v)
+    sweep(moments)
+    # TWO DIFFERENT CUTS OF ONE NAME COMPLETE EACH OTHER.
+    #
+    # The lexicon above can only offer a name the video read WHOLE somewhere.
+    # Measured on one video, that is nearly nothing: of 100 cut names, only ten
+    # had any whole reading to be mended from. But a name is cut differently in
+    # different places, because the column is a different width -- Finder cuts
+    # the MIDDLE and keeps head and tail, while a narrower view cuts the END and
+    # keeps a longer head. Neither is whole. Between them they often cover the
+    # whole string, and where the longer head runs far enough to MEET the tail
+    # the join is proved by the overlap rather than guessed.
+    #
+    # Measured: nine names recovered this way from one video's record, including
+    # two the note had been missing for five builds --
+    # feedback_email_list_is_a_bank_account.md and
+    # feedback_plain_pages_beat_polished.md. Refusing to splice without an
+    # overlap is what makes it safe: "feedback_acknowledge_optin" and
+    # "ext_page.md" do not meet, so the belly is unknown and nothing is invented.
+    for whole in _splice_cuts(cut_mid, cut_end):
+        # TWICE, and honestly: the gate below trusts only a name the video
+        # showed at two separate moments, because one sighting is one engine's
+        # opinion. A spliced name IS two sightings -- the middle cut and the end
+        # cut are independent readings of different pixels, and the overlap
+        # between them is what proved the join. Counting it once would hide
+        # corroboration that is really there.
+        add(whole)
+        add(whole)
+    # A NAME SEEN ONCE MAY NOT OVERWRITE A READING. Measured: a single tree
+    # misreading `0oInbox` sat in the lexicon and the gate rewrote the correct
+    # `00 Inbox` into it -- a gate that corrupts good readings is worse than no
+    # gate. A name the video showed at two separate moments is a name; a name
+    # seen once is one engine's opinion. The exception is a spelling fix, where
+    # the letters already agree and only the marks differ.
+    return {k: v for k, v in lex.items()}
+
+
+def lexicon_name(reading, lex):
+    """The one known name a reading plainly is, or None.
+
+    Three ways in, tightest first. An exact fold is the same name spelt
+    differently and the lexicon's spelling stands. A reading the screen cut
+    (it carries "..") is bracketed by its head and tail against the known
+    names, which is how a truncation must be matched -- a plain similarity
+    score cannot do it, because the reading is far shorter than the name and
+    every length guard throws it out: `feedback_cod_tr.._notor_sellig.md` is
+    26 letters against the true name's 36. Anything else falls to similarity,
+    and only where one name is clearly ahead of the next."""
+    r = (reading or "").strip()
+    f = flat(r)
+    if not f or len(f) < 6 or not lex:
+        return None
+    def _name(v):
+        return v[0] if isinstance(v, tuple) else v
+
+    def _count(v):
+        return v[1] if isinstance(v, tuple) else 1
+
+    if f in lex:                                   # the same letters, better marks
+        return _name(lex[f]) if _name(lex[f]) != r else None
+    solid = {k: v for k, v in lex.items() if _count(v) >= 2}
+    def _one(fits):
+        """One file however it is spelt; two real rivals mean no answer."""
+        keys, out = [], []
+        for v in sorted(set(fits), key=lambda x: (-len(x), x)):   # the fullest spelling first
+            k = re.sub(r"md$", "", flat(v))
+            if any(k == k2 or difflib.SequenceMatcher(None, k, k2, autojunk=False).ratio() >= 0.88
+                   for k2 in keys):
+                continue
+            keys.append(k)
+            out.append(v)
+        return out[0] if len(out) == 1 else None
+
+    cut = re.search(r"\.{2,}|\u2026", r)
+    if cut:
+        head, tail = flat(r[:cut.start()]), flat(r[cut.end():])
+        if len(head) + len(tail) >= 8 and head:
+            # THE ENDS ARE MATCHED LOOSELY, because the ends are read by the
+            # same engines that mangled the middle. `user_moves_fast_..pad_
+            # timelins.md` brackets `user_moves_fast_dont_pad_timelines.md`
+            # only if `padtimelinsmd` may match `padtimelinesmd`, one letter
+            # short. An exact startswith/endswith throws the answer away.
+            def ends_fit(k):
+                if len(k) <= len(head) + len(tail):
+                    return False
+                h_ok = (k.startswith(head)
+                        or difflib.SequenceMatcher(None, k[:len(head)], head, autojunk=False).ratio() >= 0.8)
+                # the candidate's own tail may be a few letters longer than the
+                # reading's, so the window is searched rather than assumed:
+                # `padtimelinsmd` against `...padtimelinesmd` misses entirely
+                # when only the last 13 letters are compared.
+                t_ok = not tail or k.endswith(tail) or any(
+                    difflib.SequenceMatcher(None, k[-w:], tail, autojunk=False).ratio() >= 0.8
+                    for w in range(max(1, len(tail) - 2), len(tail) + 4) if w <= len(k))
+                return h_ok and t_ok
+            hit = _one([_name(v) for k, v in solid.items() if ends_fit(k)])
+            if hit:
+                return hit if hit != r else None
+        return None
+    # A TRUNCATION THE SCREEN LEFT NO MARK ON. `user_prefers.plain` carries no
+    # ellipsis and is simply short, so every length guard throws it out; but it
+    # opens exactly one known name and nothing else, which is the same evidence
+    # a marked cut gives. Ten letters at least, so a short word cannot claim a
+    # long name.
+    if len(f) >= 10:
+        hit = _one([_name(v) for k, v in solid.items()
+                    if len(k) > len(f) + 3 and (k.startswith(f) or k.endswith(f))])
+        if hit:
+            return hit if hit != r else None
+    scored = sorted(((difflib.SequenceMatcher(None, k, f, autojunk=False).ratio(), _name(v))
+                     for k, v in solid.items() if abs(len(k) - len(f)) <= 0.35 * len(f)), reverse=True)
+    # ONE FILE IS ONE CANDIDATE, HOWEVER IT IS SPELT -- the same rule rescue()
+    # already carries and this gate was written without. `reference_stripe_
+    # api_version.md` scored 0.926 and `reference_stripe_api_version` 0.885,
+    # the same file twice, and the margin test read them as rivals and threw
+    # the answer away. Names that fold alike once the extension is off, or
+    # that are a letter apart, are folded into one entry before the margin.
+    seen_k, one = [], []
+    for sc, v in scored:
+        k = re.sub(r"md$", "", flat(v))
+        if any(k == k2 or difflib.SequenceMatcher(None, k, k2, autojunk=False).ratio() >= 0.88
+               for k2 in seen_k):
+            continue
+        seen_k.append(k)
+        one.append((sc, v))
+    scored = one
+    # A COMPLETION AND A SWAP ARE NOT THE SAME BET.
+    #
+    # Where the candidate is plainly longer, the reading is a cut of it and a
+    # fair likeness is evidence enough. Where the two are the same length, the
+    # gate is not completing a name but SWAPPING one for another, and a wrong
+    # swap corrupts a reading that was right. Measured: `00 Inbox` -- a correct
+    # folder name -- was rewritten to `0oInbox`, a tree misreading the video
+    # showed twice, on a likeness of 0.86. So a swap must be nearly certain.
+    if scored:
+        top, cand = scored[0]
+        margin = 1.0 if len(scored) == 1 else top - scored[1][0]
+        longer = len(flat(cand)) >= 1.15 * len(f)
+        need = 0.75 if longer else 0.90
+        if top >= need and margin >= 0.08:
+            return cand if cand != r else None
+    return None
+
+
+
+
 def pixfirst_rows(m, p, built):
     """PIXELS FIRST, WORDS SECOND (the rework): a Finder list's rows read
     from the frame's own structure by `_probe/pixfirst` -- the header from
@@ -341,9 +709,46 @@ def pixfirst_rows(m, p, built):
     here = os.path.dirname(os.path.abspath(__file__))
     cache = os.path.join(here, "_probe", "pixfirst-cache")
     os.makedirs(cache, exist_ok=True)
-    key = "%s__%s.json" % (os.path.splitext(os.path.basename(fp))[0], "-".join(str(int(v)) for v in box))
+    # THE READER'S OWN FINGERPRINT IS PART OF THE KEY.
+    #
+    # It used to be the frame and the box alone, so a cached reading survived
+    # a change to the reader that produced it and a build could silently draw
+    # yesterday's reading. The only safe answer was to wipe the cache before
+    # every build -- and that is why a five-minute video took thirty-nine
+    # minutes to draw: 47 panes re-read by three OCR engines at 50 to 90
+    # seconds each. The drawing itself is a rounding error beside it.
+    #
+    # With the reader's fingerprint in the key, a build that changes only the
+    # DRAWING reuses every read and takes minutes, while a build that changes
+    # the READER misses the cache and re-reads, which is the correct thing to
+    # happen. The switches that alter what the reader does belong in the
+    # fingerprint too, or a run with different switches would take another
+    # run's answers.
+    global _PF_FINGERPRINT
+    if _PF_FINGERPRINT is None:
+        import hashlib
+        h = hashlib.sha1()
+        for f in ("pixfirst.py", "winocr.py"):
+            fp_ = os.path.join(here, "_probe", f)
+            if os.path.exists(fp_):
+                h.update(open(fp_, "rb").read())
+        for v in ("PF_WIN", "PF_NAME", "SN_PIXFIRST"):
+            h.update(("%s=%s;" % (v, os.environ.get(v, ""))).encode())
+        _PF_FINGERPRINT = h.hexdigest()[:10]
+    key = "%s__%s__%s.json" % (os.path.splitext(os.path.basename(fp))[0],
+                               "-".join(str(int(v)) for v in box), _PF_FINGERPRINT)
+    # THE READ MAY ALREADY HAVE DONE THIS. pipeline.py reads the pixels-first
+    # rows while the pane is open and stores them in the record's own
+    # `data["pixfirst"]`. Where they are there, the drawing opens no image at
+    # all -- which is the whole difference between a six-minute build and a
+    # thirty-nine-minute one. The cache below stays for records written before
+    # this existed, and for a reader changed since.
+    from_record = (p.get("data") or {}).get("pixfirst")
     cp = os.path.join(cache, key)
-    if os.path.exists(cp):
+    _was_cached = from_record is not None or os.path.exists(cp)
+    if from_record is not None:
+        rec = from_record
+    elif _was_cached:                     # asked BEFORE the read writes the file:
         rec = _json.load(open(cp, encoding="utf-8"))
     else:
         if os.path.join(here, "_probe") not in sys.path:
@@ -375,8 +780,80 @@ def pixfirst_rows(m, p, built):
     span = (float(cols[0][0]), float(rec["window"][2]))
     pitch = float(rec.get("pitch") or 0)
     if os.environ.get("SN_ZOOM"):
-        print("PIXFIRST %s: %d rows, %d columns, pitch %.0f, %s" % (m.get("ts"), len(rows), len(cols), pitch, "cached" if os.path.exists(cp) else "read"), file=sys.stderr)
+        print("PIXFIRST %s: %d rows, %d columns, pitch %.0f, %s" % (m.get("ts"), len(rows), len(cols), pitch, "cached" if _was_cached else "read"), file=sys.stderr)
     return (top, side, head, rows, bottom, [], span, pitch * 0.5, pitch)
+
+
+def tighter(a, b):
+    """Of two spellings of one name, the one that puts no space beside a dot
+    or an underscore -- `a` where they tie. A file name does not carry those
+    spaces; a reader that saw the gap the mark leaves under the letters does."""
+    loose = lambda s_: len(re.findall(r"[._]\s|\s[._]", s_ or ""))
+    return b if loose(b) < loose(a) else a
+
+
+def keep_known_names(pf_, built):
+    """The pixels-first rows keep their STRUCTURE and take the old reading's
+    NAME where the two rows are plainly the same file.
+
+    WHY. `pixfirst_rows` replaced the old table outright, so a name the first
+    reading had got right was thrown away and the pane's own re-reading stood
+    however it came out. Measured on the memory list: the record holds
+    `reference_stripe_api_version.md`, `user_no_em_dashes_rule.md` and
+    `user_moves_fast_dont_pad_timelines.md`, read correctly at 00:01:20,
+    00:01:40 and again at 00:04:10; build 89 drew `reference strine ani
+    version.md`, `emn_dashes.s_rule.md` and `user_moves_fast_..pad_timelins.md`
+    in their places, and build 85 -- which had no pixels-first path at all --
+    was better on names by twelve.
+
+    The structure is still the new reading's: pixels first finds rows the old
+    reading missed, and a row with no counterpart keeps its own name. Only the
+    NAME cell is ever taken, never a date, size or kind, and only when one old
+    name and no other is plainly the same file. Set SN_PFNAMES=0 to switch it
+    off and measure without it."""
+    if os.environ.get("SN_PFNAMES") == "0" or not pf_ or not built:
+        return pf_
+    old = []
+    for r in (built[3] or []):
+        c = r[0] if isinstance(r, (list, tuple)) else None
+        if c and c[0] and c[0].strip():
+            old.append(c[0].strip())
+    if not old:
+        return pf_
+    seen = {}
+    for nm in old:                       # one entry per file, the fullest spelling
+        k = flat(nm)
+        if k and (k not in seen or len(nm) > len(seen[k])):
+            seen[k] = nm
+    rows, swapped = [], 0
+    for row in pf_[3]:
+        cells, icon, band = row[0], row[1], row[2]
+        nm = (cells[0] or "").strip()
+        f = flat(nm)
+        if not f:
+            rows.append(row)
+            continue
+        # this pane's own earlier reading first, then every name the video
+        # read whole anywhere -- the gate, not a second guess
+        take = lexicon_name(nm, seen) or lexicon_name(nm, _PF_LEXICON or {})
+        # THE OLD READING IS TAKEN FOR WHAT IT KNOWS, NOT FOR ITS SPACES.
+        # It is asked here because it sometimes has a name whole that the
+        # re-reading has cut. Where the two spell the same file and differ
+        # only by a space beside a dot or an underscore, the tighter one is
+        # right and it is usually the re-reading: `.claude.json.backup` was
+        # replaced by the record's `.claude.json. backup`, which no file is
+        # named. A file name does not put a space beside its dots.
+        if take and tighter(take, nm) is nm:
+            take = None
+        if take and take != nm:
+            cells = list(cells)
+            cells[0] = take
+            row = (cells, icon, band)
+            swapped += 1
+        rows.append(row)
+    if swapped and os.environ.get("SN_NAMES"):
+        print("PFNAMES: %d name(s) taken from the first reading" % swapped, file=sys.stderr)
+    return tuple(pf_[:3]) + (rows,) + tuple(pf_[4:])
 
 
 class Table:
@@ -1785,7 +2262,7 @@ class State:
                 if os.environ.get("SN_PIXFIRST"):
                     pf_ = pixfirst_rows(m, p, cut)
                     if pf_:
-                        cut = pf_
+                        cut = keep_known_names(pf_, cut)
                 part["model"].add(cut)
                 if p.get("_cut_pitch"):
                     self.at(m["ts"], make=True).pitch = p["_cut_pitch"]
@@ -1842,7 +2319,7 @@ class State:
                 if os.environ.get("SN_PIXFIRST"):
                     pf_ = pixfirst_rows(m, p, built)
                     if pf_:
-                        built = pf_
+                        built = keep_known_names(pf_, built)
                 if built:
                     part["model"].add(built)
                     # AND WHAT THIS WINDOW'S ROWS REALLY MEASURE at this
@@ -3578,6 +4055,17 @@ def harmonise(states):
                                  and sum(1 for u, w in zip(k_, f_) if u != w) <= 2}
                         if len({flat(v) for v in near_}) == 1:
                             t_.path[i_] = next(iter(near_))
+                            continue
+                        # AND A DROPPED LETTER IS NEITHER OF THOSE. The two
+                        # tries above want a name this one is the head of, or
+                        # a name of the same length; `projets` for `projects`
+                        # is a letter short of both, and the path bar drew it
+                        # wrong while four other moments read the folder right.
+                        # The lexicon's own gate -- one known name clearly
+                        # ahead of the next -- answers it.
+                        got_ = lexicon_name(c_, _PF_LEXICON or {})
+                        if got_:
+                            t_.path[i_] = got_
             for r in t_.rows:
                 if r["cells"] and r["cells"][0]:
                     r["cells"][0] = _agreed_form(bare_dot(r["cells"][0]))
@@ -5625,8 +6113,117 @@ def gaps_of(m):
     return out
 
 
+_DATE_FIRST = re.compile(r"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s*\d|^Today\s*at|^Yesterday\s*at", re.I)
+
+def restore_eaten_rows(moments):
+    """Put back the list row that was taken for a column heading.
+
+    THE READ TAKES THE FIRST FULL ROW AS THE HEADING, and when the real heading
+    was not read that is the first FILE. Measured over one video, 17 of 32 list
+    blocks had a heading that was plainly a data row -- ".agents", a date, a
+    file name -- so half the lists were quietly one row short, and nothing
+    downstream could tell a lost row from a list that never had it. columns.py
+    now refuses a heading that does not say what a heading says; this repairs
+    records already written, so an old record draws right without a re-read.
+    """
+    try:
+        import columns
+    except Exception:
+        return 0
+    n = 0
+    for m in moments or []:
+        for p in (m.get("panes") or []):
+            for blk in ((p.get("data") or {}).get("blocks") or []):
+                head = blk.get("header")
+                if not head or columns._is_heading(head):
+                    continue
+                if _DATE_FIRST.search((head[0] or "").strip()):
+                    # A DATE WHERE THE NAME SHOULD BE means the columns slipped
+                    # on that row, not that a heading was missed. Putting it
+                    # back would add a row named after a date to the note.
+                    # Eleven of 180 rows read that way, so the slip is its own
+                    # fault and is not cured by moving the row about.
+                    continue
+                # EVERY ARRAY THAT RUNS ALONGSIDE THE ROWS MOVES WITH IT.
+                # flags, row_boxes and row_style are indexed by row number, and
+                # putting a row back without them raised IndexError in draw2's
+                # items_of on the first build that tried it.
+                head_box = blk.get("head_box")
+                blk["rows"] = [list(head)] + list(blk.get("rows") or [])
+                blk["flags"] = [blk.get("headflags") or [None] * len(head)] + list(blk.get("flags") or [])
+                blk["row_boxes"] = [head_box] + list(blk.get("row_boxes") or [])
+                blk["row_style"] = [{}] + list(blk.get("row_style") or [])
+                blk["header"] = columns._standard_head(len(head))
+                # the supplied heading was never on the screen, so it carries no
+                # box and is not drawn as ink -- draw2 skips a header with none,
+                # which is what keeps the picture gates honest
+                blk["head_box"] = None
+                blk["headflags"] = [None] * len(blk["header"])
+                n += 1
+    return n
+
+
+def spell_kinds_whole(moments):
+    """Spell the Kind column whole, everywhere in the record, before drawing.
+
+    THE READER STAYS FAITHFUL AND THE NOTE READS PROPERLY. Finder itself
+    shortens "Markdown text file" to "Markdo...text file" in a narrow column,
+    so the reader is right to return the cut form and the hand-made truth
+    records it that way. But the NOTE is for reading, and a kind is not a name:
+    its vocabulary is closed and published by the system, so a cut reading of
+    it names exactly one whole string, where a cut file name may be anything.
+    Completing it here keeps both -- fidelity in the record, legibility in the
+    note -- and it mends old records without re-reading a video.
+
+    IT WALKS EVERY STRING, and the first version did not, which is why the
+    first build changed nothing. A moment carries the same reading in five
+    places -- `text`, `panes.lines`, `panes.data.readings`, `panes.data.blocks`
+    and `windows` -- and the note draws from a different one than the fix had
+    touched. Naming the fields was the mistake; the walk cannot miss one.
+
+    Measured over one video: the Kind column gave 66 distinct forms of five
+    real values, 42% of them cut. Cut FILE names are left exactly as the screen
+    showed them, which is checked: none of them bracket a kind.
+    """
+    try:
+        import finder_kinds
+    except Exception:
+        return 0
+    n = 0
+
+    def walk(o):
+        nonlocal n
+        if isinstance(o, str):
+            out, k = finder_kinds.spell_in_text(o)
+            n += k
+            return out
+        if isinstance(o, list):
+            for i, v in enumerate(o):
+                o[i] = walk(v)
+            return o
+        if isinstance(o, dict):
+            for k_, v in o.items():
+                o[k_] = walk(v)
+            return o
+        return o
+
+    walk(moments)
+    return n
+
+
 def note(records_path, diary_text=None):
     header, moments, footer = old.load(records_path)
+    _rn = restore_eaten_rows(moments)
+    _kn = spell_kinds_whole(moments)
+    if os.environ.get("SN_NAMES"):
+        if _rn:
+            print("ROWS %d list row(s) put back that were taken for a heading" % _rn, file=sys.stderr)
+        if _kn:
+            print("KINDS %d cut kind(s) spelled whole" % _kn, file=sys.stderr)
+    global _PF_LEXICON
+    _PF_LEXICON = build_lexicon(moments)
+    if os.environ.get("SN_NAMES"):
+        print("LEXICON %d name(s) the video read whole" % len(_PF_LEXICON), file=sys.stderr)
     title = header.get("title") or os.path.basename(os.path.dirname(records_path))
     diary_text = diary_text if diary_text is not None else old.diary(records_path)
     secs = (moments[-1]["secs"] - moments[0]["secs"]) if len(moments) > 1 else 0
@@ -6186,6 +6783,115 @@ def note(records_path, diary_text=None):
 
     span_T = {s["t0"]: fit_map(s["ts"]) for s in spans}
 
+    # ------- THE ZOOM, MEASURED. The fit above works the zoom out from where
+    # OCR'd WORDS sat on two frames: geometry inferred from text. Where it
+    # stands on three or more whole words it is precise and it stays. Where it
+    # does not, it used to fall back on a Finder list's row pitch against a
+    # neighbouring moment -- a guess that has now been wrong twice, and it is
+    # the guess the pictures are drawn at.
+    #
+    # zoom.py measures the same number instead: a zoomed frame is a CROP of
+    # the screen enlarged, so shrink the frame until it fits inside a frame
+    # that shows the whole screen, and the amount that fits IS the zoom. No
+    # words, no engine, about a third of a second a frame.
+    #
+    # CHECKED BY A DIFFERENT METHOD. A Finder row is a fixed number of SCREEN
+    # pixels, so through a zoom it grows by exactly 1/scale and `row pitch x
+    # measured scale` must come out the same on every frame. Over the whole
+    # video: 30.2 on all 42 panes, the worst 2% off. And the numbers say what
+    # the fallback cost -- the video is at one of two zooms, 1.00 and 0.48
+    # (2.08 seen from the screen), where the words said 2.18 and the row-pitch
+    # guess said 1.76.
+    _ZOOM_REF = [None]        # the frame showing the whole screen, found once
+    _ZOOM_AT = {}
+
+    def screen_zoom(t):
+        """(scale, x0, y0, score) for a moment's frame against the screen."""
+        if t in _ZOOM_AT:
+            return _ZOOM_AT[t]
+        _ZOOM_AT[t] = None
+        m_ = next((mm for mm in moments if mm["ts"] == t), None)
+        fp_ = frame_of(m_) if m_ else None
+        if not fp_ or not os.path.exists(fp_):
+            return None
+        try:
+            import zoom as _zoom
+            if _ZOOM_REF[0] is None:
+                for mm in moments:
+                    f2 = frame_of(mm)
+                    if f2 and os.path.exists(f2) and _zoom.unzoomed_by_bar(f2) is not None:
+                        _ZOOM_REF[0] = f2
+                        break
+                if _ZOOM_REF[0] is None:
+                    _ZOOM_REF[0] = ""
+            # THE BAR IS ITS OWN ANSWER and needs no reference at all: a frame
+            # showing the menu bar end to end is showing the whole screen.
+            if _zoom.unzoomed_by_bar(fp_) is not None:
+                _ZOOM_AT[t] = (1.0, 0.0, 0.0, 1.0, "bar")
+                return _ZOOM_AT[t]
+            if not _ZOOM_REF[0]:
+                return None
+            got = _zoom.fit(fp_, _ZOOM_REF[0])
+            _ZOOM_AT[t] = (got + ("fit",)) if got else None
+        except Exception as e:
+            print("ZOOM %s failed: %s" % (t, e), file=sys.stderr)
+        return _ZOOM_AT[t]
+
+    # THE MEASUREMENT CHECKS ITSELF, ON EVERY FRAME. A Finder row is a fixed
+    # number of SCREEN pixels, so through a zoom it grows by exactly 1/scale
+    # and `row pitch x measured scale` must come out the same on every frame
+    # of one video. Over this one it is 30.2 on all 42 panes, the worst 2%
+    # off -- so a frame whose own pitch does NOT back its measurement is a
+    # frame where the measurement is not to be trusted, and there the words
+    # keep the zoom they worked out. This is the check earning its keep: it
+    # is not a second way of doing the job, it is the thing that says whether
+    # the first way worked.
+    def list_pitch_at(t):
+        """A list's row pitch on this moment's frame, in frame pixels.
+
+        NOT from the record: `data["row_pitch"]` is written on file-tree panes
+        and never on the 18 list panes, so a check built on it was a check
+        that could never fire -- found by counting, before the build that
+        would have proved nothing. It comes instead from what the drawing
+        itself measured, `Seen.pitch`, which is the pixels-first reader's own
+        row pitch for this window at this moment, already in frame pixels."""
+        best = None
+        for st in states:
+            at_ = getattr(st, "at", None)
+            got = at_(t) if at_ else None
+            val = getattr(got, "pitch", None) if got else None
+            if val and not getattr(got, "pitch_cut", False):
+                val = float(val)
+                if best is None or val > best:
+                    best = val
+        return best
+
+    _PITCH_PRODUCT = [None]
+
+    def zoom_backed(t):
+        """True where this frame's own row pitch backs its measured scale."""
+        got = screen_zoom(t)
+        if not got:
+            return False
+        if _PITCH_PRODUCT[0] is None:
+            vals = []
+            for mm in moments:
+                z = screen_zoom(mm["ts"])
+                pt = list_pitch_at(mm["ts"])
+                if z and pt and z[3] >= 0.55:
+                    vals.append(pt * z[0])
+            vals.sort()
+            _PITCH_PRODUCT[0] = vals[len(vals) // 2] if vals else 0.0
+            if os.environ.get("SN_ZOOM"):
+                print("ZOOM: row pitch x measured scale is %.1f across %d panes"
+                      % (_PITCH_PRODUCT[0], len(vals)), file=sys.stderr)
+        if len(got) > 4 and got[4] == "bar":
+            return True                   # read straight off the screen's own bar
+        pt = list_pitch_at(t)
+        if not pt or not _PITCH_PRODUCT[0]:
+            return False                  # nothing on this frame to check with
+        return abs(pt * got[0] - _PITCH_PRODUCT[0]) <= 0.10 * _PITCH_PRODUCT[0]
+
     # TWO WORDS ARE NOT THREE WITNESSES. One matched word gives the fit a
     # width and a height, so two words passed the three-vote test and
     # 00:04:00 was fitted at a zoom of 2.18 where the frame's own tree rows
@@ -6223,16 +6929,143 @@ def note(records_path, diary_text=None):
                 best = (val, keys_)
         return best
 
+    # A TREE'S ROWS MEASURE THE ZOOM TOO, where no list and no menu bar can.
+    #
+    # 00:04:00 is the case: an Obsidian window zoomed into, with no Finder list
+    # on the frame to check a scale against and no menu bar in view. The search
+    # answered 1.00 for a frame plainly zoomed in -- it was run against a
+    # reference frame showing an entirely different screen, and a template
+    # matched by chance. So the search's answer is refused there.
+    #
+    # But the same invariant that backs the lists works on a tree: a tree row
+    # is a fixed number of SCREEN pixels for its program, so between two frames
+    # showing THE SAME TREE the pitches are in the inverse ratio of the zooms.
+    # Anchor it on a frame whose zoom is already measured and backed, and the
+    # zoom follows. The same tree, told by its own rows -- three shared and at
+    # least four in ten of this frame's, the rule already written below for the
+    # older fallback, because a Finder's favorites once lent Obsidian's tree a
+    # Finder's pitch.
+    def zoom_by_tree(t):
+        got = tree_pitch_at(t)
+        if not got or not got[0]:
+            return None
+        pitch, keys_here = got
+        for mm in moments:
+            t2 = mm["ts"]
+            if t2 == t:
+                continue
+            z2 = screen_zoom(t2)
+            if not z2 or not zoom_backed(t2):
+                continue
+            g2 = tree_pitch_at(t2)
+            if not g2 or not g2[0]:
+                continue
+            shared = len(g2[1] & keys_here)
+            if shared >= 3 and shared >= 0.4 * len(keys_here):
+                sc = z2[0] * g2[0] / float(pitch)
+                if 0.05 <= sc <= 1.0:
+                    if os.environ.get("SN_ZOOM"):
+                        print("ZOOM %s: scale %.2f from its tree's %.1f px rows against "
+                              "%.1f at %s (scale %.2f, %d rows shared)"
+                              % (t, sc, pitch, g2[0], t2, z2[0], shared), file=sys.stderr)
+                    return sc
+        return None
+
+    def zoom_scale(t):
+        """(scale, how) where something backs it, else None. The bar reads it
+        straight off the screen; the search stands where the frame's own list
+        pitch agrees; a tree stands against the same tree already measured."""
+        z = screen_zoom(t)
+        if z and zoom_backed(t):
+            return (z[0], z[4] if len(z) > 4 else "fit")
+        sc = zoom_by_tree(t)
+        return (sc, "tree") if sc else None
+
+    def scaled_T(t_this, t_base):
+        """The base moment's places carried onto this one from the two
+        measured scales.
+
+        A frame showing a crop of the screen that begins at x0 and is `scale`
+        of its width has
+            frame_x = (screen_x - x0*W) * W / (scale*W)
+        so between two such frames the zoom is one scale over the other and the
+        shift is the gap between their origins. Where either scale came from a
+        tree's row pitch there is no origin to work with -- a pitch says how
+        big, never where -- so the shift is left None and the words supply it."""
+        a, b = zoom_scale(t_this), zoom_scale(t_base)
+        if not a or not b:
+            return None
+        k = b[0] / max(1e-6, a[0])
+        if not 0.4 <= k <= 4.0:
+            return None
+        za, zb = screen_zoom(t_this), screen_zoom(t_base)
+        if a[1] != "tree" and b[1] != "tree" and za and zb:
+            return (k, (Wf / a[0]) * (zb[1] - za[1]), (Hf / a[0]) * (zb[2] - za[2]))
+        return (k, None, None)         # the shift must come from the words
+
+    # WHERE THE WORDS SAID NOTHING AT ALL, the measurement is the only answer
+    # there is: a stretch whose frame shares fewer than three read words with
+    # the base moment used to have no map of place whatever.
+    if base_ts:
+        for s_ in spans:
+            if span_T.get(s_["t0"]):
+                continue
+            got_ = scaled_T(s_["t0"], base_ts)
+            if got_ and got_[1] is not None:
+                span_T[s_["t0"]] = got_
+                if os.environ.get("SN_ZOOM"):
+                    print("ZOOM %s: no word fit; measured %.2f" % (s_["t0"], got_[0]), file=sys.stderr)
+
     for i_, s_ in enumerate(spans):
         T_, side_ = span_T.get(s_["t0"]), fit_side.get(s_["t0"])
-        if not T_ or not side_ or side_[0] >= 3:
+        if not T_ or not side_:
             continue
+        # A FIT STANDING ON ENOUGH WORDS IS STILL CHECKED. The measurement is
+        # independent of every word on the screen, so where the two disagree
+        # grossly one of them is wrong, and it is not the one whose row pitch
+        # comes out right on every pane. Under a quarter apart the words keep
+        # it: they are fitted on this frame's own anchors and are the finer
+        # answer. Beyond that the measurement stands and the shift is refitted
+        # on the same anchors.
+        if side_[0] >= 3:
+            mt_ = scaled_T(s_["t0"], base_ts) if base_ts else None
+            backed = bool(mt_)
+            gross = mt_ and max(mt_[0], T_[0]) / max(1e-6, min(mt_[0], T_[0])) > 1.25
+            if mt_ and (backed or gross):
+                xs_, ys_ = side_[1], side_[2]
+                k_ = mt_[0]
+                span_T[s_["t0"]] = (k_,
+                                    med([qx - k_ * px for px, qx in xs_]) if xs_ else (mt_[1] if mt_[1] is not None else T_[1]),
+                                    med([qy - k_ * py for py, qy in ys_]) if ys_ else (mt_[2] if mt_[2] is not None else T_[2]))
+                if os.environ.get("SN_ZOOM"):
+                    print("ZOOM %s: words said %.2f on %d whole words, measured %.2f -- measured stands (%s)"
+                          % (s_["t0"], T_[0], side_[0], k_,
+                             ("the frame's own menu bar says so" if (screen_zoom(s_["t0"]) or ("",))[-1] == "bar"
+                              else "its own row pitch backs it") if backed else "the two are grossly apart"),
+                          file=sys.stderr)
+            continue
+        # FEWER THAN THREE WHOLE WORDS: the zoom comes from the measurement,
+        # and the shift is refitted on whatever anchors the words did give.
+        mt_ = scaled_T(s_["t0"], base_ts) if base_ts else None
+        if mt_:
+            xs_, ys_ = side_[1], side_[2]
+            k_ = mt_[0]
+            span_T[s_["t0"]] = (k_,
+                                med([qx - k_ * px for px, qx in xs_]) if xs_ else (mt_[1] if mt_[1] is not None else T_[1]),
+                                med([qy - k_ * py for py, qy in ys_]) if ys_ else (mt_[2] if mt_[2] is not None else T_[2]))
+            if os.environ.get("SN_ZOOM"):
+                print("ZOOM %s: zoom %.2f -> %.2f measured (%d whole words)"
+                      % (s_["t0"], T_[0], k_, side_[0]), file=sys.stderr)
+            continue
+        # NO MEASUREMENT TO BE HAD -- no frame on disk, or no frame in the
+        # whole video showing the menu bar end to end, so nothing to measure
+        # a crop against. Only then does the old row-pitch guess still stand
+        # in, and it is kept for exactly that case. It has been wrong twice:
+        # at 00:04:00 it read 1.75 where the frames measure 2.08.
+        #
         # FOUR VOTES THAT AGREE ARE WITNESSES ENOUGH. Two whole words give
         # four sizes (a width and a height each); where those four stand
-        # within 15% of one another the zoom they name is sound, and the
-        # row-pitch guess below is what was wrong: at 00:04:00 it read 1.75
-        # against the words' 2.1 to 2.3, and the whole desktop was drawn a
-        # fifth too large. It stands in only where the words disagree.
+        # within 15% of one another the zoom they name is sound.
         kv_ = side_[3] if len(side_) > 3 else []
         if len(kv_) >= 4 and max(kv_) / max(0.01, min(kv_)) <= 1.15:
             continue
@@ -6269,6 +7102,35 @@ def note(records_path, diary_text=None):
             print("PITCH %s: zoom %.2f -> %.2f from tree row pitch %.1f against %.1f at %s (%d whole words)"
                   % (s_["t0"], T_[0], k_new, pitch, ref[1], ref[2], side_[0]), file=sys.stderr)
         span_T[s_["t0"]] = (k_new, dx_, dy_)
+
+    # A CROP THAT CANNOT EXIST SAYS BY HOW MUCH THE SHIFT IS WRONG.
+    #
+    # A screen recording zoomed in is showing part of the screen, so its crop
+    # lies inside the screen. Where the zoom is measured and the crop is the
+    # right SIZE but sits partly outside, the fault is the shift -- and the
+    # overlap is a floor on how wrong it is. At 00:04:00 the zoom is measured
+    # at 2.11 from an Obsidian tree's rows while the shift stands on two
+    # matched words, and the crop begins 151 pixels left of the screen.
+    #
+    # So the crop is slid back inside by the smallest amount that makes it
+    # possible, and the whole map of place slides with it -- the field of view
+    # is untouched, only where it sits. A crop WIDER than the screen is not
+    # this fault: no shift can fix it, the zoom itself is wrong, and it is left
+    # alone to be seen.
+    for s_ in spans:
+        T_ = span_T.get(s_["t0"])
+        if not T_:
+            continue
+        bx = back(T_, [0.0, 0.0, float(Wf), float(Hf)])
+        if bx[2] - bx[0] > Wf + 1 or bx[3] - bx[1] > Hf + 1:
+            continue
+        sx = -bx[0] if bx[0] < 0 else (Wf - bx[2] if bx[2] > Wf else 0.0)
+        sy = -bx[1] if bx[1] < 0 else (Hf - bx[3] if bx[3] > Hf else 0.0)
+        if sx or sy:
+            span_T[s_["t0"]] = (T_[0], T_[1] - sx * T_[0], T_[2] - sy * T_[0])
+            if os.environ.get("SN_ZOOM"):
+                print("ZOOM %s: crop began %.0f,%.0f outside the screen; slid back in"
+                      % (s_["t0"], sx, sy), file=sys.stderr)
 
     _frame_rects = {}
 
@@ -6364,6 +7226,33 @@ def note(records_path, diary_text=None):
             else:
                 joined.append((x0, t_))
         return [(list(bb[:3]) + [foot], joined, [t_ for _, t_ in sorted(addr)], right)]
+
+    _HOUSE_BROWSER = []
+
+    def browser_strip(s, bb, foot):
+        """The browser's strip is ONE strip, drawn the same wherever it stands.
+
+        It used to be gathered from whichever moments a stretch happened to
+        hold, so one browser came out three ways: four tabs at 00:00:00, two at
+        00:04:10, a fragment at 00:04:20 -- and at the zoomed moments no
+        reading at all, because no pane is cut over the band there and the
+        outline was drawn empty. A browser's tabs do not change unless someone
+        changes them, so the FULLEST reading anywhere in the video stands
+        everywhere the strip is shown. That is the rule the favorites sidebar
+        already follows, and for the same reason: revealed, never invented.
+
+        It is drawn only where the frame's own strip was found -- this is
+        reached from the branch that found it -- so a moment with no browser
+        behind is never given one.
+        """
+        got = browser_chrome(s, bb, foot)
+        if got and (not _HOUSE_BROWSER or len(got[0][1]) > len(_HOUSE_BROWSER[0][1])):
+            del _HOUSE_BROWSER[:]
+            _HOUSE_BROWSER.append(got[0])
+        if not _HOUSE_BROWSER:
+            return got
+        best = _HOUSE_BROWSER[0]
+        return [(list(bb[:3]) + [foot], best[1], best[2], best[3])]
 
     def frame_rects(s):
         """The rectangles drawn on this stretch's own frame, near-duplicates
@@ -8448,7 +9337,7 @@ def note(records_path, diary_text=None):
                         bb = min(tall, key=lambda b: b[1]) if tall else None
                         behinds.append(("the browser, behind", list(bb) if bb else sb))
                         if bb:
-                            browser_bits = browser_chrome(s, bb, sb[3])
+                            browser_bits = browser_strip(s, bb, sb[3])
                         break
             # A WINDOW DRAWN IN FULL MUST ITSELF BE A WINDOW. Its box has
             # to be one the frame drew, or - where the frame drew none,
@@ -8792,7 +9681,7 @@ def note(records_path, diary_text=None):
                                 subjects[i_] = (stx2, sl2, shape2)
                         behinds.append(("the browser, behind", [0.0, 0.0, float(Wf), float(sb_[3])]))
                         if not browser_bits:
-                            browser_bits = browser_chrome(s, [0.0, 0.0, float(Wf), float(Hf)], sb_[3])
+                            browser_bits = browser_strip(s, [0.0, 0.0, float(Wf), float(Hf)], sb_[3])
                         if os.environ.get("SN_ZOOM"):
                             print("  strip in the zoom: %s bottom %d -> home %d" % (stx_.name, sb_[3], y1_), file=sys.stderr)
                         break
@@ -8807,9 +9696,22 @@ def note(records_path, diary_text=None):
                 # cutting the box at the edge would shift every comparison
                 # by that band's width (an eleventh of the crop at 00:04:00)
                 zoom_box = back(T, [0.0, 0.0, float(Wf), float(Hf)])
+                # A CROP THAT RUNS OFF THE SCREEN IS A ZOOM THAT IS WRONG, and
+                # it is the one thing about a field of view a machine can check
+                # without a yardstick: a screen recording zoomed in is showing
+                # part of the screen, so its crop lies inside the screen. The
+                # box is still not clipped -- see above -- but it is counted,
+                # because the count is the measurement. Build 97, with the zoom
+                # worked out from where words sat: 4 of 19 crops ran outside,
+                # one of them 296 pixels past the right edge. Build 100, with
+                # the zoom measured: 0 of 18.
+                if (zoom_box[0] < -1 or zoom_box[1] < -1
+                        or zoom_box[2] > Wf + 1 or zoom_box[3] > Hf + 1):
+                    _OFF_SCREEN.append(s["t0"])
                 if os.environ.get("SN_ZOOM"):
-                    print("ZOOM %s: k %.2f shift %.0f,%.0f -> crop %s" % (
-                        s["t0"], T[0], T[1], T[2], [round(v) for v in zoom_box]), file=sys.stderr)
+                    print("ZOOM %s: k %.2f shift %.0f,%.0f -> crop %s%s" % (
+                        s["t0"], T[0], T[1], T[2], [round(v) for v in zoom_box],
+                        "  OFF THE SCREEN" if s["t0"] in _OFF_SCREEN else ""), file=sys.stderr)
             else:
                 _ghosts = ghost_list(s, sub_states, carded)
             # THE SCROLL THUMBS READ OFF THE FRAME: for each window drawn
@@ -9546,7 +10448,30 @@ def note(records_path, diary_text=None):
     for ln in diary_text.rstrip("\n").split("\n"):
         parts.append("> " + ln if ln else ">")
     parts.append("> ````")
-    return "\n".join(parts) + "\n"
+    out = "\n".join(parts) + "\n"
+    # AND ONCE MORE OVER THE FINISHED NOTE. Spelling the kinds whole across the
+    # record mends 761 of 797, but the drawing reads panes again as it works and
+    # makes its own cut readings after that pass has run -- 277 of them survived
+    # into the first build that tried it. One sweep of the finished text is the
+    # only place that cannot be got round, and it is safe for the same reason
+    # the rest is: a cut KIND brackets exactly one whole string from a closed
+    # published vocabulary, and a cut FILE NAME brackets none, so names come
+    # through exactly as the screen showed them.
+    try:
+        import finder_kinds as _fk2
+        out, _spelled = _fk2.spell_in_text(out)
+        if _spelled and os.environ.get("SN_NAMES"):
+            print("KINDS %d more spelled whole over the finished note" % _spelled,
+                  file=sys.stderr)
+    except Exception:
+        pass
+    # THE ONE THING ABOUT A FIELD OF VIEW A MACHINE CAN CHECK. A screen
+    # recording zoomed in is showing part of the screen, so its crop lies
+    # inside the screen; a crop that runs outside is a zoom worked out wrongly.
+    if _OFF_SCREEN:
+        print("ZOOM %d of the crops ran outside the screen: %s"
+              % (len(_OFF_SCREEN), ", ".join(_OFF_SCREEN)), file=sys.stderr)
+    return out
 
 
 def main():
