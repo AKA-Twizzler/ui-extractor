@@ -8153,8 +8153,6 @@ def note(records_path, diary_text=None):
                   "the reader measured a window's edges those are the edges drawn, otherwise they are taken from "
                   "where that window's own words sat.", ""]
         last_T = None
-        last_bar = None      # the bar last read with the screen's top in shot
-        last_browser = None  # the browser's box, measured while it was in shot
         at_idx = {m["ts"]: i for i, m in enumerate(moments)}
 
         def _agree(a, b):
@@ -8830,37 +8828,6 @@ def note(records_path, diary_text=None):
                             key=len, default=[])
             clock = next((clock_at[t] for t in s["ts"] if clock_at.get(t)), "")
             barred = any(t in bar_seen for t in s["ts"])
-            # THE MENU BAR DOES NOT LEAVE THE SCREEN WHEN THE CAMERA ZOOMS
-            # PAST IT. Measured on the memory-list video: 18 of its 22
-            # pictures are zoomed, and every one of them was drawn with no
-            # desktop bar at all -- not because the bar went away, but
-            # because the top strip was outside the crop and so nothing was
-            # read on it. Tristan, on the second picture: "it's only obsidian
-            # as the background and nothing more outlined...you should be
-            # outlineing as much as you can from prev parts".
-            #
-            # `barred` IS NOT A DRAWING SWITCH AND MUST NOT BE SET HERE. It
-            # says the top of the screen was in shot, and four things read it
-            # that way: the browser's tab strip is gathered from it, the
-            # browser's chrome is drawn from it, and TWICE it is the test for
-            # whether this frame is zoomed at all (`not barred`). Setting it
-            # true to get a bar drawn turned the zoom off for every picture
-            # in the video -- 19 zoom boxes became 0 -- while the bar itself
-            # appeared exactly as wanted, which is the kind of fix that looks
-            # right in the one place it was checked.
-            #
-            # So the carried bar rides its own flag, used at the drawing and
-            # nowhere else, and its stamp says which moment the words came
-            # from. Only while zoomed: an unzoomed frame that shows no bar is
-            # a screen with no bar, and inventing one there would be a claim
-            # about the screen rather than a fact carried from it.
-            bar_carry = ""
-            bar_show = barred
-            if barred and bar_words:
-                last_bar = (list(bar_words), clock, s["t0"])
-            elif T and not flatT(T) and T[0] >= 1.15 and last_bar:
-                bar_words, clock, bar_carry = last_bar
-                bar_show = True
 
             kz_now = T[0] if T else 1.0
             S_now = max(0.05, kz_now * furnish.UI_TXT / furnish.CSS_TXT)
@@ -9720,20 +9687,6 @@ def note(records_path, diary_text=None):
                         break
                 behinds = [(t_, _home_box(b_, _whole_home_named(t_, back(T, list(b_)), _cut_sides(b_))
                                           if any(_cut_sides(b_)) else None)) for t_, b_ in behinds]
-                # NEITHER DOES THE BROWSER LEAVE THE SCREEN. Its tab strip
-                # runs along the very top, so a crop that begins below it
-                # finds nothing to read and the picture loses the window
-                # entirely -- measured, 18 of this video's 22 pictures drew
-                # no browser at all while the three unzoomed ones drew it
-                # every time. The hunt just above is the right one and it
-                # only reaches a strip some visible window still spans; where
-                # it comes back empty, the browser's own measured rectangle
-                # from the last moment the top of the screen was in shot
-                # stands in. It is already in the screen's own coordinates,
-                # so it goes on AFTER the mapping, not through it.
-                if last_browser and not any(t_ == "the browser, behind"
-                                            for t_, _b in behinds):
-                    behinds.append(("the browser, behind", list(last_browser)))
                 _ghosts = [(_home_box(b_) if b_ else b_, t_, k_) for b_, t_, k_ in ghost_list(s, sub_states, carded)]
                 if cam:
                     cam = _home_box(cam)
@@ -9935,22 +9888,13 @@ def note(records_path, diary_text=None):
                 _kept.append((b_, t_, src_, k_))
             behinds = [(t_, b_) for b_, t_, src_, k_ in _kept if src_ == "behind"]
             _ghosts = [(b_, t_, k_) for b_, t_, src_, k_ in _kept if src_ == "ghost"]
-            # REMEMBERED WHERE THE LIST IS FINISHED, not where it is started.
-            # The browser is put into `behinds` by the `if barred:` block
-            # above, so a reading taken before that block saw an empty list
-            # every time and the carry never fired once.
-            if barred:
-                for _t, _b in behinds:
-                    if _t == "the browser, behind":
-                        last_browser = list(_b)   # the screen's own coordinates
             _shot = (furnish.screen_shot(
                 {"t0": s["t0"], "t1": s["t1"]},
                 [(sl, shape) for _, sl, shape in subjects],
                 s["size"][0], s["size"][1],
-                bar_words if bar_show else None, clock if bar_show else "",
+                bar_words if barred else None, clock if barred else "",
                 behind_cards=behinds,
                 zoom=zoom_box,
-                bar_from=bar_carry,
                 # ONLY THE TOP LAYER GETS FULL CONTENT; EVERYTHING BEHIND IS
                 # AN OUTLINE. Tristan's ruling, found in the record on
                 # 2026-08-24: "those outlined screens NEED content within the

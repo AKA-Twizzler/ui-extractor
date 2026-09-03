@@ -1273,7 +1273,7 @@ def _glue(parts):
 
 def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
                 ghosts=(), camera=None, sure=True, kz=1.0, ink=(), chrome=(),
-                chrome_step=0.0, zoom=None, bar_from=""):
+                chrome_step=0.0, zoom=None):
     """The layout of the screen over one stretch of time: the desktop bar
     with its own words, the window this stretch is about filled in with
     what it really said, and every other window standing where it stood,
@@ -1598,12 +1598,6 @@ def screen_shot(span, subjects, W, H, bar_words, clock, behind_cards=(),
         stamp += " \u00b7 edges taken from where its words sat"
     if zoom:
         stamp += " \u00b7 the video was zoomed in; the whole screen is drawn"
-    # A BAR CARRIED FROM ANOTHER MOMENT SAYS SO. The menu bar does not leave
-    # the screen when the camera zooms past it, so it is drawn -- but its
-    # WORDS are the ones read when the top of the screen was last in shot,
-    # and a reader who is not told that would take them for this moment's.
-    if bar_from:
-        stamp += " \u00b7 the desktop bar as read at %s" % bar_from
     out.append(f'<div class="sn-stamp">{esc(stamp)}</div>')
     out.append("</div>")
     return ('<div class="sn-stage">' + "".join(out) + "</div>")
