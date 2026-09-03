@@ -8,6 +8,16 @@ _probe/*
 # The measured evidence the code cites by name. A comment that says
 # "measured on 120 labelled frames" is worth nothing if the 120 frames'
 # labels are not in the repo beside it.
+# ...and the scripts that DRIVE the tool. The repo held the instrument
+# and not the way it is played: build.sh and install.sh have run every
+# build of this note and were never once committed.
+# git will not descend into an excluded DIRECTORY, so the folder has to be
+# re-included before any rule about the files inside it can bite.
+!_probe/pixfirst-test/
+_probe/pixfirst-test/*
+!_probe/pixfirst-test/*.sh
+!_probe/pixfirst-test/*.py
+!_probe/pixfirst-test/truth.json
 !_probe/screen_truth.json
 !_probe/confirmed.json
 !_probe/glyphwidth.json
