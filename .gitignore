@@ -5,6 +5,12 @@ _frames/
 _trial/
 _probe/*
 !_probe/*.py
+# The measured evidence the code cites by name. A comment that says
+# "measured on 120 labelled frames" is worth nothing if the 120 frames'
+# labels are not in the repo beside it.
+!_probe/screen_truth.json
+!_probe/confirmed.json
+!_probe/glyphwidth.json
 _bak/
 _bigwin/
 _cmp*/

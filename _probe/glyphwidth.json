@@ -1,0 +1,962 @@
+[
+ {
+  "vid": "Jarvis_Raises_Money_for_",
+  "f": "t000942.png",
+  "want": "camera",
+  "n": 5,
+  "w": 0.10078125,
+  "c": 11.0
+ },
+ {
+  "vid": "Jarvis_Raises_Money_for_",
+  "f": "t001885.png",
+  "want": "camera",
+  "n": 12,
+  "w": 0.11880165289256198,
+  "c": 11.5
+ },
+ {
+  "vid": "Jarvis_Raises_Money_for_",
+  "f": "t002828.png",
+  "want": "camera",
+  "n": 6,
+  "w": 0.10779500081155657,
+  "c": 9.0
+ },
+ {
+  "vid": "Jarvis_Raises_Money_for_",
+  "f": "t003771.png",
+  "want": "camera",
+  "n": 7,
+  "w": 0.08401639344262295,
+  "c": 9.0
+ },
+ {
+  "vid": "Jarvis_Raises_Money_for_",
+  "f": "t004714.png",
+  "want": "camera",
+  "n": 11,
+  "w": 0.16640625,
+  "c": 6.0
+ },
+ {
+  "vid": "Jarvis_Raises_Money_for_",
+  "f": "t005657.png",
+  "want": "camera",
+  "n": 6,
+  "w": 0.16787190082644626,
+  "c": 11.5
+ },
+ {
+  "vid": "Jarvis_Raises_Money_for_",
+  "f": "t006600.png",
+  "want": "camera",
+  "n": 7,
+  "w": 0.23214285714285715,
+  "c": 15.0
+ },
+ {
+  "vid": "Jarvis_Raises_Money_for_",
+  "f": "t007542.png",
+  "want": "camera",
+  "n": 11,
+  "w": 0.17326732673267325,
+  "c": 14.0
+ },
+ {
+  "vid": "Jarvis_Raises_Money_for_",
+  "f": "t008485.png",
+  "want": "camera",
+  "n": 11,
+  "w": 0.24133663366336633,
+  "c": 13.0
+ },
+ {
+  "vid": "Jarvis_Raises_Money_for_",
+  "f": "t009428.png",
+  "want": "camera",
+  "n": 8,
+  "w": 0.23531746031746031,
+  "c": 11.0
+ },
+ {
+  "vid": "Jarvis_Raises_Money_for_",
+  "f": "t010371.png",
+  "want": "camera",
+  "n": 12,
+  "w": 0.177734375,
+  "c": 17.5
+ },
+ {
+  "vid": "Jarvis_Raises_Money_for_",
+  "f": "t011314.png",
+  "want": "camera",
+  "n": 12,
+  "w": 0.15425531914893617,
+  "c": 14.5
+ },
+ {
+  "vid": "Jarvis_Raises_Money_for_",
+  "f": "t012257.png",
+  "want": "camera",
+  "n": 8,
+  "w": 0.2667768959435626,
+  "c": 9.5
+ },
+ {
+  "vid": "Jarvis_Raises_Money_for_",
+  "f": "t013200.png",
+  "want": "camera",
+  "n": 14,
+  "w": 0.37623762376237624,
+  "c": 26.0
+ },
+ {
+  "vid": "Jarvis_Raises_Money_for_",
+  "f": "t014142.png",
+  "want": "camera",
+  "n": 19,
+  "w": 0.1125886524822695,
+  "c": 9.0
+ },
+ {
+  "vid": "Jarvis_Raises_Money_for_",
+  "f": "t015085.png",
+  "want": "screen",
+  "n": 30,
+  "w": 0.27460937500000004,
+  "c": 30.5
+ },
+ {
+  "vid": "Jarvis_Raises_Money_for_",
+  "f": "t016028.png",
+  "want": "camera",
+  "n": 4,
+  "w": 0.19296875,
+  "c": 20.0
+ },
+ {
+  "vid": "Jarvis_Raises_Money_for_",
+  "f": "t016971.png",
+  "want": "camera",
+  "n": 9,
+  "w": 0.1646039603960396,
+  "c": 6.0
+ },
+ {
+  "vid": "Jarvis_Raises_Money_for_",
+  "f": "t017914.png",
+  "want": "camera",
+  "n": 5,
+  "w": 0.20173267326732675,
+  "c": 17.0
+ },
+ {
+  "vid": "Jarvis_Raises_Money_for_",
+  "f": "t018857.png",
+  "want": "camera",
+  "n": 11,
+  "w": 0.3319672131147541,
+  "c": 9.0
+ },
+ {
+  "vid": "LIVE_Replay__Using_Obsid",
+  "f": "t000567.png",
+  "want": "screen",
+  "n": 24,
+  "w": 0.301171875,
+  "c": 32.0
+ },
+ {
+  "vid": "LIVE_Replay__Using_Obsid",
+  "f": "t001134.png",
+  "want": "screen",
+  "n": 18,
+  "w": 0.129296875,
+  "c": 16.5
+ },
+ {
+  "vid": "LIVE_Replay__Using_Obsid",
+  "f": "t001701.png",
+  "want": "screen",
+  "n": 20,
+  "w": 0.201171875,
+  "c": 24.5
+ },
+ {
+  "vid": "LIVE_Replay__Using_Obsid",
+  "f": "t002268.png",
+  "want": "screen",
+  "n": 37,
+  "w": 0.08359375,
+  "c": 11.0
+ },
+ {
+  "vid": "LIVE_Replay__Using_Obsid",
+  "f": "t002835.png",
+  "want": "screen",
+  "n": 41,
+  "w": 0.075,
+  "c": 6.0
+ },
+ {
+  "vid": "LIVE_Replay__Using_Obsid",
+  "f": "t003402.png",
+  "want": "screen",
+  "n": 18,
+  "w": 0.115234375,
+  "c": 8.5
+ },
+ {
+  "vid": "LIVE_Replay__Using_Obsid",
+  "f": "t003969.png",
+  "want": "screen",
+  "n": 21,
+  "w": 0.0828125,
+  "c": 10.0
+ },
+ {
+  "vid": "LIVE_Replay__Using_Obsid",
+  "f": "t004536.png",
+  "want": "screen",
+  "n": 19,
+  "w": 0.12265625,
+  "c": 11.0
+ },
+ {
+  "vid": "LIVE_Replay__Using_Obsid",
+  "f": "t005103.png",
+  "want": "camera",
+  "n": 6,
+  "w": 0.1844262295081967,
+  "c": 9.5
+ },
+ {
+  "vid": "LIVE_Replay__Using_Obsid",
+  "f": "t005670.png",
+  "want": "screen",
+  "n": 108,
+  "w": 0.04375,
+  "c": 12.5
+ },
+ {
+  "vid": "LIVE_Replay__Using_Obsid",
+  "f": "t006237.png",
+  "want": "camera",
+  "n": 10,
+  "w": 0.2694672131147541,
+  "c": 10.5
+ },
+ {
+  "vid": "LIVE_Replay__Using_Obsid",
+  "f": "t006805.png",
+  "want": "camera",
+  "n": 11,
+  "w": 0.2520491803278688,
+  "c": 13.0
+ },
+ {
+  "vid": "LIVE_Replay__Using_Obsid",
+  "f": "t007372.png",
+  "want": "camera",
+  "n": 6,
+  "w": 0.41290983606557374,
+  "c": 20.0
+ },
+ {
+  "vid": "LIVE_Replay__Using_Obsid",
+  "f": "t007939.png",
+  "want": "camera",
+  "n": 11,
+  "w": 0.29508196721311475,
+  "c": 14.0
+ },
+ {
+  "vid": "LIVE_Replay__Using_Obsid",
+  "f": "t008506.png",
+  "want": "camera",
+  "n": 9,
+  "w": 0.1864754098360656,
+  "c": 9.0
+ },
+ {
+  "vid": "LIVE_Replay__Using_Obsid",
+  "f": "t009073.png",
+  "want": "screen",
+  "n": 36,
+  "w": 0.0890625,
+  "c": 14.0
+ },
+ {
+  "vid": "LIVE_Replay__Using_Obsid",
+  "f": "t009640.png",
+  "want": "camera",
+  "n": 7,
+  "w": 0.5654761904761905,
+  "c": 10.0
+ },
+ {
+  "vid": "LIVE_Replay__Using_Obsid",
+  "f": "t010207.png",
+  "want": "camera",
+  "n": 7,
+  "w": 0.3237704918032787,
+  "c": 15.0
+ },
+ {
+  "vid": "LIVE_Replay__Using_Obsid",
+  "f": "t010774.png",
+  "want": "screen",
+  "n": 23,
+  "w": 0.28515625,
+  "c": 31.0
+ },
+ {
+  "vid": "LIVE_Replay__Using_Obsid",
+  "f": "t011341.png",
+  "want": "screen",
+  "n": 39,
+  "w": 0.20544554455445543,
+  "c": 15.0
+ },
+ {
+  "vid": "Live_Replay_7_17_26_Clau",
+  "f": "t000436.png",
+  "want": "camera",
+  "n": 2,
+  "w": 0.21992187500000002,
+  "c": 8.5
+ },
+ {
+  "vid": "Live_Replay_7_17_26_Clau",
+  "f": "t000873.png",
+  "want": "camera",
+  "n": 1,
+  "w": 0.39609375,
+  "c": 12.0
+ },
+ {
+  "vid": "Live_Replay_7_17_26_Clau",
+  "f": "t001309.png",
+  "want": "camera",
+  "n": 4,
+  "w": 0.19804687499999998,
+  "c": 9.0
+ },
+ {
+  "vid": "Live_Replay_7_17_26_Clau",
+  "f": "t001746.png",
+  "want": "camera",
+  "n": 4,
+  "w": 0.196875,
+  "c": 10.0
+ },
+ {
+  "vid": "Live_Replay_7_17_26_Clau",
+  "f": "t002182.png",
+  "want": "camera",
+  "n": 3,
+  "w": 0.08046875,
+  "c": 5.0
+ },
+ {
+  "vid": "Live_Replay_7_17_26_Clau",
+  "f": "t002619.png",
+  "want": "camera",
+  "n": 2,
+  "w": 0.372265625,
+  "c": 12.5
+ },
+ {
+  "vid": "Live_Replay_7_17_26_Clau",
+  "f": "t003055.png",
+  "want": "camera",
+  "n": 2,
+  "w": 0.3703125,
+  "c": 12.5
+ },
+ {
+  "vid": "Live_Replay_7_17_26_Clau",
+  "f": "t003492.png",
+  "want": "camera",
+  "n": 2,
+  "w": 0.366796875,
+  "c": 12.5
+ },
+ {
+  "vid": "Live_Replay_7_17_26_Clau",
+  "f": "t003928.png",
+  "want": "camera",
+  "n": 2,
+  "w": 0.36796875,
+  "c": 12.5
+ },
+ {
+  "vid": "Live_Replay_7_17_26_Clau",
+  "f": "t004365.png",
+  "want": "camera",
+  "n": 2,
+  "w": 0.36171875,
+  "c": 12.0
+ },
+ {
+  "vid": "Live_Replay_7_17_26_Clau",
+  "f": "t004802.png",
+  "want": "camera",
+  "n": 2,
+  "w": 0.363671875,
+  "c": 12.5
+ },
+ {
+  "vid": "Live_Replay_7_17_26_Clau",
+  "f": "t005238.png",
+  "want": "screen",
+  "n": 14,
+  "w": 0.10703125,
+  "c": 4.5
+ },
+ {
+  "vid": "Live_Replay_7_17_26_Clau",
+  "f": "t005675.png",
+  "want": "camera",
+  "n": 2,
+  "w": 0.363671875,
+  "c": 12.0
+ },
+ {
+  "vid": "Live_Replay_7_17_26_Clau",
+  "f": "t006111.png",
+  "want": "camera",
+  "n": 2,
+  "w": 0.41640625,
+  "c": 12.0
+ },
+ {
+  "vid": "Live_Replay_7_17_26_Clau",
+  "f": "t006548.png",
+  "want": "camera",
+  "n": 2,
+  "w": 0.362890625,
+  "c": 12.5
+ },
+ {
+  "vid": "Live_Replay_7_17_26_Clau",
+  "f": "t006984.png",
+  "want": "camera",
+  "n": 2,
+  "w": 0.34648437499999996,
+  "c": 12.0
+ },
+ {
+  "vid": "Live_Replay_7_17_26_Clau",
+  "f": "t007421.png",
+  "want": "camera",
+  "n": 2,
+  "w": 0.347265625,
+  "c": 12.0
+ },
+ {
+  "vid": "Live_Replay_7_17_26_Clau",
+  "f": "t007857.png",
+  "want": "camera",
+  "n": 2,
+  "w": 0.36406249999999996,
+  "c": 12.5
+ },
+ {
+  "vid": "Live_Replay_7_17_26_Clau",
+  "f": "t008294.png",
+  "want": "camera",
+  "n": 4,
+  "w": 0.10682624113475178,
+  "c": 6.5
+ },
+ {
+  "vid": "Live_Replay_7_17_26_Clau",
+  "f": "t008731.png",
+  "want": "camera",
+  "n": 9,
+  "w": 0.0484375,
+  "c": 6.0
+ },
+ {
+  "vid": "Live_Replay___July_6__20",
+  "f": "t000386.png",
+  "want": "camera",
+  "n": 25,
+  "w": 0.034375,
+  "c": 3.0
+ },
+ {
+  "vid": "Live_Replay___July_6__20",
+  "f": "t000773.png",
+  "want": "camera",
+  "n": 19,
+  "w": 0.034375,
+  "c": 5.0
+ },
+ {
+  "vid": "Live_Replay___July_6__20",
+  "f": "t001160.png",
+  "want": "camera",
+  "n": 17,
+  "w": 0.03984375,
+  "c": 6.0
+ },
+ {
+  "vid": "Live_Replay___July_6__20",
+  "f": "t001546.png",
+  "want": "camera",
+  "n": 18,
+  "w": 0.032421875,
+  "c": 3.0
+ },
+ {
+  "vid": "Live_Replay___July_6__20",
+  "f": "t001933.png",
+  "want": "screen",
+  "n": 24,
+  "w": 0.21796875,
+  "c": 25.0
+ },
+ {
+  "vid": "Live_Replay___July_6__20",
+  "f": "t002320.png",
+  "want": "camera",
+  "n": 16,
+  "w": 0.037890625,
+  "c": 5.0
+ },
+ {
+  "vid": "Live_Replay___July_6__20",
+  "f": "t002706.png",
+  "want": "camera",
+  "n": 15,
+  "w": 0.04140625,
+  "c": 6.0
+ },
+ {
+  "vid": "Live_Replay___July_6__20",
+  "f": "t003093.png",
+  "want": "camera",
+  "n": 9,
+  "w": 0.12347560975609756,
+  "c": 6.0
+ },
+ {
+  "vid": "Live_Replay___July_6__20",
+  "f": "t003480.png",
+  "want": "camera",
+  "n": 9,
+  "w": 0.13567073170731708,
+  "c": 8.0
+ },
+ {
+  "vid": "Live_Replay___July_6__20",
+  "f": "t003866.png",
+  "want": "screen",
+  "n": 28,
+  "w": 0.13828125,
+  "c": 9.5
+ },
+ {
+  "vid": "Live_Replay___July_6__20",
+  "f": "t004253.png",
+  "want": "camera",
+  "n": 9,
+  "w": 0.125,
+  "c": 8.0
+ },
+ {
+  "vid": "Live_Replay___July_6__20",
+  "f": "t004640.png",
+  "want": "camera",
+  "n": 9,
+  "w": 0.22839506172839505,
+  "c": 11.0
+ },
+ {
+  "vid": "Live_Replay___July_6__20",
+  "f": "t005026.png",
+  "want": "camera",
+  "n": 7,
+  "w": 0.22067901234567902,
+  "c": 16.0
+ },
+ {
+  "vid": "Live_Replay___July_6__20",
+  "f": "t005413.png",
+  "want": "camera",
+  "n": 16,
+  "w": 0.039453125,
+  "c": 6.0
+ },
+ {
+  "vid": "Live_Replay___July_6__20",
+  "f": "t005800.png",
+  "want": "camera",
+  "n": 11,
+  "w": 0.12962962962962962,
+  "c": 7.0
+ },
+ {
+  "vid": "Live_Replay___July_6__20",
+  "f": "t006186.png",
+  "want": "camera",
+  "n": 8,
+  "w": 0.09194214876033058,
+  "c": 7.0
+ },
+ {
+  "vid": "Live_Replay___July_6__20",
+  "f": "t006573.png",
+  "want": "camera",
+  "n": 29,
+  "w": 0.05703125,
+  "c": 8.0
+ },
+ {
+  "vid": "Live_Replay___July_6__20",
+  "f": "t006960.png",
+  "want": "camera",
+  "n": 23,
+  "w": 0.03984375,
+  "c": 6.0
+ },
+ {
+  "vid": "Live_Replay___July_6__20",
+  "f": "t007346.png",
+  "want": "camera",
+  "n": 8,
+  "w": 0.06043388429752066,
+  "c": 6.5
+ },
+ {
+  "vid": "Live_Replay___July_6__20",
+  "f": "t007733.png",
+  "want": "camera",
+  "n": 9,
+  "w": 0.08574380165289257,
+  "c": 9.0
+ },
+ {
+  "vid": "Move_Memory_Files_Out_of",
+  "f": "t000022.png",
+  "want": "screen",
+  "n": 98,
+  "w": 0.05317141089108911,
+  "c": 8.0
+ },
+ {
+  "vid": "Move_Memory_Files_Out_of",
+  "f": "t000044.png",
+  "want": "screen",
+  "n": 110,
+  "w": 0.05418084777227723,
+  "c": 8.0
+ },
+ {
+  "vid": "Move_Memory_Files_Out_of",
+  "f": "t000066.png",
+  "want": "screen",
+  "n": 31,
+  "w": 0.0625,
+  "c": 10.0
+ },
+ {
+  "vid": "Move_Memory_Files_Out_of",
+  "f": "t000089.png",
+  "want": "screen",
+  "n": 91,
+  "w": 0.084375,
+  "c": 18.0
+ },
+ {
+  "vid": "Move_Memory_Files_Out_of",
+  "f": "t000111.png",
+  "want": "screen",
+  "n": 95,
+  "w": 0.0625,
+  "c": 10.0
+ },
+ {
+  "vid": "Move_Memory_Files_Out_of",
+  "f": "t000133.png",
+  "want": "screen",
+  "n": 98,
+  "w": 0.062109375,
+  "c": 10.0
+ },
+ {
+  "vid": "Move_Memory_Files_Out_of",
+  "f": "t000155.png",
+  "want": "screen",
+  "n": 98,
+  "w": 0.061328125,
+  "c": 9.0
+ },
+ {
+  "vid": "Move_Memory_Files_Out_of",
+  "f": "t000178.png",
+  "want": "screen",
+  "n": 82,
+  "w": 0.0625,
+  "c": 9.0
+ },
+ {
+  "vid": "Move_Memory_Files_Out_of",
+  "f": "t000200.png",
+  "want": "screen",
+  "n": 82,
+  "w": 0.062109375,
+  "c": 9.0
+ },
+ {
+  "vid": "Move_Memory_Files_Out_of",
+  "f": "t000222.png",
+  "want": "screen",
+  "n": 88,
+  "w": 0.07734375,
+  "c": 12.0
+ },
+ {
+  "vid": "Move_Memory_Files_Out_of",
+  "f": "t000244.png",
+  "want": "screen",
+  "n": 23,
+  "w": 0.159375,
+  "c": 29.0
+ },
+ {
+  "vid": "Move_Memory_Files_Out_of",
+  "f": "t000267.png",
+  "want": "screen",
+  "n": 41,
+  "w": 0.1799645390070922,
+  "c": 52.0
+ },
+ {
+  "vid": "Move_Memory_Files_Out_of",
+  "f": "t000289.png",
+  "want": "screen",
+  "n": 40,
+  "w": 0.1773049645390071,
+  "c": 49.5
+ },
+ {
+  "vid": "Move_Memory_Files_Out_of",
+  "f": "t000311.png",
+  "want": "screen",
+  "n": 40,
+  "w": 0.1773049645390071,
+  "c": 49.5
+ },
+ {
+  "vid": "Move_Memory_Files_Out_of",
+  "f": "t000333.png",
+  "want": "screen",
+  "n": 38,
+  "w": 0.18129432624113476,
+  "c": 52.0
+ },
+ {
+  "vid": "Move_Memory_Files_Out_of",
+  "f": "t000356.png",
+  "want": "screen",
+  "n": 40,
+  "w": 0.17686170212765956,
+  "c": 49.0
+ },
+ {
+  "vid": "Move_Memory_Files_Out_of",
+  "f": "t000378.png",
+  "want": "screen",
+  "n": 41,
+  "w": 0.17375886524822695,
+  "c": 47.0
+ },
+ {
+  "vid": "Move_Memory_Files_Out_of",
+  "f": "t000400.png",
+  "want": "screen",
+  "n": 40,
+  "w": 0.17198581560283688,
+  "c": 43.5
+ },
+ {
+  "vid": "Move_Memory_Files_Out_of",
+  "f": "t000422.png",
+  "want": "screen",
+  "n": 42,
+  "w": 0.17686170212765956,
+  "c": 49.5
+ },
+ {
+  "vid": "Move_Memory_Files_Out_of",
+  "f": "t000445.png",
+  "want": "screen",
+  "n": 41,
+  "w": 0.1799645390070922,
+  "c": 52.0
+ },
+ {
+  "vid": "Stop_Prompting_Your_AI__",
+  "f": "t000018.png",
+  "want": "camera",
+  "n": 0,
+  "w": 0.0,
+  "c": 0.0
+ },
+ {
+  "vid": "Stop_Prompting_Your_AI__",
+  "f": "t000037.png",
+  "want": "screen",
+  "n": 49,
+  "w": 0.0390625,
+  "c": 13.0
+ },
+ {
+  "vid": "Stop_Prompting_Your_AI__",
+  "f": "t000056.png",
+  "want": "screen",
+  "n": 49,
+  "w": 0.0390625,
+  "c": 14.0
+ },
+ {
+  "vid": "Stop_Prompting_Your_AI__",
+  "f": "t000075.png",
+  "want": "screen",
+  "n": 19,
+  "w": 0.0890625,
+  "c": 11.0
+ },
+ {
+  "vid": "Stop_Prompting_Your_AI__",
+  "f": "t000094.png",
+  "want": "screen",
+  "n": 20,
+  "w": 0.09296875,
+  "c": 11.0
+ },
+ {
+  "vid": "Stop_Prompting_Your_AI__",
+  "f": "t000113.png",
+  "want": "screen",
+  "n": 21,
+  "w": 0.096875,
+  "c": 11.0
+ },
+ {
+  "vid": "Stop_Prompting_Your_AI__",
+  "f": "t000132.png",
+  "want": "screen",
+  "n": 16,
+  "w": 0.4671875,
+  "c": 57.0
+ },
+ {
+  "vid": "Stop_Prompting_Your_AI__",
+  "f": "t000151.png",
+  "want": "screen",
+  "n": 14,
+  "w": 0.640234375,
+  "c": 88.0
+ },
+ {
+  "vid": "Stop_Prompting_Your_AI__",
+  "f": "t000170.png",
+  "want": "screen",
+  "n": 51,
+  "w": 0.03984375,
+  "c": 14.0
+ },
+ {
+  "vid": "Stop_Prompting_Your_AI__",
+  "f": "t000188.png",
+  "want": "screen",
+  "n": 51,
+  "w": 0.04296875,
+  "c": 14.0
+ },
+ {
+  "vid": "Stop_Prompting_Your_AI__",
+  "f": "t000207.png",
+  "want": "screen",
+  "n": 16,
+  "w": 0.40234375,
+  "c": 55.0
+ },
+ {
+  "vid": "Stop_Prompting_Your_AI__",
+  "f": "t000226.png",
+  "want": "screen",
+  "n": 55,
+  "w": 0.0390625,
+  "c": 14.0
+ },
+ {
+  "vid": "Stop_Prompting_Your_AI__",
+  "f": "t000245.png",
+  "want": "screen",
+  "n": 52,
+  "w": 0.038671875,
+  "c": 13.0
+ },
+ {
+  "vid": "Stop_Prompting_Your_AI__",
+  "f": "t000264.png",
+  "want": "screen",
+  "n": 50,
+  "w": 0.039453125,
+  "c": 14.0
+ },
+ {
+  "vid": "Stop_Prompting_Your_AI__",
+  "f": "t000283.png",
+  "want": "screen",
+  "n": 53,
+  "w": 0.0390625,
+  "c": 14.0
+ },
+ {
+  "vid": "Stop_Prompting_Your_AI__",
+  "f": "t000302.png",
+  "want": "camera",
+  "n": 0,
+  "w": 0.0,
+  "c": 0.0
+ },
+ {
+  "vid": "Stop_Prompting_Your_AI__",
+  "f": "t000321.png",
+  "want": "camera",
+  "n": 1,
+  "w": 0.6920454545454545,
+  "c": 6.0
+ },
+ {
+  "vid": "Stop_Prompting_Your_AI__",
+  "f": "t000340.png",
+  "want": "camera",
+  "n": 1,
+  "w": 0.6920454545454545,
+  "c": 6.0
+ },
+ {
+  "vid": "Stop_Prompting_Your_AI__",
+  "f": "t000359.png",
+  "want": "camera",
+  "n": 0,
+  "w": 0.0,
+  "c": 0.0
+ },
+ {
+  "vid": "Stop_Prompting_Your_AI__",
+  "f": "t000377.png",
+  "want": "camera",
+  "n": 0,
+  "w": 0.0,
+  "c": 0.0
+ }
+]
